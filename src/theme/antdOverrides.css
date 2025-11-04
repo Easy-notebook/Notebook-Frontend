@@ -1,0 +1,795 @@
+/* src/theme/antdOverrides.css */
+/* Enhanced Ant Design component styling that complements the theme configuration */
+/* This CSS provides styling that cannot be achieved through theme tokens alone */
+
+/* ====================================================================
+   Enhanced Button Styling
+   ==================================================================== */
+
+/* Primary Button with Gradient Background */
+.ant-btn-primary {
+    background: #41B883!important;
+    color: #FFFFFF !important;
+    border: none !important;
+    font-weight: 600 !important;
+    text-shadow: none !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 4px rgba(65, 184, 131, 0.3) !important;
+  }
+  
+  .ant-btn-primary:hover {
+    background: #369870 !important;
+    color: #FFFFFF !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(65, 184, 131, 0.4) !important;
+  }
+  
+  .ant-btn-primary:active {
+    background: linear-gradient(135deg, #2d7a5c, #1e70b6) !important;
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 4px rgba(65, 184, 131, 0.3) !important;
+  }
+  
+  .ant-btn-primary:focus {
+    background: linear-gradient(135deg, #41B883, #3490DC) !important;
+    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.2) !important;
+  }
+  
+  /* Loading state for primary button */
+  .ant-btn-primary.ant-btn-loading {
+    background: linear-gradient(135deg, #41B883, #3490DC) !important;
+    opacity: 0.8 !important;
+  }
+  
+  /* Default Button Enhancement */
+  .ant-btn-default {
+    background: #ffffff !important;
+    border: 1px solid #E5E7EB !important;
+    color: #35495E !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  }
+  
+  .ant-btn-default:hover {
+    border-color: #41B883 !important;
+    color: #41B883 !important;
+    background: rgba(65, 184, 131, 0.02) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 4px rgba(65, 184, 131, 0.15) !important;
+  }
+  
+  .ant-btn-default:active {
+    transform: translateY(0) !important;
+    background: rgba(65, 184, 131, 0.05) !important;
+  }
+  
+  .ant-btn-default:focus {
+    border-color: #41B883 !important;
+    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.1) !important;
+  }
+  
+  /* Ghost Button Enhancement */
+  .ant-btn-background-ghost {
+    background: transparent !important;
+    border: 1px solid #41B883 !important;
+    color: #41B883 !important;
+  }
+  
+  .ant-btn-background-ghost:hover {
+    background: rgba(65, 184, 131, 0.1) !important;
+    border-color: #369870 !important;
+    color: #369870 !important;
+  }
+  
+  /* Text Button Enhancement */
+  .ant-btn-text {
+    color: #35495E !important;
+    background: transparent !important;
+    border: none !important;
+  }
+  
+  .ant-btn-text:hover {
+    color: #41B883 !important;
+    background: rgba(65, 184, 131, 0.05) !important;
+  }
+  
+  /* Link Button Enhancement */
+  .ant-btn-link {
+    color: #41B883 !important;
+    background: transparent !important;
+    border: none !important;
+  }
+  
+  .ant-btn-link:hover {
+    color: #3490DC !important;
+    text-decoration: underline !important;
+  }
+  
+  /* Button Group Enhancement */
+  .ant-btn-group .ant-btn:not(:first-child):not(:last-child) {
+    border-left-color: rgba(255, 255, 255, 0.3) !important;
+    border-right-color: rgba(255, 255, 255, 0.3) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Input Styling
+     ==================================================================== */
+  
+  /* Input Focus Enhancement */
+  .ant-input:focus,
+  .ant-input-focused {
+    border-color: #41B883 !important;
+    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.1) !important;
+    outline: none !important;
+  }
+  
+  /* Input Hover Enhancement */
+  .ant-input:hover {
+    border-color: rgba(65, 184, 131, 0.6) !important;
+  }
+  
+  /* Search Input Enhancement */
+  .ant-input-search .ant-input-group-addon .ant-btn {
+    background: #41B883 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+  }
+  
+  .ant-input-search .ant-input-group-addon .ant-btn:hover {
+    background: #369870 !important;
+    color: #FFFFFF !important;
+  }
+  
+  /* Input Group Enhancement */
+  .ant-input-group-addon {
+    background: #F9FAFB !important;
+    border-color: #E5E7EB !important;
+    color: #6B7280 !important;
+  }
+  
+  /* TextArea Enhancement */
+  .ant-input-textarea .ant-input:focus {
+    border-color: #41B883 !important;
+    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.1) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Tabs Styling
+     ==================================================================== */
+  
+  /* Remove default tab margins that conflict with our design */
+  .ant-tabs {
+    margin: 0 !important;
+  }
+  
+  .ant-tabs-nav {
+    margin-bottom: 0 !important;
+  }
+  
+  .ant-tabs-tab {
+    margin: 0 !important;
+    padding: 8px 12px !important;
+    transition: all 0.2s ease !important;
+  }
+  
+  .ant-tabs-tab:hover {
+    color: #41B883 !important;
+  }
+  
+  .ant-tabs-tab-active {
+    color: #41B883 !important;
+    font-weight: 600 !important;
+  }
+  
+  .ant-tabs-ink-bar {
+    background: linear-gradient(to right, #41B883, #3490DC) !important;
+    height: 3px !important;
+  }
+  
+  /* Card Tabs Enhancement */
+  .ant-tabs-card .ant-tabs-tab {
+    background: #F9FAFB !important;
+    border: 1px solid #E5E7EB !important;
+    border-bottom: none !important;
+    transition: all 0.2s ease !important;
+  }
+  
+  .ant-tabs-card .ant-tabs-tab:hover {
+    background: rgba(65, 184, 131, 0.05) !important;
+    border-color: rgba(65, 184, 131, 0.3) !important;
+  }
+  
+  .ant-tabs-card .ant-tabs-tab-active {
+    background: #FFFFFF !important;
+    border-color: #41B883 !important;
+    border-bottom-color: #FFFFFF !important;
+  }
+  
+  /* Editable Card Tabs Enhancement */
+  .ant-tabs-card.ant-tabs-editable-card .ant-tabs-tab {
+    background: #FFFFFF !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 6px 6px 0 0 !important;
+    margin-right: 2px !important;
+  }
+  
+  .ant-tabs-card.ant-tabs-editable-card .ant-tabs-tab-active {
+    border-color: #41B883 !important;
+    border-bottom-color: #FFFFFF !important;
+  }
+  
+  /* Tab close button enhancement */
+  .ant-tabs-tab-remove {
+    color: #9CA3AF !important;
+    transition: all 0.2s ease !important;
+  }
+  
+  .ant-tabs-tab-remove:hover {
+    color: #EF4444 !important;
+    background: rgba(239, 68, 68, 0.1) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Table Styling
+     ==================================================================== */
+  
+  /* Table Header Enhancement */
+  .ant-table-thead > tr > th {
+    background: #41B883 !important;
+    color: #000000 !important;
+    font-weight: 600 !important;
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    border-bottom: none !important;
+    padding: 8px 12px !important;
+  }
+  
+  .ant-table-thead > tr > th:first-child {
+    border-top-left-radius: 8px !important;
+  }
+  
+  .ant-table-thead > tr > th:last-child {
+    border-top-right-radius: 8px !important;
+  }
+  
+  /* Table Body Enhancement */
+  .ant-table-tbody > tr > td {
+    border-bottom: 1px solid rgba(65, 184, 131, 0.08) !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+  }
+  
+  .ant-table-tbody > tr:last-child > td:first-child {
+    border-bottom-left-radius: 8px !important;
+  }
+  
+  .ant-table-tbody > tr:last-child > td:last-child {
+    border-bottom-right-radius: 8px !important;
+  }
+  
+  .ant-table-tbody > tr:last-child > td {
+    border-bottom: none !important;
+  }
+  
+  /* Row Hover Enhancement */
+  .ant-table-tbody > tr:hover > td {
+    background: rgba(65, 184, 131, 0.04) !important;
+  }
+  
+  /* Zebra Striping Enhancement */
+  .ant-table-tbody > tr:nth-child(even) > td {
+    background: rgba(0, 0, 0, 0.01) !important;
+  }
+  
+  .ant-table-tbody > tr:nth-child(even):hover > td {
+    background: rgba(65, 184, 131, 0.04) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Select Styling
+     ==================================================================== */
+  
+  /* Select Focus Enhancement */
+  .ant-select-focused .ant-select-selector {
+    border-color: #41B883 !important;
+    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.1) !important;
+  }
+  
+  /* Select Hover Enhancement */
+  .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
+    border-color: rgba(65, 184, 131, 0.6) !important;
+  }
+  
+  /* Select Dropdown Enhancement */
+  .ant-select-dropdown {
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2) !important;
+    border: 1px solid rgba(65, 184, 131, 0.15) !important;
+  }
+  
+  .ant-select-item {
+    border-radius: 4px !important;
+    margin: 2px 4px !important;
+  }
+  
+  .ant-select-item-option-selected {
+    background: rgba(65, 184, 131, 0.1) !important;
+    color: #41B883 !important;
+    font-weight: 500 !important;
+  }
+  
+  .ant-select-item-option-active {
+    background: rgba(65, 184, 131, 0.05) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Form Styling
+     ==================================================================== */
+  
+  /* Form Label Enhancement */
+  .ant-form-item-label > label {
+    color: #35495E !important;
+    font-weight: 500 !important;
+  }
+  
+  /* Required Mark Enhancement */
+  .ant-form-item-label > label.ant-form-item-required:not(.ant-form-item-required-mark-optional):before {
+    color: #EF4444 !important;
+  }
+  
+  /* Form Error Enhancement */
+  .ant-form-item-has-error .ant-input {
+    border-color: #EF4444 !important;
+  }
+  
+  .ant-form-item-has-error .ant-input:focus {
+    border-color: #EF4444 !important;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1) !important;
+  }
+  
+  .ant-form-item-explain-error {
+    color: #EF4444 !important;
+    font-size: 12px !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Modal Styling
+     ==================================================================== */
+  
+  /* Modal Header Enhancement */
+  .ant-modal-header {
+    border-bottom: 1px solid rgba(65, 184, 131, 0.1) !important;
+    padding: 16px 24px !important;
+  }
+  
+  .ant-modal-title {
+    color: #202124 !important;
+    font-weight: 600 !important;
+    font-size: 18px !important;
+  }
+  
+  /* Modal Body Enhancement */
+  .ant-modal-body {
+    padding: 24px !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+  }
+  
+  /* Modal Footer Enhancement */
+  .ant-modal-footer {
+    border-top: 1px solid rgba(65, 184, 131, 0.1) !important;
+    padding: 10px 16px !important;
+    text-align: right !important;
+  }
+  
+  .ant-modal-footer .ant-btn + .ant-btn {
+    margin-left: 8px !important;
+  }
+  
+  /* Modal Close Button Enhancement */
+  .ant-modal-close-x {
+    color: #9CA3AF !important;
+    transition: all 0.2s ease !important;
+  }
+  
+  .ant-modal-close-x:hover {
+    color: #6B7280 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Card Styling
+     ==================================================================== */
+  
+  /* Card Header Enhancement */
+  .ant-card-head {
+    border-bottom: 1px solid rgba(65, 184, 131, 0.1) !important;
+    padding: 16px 20px !important;
+  }
+  
+  .ant-card-head-title {
+    color: #202124 !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+  }
+  
+  /* Card Body Enhancement */
+  .ant-card-body {
+    padding: 20px !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+  }
+  
+  /* Hoverable Card Enhancement */
+  .ant-card-hoverable {
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+  }
+  
+  .ant-card-hoverable:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 16px rgba(65, 184, 131, 0.2) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Alert Styling
+     ==================================================================== */
+  
+  /* Success Alert Enhancement */
+  .ant-alert-success {
+    background: rgba(65, 184, 131, 0.05) !important;
+    border: 1px solid rgba(65, 184, 131, 0.2) !important;
+    color: #35495E !important;
+  }
+  
+  .ant-alert-success .ant-alert-icon {
+    color: #41B883 !important;
+  }
+  
+  /* Info Alert Enhancement */
+  .ant-alert-info {
+    background: rgba(52, 144, 220, 0.05) !important;
+    border: 1px solid rgba(52, 144, 220, 0.2) !important;
+    color: #35495E !important;
+  }
+  
+  .ant-alert-info .ant-alert-icon {
+    color: #3490DC !important;
+  }
+  
+  /* Warning Alert Enhancement */
+  .ant-alert-warning {
+    background: rgba(245, 158, 11, 0.05) !important;
+    border: 1px solid rgba(245, 158, 11, 0.2) !important;
+    color: #35495E !important;
+  }
+  
+  .ant-alert-warning .ant-alert-icon {
+    color: #F59E0B !important;
+  }
+  
+  /* Error Alert Enhancement */
+  .ant-alert-error {
+    background: rgba(239, 68, 68, 0.05) !important;
+    border: 1px solid rgba(239, 68, 68, 0.2) !important;
+    color: #35495E !important;
+  }
+  
+  .ant-alert-error .ant-alert-icon {
+    color: #EF4444 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Tooltip Styling
+     ==================================================================== */
+  
+  .ant-tooltip-inner {
+    background: rgba(35, 41, 70, 0.95) !important;
+    color: #FFFFFF !important;
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+  
+  .ant-tooltip-arrow::before {
+    background: rgba(35, 41, 70, 0.95) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Popover Styling
+     ==================================================================== */
+  
+  .ant-popover-inner {
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2) !important;
+  }
+  
+  .ant-popover-title {
+    color: #202124 !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    border-bottom: 1px solid rgba(65, 184, 131, 0.1) !important;
+  }
+  
+  .ant-popover-inner-content {
+    color: #35495E !important;
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Menu Styling
+     ==================================================================== */
+  
+  .ant-menu-item:hover {
+    background: rgba(65, 184, 131, 0.05) !important;
+    color: #41B883 !important;
+  }
+  
+  .ant-menu-item-selected {
+    background: rgba(65, 184, 131, 0.1) !important;
+    color: #41B883 !important;
+    font-weight: 600 !important;
+  }
+  
+  .ant-menu-submenu-title:hover {
+    color: #41B883 !important;
+  }
+  
+  .ant-menu-submenu-selected > .ant-menu-submenu-title {
+    color: #41B883 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Dropdown Styling
+     ==================================================================== */
+  
+  .ant-dropdown {
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2) !important;
+    border: 1px solid rgba(65, 184, 131, 0.15) !important;
+  }
+  
+  .ant-dropdown-menu {
+    border-radius: 8px !important;
+    padding: 4px !important;
+  }
+  
+  .ant-dropdown-menu-item {
+    border-radius: 4px !important;
+    margin: 1px !important;
+    padding: 8px 12px !important;
+    transition: all 0.2s ease !important;
+  }
+  
+  .ant-dropdown-menu-item:hover {
+    background: rgba(65, 184, 131, 0.05) !important;
+    color: #41B883 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Notification Styling
+     ==================================================================== */
+  
+  .ant-notification-notice {
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 1px rgba(65, 184, 131, 0.2) !important;
+    border: 1px solid rgba(65, 184, 131, 0.1) !important;
+  }
+  
+  .ant-notification-notice-icon-success {
+    color: #41B883 !important;
+  }
+  
+  .ant-notification-notice-icon-info {
+    color: #3490DC !important;
+  }
+  
+  .ant-notification-notice-icon-warning {
+    color: #F59E0B !important;
+  }
+  
+  .ant-notification-notice-icon-error {
+    color: #EF4444 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Message Styling
+     ==================================================================== */
+  
+  .ant-message-notice {
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 1px rgba(65, 184, 131, 0.2) !important;
+  }
+  
+  .ant-message-success .anticon {
+    color: #41B883 !important;
+  }
+  
+  .ant-message-info .anticon {
+    color: #3490DC !important;
+  }
+  
+  .ant-message-warning .anticon {
+    color: #F59E0B !important;
+  }
+  
+  .ant-message-error .anticon {
+    color: #EF4444 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Checkbox and Radio Styling
+     ==================================================================== */
+  
+  /* Checkbox Enhancement */
+  .ant-checkbox-checked .ant-checkbox-inner {
+    background-color: #41B883 !important;
+    border-color: #41B883 !important;
+  }
+  
+  .ant-checkbox-wrapper:hover .ant-checkbox-inner {
+    border-color: #41B883 !important;
+  }
+  
+  .ant-checkbox:hover .ant-checkbox-inner {
+    border-color: #41B883 !important;
+  }
+  
+  .ant-checkbox-indeterminate .ant-checkbox-inner {
+    background-color: #41B883 !important;
+    border-color: #41B883 !important;
+  }
+  
+  /* Radio Enhancement */
+  .ant-radio-checked .ant-radio-inner {
+    border-color: #41B883 !important;
+  }
+  
+  .ant-radio-checked .ant-radio-inner::after {
+    background-color: #41B883 !important;
+  }
+  
+  .ant-radio-wrapper:hover .ant-radio-inner {
+    border-color: #41B883 !important;
+  }
+  
+  .ant-radio:hover .ant-radio-inner {
+    border-color: #41B883 !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Switch Styling
+     ==================================================================== */
+  
+  .ant-switch-checked {
+    background: #41B883 !important;
+  }
+  
+  .ant-switch-checked:hover {
+    background: #369870 !important;
+  }
+  
+  .ant-switch:hover {
+    background: #F3F4F6 !important;
+  }
+  
+  .ant-switch-checked:focus {
+    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.1) !important;
+  }
+  
+  /* ====================================================================
+     Enhanced Slider Styling
+     ==================================================================== */
+  
+  .ant-slider-track {
+    background: #41B883 !important;
+  }
+  
+  .ant-slider-handle {
+    border-color: #41B883 !important;
+    box-shadow: 0 0 0 2px rgba(65, 184, 131, 0.1) !important;
+  }
+  
+  .ant-slider-handle:focus {
+    border-color: #41B883 !important;
+    box-shadow: 0 0 0 4px rgba(65, 184, 131, 0.15) !important;
+  }
+  
+  .ant-slider:hover .ant-slider-track {
+    background: #369870 !important;
+  }
+  
+  .ant-slider:hover .ant-slider-handle {
+    border-color: #369870 !important;
+  }
+  
+  /* ====================================================================
+     Responsive Design Adjustments
+     ==================================================================== */
+  
+  @media (max-width: 768px) {
+    /* Mobile button adjustments */
+    .ant-btn {
+      font-size: 14px !important;
+      height: 36px !important;
+      padding: 0 14px !important;
+    }
+    
+    .ant-btn-sm {
+      height: 28px !important;
+      padding: 0 10px !important;
+      font-size: 12px !important;
+    }
+    
+    /* Mobile input adjustments */
+    .ant-input {
+      height: 36px !important;
+      font-size: 14px !important;
+    }
+    
+    /* Mobile table adjustments */
+    .ant-table-tbody > tr > td {
+      padding: 8px 6px !important;
+      font-size: 12px !important;
+    }
+    
+    .ant-table-thead > tr > th {
+      padding: 8px 6px !important;
+      font-size: 10px !important;
+    }
+    
+    /* Mobile modal adjustments */
+    .ant-modal {
+      margin: 10px !important;
+    }
+    
+    .ant-modal-body {
+      padding: 16px !important;
+    }
+    
+    /* Mobile card adjustments */
+    .ant-card-body {
+      padding: 16px !important;
+    }
+  }
+  
+  /* ====================================================================
+     Dark Mode Support (Future Enhancement)
+     ==================================================================== */
+  
+  /* Currently commented out as the main design uses light mode
+     Uncomment and adjust when dark mode support is needed */
+  
+  /*
+  @media (prefers-color-scheme: dark) {
+    .ant-btn-primary {
+      background: linear-gradient(135deg, #41B883, #3490DC) !important;
+      color: #ffffff !important;
+    }
+    
+    .ant-btn-default {
+      background: #1f2937 !important;
+      border-color: #374151 !important;
+      color: #d1d5db !important;
+    }
+    
+    .ant-input {
+      background: #1f2937 !important;
+      border-color: #374151 !important;
+      color: #d1d5db !important;
+    }
+    
+    .ant-table-thead > tr > th {
+      background: #41B883 !important;
+      color: #ffffff !important;
+    }
+    
+    .ant-table-tbody > tr > td {
+      background: #1f2937 !important;
+      color: #d1d5db !important;
+      border-bottom-color: #374151 !important;
+    }
+  }
+  */

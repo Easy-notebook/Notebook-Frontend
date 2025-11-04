@@ -1,0 +1,634 @@
+{
+  "notebook_id": "dslc-sg-used-cars-synthetic",
+  "cells": [
+    {
+      "id": "cell-001",
+      "type": "markdown",
+      "content": "# DSLC Project: Singapore Used Car Market (Synthetic Data)",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Project title and introduction."
+    },
+    {
+      "id": "cell-002",
+      "type": "markdown",
+      "content": "Welcome to this DSLC project notebook. In this project, we analyze Singapore's used car market using synthetic data that is generated within Python. We will follow the complete data science lifecycle—from problem definition and data generation to modeling, evaluation, and communication of insights.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Project introduction."
+    },
+    {
+      "id": "cell-003",
+      "type": "code",
+      "content": "## Data Generation: Create a Synthetic Dataset for Singapore's Used Car Market\nimport numpy as np\nimport pandas as pd\n\nnp.random.seed(42)\n\nn_samples = 500\n\n# Generate synthetic features\ncar_age = np.random.randint(1, 21, n_samples)  # Car age between 1 and 20 years\nmileage = np.random.randint(5000, 200001, n_samples)  # Mileage between 5,000 and 200,000 km\nbrands = np.random.choice([\"Toyota\", \"Honda\", \"BMW\", \"Mercedes\", \"Nissan\"], n_samples)\nregions = np.random.choice([\"Central\", \"East\", \"North\", \"West\", \"South\"], n_samples)\n\n# Define brand factors to simulate premium pricing\nbrand_factor = {\"Toyota\": 2000, \"Honda\": 1500, \"BMW\": 10000, \"Mercedes\": 12000, \"Nissan\": 1800}\n\n# Compute Price using a synthetic formula:\n# Price = 50000 - 2000 * car_age - 0.05 * mileage + brand_factor + random noise\nnoise = np.random.normal(0, 1000, n_samples)\nprice = 50000 - 2000 * car_age - 0.05 * mileage + np.array([brand_factor[b] for b in brands]) + noise\n\n# Create the DataFrame\ndf = pd.DataFrame({\n    \"Price\": price,\n    \"Mileage\": mileage,\n    \"Car_Age\": car_age,\n    \"Brand\": brands,\n    \"Region\": regions\n})\n\n# Display a sample of the synthetic dataset\nprint(\"Synthetic dataset sample:\")\nprint(df.head())\n\n# Save the dataset to a CSV file (optional)\ndf.to_csv(\"synthetic_singapore_used_cars.csv\", index=False)",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "This cell generates the synthetic dataset."
+    },
+    {
+      "id": "cell-004",
+      "type": "markdown",
+      "content": "## 1. Problem Definition & Data Collection\n\nWe aim to investigate how features like Mileage, Car Age, and Brand affect the price of used cars in Singapore. We also explore if market segmentation reveals distinct clusters of vehicles. Our synthetic dataset provides all the necessary variables for a comprehensive analysis.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Defining the research questions and objectives."
+    },
+    {
+      "id": "cell-005",
+      "type": "code",
+      "content": "# Preview the synthetic dataset\nprint(\"Data preview:\")\nprint(df.head())",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Display a preview of the generated data."
+    },
+    {
+      "id": "cell-006",
+      "type": "markdown",
+      "content": "### 1.1 Baseline Predictability Assessment\n\nBefore deeper analysis, we assess if our features can predict car prices. We use a simple linear regression (using only numerical predictors) as a baseline.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Baseline model evaluation."
+    },
+    {
+      "id": "cell-007",
+      "type": "code",
+      "content": "from sklearn.model_selection import train_test_split\nfrom sklearn.linear_model import LinearRegression\n\n# For baseline, use only Mileage and Car_Age\nX = df[['Mileage', 'Car_Age']]\ny = df['Price']\n\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n\nmodel = LinearRegression()\nmodel.fit(X_train, y_train)\npredictions = model.predict(X_test)\nprint('Baseline predictions:', predictions[:5])",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Run a baseline linear regression model."
+    },
+    {
+      "id": "cell-008",
+      "type": "markdown",
+      "content": "## 2. Data Cleaning & Exploratory Analysis\n\nEven though our synthetic data is clean, we simulate the data cleaning process by checking for missing values. Then we perform exploratory data analysis (EDA) to understand the data distributions and relationships.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Data cleaning and EDA overview."
+    },
+    {
+      "id": "cell-009",
+      "type": "code",
+      "content": "# Check for missing values\nprint(\"Missing values before imputation:\")\nprint(df.isnull().sum())\n\n# Impute missing values (if any)\ndf_clean = df.fillna(df.mean())\nprint(\"Missing values after imputation:\")\nprint(df_clean.isnull().sum())",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Simulated data cleaning step."
+    },
+    {
+      "id": "cell-010",
+      "type": "markdown",
+      "content": "### 2.1 Data Preprocessing\n\nWe standardize numerical features and apply one-hot encoding to the categorical variables (`Brand` and `Region`) to prepare our data for modeling.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Preprocessing steps."
+    },
+    {
+      "id": "cell-011",
+      "type": "code",
+      "content": "from sklearn.preprocessing import StandardScaler, OneHotEncoder\n\n# Standardize numeric features\nscaler = StandardScaler()\ndf_numeric = df_clean[['Price', 'Mileage', 'Car_Age']]\ndf_scaled = scaler.fit_transform(df_numeric)\n\n# One-hot encode categorical features\nencoder = OneHotEncoder()\ndf_categorical = encoder.fit_transform(df_clean[['Brand', 'Region']])\n\n# Combine the preprocessed data\nimport numpy as np\ndf_preprocessed = np.hstack((df_scaled, df_categorical.toarray()))\nprint('Shape after preprocessing:', df_preprocessed.shape)",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Combine scaled and encoded features."
+    },
+    {
+      "id": "cell-012",
+      "type": "markdown",
+      "content": "### 2.2 Exploratory Data Analysis (EDA)\n\nWe now explore the dataset through visualizations. A histogram of Mileage reveals the distribution of vehicle usage, while a correlation heatmap shows the relationships among numerical features.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "EDA narrative."
+    },
+    {
+      "id": "cell-013",
+      "type": "code",
+      "content": "import matplotlib.pyplot as plt\nimport seaborn as sns\n\n# Histogram: Mileage Distribution\nplt.figure(figsize=(10,6))\nsns.histplot(df_clean['Mileage'], bins=30, kde=True, color='skyblue')\nplt.title('Mileage Distribution of Used Cars')\nplt.xlabel('Mileage')\nplt.ylabel('Frequency')\nplt.savefig('mileage_distribution.png')\nplt.show()\n\n# Correlation Heatmap\nplt.figure(figsize=(12,8))\nsns.heatmap(df_clean.corr(), annot=True, fmt='.2f', cmap='coolwarm')\nplt.title('Feature Correlation')\nplt.savefig('correlation_heatmap.png')\nplt.show()",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Generate EDA visualizations."
+    },
+    {
+      "id": "cell-014",
+      "type": "markdown",
+      "content": "### 2.3 Dimensionality Reduction with PCA\n\nTo reduce complexity and reveal hidden patterns, we apply Principal Component Analysis (PCA) on our numerical features.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "PCA narrative."
+    },
+    {
+      "id": "cell-015",
+      "type": "code",
+      "content": "from sklearn.decomposition import PCA\n\npca = PCA(n_components=2)\n# Use Mileage and Car_Age for PCA demonstration\nprincipal_components = pca.fit_transform(df_clean[['Mileage', 'Car_Age']])\n\nplt.figure(figsize=(8,6))\nplt.scatter(principal_components[:,0], principal_components[:,1], c='teal', alpha=0.6)\nplt.xlabel('Principal Component 1')\nplt.ylabel('Principal Component 2')\nplt.title('PCA: Hidden Patterns')\nplt.savefig('pca_scatter.png')\nplt.show()",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Visualize the results of PCA."
+    },
+    {
+      "id": "cell-016",
+      "type": "markdown",
+      "content": "## 3. Market Segmentation & Clustering\n\nNext, we use K-Means clustering to segment the market. Clusters may indicate distinct consumer groups or vehicle conditions.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Clustering narrative."
+    },
+    {
+      "id": "cell-017",
+      "type": "code",
+      "content": "from sklearn.cluster import KMeans\nimport pandas as pd\n\n# Convert preprocessed data to a DataFrame for clustering\ndata = pd.DataFrame(df_preprocessed)\nkmeans = KMeans(n_clusters=3, random_state=42)\nclusters = kmeans.fit_predict(data)\n\nplt.figure(figsize=(8,6))\nsns.scatterplot(x=principal_components[:,0], y=principal_components[:,1], hue=clusters, palette='viridis')\nplt.xlabel('Principal Component 1')\nplt.ylabel('Principal Component 2')\nplt.title('Market Segmentation via K-Means')\nplt.savefig('market_clusters.png')\nplt.show()",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "K-Means clustering and visualization."
+    },
+    {
+      "id": "cell-018",
+      "type": "markdown",
+      "content": "## 4. Predictive Modeling & Statistical Inference\n\nWe now build a Random Forest model to predict car prices and perform OLS regression to infer the influence of features such as Mileage and Car Age on price.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Prediction and inference narrative."
+    },
+    {
+      "id": "cell-019",
+      "type": "code",
+      "content": "from sklearn.ensemble import RandomForestRegressor\nfrom sklearn.metrics import mean_squared_error\n\n# For prediction, we use Mileage and Car_Age as predictors\nX = df_clean[['Mileage', 'Car_Age']]\ny = df_clean['Price']\n\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n\nmodel_rf = RandomForestRegressor(n_estimators=100, random_state=42)\nmodel_rf.fit(X_train, y_train)\npredictions_rf = model_rf.predict(X_test)\nmse_rf = mean_squared_error(y_test, predictions_rf)\nprint(f'Random Forest MSE: {mse_rf}')",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Random Forest model for prediction."
+    },
+    {
+      "id": "cell-020",
+      "type": "markdown",
+      "content": "### 4.1 Statistical Inference with OLS Regression\n\nWe perform Ordinary Least Squares (OLS) regression to quantify the impact of Mileage and Car Age on car price.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Inference narrative."
+    },
+    {
+      "id": "cell-021",
+      "type": "code",
+      "content": "import statsmodels.api as sm\n\nX_sm = sm.add_constant(X)\nmodel_sm = sm.OLS(y, X_sm)\nresults_sm = model_sm.fit()\nprint(results_sm.summary())",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "OLS regression for statistical inference."
+    },
+    {
+      "id": "cell-022",
+      "type": "markdown",
+      "content": "## 5. Model Evaluation & Final Communication\n\nWe evaluate the performance of our Random Forest model using the R² metric and visualize the actual versus predicted prices. Finally, we compile our insights into a comprehensive report.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Evaluation and communication narrative."
+    },
+    {
+      "id": "cell-023",
+      "type": "code",
+      "content": "from sklearn.metrics import r2_score\n\nr2_rf = r2_score(y_test, predictions_rf)\nprint(f'Random Forest R² Score: {r2_rf}')\n\nplt.figure(figsize=(8,6))\nplt.scatter(y_test, predictions_rf, alpha=0.5, color='darkorange')\nplt.xlabel('Actual Prices')\nplt.ylabel('Predicted Prices')\nplt.title('Actual vs Predicted Prices')\nplt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')\nplt.savefig('actual_vs_predicted.png')\nplt.show()",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Evaluate model performance and visualize results."
+    },
+    {
+      "id": "cell-024",
+      "type": "markdown",
+      "content": "## 6. Communication & Domain Knowledge Update\n\nOur final step is to communicate the insights. The visualizations and statistical summaries form the basis of a final report that informs stakeholders about key trends and market segments in Singapore's used car market.",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Final communication of insights."
+    },
+    {
+      "id": "cell-025",
+      "type": "code",
+      "content": "## Final Visualization and Report Summary\nplt.figure(figsize=(8,6))\nsns.scatterplot(x=y_test, y=predictions_rf, alpha=0.7, palette='cool')\nplt.xlabel('Actual Prices')\nplt.ylabel('Predicted Prices')\nplt.title('Final Results: Actual vs Predicted Prices')\nplt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')\nplt.savefig('final_results.png')\nplt.show()\n\nprint('Final insights: The analysis reveals key trends and market segments that provide actionable intelligence for strategic decisions in the used car market.')",
+      "outputs": [],
+      "enableEdit": true,
+      "phaseId": null,
+      "description": "Communicate the final results."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-dslc-sg-used-cars",
+      "title": "DSLC Project: Singapore Used Car Market Analysis",
+      "phases": [
+        {
+          "id": "phase-intro",
+          "title": "Project Intro & Input",
+          "icon": {},
+          "status": "pending",
+          "steps": [
+            {
+              "id": "step-intro-1",
+              "title": "Project Introduction",
+              "status": "pending",
+              "startIndex": 0,
+              "endIndex": 3,
+              "content": [
+                {
+                  "id": "cell-002",
+                  "type": "markdown",
+                  "content": "Welcome to our DSLC project on Singapore's used car market using synthetic data. This notebook tells a comprehensive story from data generation to final insights.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Project introduction."
+                },
+                {
+                  "id": "cell-003",
+                  "type": "code",
+                  "content": "## Data generation is performed in cell-003.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Reference to data generation."
+                }
+              ]
+            }
+          ],
+          "currentIntroStep": null
+        },
+        {
+          "id": "phase-1",
+          "title": "1. Problem Definition & Data Collection",
+          "icon": {},
+          "status": "pending",
+          "steps": [
+            {
+              "id": "step-1-1",
+              "title": "Define Problem & Collect Data",
+              "status": "pending",
+              "startIndex": 4,
+              "endIndex": 7,
+              "content": [
+                {
+                  "id": "cell-004",
+                  "type": "markdown",
+                  "content": "Define research questions and gather the synthetic data for analysis.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Problem definition narrative."
+                },
+                {
+                  "id": "cell-005",
+                  "type": "code",
+                  "content": "# Data preview from cell-005\nprint(df.head())",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Preview dataset."
+                }
+              ]
+            },
+            {
+              "id": "step-1-2",
+              "title": "Predictability Assessment",
+              "status": "pending",
+              "startIndex": 6,
+              "endIndex": 8,
+              "content": [
+                {
+                  "id": "cell-006",
+                  "type": "markdown",
+                  "content": "Assess baseline predictability using linear regression.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Baseline predictability narrative."
+                },
+                {
+                  "id": "cell-007",
+                  "type": "code",
+                  "content": "# Baseline prediction code from cell-007 is executed here.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Baseline prediction reference."
+                }
+              ]
+            }
+          ],
+          "currentIntroStep": null
+        },
+        {
+          "id": "phase-2",
+          "title": "2. Data Cleaning & EDA",
+          "icon": {},
+          "status": "pending",
+          "steps": [
+            {
+              "id": "step-2-1",
+              "title": "Data Cleaning & Preprocessing",
+              "status": "pending",
+              "startIndex": 8,
+              "endIndex": 12,
+              "content": [
+                {
+                  "id": "cell-008",
+                  "type": "markdown",
+                  "content": "Clean and preprocess the data (see cells 009 and 011).",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Data cleaning narrative."
+                },
+                {
+                  "id": "cell-009",
+                  "type": "code",
+                  "content": "# Data cleaning code is in cell-009.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Data cleaning reference."
+                },
+                {
+                  "id": "cell-010",
+                  "type": "markdown",
+                  "content": "Preprocessing is completed in cell-011.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Preprocessing narrative."
+                },
+                {
+                  "id": "cell-011",
+                  "type": "code",
+                  "content": "# Preprocessing code from cell-011 is executed here.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Preprocessing reference."
+                }
+              ]
+            },
+            {
+              "id": "step-2-2",
+              "title": "Exploratory Analysis & PCA",
+              "status": "pending",
+              "startIndex": 12,
+              "endIndex": 16,
+              "content": [
+                {
+                  "id": "cell-012",
+                  "type": "markdown",
+                  "content": "Perform EDA and visualize data distributions and correlations (see cell-013 and cell-015).",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "EDA narrative."
+                },
+                {
+                  "id": "cell-013",
+                  "type": "code",
+                  "content": "# EDA visualizations are generated in cell-013.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "EDA reference."
+                },
+                {
+                  "id": "cell-014",
+                  "type": "markdown",
+                  "content": "PCA analysis is performed in cell-015.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "PCA narrative."
+                },
+                {
+                  "id": "cell-015",
+                  "type": "code",
+                  "content": "# PCA code from cell-015 is executed here.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "PCA reference."
+                }
+              ]
+            }
+          ],
+          "currentIntroStep": null
+        },
+        {
+          "id": "phase-3",
+          "title": "3. Market Segmentation",
+          "icon": {},
+          "status": "pending",
+          "steps": [
+            {
+              "id": "step-3-1",
+              "title": "Clustering",
+              "status": "pending",
+              "startIndex": 16,
+              "endIndex": 18,
+              "content": [
+                {
+                  "id": "cell-016",
+                  "type": "markdown",
+                  "content": "Market segmentation via clustering is detailed in cell-017.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Clustering narrative."
+                },
+                {
+                  "id": "cell-017",
+                  "type": "code",
+                  "content": "# Clustering code from cell-017 is executed here.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Clustering reference."
+                }
+              ]
+            }
+          ],
+          "currentIntroStep": null
+        },
+        {
+          "id": "phase-4",
+          "title": "4. Predictive Modeling & Inference",
+          "icon": {},
+          "status": "pending",
+          "steps": [
+            {
+              "id": "step-4-1",
+              "title": "Random Forest Prediction",
+              "status": "pending",
+              "startIndex": 18,
+              "endIndex": 20,
+              "content": [
+                {
+                  "id": "cell-018",
+                  "type": "markdown",
+                  "content": "Train the Random Forest model as shown in cell-019.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Prediction narrative."
+                },
+                {
+                  "id": "cell-019",
+                  "type": "code",
+                  "content": "# Prediction code from cell-019 is executed here.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Prediction reference."
+                }
+              ]
+            },
+            {
+              "id": "step-4-2",
+              "title": "OLS Inference",
+              "status": "pending",
+              "startIndex": 20,
+              "endIndex": 22,
+              "content": [
+                {
+                  "id": "cell-020",
+                  "type": "markdown",
+                  "content": "Perform OLS regression for inference (see cell-021).",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Inference narrative."
+                },
+                {
+                  "id": "cell-021",
+                  "type": "code",
+                  "content": "# OLS regression code from cell-021 is executed here.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Inference reference."
+                }
+              ]
+            }
+          ],
+          "currentIntroStep": null
+        },
+        {
+          "id": "phase-5",
+          "title": "5. Model Evaluation & Communication",
+          "icon": {},
+          "status": "pending",
+          "steps": [
+            {
+              "id": "step-5-1",
+              "title": "Evaluation",
+              "status": "pending",
+              "startIndex": 22,
+              "endIndex": 24,
+              "content": [
+                {
+                  "id": "cell-022",
+                  "type": "markdown",
+                  "content": "Evaluate the model using R² and review visualizations (see cell-023).",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Evaluation narrative."
+                },
+                {
+                  "id": "cell-023",
+                  "type": "code",
+                  "content": "# Evaluation code from cell-023 is executed here.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Evaluation reference."
+                }
+              ]
+            },
+            {
+              "id": "step-5-2",
+              "title": "Communication",
+              "status": "pending",
+              "startIndex": 24,
+              "endIndex": 26,
+              "content": [
+                {
+                  "id": "cell-024",
+                  "type": "markdown",
+                  "content": "Communicate the final insights and findings as demonstrated in cell-025.",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Communication narrative."
+                },
+                {
+                  "id": "cell-025",
+                  "type": "code",
+                  "content": "# Final communication code from cell-025 is executed here.\nprint('Final insights communicated.')",
+                  "outputs": [],
+                  "enableEdit": true,
+                  "phaseId": null,
+                  "description": "Communication reference."
+                }
+              ]
+            }
+          ],
+          "currentIntroStep": null
+        }
+      ],
+      "introPhase": {
+        "id": "phase-intro",
+        "title": "Project Intro & Input",
+        "icon": {},
+        "status": "pending",
+        "steps": [
+          {
+            "id": "step-intro-1",
+            "title": "Project Introduction",
+            "status": "pending",
+            "startIndex": 0,
+            "endIndex": 3,
+            "content": [
+              {
+                "id": "cell-002",
+                "type": "markdown",
+                "content": "Welcome to our DSLC project on Singapore's used car market using synthetic data. This notebook tells a comprehensive story from data generation to final insights.",
+                "outputs": [],
+                "enableEdit": true,
+                "phaseId": null,
+                "description": "Project introduction."
+              },
+              {
+                "id": "cell-003",
+                "type": "code",
+                "content": "## Data generation is performed in cell-003.",
+                "outputs": [],
+                "enableEdit": true,
+                "phaseId": null,
+                "description": "Reference to data generation."
+              }
+            ]
+          }
+        ],
+        "currentIntroStep": null
+      }
+    }
+  ]
+}
