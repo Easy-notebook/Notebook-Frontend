@@ -6,7 +6,7 @@ import { NotebookORM } from './notebookOrm';
 import { FileORM } from './fileOrm';
 import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG, NotebookEntity } from './schema';
 import { DataMigration } from './migration';
-import { storageLog } from '../utils/logger';
+import { storageLog } from '@Utils/logger';
 
 /**
  * Storage cleanup statistics
@@ -38,8 +38,8 @@ export class StorageManager {
   private static cleanupInProgress = false;
   private static lastCleanup = 0;
   private static initializationPromise: Promise<void> | null = null;
-  private static isInitialized: boolean = false;
-  
+  private static isInitialized = false;
+
   /**
    * Initialize storage system with singleton protection
    */
@@ -49,16 +49,16 @@ export class StorageManager {
       storageLog.debug('Storage system already initialized, skipping');
       return;
     }
-    
+
     // Return existing promise if initialization is in progress
     if (this.initializationPromise) {
       storageLog.debug('Storage initialization in progress, waiting');
       return this.initializationPromise;
     }
-    
+
     // Create and store the initialization promise
     this.initializationPromise = this.doInitialize();
-    
+
     try {
       await this.initializationPromise;
       this.isInitialized = true;
@@ -71,7 +71,7 @@ export class StorageManager {
       this.initializationPromise = null;
     }
   }
-  
+
   /**
    * Internal initialization method
    */
@@ -80,16 +80,16 @@ export class StorageManager {
       storageLog.info('Initializing storage system');
       await IndexedDBManager.initialize();
       storageLog.persistence('IndexedDB', 'init', { success: true });
-      
+
       // Wait a bit to ensure database is fully ready
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       await this.ensureConfig();
       storageLog.info('Storage configuration initialized');
-      
+
       // Check and perform data migration if needed
       await this.checkAndMigrate();
-      
+
       // Schedule periodic cleanup
       this.scheduleCleanup();
       storageLog.info('Storage system initialization completed');
@@ -98,22 +98,22 @@ export class StorageManager {
       throw error;
     }
   }
-  
+
   /**
    * Get storage configuration
    */
   static async getConfig(): Promise<StorageConfigEntity> {
     try {
       const db = await IndexedDBManager.getDB();
-      
+
       return new Promise((resolve, reject) => {
         try {
           const transaction = db.transaction([DB_CONFIG.STORES.CONFIG], 'readonly');
           const store = transaction.objectStore(DB_CONFIG.STORES.CONFIG);
-          
+
           const request = store.get('config');
           let resolved = false;
-          
+
           request.onsuccess = () => {
             if (!resolved) {
               resolved = true;
@@ -121,7 +121,7 @@ export class StorageManager {
               resolve(config || DEFAULT_STORAGE_CONFIG);
             }
           };
-          
+
           request.onerror = () => {
             if (!resolved) {
               resolved = true;
@@ -129,7 +129,7 @@ export class StorageManager {
               resolve(DEFAULT_STORAGE_CONFIG);
             }
           };
-          
+
           transaction.onerror = () => {
             if (!resolved) {
               resolved = true;
@@ -137,7 +137,7 @@ export class StorageManager {
               resolve(DEFAULT_STORAGE_CONFIG);
             }
           };
-          
+
           transaction.onabort = () => {
             if (!resolved) {
               resolved = true;
@@ -145,7 +145,7 @@ export class StorageManager {
               resolve(DEFAULT_STORAGE_CONFIG);
             }
           };
-          
+
           // Reduced timeout and better error handling
           setTimeout(() => {
             if (!resolved) {
@@ -164,7 +164,7 @@ export class StorageManager {
       return DEFAULT_STORAGE_CONFIG;
     }
   }
-  
+
   /**
    * Update storage configuration
    */
@@ -172,34 +172,34 @@ export class StorageManager {
     try {
       const db = await IndexedDBManager.getDB();
       const currentConfig = await this.getConfig();
-      
+
       const updatedConfig: StorageConfigEntity = {
         ...currentConfig,
-        ...config
+        ...config,
       };
-      
+
       return new Promise((resolve, reject) => {
         try {
           const transaction = db.transaction([DB_CONFIG.STORES.CONFIG], 'readwrite');
           const store = transaction.objectStore(DB_CONFIG.STORES.CONFIG);
-          
+
           const request = store.put(updatedConfig);
-          
+
           request.onsuccess = () => {
             storageLog.info('Storage configuration updated successfully');
             resolve();
           };
-          
+
           request.onerror = () => {
             storageLog.error('Failed to update config', { error: request.error });
             reject(request.error);
           };
-          
+
           transaction.onerror = () => {
             storageLog.error('Config update transaction failed', { error: transaction.error });
             reject(transaction.error);
           };
-          
+
           setTimeout(() => {
             storageLog.warn('Config update timeout');
             reject(new Error('Update config timeout'));
@@ -214,13 +214,13 @@ export class StorageManager {
       throw error;
     }
   }
-  
+
   /**
    * Get comprehensive storage statistics
    */
   static async getStorageStats(): Promise<StorageStats> {
     const notebooks = await NotebookORM.getNotebooks();
-    
+
     let totalFiles = 0;
     let totalSize = 0;
     let largeFilesCount = 0;
@@ -228,27 +228,27 @@ export class StorageManager {
     let newestNotebook = 0;
     let mostAccessedNotebook = '';
     let maxAccess = 0;
-    
+
     for (const notebook of notebooks) {
       const stats = await NotebookORM.getNotebookStats(notebook.id);
       totalFiles += stats.fileCount;
       totalSize += stats.totalSize;
-      
+
       // Get large files count for this notebook
       const largeFiles = await FileORM.getLargeFiles(notebook.id);
       largeFilesCount += largeFiles.length;
-      
+
       // Track oldest/newest
       oldestNotebook = Math.min(oldestNotebook, notebook.createdAt);
       newestNotebook = Math.max(newestNotebook, notebook.createdAt);
-      
+
       // Track most accessed
       if (notebook.accessCount > maxAccess) {
         maxAccess = notebook.accessCount;
         mostAccessedNotebook = notebook.id;
       }
     }
-    
+
     return {
       totalNotebooks: notebooks.length,
       totalFiles,
@@ -256,38 +256,38 @@ export class StorageManager {
       largeFilesCount,
       oldestNotebook,
       newestNotebook,
-      mostAccessedNotebook
+      mostAccessedNotebook,
     };
   }
-  
+
   /**
    * Clean up old and unused notebooks and files
    */
-  static async cleanupStorage(force: boolean = false): Promise<CleanupStats> {
+  static async cleanupStorage(force = false): Promise<CleanupStats> {
     if (this.cleanupInProgress && !force) {
       throw new Error('Cleanup already in progress');
     }
-    
+
     this.cleanupInProgress = true;
     const startTime = Date.now();
-    
+
     try {
       const config = await this.getConfig();
       const stats: CleanupStats = {
         notebooksDeleted: 0,
         filesDeleted: 0,
         bytesFreed: 0,
-        duration: 0
+        duration: 0,
       };
-      
+
       // 1. Clean up inactive notebooks
       const inactiveNotebooks = await NotebookORM.getInactiveNotebooks(config.retentionPeriod);
-      
+
       for (const notebook of inactiveNotebooks) {
         // Get files for size calculation
         const files = await FileORM.getFilesForNotebook(notebook.id);
         const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-        
+
         // Delete notebook and all associated data
         const deleted = await NotebookORM.deleteNotebook(notebook.id);
         if (deleted) {
@@ -296,20 +296,20 @@ export class StorageManager {
           stats.bytesFreed += notebookSize;
         }
       }
-      
+
       // 2. Enforce maximum notebook limit
       const allNotebooks = await NotebookORM.getNotebooks({
         orderBy: 'lastAccessedAt',
-        limit: config.maxNotebooks + 50 // Get more than limit to find candidates for deletion
+        limit: config.maxNotebooks + 50, // Get more than limit to find candidates for deletion
       });
-      
+
       if (allNotebooks.length > config.maxNotebooks) {
         const excessNotebooks = allNotebooks.slice(config.maxNotebooks);
-        
+
         for (const notebook of excessNotebooks) {
           const files = await FileORM.getFilesForNotebook(notebook.id);
           const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-          
+
           const deleted = await NotebookORM.deleteNotebook(notebook.id);
           if (deleted) {
             stats.notebooksDeleted++;
@@ -318,22 +318,22 @@ export class StorageManager {
           }
         }
       }
-      
+
       // 3. Clean up orphaned activities (older than retention period)
       await this.cleanupOldActivities(config.retentionPeriod);
-      
+
       // 4. Update config with last cleanup time
       await this.updateConfig({ lastCleanup: Date.now() });
-      
+
       stats.duration = Date.now() - startTime;
       this.lastCleanup = Date.now();
-      
+
       return stats;
     } finally {
       this.cleanupInProgress = false;
     }
   }
-  
+
   /**
    * Clean up specific notebook and all its data
    */
@@ -342,25 +342,25 @@ export class StorageManager {
       // Get files for size calculation
       const files = await FileORM.getFilesForNotebook(notebookId);
       const totalSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-      
+
       // Delete notebook and all associated data
       const deleted = await NotebookORM.deleteNotebook(notebookId);
-      
+
       if (deleted) {
         storageLog.info('Cleaned up notebook', {
           notebookId,
           filesCount: files.length,
-          bytesFreed: totalSize
+          bytesFreed: totalSize,
         });
       }
-      
+
       return deleted;
     } catch (error) {
       storageLog.error('Failed to cleanup notebook', { notebookId, error });
       return false;
     }
   }
-  
+
   /**
    * Get notebooks ready for cleanup (inactive or exceeding limits)
    */
@@ -370,63 +370,62 @@ export class StorageManager {
     totalBytesToFree: number;
   }> {
     const config = await this.getConfig();
-    
+
     // Get inactive notebooks
     const inactive = await NotebookORM.getInactiveNotebooks(config.retentionPeriod);
-    
+
     // Get excess notebooks (over the limit)
     const allNotebooks = await NotebookORM.getNotebooks({
-      orderBy: 'lastAccessedAt'
+      orderBy: 'lastAccessedAt',
     });
-    
-    const excess = allNotebooks.length > config.maxNotebooks 
-      ? allNotebooks.slice(config.maxNotebooks)
-      : [];
-    
+
+    const excess =
+      allNotebooks.length > config.maxNotebooks ? allNotebooks.slice(config.maxNotebooks) : [];
+
     // Calculate total bytes to free
     let totalBytesToFree = 0;
-    
+
     for (const notebook of [...inactive, ...excess]) {
       const stats = await NotebookORM.getNotebookStats(notebook.id);
       totalBytesToFree += stats.totalSize;
     }
-    
+
     return {
       inactive,
       excess,
-      totalBytesToFree
+      totalBytesToFree,
     };
   }
-  
+
   /**
    * Emergency cleanup when storage is full
    */
   static async emergencyCleanup(): Promise<CleanupStats> {
     storageLog.warn('Performing emergency storage cleanup');
-    
+
     const config = await this.getConfig();
     const stats: CleanupStats = {
       notebooksDeleted: 0,
       filesDeleted: 0,
       bytesFreed: 0,
-      duration: Date.now()
+      duration: Date.now(),
     };
-    
+
     // Get all notebooks ordered by last access (oldest first)
     const notebooks = await NotebookORM.getNotebooks({
-      orderBy: 'lastAccessedAt'
+      orderBy: 'lastAccessedAt',
     });
-    
+
     // Delete oldest notebooks until we're under limits
     const targetNotebooks = Math.floor(config.maxNotebooks * 0.7); // Keep only 70%
-    
+
     if (notebooks.length > targetNotebooks) {
       const notebooksToDelete = notebooks.slice(0, notebooks.length - targetNotebooks);
-      
+
       for (const notebook of notebooksToDelete) {
         const files = await FileORM.getFilesForNotebook(notebook.id);
         const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-        
+
         const deleted = await NotebookORM.deleteNotebook(notebook.id);
         if (deleted) {
           stats.notebooksDeleted++;
@@ -435,23 +434,23 @@ export class StorageManager {
         }
       }
     }
-    
+
     stats.duration = Date.now() - stats.duration;
-    
+
     return stats;
   }
-  
+
   /**
    * Schedule periodic cleanup
    */
   private static scheduleCleanup(): void {
     const checkInterval = 60 * 60 * 1000; // Check every hour
-    
+
     setInterval(async () => {
       try {
         const config = await this.getConfig();
         const timeSinceLastCleanup = Date.now() - (config.lastCleanup || 0);
-        
+
         if (timeSinceLastCleanup >= config.cleanupInterval) {
           storageLog.info('Performing scheduled storage cleanup');
           const stats = await this.cleanupStorage();
@@ -459,7 +458,7 @@ export class StorageManager {
             notebooksDeleted: stats.notebooksDeleted,
             filesDeleted: stats.filesDeleted,
             bytesFreed: stats.bytesFreed,
-            duration: stats.duration
+            duration: stats.duration,
           });
         }
       } catch (error) {
@@ -467,7 +466,7 @@ export class StorageManager {
       }
     }, checkInterval);
   }
-  
+
   /**
    * Ensure config exists in database
    */
@@ -475,7 +474,7 @@ export class StorageManager {
     try {
       storageLog.debug('Checking storage configuration');
       const config = await this.getConfig();
-      
+
       // If config doesn't exist or is default, create it
       if (!config || config === DEFAULT_STORAGE_CONFIG) {
         storageLog.info('Creating default storage configuration');
@@ -489,22 +488,22 @@ export class StorageManager {
       // Don't throw - we can continue with default config in memory
     }
   }
-  
+
   /**
    * Clean up old activity records
    */
   private static async cleanupOldActivities(retentionPeriod: number): Promise<void> {
     const db = await IndexedDBManager.getDB();
     const cutoffTime = Date.now() - retentionPeriod;
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.ACTIVITIES], 'readwrite');
       const store = transaction.objectStore(DB_CONFIG.STORES.ACTIVITIES);
       const index = store.index('timestamp');
-      
+
       const range = IDBKeyRange.upperBound(cutoffTime);
       const request = index.openCursor(range);
-      
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
@@ -514,13 +513,13 @@ export class StorageManager {
           resolve();
         }
       };
-      
+
       request.onerror = () => reject(request.error);
-      
+
       setTimeout(() => resolve(), 10000); // Don't block too long on cleanup
     });
   }
-  
+
   /**
    * Check and perform data migration if needed
    */
@@ -528,19 +527,19 @@ export class StorageManager {
     try {
       storageLog.debug('Checking if data migration is needed');
       const migrationNeeded = await DataMigration.isMigrationNeeded();
-      
+
       if (migrationNeeded) {
         storageLog.info('Data migration required, starting migration');
         const stats = await DataMigration.migrate();
-        
+
         if (stats.notebooksMigrated > 0 || stats.filesMigrated > 0) {
           storageLog.info('Data migration completed successfully', {
             notebooks: stats.notebooksMigrated,
             files: stats.filesMigrated,
-            duration: stats.duration
+            duration: stats.duration,
           });
         }
-        
+
         if (stats.errors.length > 0) {
           storageLog.warn('Migration completed with errors', { errors: stats.errors });
         }

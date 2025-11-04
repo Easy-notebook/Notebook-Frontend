@@ -12,7 +12,7 @@ export const useBlockManager = ({ editor }: UseBlockManagerProps) => {
   } | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
 
   // 处理块悬停
   const handleBlockHover = useCallback((blockId: string, element: HTMLElement) => {
@@ -58,90 +58,112 @@ export const useBlockManager = ({ editor }: UseBlockManagerProps) => {
   }, []);
 
   // 获取块的位置信息
-  const getBlockPosition = useCallback((blockId: string) => {
-    if (!editor) return null;
-    
-    const pos = parseInt(blockId.replace('block-', ''));
-    const node = editor.state.doc.nodeAt(pos);
-    
-    return node ? { pos, node } : null;
-  }, [editor]);
+  const getBlockPosition = useCallback(
+    (blockId: string) => {
+      if (!editor) return null;
+
+      const pos = parseInt(blockId.replace('block-', ''));
+      const node = editor.state.doc.nodeAt(pos);
+
+      return node ? { pos, node } : null;
+    },
+    [editor]
+  );
 
   // 移动块
-  const moveBlock = useCallback((fromBlockId: string, toBlockId: string) => {
-    if (!editor) return;
+  const moveBlock = useCallback(
+    (fromBlockId: string, toBlockId: string) => {
+      if (!editor) return;
 
-    const fromInfo = getBlockPosition(fromBlockId);
-    const toInfo = getBlockPosition(toBlockId);
+      const fromInfo = getBlockPosition(fromBlockId);
+      const toInfo = getBlockPosition(toBlockId);
 
-    if (!fromInfo || !toInfo) return;
+      if (!fromInfo || !toInfo) return;
 
-    const { pos: fromPos, node: fromNode } = fromInfo;
-    const { pos: toPos } = toInfo;
+      const { pos: fromPos, node: fromNode } = fromInfo;
+      const { pos: toPos } = toInfo;
 
-    const tr = editor.state.tr;
-    
-    // 删除原始节点
-    tr.delete(fromPos, fromPos + fromNode.nodeSize);
-    
-    // 计算新的插入位置
-    let insertPos = toPos;
-    if (fromPos < toPos) {
-      insertPos = toPos - fromNode.nodeSize;
-    }
-    
-    // 插入到新位置
-    tr.insert(insertPos, fromNode);
-    
-    editor.view.dispatch(tr);
-  }, [editor, getBlockPosition]);
+      const tr = editor.state.tr;
+
+      // 删除原始节点
+      tr.delete(fromPos, fromPos + fromNode.nodeSize);
+
+      // 计算新的插入位置
+      let insertPos = toPos;
+      if (fromPos < toPos) {
+        insertPos = toPos - fromNode.nodeSize;
+      }
+
+      // 插入到新位置
+      tr.insert(insertPos, fromNode);
+
+      editor.view.dispatch(tr);
+    },
+    [editor, getBlockPosition]
+  );
 
   // 在指定块之前插入新块
-  const insertBlockBefore = useCallback((blockId: string, content: string) => {
-    if (!editor) return;
+  const insertBlockBefore = useCallback(
+    (blockId: string, content: string) => {
+      if (!editor) return;
 
-    const blockInfo = getBlockPosition(blockId);
-    if (!blockInfo) return;
+      const blockInfo = getBlockPosition(blockId);
+      if (!blockInfo) return;
 
-    editor.chain().focus().insertContentAt(blockInfo.pos, content).run();
-  }, [editor, getBlockPosition]);
+      editor.chain().focus().insertContentAt(blockInfo.pos, content).run();
+    },
+    [editor, getBlockPosition]
+  );
 
   // 在指定块之后插入新块
-  const insertBlockAfter = useCallback((blockId: string, content: string) => {
-    if (!editor) return;
+  const insertBlockAfter = useCallback(
+    (blockId: string, content: string) => {
+      if (!editor) return;
 
-    const blockInfo = getBlockPosition(blockId);
-    if (!blockInfo) return;
+      const blockInfo = getBlockPosition(blockId);
+      if (!blockInfo) return;
 
-    const insertPos = blockInfo.pos + blockInfo.node.nodeSize;
-    editor.chain().focus().insertContentAt(insertPos, content).run();
-  }, [editor, getBlockPosition]);
+      const insertPos = blockInfo.pos + blockInfo.node.nodeSize;
+      editor.chain().focus().insertContentAt(insertPos, content).run();
+    },
+    [editor, getBlockPosition]
+  );
 
   // 删除块
-  const deleteBlock = useCallback((blockId: string) => {
-    if (!editor) return;
+  const deleteBlock = useCallback(
+    (blockId: string) => {
+      if (!editor) return;
 
-    const blockInfo = getBlockPosition(blockId);
-    if (!blockInfo) return;
+      const blockInfo = getBlockPosition(blockId);
+      if (!blockInfo) return;
 
-    const { pos, node } = blockInfo;
-    editor.chain().focus().deleteRange({ from: pos, to: pos + node.nodeSize }).run();
-  }, [editor, getBlockPosition]);
+      const { pos, node } = blockInfo;
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from: pos, to: pos + node.nodeSize })
+        .run();
+    },
+    [editor, getBlockPosition]
+  );
 
   // 复制块
-  const duplicateBlock = useCallback((blockId: string) => {
-    if (!editor) return;
+  const duplicateBlock = useCallback(
+    (blockId: string) => {
+      if (!editor) return;
 
-    const blockInfo = getBlockPosition(blockId);
-    if (!blockInfo) return;
+      const blockInfo = getBlockPosition(blockId);
+      if (!blockInfo) return;
 
-    const { pos, node } = blockInfo;
-    const insertPos = pos + node.nodeSize;
-    
-    // 创建节点的副本
-    const duplicatedNode = node.copy(node.content);
-    editor.chain().focus().insertContentAt(insertPos, duplicatedNode.toJSON()).run();
-  }, [editor, getBlockPosition]);
+      const { pos, node } = blockInfo;
+      const insertPos = pos + node.nodeSize;
+
+      // 创建节点的副本
+      const duplicatedNode = node.copy(node.content);
+      editor.chain().focus().insertContentAt(insertPos, duplicatedNode.toJSON()).run();
+    },
+    [editor, getBlockPosition]
+  );
 
   // 设置拖拽事件监听器
   useEffect(() => {
@@ -153,7 +175,7 @@ export const useBlockManager = ({ editor }: UseBlockManagerProps) => {
 
     const handleDrop = (e: DragEvent) => {
       e.preventDefault();
-      
+
       const draggedBlockId = e.dataTransfer?.getData('text/plain');
       const target = e.target as HTMLElement;
       const targetBlock = target.closest('.tiptap-block');

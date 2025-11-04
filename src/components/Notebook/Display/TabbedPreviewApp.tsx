@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import usePreviewStore, { FileType } from '../../../store/previewStore';
+import usePreviewStore, { FileType } from '@Store/previewStore';
 import CSVPreviewWrapper from './DataTable';
 import ImageDisplay from './ImageView/ImageDisplay';
 import PDFDisplay from './PDFView/PDFDisplay';
@@ -7,25 +7,17 @@ import ReactLiveSandbox from './WebView/ReactLiveSandbox';
 import DocDisplay from './DocView/DocDisplay';
 import CodeDisplay from './CodeView/CodeDisplay';
 import HexDisplay from './HexView/HexDisplay';
-import {
-  Code,
-  Monitor,
-} from 'lucide-react';
+import { Code, Monitor } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import IframeViewer from './WebView/IframeViewer';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
-
 
 // ---------- Main ----------
 const TabbedPreviewApp: React.FC = () => {
   // UI-only state
   const [showSource, setShowSource] = useState(false);
 
-  const {
-    activeFile,
-    setTabDirty
-  } = usePreviewStore();
-
+  const { activeFile, setTabDirty } = usePreviewStore();
 
   // 键盘快捷键：⌘/Ctrl+S 清理当前 tab 的 dirty（不阻断你已有的保存逻辑）
   useEffect(() => {
@@ -56,7 +48,9 @@ const TabbedPreviewApp: React.FC = () => {
         <div className="flex items-center justify-center h-full">
           <div className="text-center text-gray-400">
             <div className="text-lg mb-2">No file selected</div>
-            <div className="text-sm">Switch to notebook view or select a file from the file explorer</div>
+            <div className="text-sm">
+              Switch to notebook view or select a file from the file explorer
+            </div>
           </div>
         </div>
       );
@@ -64,17 +58,25 @@ const TabbedPreviewApp: React.FC = () => {
 
     // 兜底矫正：文件类型可能被误识别
     const isExcelName =
-      activeFile.name.toLowerCase().endsWith('.xlsx') || activeFile.name.toLowerCase().endsWith('.xls');
-    const isDocxName = 
-      activeFile.name.toLowerCase().endsWith('.docx') || activeFile.name.toLowerCase().endsWith('.doc');
-    const isJsName = 
-      activeFile.name.toLowerCase().endsWith('.js') || activeFile.name.toLowerCase().endsWith('.ts') || activeFile.name.toLowerCase().endsWith('.mjs');
-    const isCssName = 
-      activeFile.name.toLowerCase().endsWith('.css') || activeFile.name.toLowerCase().endsWith('.scss') || activeFile.name.toLowerCase().endsWith('.sass');
-    const isMdName = 
-      activeFile.name.toLowerCase().endsWith('.md') || activeFile.name.toLowerCase().endsWith('.markdown');
-    const isPyName = 
-      activeFile.name.toLowerCase().endsWith('.py') || activeFile.name.toLowerCase().endsWith('.pyw');
+      activeFile.name.toLowerCase().endsWith('.xlsx') ||
+      activeFile.name.toLowerCase().endsWith('.xls');
+    const isDocxName =
+      activeFile.name.toLowerCase().endsWith('.docx') ||
+      activeFile.name.toLowerCase().endsWith('.doc');
+    const isJsName =
+      activeFile.name.toLowerCase().endsWith('.js') ||
+      activeFile.name.toLowerCase().endsWith('.ts') ||
+      activeFile.name.toLowerCase().endsWith('.mjs');
+    const isCssName =
+      activeFile.name.toLowerCase().endsWith('.css') ||
+      activeFile.name.toLowerCase().endsWith('.scss') ||
+      activeFile.name.toLowerCase().endsWith('.sass');
+    const isMdName =
+      activeFile.name.toLowerCase().endsWith('.md') ||
+      activeFile.name.toLowerCase().endsWith('.markdown');
+    const isPyName =
+      activeFile.name.toLowerCase().endsWith('.py') ||
+      activeFile.name.toLowerCase().endsWith('.pyw');
     const isJsonName = activeFile.name.toLowerCase().endsWith('.json');
 
     let effectiveType: FileType | 'notebook' = activeFile.type as FileType;
@@ -181,7 +183,7 @@ const TabbedPreviewApp: React.FC = () => {
                         lineHeight: '1.5',
                         height: '100%',
                         background: '#2d3748',
-                        borderRadius: '0 0 8px 8px'
+                        borderRadius: '0 0 8px 8px',
                       }}
                       showLineNumbers
                       wrapLines
@@ -233,22 +235,10 @@ const TabbedPreviewApp: React.FC = () => {
         );
 
       case 'hex':
-        return (
-          <HexDisplay
-            content={activeFile.content}
-            fileName={activeFile.name}
-            showControls
-          />
-        );
+        return <HexDisplay content={activeFile.content} fileName={activeFile.name} showControls />;
 
       default:
-        return (
-          <HexDisplay
-            content={activeFile.content}
-            fileName={activeFile.name}
-            showControls
-          />
-        );
+        return <HexDisplay content={activeFile.content} fileName={activeFile.name} showControls />;
     }
   }, [activeFile, setTabDirty, showSource]);
 
@@ -259,12 +249,18 @@ const TabbedPreviewApp: React.FC = () => {
         <div className="flex items-center">
           {/* HTML 预览/源码切换 */}
           {activeFile?.type === 'html' && (
-            <div className="flex items-center bg-gray-200 rounded p-1" role="tablist" aria-label="HTML view switch">
+            <div
+              className="flex items-center bg-gray-200 rounded p-1"
+              role="tablist"
+              aria-label="HTML view switch"
+            >
               <button
                 type="button"
                 onClick={() => setShowSource(false)}
                 className={`px-2 py-1 text-sm rounded transition-colors ${
-                  !showSource ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  !showSource
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
                 title="Show preview"
                 aria-selected={!showSource}
@@ -275,7 +271,9 @@ const TabbedPreviewApp: React.FC = () => {
                 type="button"
                 onClick={() => setShowSource(true)}
                 className={`px-2 py-1 text-sm rounded transition-colors ${
-                  showSource ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                  showSource
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
                 title="Show source code"
                 aria-selected={showSource}

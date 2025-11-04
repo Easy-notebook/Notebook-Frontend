@@ -1,14 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { 
-  Play, 
-  Square, 
-  ChevronUp, 
-  ChevronDown, 
-  Copy, 
-  Trash2, 
-  MoreVertical,
-  Plus
-} from 'lucide-react';
+import { Play, Square, ChevronUp, ChevronDown, Copy, Trash2, Plus } from 'lucide-react';
 
 interface CellWrapperProps {
   cellId: string;
@@ -20,8 +11,6 @@ interface CellWrapperProps {
   canMoveDown: boolean;
   children: React.ReactNode;
   onSelect: () => void;
-  onFocus: () => void;
-  onBlur: () => void;
   onStartEdit: () => void;
   onStopEdit: () => void;
   onDelete: () => void;
@@ -46,8 +35,6 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
   canMoveDown,
   children,
   onSelect,
-  onFocus,
-  onBlur,
   onStartEdit,
   onStopEdit,
   onDelete,
@@ -59,7 +46,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
   onRun,
   onStop,
   registerRef,
-  className = ''
+  className = '',
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [showToolbar, setShowToolbar] = useState(false);
@@ -184,13 +171,13 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
       )}
 
       {/* 顶部插入区域 */}
-      <div 
+      <div
         className="absolute -top-2 left-0 right-0 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
         onMouseEnter={() => setShowInsertMenu('above')}
       >
         {showInsertMenu === 'above' && (
           <div className="flex items-center gap-1 bg-white shadow-lg rounded-lg px-2 py-1 border">
-            {insertMenuItems.map(item => (
+            {insertMenuItems.map((item) => (
               <button
                 key={item.type}
                 onClick={(e) => {
@@ -224,7 +211,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
               <Play size={14} />
             </button>
           )}
-          
+
           {onStop && (
             <button
               onClick={(e) => {
@@ -289,18 +276,16 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
       )}
 
       {/* Cell内容 */}
-      <div className="relative">
-        {children}
-      </div>
+      <div className="relative">{children}</div>
 
       {/* 底部插入区域 */}
-      <div 
+      <div
         className="absolute -bottom-2 left-0 right-0 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
         onMouseEnter={() => setShowInsertMenu('below')}
       >
         {showInsertMenu === 'below' && (
           <div className="flex items-center gap-1 bg-white shadow-lg rounded-lg px-2 py-1 border">
-            {insertMenuItems.map(item => (
+            {insertMenuItems.map((item) => (
               <button
                 key={item.type}
                 onClick={(e) => {

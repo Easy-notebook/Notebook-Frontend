@@ -1,9 +1,7 @@
-/* eslint-disable no-console */
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { markdown } from '@codemirror/lang-markdown';
 import { EditorView, keymap } from '@codemirror/view';
-import type { EditorState } from '@codemirror/state';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { Trash2, Eye } from 'lucide-react';
@@ -12,10 +10,10 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import useStore, { Cell as StoreCell, OutputItem, CellType } from '../../../store/notebookStore';
+import useStore, { Cell as StoreCell, OutputItem, CellType } from '@Store/notebookStore';
 import { v4 as uuidv4 } from 'uuid';
 import mermaid from 'mermaid';
-import editorLogger from '../../../utils/logger/editor_logger';
+import editorLogger from '@Utils/logger/editor_logger';
 
 interface MarkdownCellProps {
   cell: StoreCell;
@@ -42,7 +40,7 @@ interface CodeBlockProps {
   inline?: boolean;
   className?: string;
   children?: React.ReactNode;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ inline, className, children, ...props }) => {
@@ -85,7 +83,7 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ alt, src, title }) => (
 
 interface MarkdownTableProps {
   children: React.ReactNode;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 const MarkdownTable: React.FC<MarkdownTableProps> = ({ children, ...props }) => (
   <div className="table-container" style={{ overflowX: 'auto', margin: '1rem 0' }}>
@@ -104,7 +102,7 @@ const MarkdownTable: React.FC<MarkdownTableProps> = ({ children, ...props }) => 
 
 interface MarkdownTableRowProps {
   children: React.ReactNode;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 const MarkdownTableRow: React.FC<MarkdownTableRowProps> = ({ children, ...props }) => (
   <tr {...props}>{children}</tr>
@@ -112,7 +110,8 @@ const MarkdownTableRow: React.FC<MarkdownTableRowProps> = ({ children, ...props 
 
 interface MarkdownTableCellProps {
   children: React.ReactNode;
-  [key: string]: any;
+  style?: React.CSSProperties;
+  [key: string]: unknown;
 }
 const MarkdownTableCell: React.FC<MarkdownTableCellProps> = ({ children, ...props }) => (
   <td
@@ -129,7 +128,7 @@ const MarkdownTableCell: React.FC<MarkdownTableCellProps> = ({ children, ...prop
 
 interface MarkdownTableHeadProps {
   children: React.ReactNode;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 const MarkdownTableHead: React.FC<MarkdownTableHeadProps> = ({ children, ...props }) => (
   <th
@@ -204,18 +203,28 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
         tr: MarkdownTableRow,
         td: MarkdownTableCell,
         th: MarkdownTableHead,
-        p: ({ children, ...props }: any) => {
+        p: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => {
           if (typeof children === 'string') {
-            const processedChildren = children.split('\n').reduce((acc: any[], part: string, index: number) => {
-              if (index > 0) acc.push(<br key={`br-${index}`} />);
-              acc.push(part);
-              return acc;
-            }, []);
+            const processedChildren = children
+              .split('\n')
+              .reduce((acc: React.ReactNode[], part: string, index: number) => {
+                if (index > 0) acc.push(<br key={`br-${index}`} />);
+                acc.push(part);
+                return acc;
+              }, []);
             return <p {...props}>{processedChildren}</p>;
           }
           return <p {...props}>{children}</p>;
         },
-        a: ({ href = '', children, ...props }: any) => (
+        a: ({
+          href = '',
+          children,
+          ...props
+        }: {
+          href?: string;
+          children?: React.ReactNode;
+          [key: string]: unknown;
+        }) => (
           <a
             {...props}
             href={href}
@@ -224,7 +233,8 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
               e.preventDefault();
               import('../../../store/previewStore').then(async (mod) => {
                 const usePreviewStore = (mod as any).default;
-                const useNotebookStore = (await import('../../../store/notebookStore')).default as any;
+                const useNotebookStore = (await import('../../../store/notebookStore'))
+                  .default as any;
                 const notebookId = useNotebookStore.getState().notebookId;
                 if (!notebookId) return;
                 const { Backend_BASE_URL } = await import('../../../config/base_url');
@@ -235,12 +245,19 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                   const pattern = new RegExp(`^${base}/download_file/${notebookId}/(.+)$`);
                   const m = href.match(pattern);
                   if (m && m[1]) filePath = decodeURIComponent(m[1]);
-                } catch {}
+                } catch {
+                  // Ignore regex parsing errors
+                }
                 if (!filePath) {
-                  const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)');
+                  const relPattern = new RegExp(
+                    '^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)'
+                  );
                   if (relPattern.test(href)) {
                     filePath = href.replace(new RegExp('^\\./'), '');
-                  } else if (!new RegExp('^[a-z]+://', 'i').test(href) && href.indexOf('/') === -1) {
+                  } else if (
+                    !new RegExp('^[a-z]+://', 'i').test(href) &&
+                    href.indexOf('/') === -1
+                  ) {
                     filePath = href;
                   }
                 }
@@ -251,18 +268,26 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                 }
 
                 try {
-                  const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
-                  await usePreviewStore.getState().previewFile(notebookId, filePath, { file: fileObj } as any);
+                  const fileObj = {
+                    name: filePath.split('/').pop() || filePath,
+                    path: filePath,
+                    type: 'file' as const,
+                  };
+                  await usePreviewStore
+                    .getState()
+                    .previewFile(notebookId, filePath, { file: fileObj });
                   if (usePreviewStore.getState().previewMode !== 'file') {
                     usePreviewStore.getState().changePreviewMode();
                   }
-                } catch (err: any) {
+                } catch (err) {
                   console.error('Markdown link split preview failed:', err);
                   try {
                     const baseName = (filePath || href).split('/').pop() || '';
                     if (baseName && baseName !== filePath) {
-                      const fileObj2 = { name: baseName, path: baseName, type: 'file' } as any;
-                      await usePreviewStore.getState().previewFile(notebookId, baseName, { file: fileObj2 } as any);
+                      const fileObj2 = { name: baseName, path: baseName, type: 'file' as const };
+                      await usePreviewStore
+                        .getState()
+                        .previewFile(notebookId, baseName, { file: fileObj2 });
                       if (usePreviewStore.getState().previewMode !== 'file') {
                         usePreviewStore.getState().changePreviewMode();
                       }
@@ -279,7 +304,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
           </a>
         ),
       }) as any,
-    [],
+    []
   );
 
   /** ---------- 新建 cell ---------- **/
@@ -300,7 +325,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
       setEditingCellId(newCellId);
       return newCellId;
     },
-    [addCell, setEditingCellId],
+    [addCell, setEditingCellId]
   );
 
   const createNewCodeCell = useCallback(
@@ -324,7 +349,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
       }
       return newCellId;
     },
-    [addCell, setEditingCellId, setCurrentCell, cell.metadata],
+    [addCell, setEditingCellId, setCurrentCell, cell.metadata]
   );
 
   /** ---------- 内容变更（含 ``` 代码块拆分 / 标题后自动新建 cell） ---------- **/
@@ -365,7 +390,15 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
 
       updateCell(cell.id, value);
     },
-    [cell.id, cells, updateCell, createNewCodeCell, createNewMarkdownCell, deleteCell, isEmptyMarkdownCell],
+    [
+      cell.id,
+      cells,
+      updateCell,
+      createNewCodeCell,
+      createNewMarkdownCell,
+      deleteCell,
+      isEmptyMarkdownCell,
+    ]
   );
 
   /** ---------- 跨 cell 导航（供 keymap/按键共用） ---------- **/
@@ -382,7 +415,13 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
 
       if (newIndex >= 0 && newIndex < cells.length) {
         const targetCell = cells[newIndex];
-        editorLogger.logNavigationSuccess(cell.id, targetCell.id, cell.type, targetCell.type, direction);
+        editorLogger.logNavigationSuccess(
+          cell.id,
+          targetCell.id,
+          cell.type,
+          targetCell.type,
+          direction
+        );
 
         if (targetCell.type === 'markdown') {
           // 切到目标 markdown，目标组件会 autoFocus
@@ -392,18 +431,22 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
           // 其它类型（code/thinking/image 等）
           setEditingCellId(null);
           setCurrentCell(targetCell.id);
-          
+
           // 对于 code cell，确保聚焦到编辑器并传递导航方向
           if (targetCell.type === 'code') {
             // 发送导航事件以正确定位光标
             setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('cell-navigation', {
-                detail: { targetCellId: targetCell.id, direction }
-              }));
+              window.dispatchEvent(
+                new CustomEvent('cell-navigation', {
+                  detail: { targetCellId: targetCell.id, direction },
+                })
+              );
             }, 0);
-            
+
             setTimeout(() => {
-              const codeElement = document.querySelector(`[data-cell-id="${targetCell.id}"] .cm-editor .cm-content`);
+              const codeElement = document.querySelector(
+                `[data-cell-id="${targetCell.id}"] .cm-editor .cm-content`
+              );
               if (codeElement) {
                 (codeElement as HTMLElement).focus();
               }
@@ -411,10 +454,15 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
           }
         }
       } else {
-        editorLogger.logNavigationBlocked(cell.id, cell.type, direction, 'no_target_cell_available');
+        editorLogger.logNavigationBlocked(
+          cell.id,
+          cell.type,
+          direction,
+          'no_target_cell_available'
+        );
       }
     },
-    [cells, cell.id, cell.type, setCurrentCell, setEditingCellId],
+    [cells, cell.id, cell.type, setCurrentCell, setEditingCellId]
   );
 
   /** ---------- 用 keymap 精准拦截方向键（编辑模式） ---------- **/
@@ -482,7 +530,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
           },
         },
       ]),
-    [navigateToSibling],
+    [navigateToSibling]
   );
 
   /** ---------- 编辑/聚焦日志 ---------- **/
@@ -495,7 +543,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
   }, [isEditing, cell.id, cell.type]);
 
   /** ---------- Editor 创建回调：保存 EditorView 实例 ---------- **/
-  const handleCreateEditor = useCallback((view: EditorView, _state: EditorState) => {
+  const handleCreateEditor = useCallback((view: EditorView) => {
     editorRef.current = view;
 
     // 调试信息
@@ -548,7 +596,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
 
       // 编辑模式下的左右键跨 cell 已由 keymap 处理，这里不再重复
     },
-    [cells, cell.id, isEditing, toggleEditing, createNewMarkdownCell, navigateToSibling],
+    [cells, cell.id, isEditing, toggleEditing, createNewMarkdownCell, navigateToSibling]
   );
 
   const handleBlur = useCallback(() => {
@@ -638,7 +686,11 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                       : {}
                   }
                 >
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={markdownComponents}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeKatex]}
+                    components={markdownComponents}
+                  >
                     {cell.content.replace(/(?<!\n)\n(?!\n)/g, '  \n')}
                   </ReactMarkdown>
                 </div>

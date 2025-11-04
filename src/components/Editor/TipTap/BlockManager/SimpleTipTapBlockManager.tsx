@@ -9,14 +9,14 @@ interface SimpleTipTapBlockManagerProps {
 
 const SimpleTipTapBlockManager: React.FC<SimpleTipTapBlockManagerProps> = ({
   editor,
-  children
+  children,
 }) => {
   const [hoveredBlock, setHoveredBlock] = useState<{
     blockId: string;
     element: HTMLElement;
   } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoverTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!editor || !containerRef.current) return;
@@ -32,12 +32,15 @@ const SimpleTipTapBlockManager: React.FC<SimpleTipTapBlockManagerProps> = ({
       }
 
       // 查找块级元素，但排除编辑器根元素
-      const blockElement = target.closest('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table');
+      const blockElement = target.closest(
+        'p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre, table'
+      );
 
-      if (blockElement &&
-          container.contains(blockElement) &&
-          !blockElement.closest('.ProseMirror') === blockElement.parentElement) {
-
+      if (
+        blockElement &&
+        container.contains(blockElement) &&
+        !blockElement.closest('.ProseMirror') === blockElement.parentElement
+      ) {
         // 清除之前的超时
         if (hoverTimeoutRef.current) {
           clearTimeout(hoverTimeoutRef.current);
@@ -56,7 +59,7 @@ const SimpleTipTapBlockManager: React.FC<SimpleTipTapBlockManagerProps> = ({
 
         setHoveredBlock({
           blockId,
-          element: blockElement as HTMLElement
+          element: blockElement as HTMLElement,
         });
       }
     };
@@ -64,11 +67,11 @@ const SimpleTipTapBlockManager: React.FC<SimpleTipTapBlockManagerProps> = ({
     const handleMouseOut = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       const relatedTarget = event.relatedTarget as HTMLElement;
-      
+
       // 检查是否真的离开了块元素
       const blockElement = target.closest('.tiptap-block');
       const relatedBlockElement = relatedTarget?.closest?.('.tiptap-block');
-      
+
       if (blockElement && blockElement !== relatedBlockElement) {
         // 延迟隐藏，避免鼠标移动到工具栏时立即隐藏
         hoverTimeoutRef.current = setTimeout(() => {
@@ -158,7 +161,7 @@ const SimpleTipTapBlockManager: React.FC<SimpleTipTapBlockManagerProps> = ({
   return (
     <div ref={containerRef} className="relative">
       {children}
-      
+
       {/* 块级工具栏 */}
       {hoveredBlock && (
         <BlockToolbar

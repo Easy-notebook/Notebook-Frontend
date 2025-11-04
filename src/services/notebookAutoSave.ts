@@ -6,7 +6,7 @@
 import { debounce } from 'lodash-es';
 import { NotebookORM, FileORM, StorageManager } from '@Storage/index';
 import type { Cell, Task } from '@Store/notebookStore';
-import { notebookLog, storageLog } from '../utils/logger';
+import { notebookLog, storageLog } from '@Utils/logger';
 
 interface NotebookSnapshot {
   notebookId: string;
@@ -40,7 +40,7 @@ export class NotebookAutoSave {
   private readonly saveQueue = new Map<string, NotebookSnapshot>();
   private isInitialized = false;
   private saveInProgress = false;
-  private readonly isDevelopment = process.env.NODE_ENV === 'development';
+  private readonly isDevelopment = import.meta.env.DEV;
 
   // Debounced save function with 25ms delay
   private readonly debouncedSave = debounce(async (): Promise<void> => {
@@ -71,10 +71,10 @@ export class NotebookAutoSave {
 
     try {
       notebookLog.info('Initializing notebook auto-save service');
-      
+
       // Ensure storage is initialized
       await StorageManager.initialize();
-      
+
       this.isInitialized = true;
       notebookLog.info('Notebook auto-save service initialized successfully');
     } catch (error) {
@@ -100,36 +100,39 @@ export class NotebookAutoSave {
         notebookId: snapshot.notebookId,
         title: snapshot.notebookTitle,
         cellsCount: snapshot.cells?.length || 0,
-        tasksCount: snapshot.tasks?.length || 0
+        tasksCount: snapshot.tasks?.length || 0,
       });
     }
-    
+
     // Safety check: prevent accidental data loss from empty cells
     if (!snapshot.cells || snapshot.cells.length === 0) {
       try {
         const existingData = await NotebookAutoSave.loadNotebook(snapshot.notebookId);
         if (existingData?.cells && existingData.cells.length > 0) {
-          notebookLog.warn('Preventing data loss: notebook has existing content, skipping empty save', {
-            notebookId: snapshot.notebookId,
-            existingCellsCount: existingData.cells.length,
-            snapshotTitle: snapshot.title,
-            existingTitle: existingData.title,
-            reason: 'Empty snapshot would overwrite existing content'
-          });
+          notebookLog.warn(
+            'Preventing data loss: notebook has existing content, skipping empty save',
+            {
+              notebookId: snapshot.notebookId,
+              existingCellsCount: existingData.cells.length,
+              snapshotTitle: snapshot.title,
+              existingTitle: existingData.title,
+              reason: 'Empty snapshot would overwrite existing content',
+            }
+          );
           return;
         } else {
           // Allow empty save for truly new/empty notebooks
           notebookLog.debug('Empty save allowed: target notebook is also empty', {
             notebookId: snapshot.notebookId,
-            existingCellsCount: existingData?.cells?.length || 0
+            existingCellsCount: existingData?.cells?.length || 0,
           });
         }
       } catch (error) {
         // If we can't check existing content, be conservative and allow the save
-        notebookLog.warn('Failed to check existing notebook content, proceeding with save', { 
+        notebookLog.warn('Failed to check existing notebook content, proceeding with save', {
           notebookId: snapshot.notebookId,
           error: error.message,
-          decision: 'allowing_save_due_to_check_failure'
+          decision: 'allowing_save_due_to_check_failure',
         });
       }
     }
@@ -137,7 +140,7 @@ export class NotebookAutoSave {
     // Update the queue with latest snapshot
     this.saveQueue.set(snapshot.notebookId, {
       ...snapshot,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
 
     // Trigger debounced save
@@ -154,7 +157,7 @@ export class NotebookAutoSave {
     }
 
     this.saveInProgress = true;
-    
+
     try {
       const snapshots = Array.from(this.saveQueue.values());
       this.saveQueue.clear();
@@ -167,7 +170,7 @@ export class NotebookAutoSave {
         } catch (error) {
           notebookLog.error('Failed to save notebook', {
             notebookId: snapshot.notebookId,
-            error
+            error,
           });
           // Continue with other notebooks even if one fails
         }
@@ -196,31 +199,35 @@ export class NotebookAutoSave {
         accessCount: 1,
         fileCount: cells.length,
         totalSize: this.calculateContentSize(cells),
-        cacheEnabled: true
+        cacheEnabled: true,
       });
 
       // 2. Save notebook content as a single main file
-      const notebookContent = JSON.stringify({
-        notebook_id: notebookId,
-        title: notebookTitle,
-        notebookTitle: notebookTitle,
-        cells: cells || [],
-        tasks: tasks || [],
-        saved_at: timestamp,
-        version: '2.0',
-        metadata: {
-          totalCells: cells?.length || 0,
-          hasImages: cells?.some(c => c.type === 'image') || false,
-          lastSaved: new Date(timestamp).toISOString()
-        }
-      }, null, 2);
+      const notebookContent = JSON.stringify(
+        {
+          notebook_id: notebookId,
+          title: notebookTitle,
+          notebookTitle: notebookTitle,
+          cells: cells || [],
+          tasks: tasks || [],
+          saved_at: timestamp,
+          version: '2.0',
+          metadata: {
+            totalCells: cells?.length || 0,
+            hasImages: cells?.some((c) => c.type === 'image') || false,
+            lastSaved: new Date(timestamp).toISOString(),
+          },
+        },
+        null,
+        2
+      );
 
       if (this.isDevelopment) {
         notebookLog.lifecycleEvent('save', notebookId, {
           title: notebookTitle,
           cellsCount: cells?.length || 0,
           tasksCount: tasks?.length || 0,
-          contentLength: notebookContent.length
+          contentLength: notebookContent.length,
         });
       }
 
@@ -231,21 +238,21 @@ export class NotebookAutoSave {
         content: notebookContent,
         lastModified: new Date(timestamp).toISOString(),
         size: new Blob([notebookContent]).size,
-        remoteUrl: undefined
+        remoteUrl: undefined,
       });
-      
+
       if (this.isDevelopment) {
         storageLog.debug('File save result', {
           fileId: saveResult.id,
           hasLocalContent: saveResult.hasLocalContent,
           storageType: saveResult.storageType,
-          size: saveResult.size
+          size: saveResult.size,
         });
       }
 
       notebookLog.info('Notebook auto-saved successfully', {
         notebookId,
-        cellsCount: cells.length
+        cellsCount: cells.length,
       });
     } catch (error) {
       notebookLog.error('Failed to auto-save notebook', { notebookId, error });
@@ -270,7 +277,6 @@ export class NotebookAutoSave {
     return totalSize;
   }
 
-
   /**
    * Load notebook from database with validation
    * @param notebookId - The unique identifier of the notebook
@@ -288,30 +294,30 @@ export class NotebookAutoSave {
       // Try to load main notebook file first
       const expectedFilePath = `notebook_${notebookId}.json`;
       const mainFile = await FileORM.getFile(notebookId, expectedFilePath);
-      
+
       if (mainFile?.content) {
         try {
           const data = JSON.parse(mainFile.content);
-          
+
           // Validate parsed data structure
           if (typeof data !== 'object' || data === null) {
             throw new Error('Invalid notebook data structure');
           }
-          
+
           return {
             notebookTitle: data.title || data.notebookTitle || 'Untitled',
             cells: Array.isArray(data.cells) ? data.cells : [],
-            tasks: Array.isArray(data.tasks) ? data.tasks : []
+            tasks: Array.isArray(data.tasks) ? data.tasks : [],
           };
         } catch (parseError) {
-          notebookLog.warn('Failed to parse notebook file', { 
+          notebookLog.warn('Failed to parse notebook file', {
             notebookId,
-            error: parseError 
+            error: parseError,
           });
-          if (process.env.NODE_ENV === 'development') {
+          if (import.meta.env.DEV) {
             notebookLog.debug('Raw content preview', {
               notebookId,
-              preview: mainFile.content.substring(0, 200)
+              preview: mainFile.content.substring(0, 200),
             });
           }
         }
@@ -319,27 +325,28 @@ export class NotebookAutoSave {
 
       // Fallback: try to load from notebook metadata
       const notebook = await NotebookORM.getNotebook(notebookId);
-      
+
       if (!notebook) {
         notebookLog.debug('Notebook not found in database', { notebookId });
         return null;
       }
 
-      notebookLog.info('Loaded notebook metadata only - cells will be empty', { 
-        notebookId 
+      notebookLog.info('Loaded notebook metadata only - cells will be empty', {
+        notebookId,
       });
 
       return {
         notebookTitle: notebook.name,
         cells: [],
-        tasks: []
+        tasks: [],
       };
     } catch (error) {
       notebookLog.error('Failed to load notebook', { notebookId, error });
-      throw new Error(`Failed to load notebook: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to load notebook: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
-
 
   /**
    * Immediate save bypassing debouncing mechanism

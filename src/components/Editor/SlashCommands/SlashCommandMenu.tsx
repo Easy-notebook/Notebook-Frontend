@@ -1,20 +1,18 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Code, 
-  Type, 
-  Image, 
-  Table, 
-  Brain, 
-  Calculator, 
-  Hash,
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Code,
+  Type,
+  Image,
+  Table,
+  Brain,
+  Calculator,
   List,
   ListOrdered,
   Quote,
   Heading1,
   Heading2,
   Heading3,
-  FileText,
-  Zap
+  Zap,
 } from 'lucide-react';
 
 export interface SlashCommand {
@@ -40,7 +38,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   onClose,
   onCommand,
   position,
-  searchQuery = ''
+  searchQuery = '',
 }) => {
   const [filteredCommands, setFilteredCommands] = useState<SlashCommand[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -58,7 +56,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Type size={16} />,
       keywords: ['text', 'paragraph', '文本', '段落'],
       action: () => {},
-      category: 'basic'
+      category: 'basic',
     },
     {
       id: 'heading1',
@@ -67,7 +65,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Heading1 size={16} />,
       keywords: ['h1', 'heading', 'title', '标题', '大标题'],
       action: () => {},
-      category: 'basic'
+      category: 'basic',
     },
     {
       id: 'heading2',
@@ -76,7 +74,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Heading2 size={16} />,
       keywords: ['h2', 'heading', 'subtitle', '标题', '中标题'],
       action: () => {},
-      category: 'basic'
+      category: 'basic',
     },
     {
       id: 'heading3',
@@ -85,7 +83,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Heading3 size={16} />,
       keywords: ['h3', 'heading', '标题', '小标题'],
       action: () => {},
-      category: 'basic'
+      category: 'basic',
     },
     {
       id: 'bulletlist',
@@ -94,7 +92,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <List size={16} />,
       keywords: ['list', 'bullet', 'ul', '列表', '无序'],
       action: () => {},
-      category: 'basic'
+      category: 'basic',
     },
     {
       id: 'numberedlist',
@@ -103,7 +101,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <ListOrdered size={16} />,
       keywords: ['list', 'numbered', 'ol', '列表', '有序', '编号'],
       action: () => {},
-      category: 'basic'
+      category: 'basic',
     },
     {
       id: 'quote',
@@ -112,9 +110,9 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Quote size={16} />,
       keywords: ['quote', 'blockquote', '引用'],
       action: () => {},
-      category: 'basic'
+      category: 'basic',
     },
-    
+
     // 代码和技术
     {
       id: 'code',
@@ -123,7 +121,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Code size={16} />,
       keywords: ['code', 'python', 'javascript', '代码', '编程'],
       action: () => {},
-      category: 'advanced'
+      category: 'advanced',
     },
     {
       id: 'math',
@@ -132,9 +130,9 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Calculator size={16} />,
       keywords: ['math', 'latex', 'formula', '数学', '公式'],
       action: () => {},
-      category: 'advanced'
+      category: 'advanced',
     },
-    
+
     // 媒体
     {
       id: 'image',
@@ -143,7 +141,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Image size={16} />,
       keywords: ['image', 'photo', 'picture', '图片', '照片'],
       action: () => {},
-      category: 'media'
+      category: 'media',
     },
     {
       id: 'table',
@@ -152,9 +150,9 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Table size={16} />,
       keywords: ['table', 'grid', '表格'],
       action: () => {},
-      category: 'media'
+      category: 'media',
     },
-    
+
     // AI功能
     {
       id: 'ai-thinking',
@@ -163,7 +161,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Brain size={16} />,
       keywords: ['ai', 'thinking', 'assistant', 'AI', '思考', '助手'],
       action: () => {},
-      category: 'ai'
+      category: 'ai',
     },
     {
       id: 'ai-generate',
@@ -172,26 +170,26 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       icon: <Zap size={16} />,
       keywords: ['ai', 'generate', 'create', 'AI', '生成', '创建'],
       action: () => {},
-      category: 'ai'
-    }
+      category: 'ai',
+    },
   ];
 
   // 过滤命令
   useEffect(() => {
-    const filtered = commands.filter(command => {
+    const filtered = commands.filter((command) => {
       if (!query.trim()) return true;
-      
+
       const searchTerm = query.toLowerCase();
       return (
         command.title.toLowerCase().includes(searchTerm) ||
         command.description.toLowerCase().includes(searchTerm) ||
-        command.keywords.some(keyword => keyword.toLowerCase().includes(searchTerm))
+        command.keywords.some((keyword) => keyword.toLowerCase().includes(searchTerm))
       );
     });
-    
+
     setFilteredCommands(filtered);
     setSelectedIndex(0);
-  }, [query]);
+  }, [query, commands]);
 
   // 键盘导航
   useEffect(() => {
@@ -201,15 +199,11 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
-          setSelectedIndex(prev => 
-            prev < filteredCommands.length - 1 ? prev + 1 : 0
-          );
+          setSelectedIndex((prev) => (prev < filteredCommands.length - 1 ? prev + 1 : 0));
           break;
         case 'ArrowUp':
           e.preventDefault();
-          setSelectedIndex(prev => 
-            prev > 0 ? prev - 1 : filteredCommands.length - 1
-          );
+          setSelectedIndex((prev) => (prev > 0 ? prev - 1 : filteredCommands.length - 1));
           break;
         case 'Enter':
           e.preventDefault();
@@ -256,11 +250,16 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'basic': return 'text-theme-600';
-      case 'advanced': return 'text-purple-600';
-      case 'media': return 'text-green-600';
-      case 'ai': return 'text-orange-600';
-      default: return 'text-gray-600';
+      case 'basic':
+        return 'text-theme-600';
+      case 'advanced':
+        return 'text-purple-600';
+      case 'media':
+        return 'text-green-600';
+      case 'ai':
+        return 'text-orange-600';
+      default:
+        return 'text-gray-600';
     }
   };
 
@@ -271,7 +270,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       style={{
         left: position.x,
         top: position.y,
-        maxHeight: '400px'
+        maxHeight: '400px',
       }}
     >
       {/* 搜索输入框 */}
@@ -289,9 +288,7 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       {/* 命令列表 */}
       <div className="max-h-80 overflow-y-auto">
         {filteredCommands.length === 0 ? (
-          <div className="p-4 text-center text-gray-500 text-sm">
-            没有找到匹配的命令
-          </div>
+          <div className="p-4 text-center text-gray-500 text-sm">没有找到匹配的命令</div>
         ) : (
           <div className="py-2">
             {filteredCommands.map((command, index) => (
@@ -307,12 +304,8 @@ const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                   {command.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 text-sm">
-                    {command.title}
-                  </div>
-                  <div className="text-gray-500 text-xs truncate">
-                    {command.description}
-                  </div>
+                  <div className="font-medium text-gray-900 text-sm">{command.title}</div>
+                  <div className="text-gray-500 text-xs truncate">{command.description}</div>
                 </div>
               </button>
             ))}

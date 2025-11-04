@@ -34,12 +34,12 @@
       "@Utils/*": ["./src/utils/*"],
       "@Config/*": ["./src/config/*"],
       "@Types/*": ["./src/types/*"],
-      "@WorkflowMode/*": ["src/components/Senario/Workflow/*"],
-      "@BasicMode/*": ["src/components/Senario/View/*"],
+      "@WorkflowMode/*": ["./src/components/Scenario/Workflow/*"],
+      "@BasicMode/*": ["./src/components/Scenario/View/*"],
       "@Storage/*": ["./src/storage/*"],
       "@Hooks/*": ["./src/hooks/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

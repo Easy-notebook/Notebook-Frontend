@@ -2,12 +2,8 @@
 // Notebook ORM for managing notebook entities and relationships
 
 import { IndexedDBManager, DB_CONFIG } from './database';
-import {
-  NotebookEntity,
-  FileMetadataEntity,
-  NotebookActivityEntity,
-} from './schema';
-import { storageLog, notebookLog } from '../utils/logger';
+import { NotebookEntity, FileMetadataEntity, NotebookActivityEntity } from './schema';
+import { storageLog, notebookLog } from '@Utils/logger';
 
 /**
  * Notebook ORM for CRUD operations and relationship management
@@ -16,7 +12,9 @@ export class NotebookORM {
   /**
    * Create or update a notebook entity
    */
-  static async saveNotebook(notebookData: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>): Promise<NotebookEntity> {
+  static async saveNotebook(
+    notebookData: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
+  ): Promise<NotebookEntity> {
     const db = await IndexedDBManager.getDB();
 
     const now = Date.now();
@@ -32,14 +30,15 @@ export class NotebookORM {
         const notebook: NotebookEntity = {
           ...notebookData,
           createdAt: existing?.createdAt ?? now,
-          updatedAt: now
+          updatedAt: now,
         };
 
         const putReq = store.put(notebook);
         putReq.onsuccess = () => {
           // Log activity
-          this.logActivity(notebook.id, 'open').catch(error => 
-            storageLog.error('Failed to log notebook open activity', { error }));
+          this.logActivity(notebook.id, 'open').catch((error) =>
+            storageLog.error('Failed to log notebook open activity', { error })
+          );
           resolve(notebook);
         };
         putReq.onerror = () => reject(putReq.error);
@@ -66,8 +65,9 @@ export class NotebookORM {
         const notebook = request.result as NotebookEntity | undefined;
         if (notebook) {
           // Update last accessed time
-          this.updateNotebookAccess(notebookId).catch(error => 
-            storageLog.error('Failed to update notebook access time', { error }));
+          this.updateNotebookAccess(notebookId).catch((error) =>
+            storageLog.error('Failed to update notebook access time', { error })
+          );
         }
         resolve(notebook || null);
       };
@@ -81,22 +81,24 @@ export class NotebookORM {
   /**
    * Get all notebooks with optional filtering and sorting
    */
-  static async getNotebooks(options: {
-    orderBy?: 'lastAccessedAt' | 'updatedAt' | 'accessCount';
-    limit?: number;
-    offset?: number;
-  } = {}): Promise<NotebookEntity[]> {
+  static async getNotebooks(
+    options: {
+      orderBy?: 'lastAccessedAt' | 'updatedAt' | 'accessCount';
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<NotebookEntity[]> {
     const db = await IndexedDBManager.getDB();
     const { orderBy = 'lastAccessedAt', limit, offset = 0 } = options;
 
     return new Promise((resolve, reject) => {
       storageLog.debug('NotebookORM: Starting getNotebooks', { orderBy, limit, offset });
-      
+
       const transaction = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
 
       let request: IDBRequest;
-      let timeoutId: NodeJS.Timeout;
+      let timeoutId: number;
 
       if (orderBy === 'lastAccessedAt' || orderBy === 'updatedAt' || orderBy === 'accessCount') {
         const index = store.index(orderBy);
@@ -122,7 +124,7 @@ export class NotebookORM {
             if (limit && notebooks.length >= limit) {
               cleanup();
               notebookLog.debug('NotebookORM: Successfully retrieved notebooks (limited)', {
-                count: notebooks.length
+                count: notebooks.length,
               });
               resolve(notebooks);
               return;
@@ -133,7 +135,7 @@ export class NotebookORM {
         } else {
           cleanup();
           notebookLog.debug('NotebookORM: Successfully retrieved notebooks (all)', {
-            count: notebooks.length
+            count: notebooks.length,
           });
           resolve(notebooks);
         }
@@ -176,7 +178,7 @@ export class NotebookORM {
           const updatedNotebook: NotebookEntity = {
             ...notebook,
             lastAccessedAt: Date.now(),
-            accessCount: notebook.accessCount + 1
+            accessCount: notebook.accessCount + 1,
           };
 
           const putRequest = store.put(updatedNotebook);
@@ -200,12 +202,15 @@ export class NotebookORM {
     const db = await IndexedDBManager.getDB();
 
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([
-        DB_CONFIG.STORES.NOTEBOOKS,
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.FILES_CONTENT,
-        DB_CONFIG.STORES.ACTIVITIES
-      ], 'readwrite');
+      const transaction = db.transaction(
+        [
+          DB_CONFIG.STORES.NOTEBOOKS,
+          DB_CONFIG.STORES.FILES_METADATA,
+          DB_CONFIG.STORES.FILES_CONTENT,
+          DB_CONFIG.STORES.ACTIVITIES,
+        ],
+        'readwrite'
+      );
 
       let operationsCompleted = 0;
       const totalOperations = 4;
@@ -305,10 +310,10 @@ export class NotebookORM {
     const db = await IndexedDBManager.getDB();
 
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.ACTIVITIES
-      ], 'readonly');
+      const transaction = db.transaction(
+        [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.ACTIVITIES],
+        'readonly'
+      );
 
       let fileCount = 0;
       let totalSize = 0;
@@ -345,7 +350,7 @@ export class NotebookORM {
                 fileCount,
                 totalSize,
                 lastActivity,
-                activities: activities.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50) // Last 50 activities
+                activities: activities.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50), // Last 50 activities
               });
             }
           };
@@ -378,7 +383,7 @@ export class NotebookORM {
       activityType,
       filePath,
       timestamp,
-      metadata
+      metadata,
     };
 
     return new Promise((resolve, reject) => {
@@ -429,7 +434,11 @@ export class NotebookORM {
   /**
    * Adjust notebook's fileCount and totalSize by deltas
    */
-  static async adjustNotebookStats(notebookId: string, deltaFileCount: number, deltaBytes: number): Promise<void> {
+  static async adjustNotebookStats(
+    notebookId: string,
+    deltaFileCount: number,
+    deltaBytes: number
+  ): Promise<void> {
     const db = await IndexedDBManager.getDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite');
@@ -437,12 +446,15 @@ export class NotebookORM {
       const getReq = store.get(notebookId);
       getReq.onsuccess = () => {
         const nb = getReq.result as NotebookEntity | undefined;
-        if (!nb) { resolve(); return; }
+        if (!nb) {
+          resolve();
+          return;
+        }
         const updated: NotebookEntity = {
           ...nb,
           fileCount: Math.max(0, (nb.fileCount || 0) + (deltaFileCount || 0)),
           totalSize: Math.max(0, (nb.totalSize || 0) + (deltaBytes || 0)),
-          updatedAt: Date.now()
+          updatedAt: Date.now(),
         };
         const putReq = store.put(updated);
         putReq.onsuccess = () => resolve();
@@ -459,10 +471,10 @@ export class NotebookORM {
   static async recalcNotebookStats(notebookId: string): Promise<void> {
     const db = await IndexedDBManager.getDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction([
-        DB_CONFIG.STORES.NOTEBOOKS,
-        DB_CONFIG.STORES.FILES_METADATA
-      ], 'readwrite');
+      const tx = db.transaction(
+        [DB_CONFIG.STORES.NOTEBOOKS, DB_CONFIG.STORES.FILES_METADATA],
+        'readwrite'
+      );
       const nbStore = tx.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
       const metaStore = tx.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const index = metaStore.index('notebookId');
@@ -480,12 +492,15 @@ export class NotebookORM {
           const getNbReq = nbStore.get(notebookId);
           getNbReq.onsuccess = () => {
             const nb = getNbReq.result as NotebookEntity | undefined;
-            if (!nb) { resolve(); return; }
+            if (!nb) {
+              resolve();
+              return;
+            }
             const updated: NotebookEntity = {
               ...nb,
               fileCount,
               totalSize,
-              updatedAt: Date.now()
+              updatedAt: Date.now(),
             };
             const putReq = nbStore.put(updated);
             putReq.onsuccess = () => resolve();
@@ -498,5 +513,4 @@ export class NotebookORM {
       setTimeout(() => resolve(), 8000);
     });
   }
-
 }

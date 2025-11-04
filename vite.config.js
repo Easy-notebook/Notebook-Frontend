@@ -1,11 +1,11 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { resolve } from 'path'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000
+    port: 3000,
   },
   resolve: {
     alias: {
@@ -20,10 +20,10 @@ export default defineConfig({
       '@Utils': resolve(__dirname, './src/utils'),
       '@Config': resolve(__dirname, './src/config'),
       '@Types': resolve(__dirname, './src/types'),
-      '@WorkflowMode': resolve(__dirname, './src/components/Senario/WorkflowMode'),
-      '@BasicMode': resolve(__dirname, './src/components/Senario/BasicMode'),
+      '@WorkflowMode': resolve(__dirname, './src/components/Scenario/Workflow'),
+      '@BasicMode': resolve(__dirname, './src/components/Scenario/View'),
       '@Storage': resolve(__dirname, './src/storage'),
-      '@Hooks': resolve(__dirname, './src/hooks')
-    }
-  }
-})
+      '@Hooks': resolve(__dirname, './src/hooks'),
+    },
+  },
+});

@@ -9,7 +9,6 @@ import {
   DragEndEvent,
   DragStartEvent,
   DragOverlay,
-  DragOverEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -17,18 +16,15 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import {
-  restrictToVerticalAxis,
-  restrictToWindowEdges,
-} from '@dnd-kit/modifiers';
+import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import DraggableCell from './DraggableCell';
 
 interface Cell {
   id: string;
   type: string;
   content: string;
-  outputs?: any[];
-  [key: string]: any;
+  outputs?: unknown[];
+  [key: string]: unknown;
 }
 
 interface DraggableCellListProps {
@@ -46,7 +42,7 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
   renderCell,
   className = '',
   disabled = false,
-  onAddCell
+  onAddCell,
 }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draggedCell, setDraggedCell] = useState<Cell | null>(null);
@@ -65,13 +61,13 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     setActiveId(active.id as string);
-    
+
     // 找到被拖拽的cell
-    const cell = cells.find(c => c.id === active.id);
+    const cell = cells.find((c) => c.id === active.id);
     setDraggedCell(cell || null);
   };
 
-  const handleDragOver = (event: DragOverEvent) => {
+  const handleDragOver = () => {
     // 可以在这里添加拖拽过程中的视觉反馈
   };
 
@@ -79,8 +75,8 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
     const { active, over } = event;
 
     if (active.id !== over?.id) {
-      const oldIndex = cells.findIndex(cell => cell.id === active.id);
-      const newIndex = cells.findIndex(cell => cell.id === over?.id);
+      const oldIndex = cells.findIndex((cell) => cell.id === active.id);
+      const newIndex = cells.findIndex((cell) => cell.id === over?.id);
 
       if (oldIndex !== -1 && newIndex !== -1) {
         const newCells = arrayMove(cells, oldIndex, newIndex);
@@ -102,9 +98,7 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
     return (
       <div className={className}>
         {cells.map((cell) => (
-          <div key={cell.id}>
-            {renderCell(cell)}
-          </div>
+          <div key={cell.id}>{renderCell(cell)}</div>
         ))}
       </div>
     );
@@ -120,14 +114,14 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
       onDragCancel={handleDragCancel}
       modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
     >
-      <SortableContext items={cells.map(cell => cell.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={cells.map((cell) => cell.id)} strategy={verticalListSortingStrategy}>
         <div className={className}>
           {cells.map((cell, index) => (
             <DraggableCell
               key={cell.id}
               cell={cell}
               isActive={activeId === cell.id}
-className=""
+              className=""
               onAddCell={onAddCell}
               cellIndex={index}
             >

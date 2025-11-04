@@ -1,8 +1,11 @@
 import React, { useMemo } from 'react';
 import { BsBoxArrowInRight, BsCheckCircleFill, BsGearFill, BsPlayCircleFill } from 'react-icons/bs';
-import { usePipelineStore } from '../../Senario/Workflow/store/usePipelineStore';
-import { useWorkflowStateMachine, WorkflowStep } from '../../Senario/Workflow/store/workflowStateMachine';
-import { extractSectionTitle} from '../utils/String';
+import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
+import {
+  useWorkflowStateMachine,
+  WorkflowStep,
+} from '@/components/Scenario/Workflow/store/workflowStateMachine';
+import { extractSectionTitle } from '../utils/String';
 // A mapping for step status icons and colors
 const STEP_STATUS_STYLES = {
   ACTIVE: {
@@ -26,30 +29,35 @@ const STEP_STATUS_STYLES = {
  * Renders a single step (action) within a stage card.
  * It determines its status (active, completed, pending) based on the FSM context.
  */
-const StepItem: React.FC<{ step: WorkflowStep; stageIndex: number; stepIndex: number; fsmContext: any }> = ({
-  step,
-  stageIndex,
-  stepIndex,
-  fsmContext,
-}) => {
+const StepItem: React.FC<{
+  step: WorkflowStep;
+  stageIndex: number;
+  stepIndex: number;
+  fsmContext: any;
+}> = ({ step, stageIndex, stepIndex, fsmContext }) => {
   const status = useMemo(() => {
     const isCurrentStep = step.id === fsmContext.currentStepId;
     if (isCurrentStep) return 'ACTIVE';
 
     const currentStageIndex = fsmContext.currentStageIndex ?? 0;
     const currentStepIndex = fsmContext.currentStepIndex ?? 0;
-    
-    if (stageIndex < currentStageIndex || (stageIndex === currentStageIndex && stepIndex < currentStepIndex)) {
+
+    if (
+      stageIndex < currentStageIndex ||
+      (stageIndex === currentStageIndex && stepIndex < currentStepIndex)
+    ) {
       return 'COMPLETED';
     }
-    
+
     return 'PENDING';
   }, [step.id, stageIndex, stepIndex, fsmContext]);
 
   const styles = STEP_STATUS_STYLES[status];
 
   return (
-    <div className={`p-3 rounded-lg border-l-4 transition-all ${styles.borderColor} ${styles.bgColor}`}>
+    <div
+      className={`p-3 rounded-lg border-l-4 transition-all ${styles.borderColor} ${styles.bgColor}`}
+    >
       <div className="flex items-start gap-3">
         <div className="mt-1">{styles.icon}</div>
         <div className="flex-1">
@@ -64,7 +72,11 @@ const StepItem: React.FC<{ step: WorkflowStep; stageIndex: number; stepIndex: nu
 /**
  * Renders a card for a single stage of the workflow, including all its steps.
  */
-const StageCard: React.FC<{ stage: any; stageIndex: number; fsmContext: any }> = ({ stage, stageIndex, fsmContext }) => {
+const StageCard: React.FC<{ stage: any; stageIndex: number; fsmContext: any }> = ({
+  stage,
+  stageIndex,
+  fsmContext,
+}) => {
   const isActive = stage.id === fsmContext.currentStageId;
 
   return (
@@ -79,14 +91,22 @@ const StageCard: React.FC<{ stage: any; stageIndex: number; fsmContext: any }> =
         ) : (
           <span className="text-theme-600 font-bold text-lg">{stageIndex + 1}</span>
         )}
-        <h3 className="text-lg font-bold text-gray-900">{extractSectionTitle(stage.title) || 'Untitled Stage'}</h3>
+        <h3 className="text-lg font-bold text-gray-900">
+          {extractSectionTitle(stage.title) || 'Untitled Stage'}
+        </h3>
       </div>
-      
+
       {stage.description && <p className="text-sm text-gray-600 mb-4">{stage.description}</p>}
 
       <div className="space-y-3">
         {stage.steps?.map((step: WorkflowStep, index: number) => (
-          <StepItem key={step.id || index} step={step} stageIndex={stageIndex} stepIndex={index} fsmContext={fsmContext} />
+          <StepItem
+            key={step.id || index}
+            step={step}
+            stageIndex={stageIndex}
+            stepIndex={index}
+            fsmContext={fsmContext}
+          />
         ))}
       </div>
     </div>
@@ -103,10 +123,14 @@ const WorkflowVisualization: React.FC<{ className?: string }> = ({ className = '
   // Augment FSM context with indices for easier status calculation
   const augmentedFsmContext = useMemo(() => {
     if (!workflowTemplate || !fsmContext.currentStageId) return fsmContext;
-    
-    const currentStageIndex = workflowTemplate.stages.findIndex(s => s.id === fsmContext.currentStageId);
+
+    const currentStageIndex = workflowTemplate.stages.findIndex(
+      (s) => s.id === fsmContext.currentStageId
+    );
     const currentStage = workflowTemplate.stages[currentStageIndex];
-    const currentStepIndex = currentStage?.steps.findIndex(st => st.id === fsmContext.currentStepId);
+    const currentStepIndex = currentStage?.steps.findIndex(
+      (st) => st.id === fsmContext.currentStepId
+    );
 
     return { ...fsmContext, currentStageIndex, currentStepIndex };
   }, [workflowTemplate, fsmContext]);
@@ -130,7 +154,12 @@ const WorkflowVisualization: React.FC<{ className?: string }> = ({ className = '
 
       <div className="mb-4 mt-0">
         {workflowTemplate.stages.map((stage, index) => (
-          <StageCard key={stage.id} stage={stage} stageIndex={index} fsmContext={augmentedFsmContext} />
+          <StageCard
+            key={stage.id}
+            stage={stage}
+            stageIndex={index}
+            fsmContext={augmentedFsmContext}
+          />
         ))}
       </div>
     </div>

@@ -1,23 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Editor } from '@tiptap/react';
-import { 
-  GripVertical,
-  Plus,
-  Copy,
-  Trash2,
-  ChevronUp,
-  ChevronDown
-} from 'lucide-react';
+import { GripVertical, Plus, Copy, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface MinimalBlockManagerProps {
   editor: Editor | null;
   children: React.ReactNode;
 }
 
-const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
-  editor,
-  children
-}) => {
+const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({ editor, children }) => {
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [currentBlock, setCurrentBlock] = useState<HTMLElement | null>(null);
@@ -27,7 +17,7 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
     if (!editor || !containerRef.current) return;
 
     const container = containerRef.current;
-    let hideTimeout: NodeJS.Timeout | null = null;
+    let hideTimeout: number | null = null;
 
     const handleMouseMove = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -44,7 +34,9 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
       }
 
       // 查找块级元素
-      const blockElement = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre');
+      const blockElement = target.closest(
+        '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+      );
 
       if (blockElement && blockElement !== currentBlock) {
         // 清除之前的隐藏定时器
@@ -58,7 +50,7 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
         const rect = blockElement.getBoundingClientRect();
         setToolbarPosition({
           x: rect.left - 60,
-          y: rect.top + window.scrollY
+          y: rect.top + window.scrollY,
         });
         setShowToolbar(true);
       } else if (!blockElement && !isOnToolbar) {
@@ -112,11 +104,11 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
   // 添加基础样式
   useEffect(() => {
     const styleId = 'minimal-block-styles';
-    
+
     if (document.getElementById(styleId)) {
       return;
     }
-    
+
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
@@ -181,7 +173,7 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
 
   const deleteBlock = () => {
     if (!editor || !currentBlock) return;
-    
+
     // 简单的删除方法
     const selection = editor.state.selection;
     editor.chain().focus().deleteSelection().run();
@@ -190,7 +182,7 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
 
   const duplicateBlock = () => {
     if (!editor || !currentBlock) return;
-    
+
     // 简单的复制方法
     const selection = editor.state.selection;
     const content = editor.state.doc.cut(selection.from, selection.to);
@@ -200,7 +192,7 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
 
   const insertBlockAbove = () => {
     if (!editor) return;
-    
+
     editor.chain().focus().insertContentAt(editor.state.selection.from, '<p></p>').run();
     setShowToolbar(false);
   };
@@ -208,7 +200,7 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
   return (
     <div ref={containerRef} className="relative">
       {children}
-      
+
       {/* 简单的工具栏 */}
       {showToolbar && currentBlock && (
         <div
@@ -226,10 +218,11 @@ const MinimalBlockManager: React.FC<MinimalBlockManagerProps> = ({
             const rect = currentBlock?.getBoundingClientRect();
             if (rect) {
               const { clientX, clientY } = e;
-              const isOverBlock = clientX >= rect.left &&
-                                clientX <= rect.right &&
-                                clientY >= rect.top &&
-                                clientY <= rect.bottom;
+              const isOverBlock =
+                clientX >= rect.left &&
+                clientX <= rect.right &&
+                clientY >= rect.top &&
+                clientY <= rect.bottom;
 
               if (!isOverBlock) {
                 // 延迟隐藏，给用户时间移动回块或工具栏

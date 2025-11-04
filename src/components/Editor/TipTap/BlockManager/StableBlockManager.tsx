@@ -1,30 +1,20 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Editor } from '@tiptap/react';
-import { 
-  GripVertical,
-  Plus,
-  Copy,
-  Trash2,
-  ChevronUp,
-  ChevronDown
-} from 'lucide-react';
+import { GripVertical, Plus, Copy, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface StableBlockManagerProps {
   editor: Editor | null;
   children: React.ReactNode;
 }
 
-const StableBlockManager: React.FC<StableBlockManagerProps> = ({
-  editor,
-  children
-}) => {
+const StableBlockManager: React.FC<StableBlockManagerProps> = ({ editor, children }) => {
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [currentBlock, setCurrentBlock] = useState<HTMLElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedBlock, setDraggedBlock] = useState<HTMLElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hideTimeoutRef = useRef<number | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   // 清除隐藏定时器
@@ -45,21 +35,24 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
   }, [clearHideTimeout]);
 
   // 显示工具栏
-  const showToolbarForBlock = useCallback((blockElement: HTMLElement) => {
-    clearHideTimeout();
-    
-    if (blockElement !== currentBlock) {
-      setCurrentBlock(blockElement);
-      
-      const rect = blockElement.getBoundingClientRect();
-      setToolbarPosition({
-        x: rect.left - 60,
-        y: rect.top + window.scrollY
-      });
-    }
-    
-    setShowToolbar(true);
-  }, [currentBlock, clearHideTimeout]);
+  const showToolbarForBlock = useCallback(
+    (blockElement: HTMLElement) => {
+      clearHideTimeout();
+
+      if (blockElement !== currentBlock) {
+        setCurrentBlock(blockElement);
+
+        const rect = blockElement.getBoundingClientRect();
+        setToolbarPosition({
+          x: rect.left - 60,
+          y: rect.top + window.scrollY,
+        });
+      }
+
+      setShowToolbar(true);
+    },
+    [currentBlock, clearHideTimeout]
+  );
 
   useEffect(() => {
     if (!editor || !containerRef.current) return;
@@ -68,16 +61,18 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
 
     const handleMouseMove = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      
+
       // 检查是否在工具栏上
       if (toolbarRef.current && toolbarRef.current.contains(target)) {
         clearHideTimeout();
         return;
       }
-      
+
       // 查找块级元素
-      const blockElement = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre');
-      
+      const blockElement = target.closest(
+        '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+      );
+
       if (blockElement) {
         showToolbarForBlock(blockElement as HTMLElement);
       } else {
@@ -112,11 +107,11 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
   // 添加CSS样式
   useEffect(() => {
     const styleId = 'stable-block-styles';
-    
+
     if (document.getElementById(styleId)) {
       return;
     }
-    
+
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
@@ -210,7 +205,7 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
 
   const deleteBlock = () => {
     if (!editor || !currentBlock) return;
-    
+
     const selection = editor.state.selection;
     editor.chain().focus().deleteSelection().run();
     setShowToolbar(false);
@@ -218,7 +213,7 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
 
   const duplicateBlock = () => {
     if (!editor || !currentBlock) return;
-    
+
     const selection = editor.state.selection;
     const content = editor.state.doc.cut(selection.from, selection.to);
     editor.chain().focus().insertContent(content.toJSON()).run();
@@ -272,7 +267,9 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
     if (!editor || !draggedBlock) return;
 
     const target = e.target as HTMLElement;
-    const targetBlock = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre');
+    const targetBlock = target.closest(
+      '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+    );
 
     if (targetBlock && targetBlock !== draggedBlock) {
       moveBlock(draggedBlock, targetBlock as HTMLElement);
@@ -314,7 +311,6 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
 
       // 应用变换
       editor.view.dispatch(tr);
-
     } catch (error) {
       console.error('移动块时出错:', error);
     }
@@ -345,14 +341,9 @@ const StableBlockManager: React.FC<StableBlockManagerProps> = ({
   };
 
   return (
-    <div
-      ref={containerRef}
-      className="relative"
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
+    <div ref={containerRef} className="relative" onDragOver={handleDragOver} onDrop={handleDrop}>
       {children}
-      
+
       {/* 稳定的工具栏 */}
       {showToolbar && currentBlock && (
         <div

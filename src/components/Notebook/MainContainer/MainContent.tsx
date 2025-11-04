@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import DSLCPipeline from '../../Senario/Workflow/Pipeline';
-import CreateMode from '../../Senario/View/CreateMode';
-import DemoMode from '../../Senario/View/DemoMode';
+import DSLCPipeline from '@/components/Scenario/Workflow/Pipeline';
+import CreateMode from '@/components/Scenario/View/CreateMode';
+import DemoMode from '@/components/Scenario/View/DemoMode';
 import DetachedCellView from './DetachedCellView';
 import WorkflowPanel from './WorkflowPanel';
-import { findCellsByStep } from '../../../utils/markdownParser';
-import useStore from '../../../store/notebookStore';
+import { findCellsByStep } from '@Utils/markdownParser';
+import useStore from '@Store/notebookStore';
 import PreviewApp from '../Display/PreviewApp';
 import { Splitter } from 'antd';
 
@@ -29,20 +29,28 @@ interface MainContentProps {
   isLastPhase?: boolean;
 }
 // 内联组件：可拖拽分屏
-const ResizableSplit: React.FC<{ renderLeft: () => JSX.Element; renderRight: () => JSX.Element }>
-  = ({ renderLeft, renderRight }) => {
+const ResizableSplit: React.FC<{
+  renderLeft: () => JSX.Element;
+  renderRight: () => JSX.Element;
+}> = ({ renderLeft, renderRight }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('notebook_split_left_width');
       if (saved) return Math.min(80, Math.max(20, Number(saved)));
-    } catch {}
+    } catch {
+      // Ignore localStorage errors
+    }
     return 50; // default percent
   });
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
-    try { localStorage.setItem('notebook_split_left_width', String(leftWidth)); } catch {}
+    try {
+      localStorage.setItem('notebook_split_left_width', String(leftWidth));
+    } catch {
+      // Ignore localStorage errors
+    }
   }, [leftWidth]);
 
   useEffect(() => {
@@ -65,10 +73,11 @@ const ResizableSplit: React.FC<{ renderLeft: () => JSX.Element; renderRight: () 
 
   return (
     <div ref={containerRef} className="w-full h-full flex select-none">
-      <div className="h-full border-r border-gray-200 overflow-hidden" style={{ width: `${leftWidth}%` }}>
-        <div className="w-full h-full overflow-auto">
-          {renderLeft()}
-        </div>
+      <div
+        className="h-full border-r border-gray-200 overflow-hidden"
+        style={{ width: `${leftWidth}%` }}
+      >
+        <div className="w-full h-full overflow-auto">{renderLeft()}</div>
       </div>
       <div
         role="separator"
@@ -99,7 +108,7 @@ const MainContent: React.FC<MainContentProps> = ({
   handlePreviousPhase,
   handleNextPhase,
   isFirstPhase,
-  isLastPhase
+  isLastPhase,
 }) => {
   const { detachedCellId, isDetachedCellFullscreen, getDetachedCell } = useStore();
   const detachedCell = getDetachedCell();
@@ -120,14 +129,21 @@ const MainContent: React.FC<MainContentProps> = ({
   if (detachedCellId && !isDetachedCellFullscreen) {
     return (
       <div className="w-full h-full">
-        <Splitter onResizeEnd={(sizes) => {
-          // 将左侧面板宽度百分比持久化（与旧逻辑兼容）
-          try {
-            const total = sizes.reduce((a, b) => a + b, 0);
-            const leftPercent = (sizes[0] / total) * 100;
-            localStorage.setItem('notebook_split_left_width', String(Math.min(80, Math.max(20, leftPercent))));
-          } catch {}
-        }}>
+        <Splitter
+          onResizeEnd={(sizes) => {
+            // 将左侧面板宽度百分比持久化（与旧逻辑兼容）
+            try {
+              const total = sizes.reduce((a, b) => a + b, 0);
+              const leftPercent = (sizes[0] / total) * 100;
+              localStorage.setItem(
+                'notebook_split_left_width',
+                String(Math.min(80, Math.max(20, leftPercent)))
+              );
+            } catch {
+              // Ignore localStorage errors
+            }
+          }}
+        >
           <Splitter.Panel defaultSize={'50%'} min={'20%'} max={'80%'}>
             {shouldShowDSLCUI ? (
               <div className="w-full h-full" style={{ zIndex: 1 }}>
@@ -168,21 +184,19 @@ const MainContent: React.FC<MainContentProps> = ({
       {/* Always render DSLCPipeline when needed - visible or invisible */}
       {shouldAlwaysRenderDSLC && (
         <div
-          className={shouldShowDSLCUI ? 'block w-full h-full' : 'absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none'}
+          className={
+            shouldShowDSLCUI
+              ? 'block w-full h-full'
+              : 'absolute w-0 h-0 overflow-hidden opacity-0 pointer-events-none'
+          }
           style={{ zIndex: shouldShowDSLCUI ? 100 : -1 }}
         >
-          <DSLCPipeline
-            onAddCell={handleAddCell}
-          />
+          <DSLCPipeline onAddCell={handleAddCell} />
         </div>
       )}
 
       {/* Render other modes when DSLC UI is hidden */}
-      {!shouldShowDSLCUI && (
-        <div style={{ zIndex: 10 }}>
-          {renderOtherModes()}
-        </div>
-      )}
+      {!shouldShowDSLCUI && <div style={{ zIndex: 10 }}>{renderOtherModes()}</div>}
     </>
   );
 

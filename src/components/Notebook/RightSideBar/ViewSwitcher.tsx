@@ -1,8 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { CircleX, Clock, List, Bug, MessageCircle as LucideMessageCircle } from 'lucide-react';
-import useStore from '../../../store/notebookStore';
-import { useAIAgentStore } from '../../../store/AIAgentStore';
+import useStore from '@Store/notebookStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
 
 type ViewTypeExtended = 'script' | 'qa' | 'debug';
 
@@ -21,9 +21,10 @@ const ViewSwitcher: React.FC = () => {
             className={`
               px-2 py-2 rounded-md transition-all duration-300 flex items-center gap-1.5
               flex-shrink-0 min-w-0
-              ${activeView === view
-                ? 'bg-white text-theme-800 font-semibold'
-                : 'text-gray-600 hover:bg-white/10'
+              ${
+                activeView === view
+                  ? 'bg-white text-theme-800 font-semibold'
+                  : 'text-gray-600 hover:bg-white/10'
               }
             `}
           >
@@ -37,10 +38,13 @@ const ViewSwitcher: React.FC = () => {
               <List className="w-5 h-5 flex-shrink-0" />
             )}
             <span className="hidden sm:inline whitespace-nowrap overflow-hidden text-ellipsis">
-              {view === 'script' ? t('rightSideBar.history') : 
-                view === 'qa' ? t('rightSideBar.chat') : 
-                view === 'debug' ? 'Debug' :
-                t('rightSideBar.workflow')}
+              {view === 'script'
+                ? t('rightSideBar.history')
+                : view === 'qa'
+                  ? t('rightSideBar.chat')
+                  : view === 'debug'
+                    ? 'Debug'
+                    : t('rightSideBar.workflow')}
             </span>
           </button>
         ))}
@@ -56,5 +60,3 @@ const ViewSwitcher: React.FC = () => {
 };
 
 export default ViewSwitcher;
-
-

@@ -5,7 +5,7 @@ import { IndexedDBManager, DB_CONFIG } from './database';
 import { FileMetadataEntity, FileContentEntity, DEFAULT_STORAGE_CONFIG } from './schema';
 import { NotebookORM } from './notebookOrm';
 import { getFileType } from './fileTypes';
-import { fileLog, storageLog } from '../utils/logger';
+import { fileLog, storageLog } from '@Utils/logger';
 
 /**
  * File storage configuration
@@ -43,28 +43,33 @@ export interface FileResult {
  */
 export class FileORM {
   private static defaultConfig = DEFAULT_STORAGE_CONFIG;
-  
+
   /**
    * Save file with intelligent storage strategy
    */
-  static async saveFile(fileData: FileData, options: FileStorageOptions = {}): Promise<FileMetadataEntity> {
+  static async saveFile(
+    fileData: FileData,
+    options: FileStorageOptions = {}
+  ): Promise<FileMetadataEntity> {
     // Validate required fields
     if (!fileData.notebookId || !fileData.filePath || !fileData.fileName) {
-      throw new Error(`Invalid file data: missing required fields. Got notebookId=${fileData.notebookId}, filePath=${fileData.filePath}, fileName=${fileData.fileName}`);
+      throw new Error(
+        `Invalid file data: missing required fields. Got notebookId=${fileData.notebookId}, filePath=${fileData.filePath}, fileName=${fileData.fileName}`
+      );
     }
-    
+
     const db = await IndexedDBManager.getDB();
     const now = Date.now();
-    
+
     const config = {
       maxFileSize: options.maxFileSize ?? this.defaultConfig.maxFileSize,
       compressionEnabled: options.compressionEnabled ?? this.defaultConfig.compressionEnabled,
-      forceLocal: options.forceLocal ?? false
+      forceLocal: options.forceLocal ?? false,
     };
-    
+
     const fileId = `${fileData.notebookId}::${fileData.filePath}`;
     const isLargeFile = fileData.size > config.maxFileSize && !config.forceLocal;
-    
+
     // Create file metadata
     const metadata: FileMetadataEntity = {
       id: fileId,
@@ -81,18 +86,18 @@ export class FileORM {
       hasLocalContent: !isLargeFile,
       remoteUrl: fileData.remoteUrl,
       isLargeFile,
-      contentPreview: isLargeFile ? this.generateContentPreview(fileData.content) : undefined
+      contentPreview: isLargeFile ? this.generateContentPreview(fileData.content) : undefined,
     };
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.FILES_CONTENT
-      ], 'readwrite');
-      
+      const transaction = db.transaction(
+        [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
+        'readwrite'
+      );
+
       const metaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
-      
+
       // Check if file already exists to compute notebook deltas
       const getExistingReq = metaStore.get(fileId);
       getExistingReq.onsuccess = () => {
@@ -108,9 +113,11 @@ export class FileORM {
           if (!isLargeFile) {
             const content: FileContentEntity = {
               fileId,
-              content: config.compressionEnabled ? this.compressContent(fileData.content) : fileData.content,
+              content: config.compressionEnabled
+                ? this.compressContent(fileData.content)
+                : fileData.content,
               compressed: config.compressionEnabled,
-              encoding: this.detectEncoding(fileData.content)
+              encoding: this.detectEncoding(fileData.content),
             };
 
             const contentRequest = contentStore.put(content);
@@ -121,15 +128,19 @@ export class FileORM {
                 size: fileData.content.length,
                 compressed: config.compressionEnabled,
                 storageType: metadata.storageType,
-                hasLocalContent: metadata.hasLocalContent
+                hasLocalContent: metadata.hasLocalContent,
               });
-              
+
               // Log activity and resolve
-              NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath)
-                .catch(error => storageLog.error('Failed to log file create activity', { error }));
+              NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath).catch(
+                (error) => storageLog.error('Failed to log file create activity', { error })
+              );
               // Adjust notebook stats
-              NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes)
-                .catch(error => storageLog.error('Failed to adjust notebook stats', { error }));
+              NotebookORM.adjustNotebookStats(
+                fileData.notebookId,
+                deltaFileCount,
+                deltaBytes
+              ).catch((error) => storageLog.error('Failed to adjust notebook stats', { error }));
               resolve(metadata);
             };
 
@@ -138,11 +149,15 @@ export class FileORM {
             // Large file - only metadata is saved
             NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath, {
               isLargeFile: true,
-              remoteUrl: fileData.remoteUrl
-            }).catch(error => storageLog.error('Failed to log large file create activity', { error }));
+              remoteUrl: fileData.remoteUrl,
+            }).catch((error) =>
+              storageLog.error('Failed to log large file create activity', { error })
+            );
             // Adjust notebook stats
-            NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes)
-              .catch(error => storageLog.error('Failed to adjust notebook stats for large file', { error }));
+            NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes).catch(
+              (error) =>
+                storageLog.error('Failed to adjust notebook stats for large file', { error })
+            );
             resolve(metadata);
           }
         };
@@ -158,19 +173,25 @@ export class FileORM {
         fileLog.warn('Save file timeout', {
           notebookId: fileData.notebookId,
           filePath: fileData.filePath,
-          timeoutMs: 20000
+          timeoutMs: 20000,
         });
         reject(new Error('Save file timeout - operation took longer than 20 seconds'));
       }, 20000); // Increased from 10s to 20s
-      
+
       // Add timeout cleanup to success/error handlers
       const originalResolve = resolve;
       const originalReject = reject;
-      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
-      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
+      resolve = (value) => {
+        clearTimeout(timeoutId);
+        originalResolve(value);
+      };
+      reject = (error) => {
+        clearTimeout(timeoutId);
+        originalReject(error);
+      };
     });
   }
-  
+
   /**
    * Get file by notebook ID and file path
    */
@@ -180,80 +201,85 @@ export class FileORM {
       fileLog.warn('Invalid parameters for getFile', { notebookId, filePath });
       return null;
     }
-    
+
     const db = await IndexedDBManager.getDB();
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.FILES_CONTENT
-      ], 'readwrite');
-      
+      const transaction = db.transaction(
+        [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
+        'readwrite'
+      );
+
       const metaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const index = metaStore.index('notebookPath');
-      
+
       const metaRequest = index.get([notebookId, filePath]);
-      
+
       metaRequest.onsuccess = () => {
         const metadata = metaRequest.result as FileMetadataEntity | undefined;
-        
+
         if (!metadata) {
           resolve(null);
           return;
         }
-        
+
         // Update access statistics
         const updatedMetadata: FileMetadataEntity = {
           ...metadata,
           lastAccessedAt: Date.now(),
-          accessCount: metadata.accessCount + 1
+          accessCount: metadata.accessCount + 1,
         };
-        
+
         const updateRequest = metaStore.put(updatedMetadata);
         updateRequest.onsuccess = () => {
           // Log activity and update notebook access
-          NotebookORM.logActivity(notebookId, 'file_access', filePath)
-            .catch(error => storageLog.error('Failed to log file access activity', { error }));
-          NotebookORM.updateNotebookAccess(notebookId)
-            .catch(error => storageLog.error('Failed to update notebook access', { error }));
+          NotebookORM.logActivity(notebookId, 'file_access', filePath).catch((error) =>
+            storageLog.error('Failed to log file access activity', { error })
+          );
+          NotebookORM.updateNotebookAccess(notebookId).catch((error) =>
+            storageLog.error('Failed to update notebook access', { error })
+          );
         };
-        updateRequest.onerror = () => fileLog.error('Failed to update file access stats', { notebookId, filePath });
-        
+        updateRequest.onerror = () =>
+          fileLog.error('Failed to update file access stats', { notebookId, filePath });
+
         if (metadata.hasLocalContent) {
           // Get content from local storage
           const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
           const contentRequest = contentStore.get(metadata.id);
-          
+
           contentRequest.onsuccess = () => {
             clearTimeout(timeoutId);
             const contentEntity = contentRequest.result as FileContentEntity | undefined;
-            
+
             fileLog.debug('Retrieved file content', {
               fileId: metadata.id,
               found: !!contentEntity,
               compressed: contentEntity?.compressed,
               rawContentSize: contentEntity?.content?.length || 0,
-              encoding: contentEntity?.encoding
+              encoding: contentEntity?.encoding,
             });
-            
+
             const result: FileResult = {
               metadata: updatedMetadata,
-              content: contentEntity ? this.decompressContent(contentEntity.content, contentEntity.compressed) : undefined
+              content: contentEntity
+                ? this.decompressContent(contentEntity.content, contentEntity.compressed)
+                : undefined,
             };
-            
+
             if (result.content) {
               fileLog.debug('Decompressed content size', { size: result.content.length });
             }
-            
+
             resolve(result);
           };
-          
+
           contentRequest.onerror = () => {
             clearTimeout(timeoutId);
             // Content not found locally, mark for remote fetch
             resolve({
               metadata: updatedMetadata,
-              needsRemoteFetch: true
+              needsRemoteFetch: true,
             });
           };
         } else {
@@ -261,81 +287,87 @@ export class FileORM {
           // Large file - needs remote fetch
           resolve({
             metadata: updatedMetadata,
-            needsRemoteFetch: true
+            needsRemoteFetch: true,
           });
         }
       };
-      
+
       metaRequest.onerror = () => {
         clearTimeout(timeoutId);
         reject(metaRequest.error);
       };
-      
+
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
         fileLog.warn('File retrieval timeout - consider optimizing database', {
           notebookId,
           filePath,
-          timeoutMs: 15000
+          timeoutMs: 15000,
         });
         reject(new Error('Get file timeout - operation took longer than 15 seconds'));
       }, 15000); // Increased from 5s to 15s
     });
   }
-  
+
   /**
    * Get all files for a notebook
    */
-  static async getFilesForNotebook(notebookId: string, includeContent: boolean = false): Promise<FileResult[]> {
+  static async getFilesForNotebook(
+    notebookId: string,
+    includeContent = false
+  ): Promise<FileResult[]> {
     const db = await IndexedDBManager.getDB();
     // Update notebook access on listing files
-    NotebookORM.updateNotebookAccess(notebookId)
-      .catch(error => storageLog.error('Failed to update notebook access during file listing', { error }));
+    NotebookORM.updateNotebookAccess(notebookId).catch((error) =>
+      storageLog.error('Failed to update notebook access during file listing', { error })
+    );
 
     return new Promise((resolve, reject) => {
-      const storeNames = includeContent 
+      const storeNames = includeContent
         ? [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT]
         : [DB_CONFIG.STORES.FILES_METADATA];
-        
+
       const transaction = db.transaction(storeNames, 'readonly');
       const metaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const index = metaStore.index('notebookId');
-      
+
       const request = index.openCursor(notebookId);
       const files: FileResult[] = [];
-      
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
           const metadata = cursor.value as FileMetadataEntity;
-          
+
           if (includeContent && metadata.hasLocalContent) {
             // Get content
             const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
             const contentRequest = contentStore.get(metadata.id);
-            
+
             contentRequest.onsuccess = () => {
               const contentEntity = contentRequest.result as FileContentEntity | undefined;
               files.push({
                 metadata,
-                content: contentEntity ? this.decompressContent(contentEntity.content, contentEntity.compressed) : undefined,
-                needsRemoteFetch: !contentEntity
+                content: contentEntity
+                  ? this.decompressContent(contentEntity.content, contentEntity.compressed)
+                  : undefined,
+                needsRemoteFetch: !contentEntity,
               });
-              
+
               cursor.continue();
             };
-            
+
             contentRequest.onerror = () => {
               files.push({
                 metadata,
-                needsRemoteFetch: true
+                needsRemoteFetch: true,
               });
               cursor.continue();
             };
           } else {
             files.push({
               metadata,
-              needsRemoteFetch: !metadata.hasLocalContent
+              needsRemoteFetch: !metadata.hasLocalContent,
             });
             cursor.continue();
           }
@@ -343,27 +375,33 @@ export class FileORM {
           resolve(files);
         }
       };
-      
+
       request.onerror = () => reject(request.error);
-      
+
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
         fileLog.warn('Get files timeout for notebook', {
           notebookId,
           includeContent,
-          timeoutMs: 20000
+          timeoutMs: 20000,
         });
         reject(new Error('Get files timeout - operation took longer than 20 seconds'));
       }, 20000); // Increased from 8s to 20s
-      
+
       // Add timeout cleanup to success/error handlers
       const originalResolve = resolve;
       const originalReject = reject;
-      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
-      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
+      resolve = (value) => {
+        clearTimeout(timeoutId);
+        originalResolve(value);
+      };
+      reject = (error) => {
+        clearTimeout(timeoutId);
+        originalReject(error);
+      };
     });
   }
-  
+
   /**
    * Delete file
    */
@@ -373,16 +411,16 @@ export class FileORM {
       fileLog.warn('Invalid parameters for deleteFile', { notebookId, filePath });
       return false;
     }
-    
+
     const db = await IndexedDBManager.getDB();
     const fileId = `${notebookId}::${filePath}`;
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.FILES_CONTENT
-      ], 'readwrite');
-      
+      const transaction = db.transaction(
+        [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
+        'readwrite'
+      );
+
       const metaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
 
@@ -405,11 +443,13 @@ export class FileORM {
           const contentRequest = contentStore.delete(fileId);
 
           const finalize = () => {
-            NotebookORM.logActivity(notebookId, 'file_delete', filePath)
-              .catch(error => storageLog.error('Failed to log file delete activity', { error }));
+            NotebookORM.logActivity(notebookId, 'file_delete', filePath).catch((error) =>
+              storageLog.error('Failed to log file delete activity', { error })
+            );
             // Adjust notebook stats
-            NotebookORM.adjustNotebookStats(notebookId, -1, -size)
-              .catch(error => storageLog.error('Failed to adjust notebook stats after delete', { error }));
+            NotebookORM.adjustNotebookStats(notebookId, -1, -size).catch((error) =>
+              storageLog.error('Failed to adjust notebook stats after delete', { error })
+            );
             resolve(true);
           };
 
@@ -420,52 +460,62 @@ export class FileORM {
         metaRequest.onerror = () => reject(metaRequest.error);
       };
       getMetaReq.onerror = () => reject(getMetaReq.error);
-      
+
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
         fileLog.warn('Delete file timeout', {
           notebookId,
           filePath,
-          timeoutMs: 15000
+          timeoutMs: 15000,
         });
         reject(new Error('Delete file timeout - operation took longer than 15 seconds'));
       }, 15000); // Increased from 5s to 15s
-      
+
       // Add timeout cleanup to success/error handlers
       const originalResolve = resolve;
       const originalReject = reject;
-      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
-      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
+      resolve = (value) => {
+        clearTimeout(timeoutId);
+        originalResolve(value);
+      };
+      reject = (error) => {
+        clearTimeout(timeoutId);
+        originalReject(error);
+      };
     });
   }
-  
+
   /**
    * Update file content (promotes large files to local if content provided)
    */
-  static async updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean> {
+  static async updateFileContent(
+    notebookId: string,
+    filePath: string,
+    content: string
+  ): Promise<boolean> {
     const db = await IndexedDBManager.getDB();
     const fileId = `${notebookId}::${filePath}`;
-    
+
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.FILES_CONTENT
-      ], 'readwrite');
-      
+      const transaction = db.transaction(
+        [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
+        'readwrite'
+      );
+
       const metaStore = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
       const contentStore = transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT);
-      
+
       // Get current metadata
       const getRequest = metaStore.get(fileId);
-      
+
       getRequest.onsuccess = () => {
         const metadata = getRequest.result as FileMetadataEntity | undefined;
-        
+
         if (!metadata) {
           reject(new Error('File not found'));
           return;
         }
-        
+
         // Update metadata
         const updatedMetadata: FileMetadataEntity = {
           ...metadata,
@@ -473,9 +523,9 @@ export class FileORM {
           storageType: 'local',
           size: new Blob([content]).size,
           lastModified: new Date().toISOString(),
-          lastAccessedAt: Date.now()
+          lastAccessedAt: Date.now(),
         };
-        
+
         // Save updated metadata
         const metaUpdateRequest = metaStore.put(updatedMetadata);
 
@@ -483,9 +533,11 @@ export class FileORM {
           // Save content
           const contentEntity: FileContentEntity = {
             fileId,
-            content: this.defaultConfig.compressionEnabled ? this.compressContent(content) : content,
+            content: this.defaultConfig.compressionEnabled
+              ? this.compressContent(content)
+              : content,
             compressed: this.defaultConfig.compressionEnabled,
-            encoding: this.detectEncoding(content)
+            encoding: this.detectEncoding(content),
           };
 
           const contentRequest = contentStore.put(contentEntity);
@@ -493,48 +545,55 @@ export class FileORM {
           contentRequest.onsuccess = () => {
             // Adjust notebook stats for size change only
             const deltaBytes = (updatedMetadata.size || 0) - (metadata.size || 0);
-            NotebookORM.adjustNotebookStats(notebookId, 0, deltaBytes)
-              .catch(error => storageLog.error('Failed to adjust notebook stats after file update', { error }));
+            NotebookORM.adjustNotebookStats(notebookId, 0, deltaBytes).catch((error) =>
+              storageLog.error('Failed to adjust notebook stats after file update', { error })
+            );
             resolve(true);
           };
           contentRequest.onerror = () => reject(contentRequest.error);
         };
-        
+
         metaUpdateRequest.onerror = () => reject(metaUpdateRequest.error);
       };
-      
+
       getRequest.onerror = () => reject(getRequest.error);
-      
+
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
         fileLog.warn('Update file timeout', {
           notebookId,
           filePath,
-          timeoutMs: 20000
+          timeoutMs: 20000,
         });
         reject(new Error('Update file timeout - operation took longer than 20 seconds'));
       }, 20000); // Increased from 8s to 20s
-      
+
       // Add timeout cleanup to success/error handlers
       const originalResolve = resolve;
       const originalReject = reject;
-      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
-      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
+      resolve = (value) => {
+        clearTimeout(timeoutId);
+        originalResolve(value);
+      };
+      reject = (error) => {
+        clearTimeout(timeoutId);
+        originalReject(error);
+      };
     });
   }
-  
+
   /**
    * Get large files that only have metadata (for cleanup or remote sync)
    */
   static async getLargeFiles(notebookId?: string): Promise<FileMetadataEntity[]> {
     const db = await IndexedDBManager.getDB();
-    
+
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([DB_CONFIG.STORES.FILES_METADATA], 'readonly');
       const store = transaction.objectStore(DB_CONFIG.STORES.FILES_METADATA);
-      
+
       let request: IDBRequest;
-      
+
       if (notebookId) {
         const index = store.index('notebookId');
         request = index.openCursor(notebookId);
@@ -542,9 +601,9 @@ export class FileORM {
         const index = store.index('isLargeFile');
         request = index.openCursor(true); // Only large files
       }
-      
+
       const largeFiles: FileMetadataEntity[] = [];
-      
+
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
@@ -557,26 +616,32 @@ export class FileORM {
           resolve(largeFiles);
         }
       };
-      
+
       request.onerror = () => reject(request.error);
-      
+
       // Increase timeout for slower systems
       const timeoutId = setTimeout(() => {
         fileLog.warn('Get large files timeout for notebook', {
           notebookId,
-          timeoutMs: 15000
+          timeoutMs: 15000,
         });
         reject(new Error('Get large files timeout - operation took longer than 15 seconds'));
       }, 15000); // Increased from 5s to 15s
-      
+
       // Add timeout cleanup to success/error handlers
       const originalResolve = resolve;
       const originalReject = reject;
-      resolve = (value) => { clearTimeout(timeoutId); originalResolve(value); };
-      reject = (error) => { clearTimeout(timeoutId); originalReject(error); };
+      resolve = (value) => {
+        clearTimeout(timeoutId);
+        originalResolve(value);
+      };
+      reject = (error) => {
+        clearTimeout(timeoutId);
+        originalReject(error);
+      };
     });
   }
-  
+
   /**
    * Generate content preview for large files
    */
@@ -585,24 +650,24 @@ export class FileORM {
     if (content.length <= maxPreviewLength) {
       return content;
     }
-    
+
     // For text files, take first 500 characters
     if (typeof content === 'string') {
       return content.substring(0, maxPreviewLength) + '... [truncated]';
     }
-    
+
     return '[Binary content preview not available]';
   }
-  
+
   /**
    * Detect content encoding
    */
   private static detectEncoding(content: string): 'utf8' | 'base64' | 'binary' {
     if (typeof content !== 'string') return 'binary';
-    
+
     // Check if it's base64
     if (/^data:/.test(content)) return 'base64';
-    
+
     // Check for binary indicators
     try {
       // If it has null bytes or other binary indicators, it's likely binary
@@ -612,10 +677,10 @@ export class FileORM {
     } catch {
       return 'binary';
     }
-    
+
     return 'utf8';
   }
-  
+
   /**
    * Compress content (simple implementation)
    */
@@ -624,13 +689,13 @@ export class FileORM {
     // In a real implementation, you might use a compression library
     return content;
   }
-  
+
   /**
    * Decompress content
    */
   private static decompressContent(content: string, compressed: boolean): string {
     if (!compressed) return content;
-    
+
     // For now, just return as-is
     // In a real implementation, you would decompress
     return content;

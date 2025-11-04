@@ -15,7 +15,7 @@ const DropZone: React.FC<DropZoneProps> = ({
   index,
   onAddCell,
   className = '',
-  showAddButton = true
+  showAddButton = true,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const { isOver, setNodeRef } = useDroppable({
@@ -81,12 +81,14 @@ const DropZone: React.FC<DropZoneProps> = ({
       )}
 
       {/* 简单的分割线 */}
-      <div className={`
+      <div
+        className={`
         absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
         w-full h-px bg-gray-200
         ${isHovered || isOver ? 'bg-theme-300' : ''}
         transition-colors duration-200
-      `} />
+      `}
+      />
     </div>
   );
 };

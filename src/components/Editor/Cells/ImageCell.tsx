@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2, Eye, Edit3, X, Loader2 } from 'lucide-react';
-import { Image, ImageProps } from 'antd';
-import useStore from '../../../store/notebookStore';
+import { Image } from 'antd';
+import useStore from '@Store/notebookStore';
 
 interface Cell {
   id: string;
   content: string;
   type: string;
-  outputs: any[];
+  outputs: unknown[];
   enableEdit: boolean;
   metadata?: {
     isGenerating?: boolean;
@@ -21,7 +21,7 @@ interface Cell {
     };
     generationError?: string;
     generationStatus?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
@@ -44,8 +44,8 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
 
   // 使用 useMemo 从 store 获取最新的 cell 数据，确保能实时响应 metadata 的更新
   const cell = React.useMemo(() => {
-    return cells.find(c => c.id === propCell.id) || propCell;
-  }, [cells, propCell.id, propCell]);
+    return cells.find((c) => c.id === propCell.id) || propCell;
+  }, [cells, propCell]);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const isEditing = editingCellId === cell.id;
@@ -68,7 +68,8 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
     generationStatus,
   } = cell.metadata || {};
 
-  const shouldShowLoading = isGenerating || (cell.metadata?.generationType && !hasContent && !generationError);
+  const shouldShowLoading =
+    isGenerating || (cell.metadata?.generationType && !hasContent && !generationError);
 
   // 解析 Markdown 语法并检测媒体类型
   const parseMarkdown = (markdownStr: string) => {
@@ -77,7 +78,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
       const src = match[2] || '';
       const alt = match[1] || '';
       const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv'];
-      const isVideo = videoExtensions.some(ext => src.toLowerCase().includes(ext));
+      const isVideo = videoExtensions.some((ext) => src.toLowerCase().includes(ext));
       return { alt, src, isValid: true, isVideo };
     }
     return { alt: '', src: '', isValid: false, isVideo: false };
@@ -89,7 +90,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
   // -- Handlers --
 
   const startEditing = useCallback(() => {
-    if (viewMode !== "create") return;
+    if (viewMode !== 'create') return;
     setEditingCellId(cell.id);
     setTempContent(cell.content);
     setTimeout(() => {
@@ -111,15 +112,18 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
     setEditingCellId(null);
   }, [cell.content, setEditingCellId]);
 
-  const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      saveEdit();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      cancelEdit();
-    }
-  }, [saveEdit, cancelEdit]);
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        saveEdit();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelEdit();
+      }
+    },
+    [saveEdit, cancelEdit]
+  );
 
   const handleClearError = () => {
     const newMetadata = {
@@ -130,7 +134,6 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
     };
     updateCellMetadata(cell.id, newMetadata);
   };
-
 
   // -- Effects --
 
@@ -143,7 +146,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
       setTempContent(cell.content);
     }
   }, [isEditing, cell.content]);
-  
+
   // 处理失焦自动保存
   const handleBlur = useCallback(() => {
     if (isEditing) {
@@ -153,7 +156,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
 
   // 生成状态计时器
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: number;
     if (shouldShowLoading && !generationError) {
       const startTime = generationStartTime || Date.now();
       const update = () => setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
@@ -199,9 +202,7 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
             )}
           </div>
           {!generationError && (
-            <div className="text-xs text-gray-500">
-              已用时: {formatElapsedTime(elapsedTime)}
-            </div>
+            <div className="text-xs text-gray-500">已用时: {formatElapsedTime(elapsedTime)}</div>
           )}
         </div>
 
@@ -225,14 +226,26 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
             {generationPrompt && (
               <div className="p-3 bg-white/70 backdrop-blur-sm rounded border border-gray-200">
                 <div className="text-xs text-gray-500 font-medium mb-1">提示词:</div>
-                <div className="text-sm text-gray-700">"{generationPrompt}"</div>
+                <div className="text-sm text-gray-700">&quot;{generationPrompt}&quot;</div>
               </div>
             )}
             {Object.keys(generationParams).length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {generationParams.quality && <span className="px-2 py-1 bg-theme-100 text-theme-700 text-xs rounded font-medium">质量: {generationParams.quality}</span>}
-                {generationParams.ratio && <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded font-medium">比例: {generationParams.ratio}</span>}
-                {generationParams.duration && <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded font-medium">时长: {generationParams.duration}s</span>}
+                {generationParams.quality && (
+                  <span className="px-2 py-1 bg-theme-100 text-theme-700 text-xs rounded font-medium">
+                    质量: {generationParams.quality}
+                  </span>
+                )}
+                {generationParams.ratio && (
+                  <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded font-medium">
+                    比例: {generationParams.ratio}
+                  </span>
+                )}
+                {generationParams.duration && (
+                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded font-medium">
+                    时长: {generationParams.duration}s
+                  </span>
+                )}
               </div>
             )}
             <div className="text-xs text-gray-400 text-center pt-2">
@@ -259,7 +272,15 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
       {previewData.isValid && previewData.src ? (
         <div className="mt-3">
           {previewData.isVideo ? (
-            <video src={previewData.src} controls className="max-w-full h-auto rounded-lg shadow-sm" onError={() => setImageError(true)} onLoadedData={() => setImageError(false)}>您的浏览器不支持视频播放</video>
+            <video
+              src={previewData.src}
+              controls
+              className="max-w-full h-auto rounded-lg shadow-sm"
+              onError={() => setImageError(true)}
+              onLoadedData={() => setImageError(false)}
+            >
+              您的浏览器不支持视频播放
+            </video>
           ) : (
             <Image
               src={previewData.src}
@@ -270,13 +291,23 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
               onLoad={() => setImageError(false)}
             />
           )}
-          {imageError && <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">⚠️ 加载失败: {previewData.src}</div>}
-          {previewData.alt && !imageError && <div className="mt-2 text-sm text-center italic">{previewData.alt}</div>}
+          {imageError && (
+            <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+              ⚠️ 加载失败: {previewData.src}
+            </div>
+          )}
+          {previewData.alt && !imageError && (
+            <div className="mt-2 text-sm text-center italic">{previewData.alt}</div>
+          )}
         </div>
       ) : tempContent ? (
-        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">⚠️ 请检查 Markdown 语法: ![描述](URL)</div>
+        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
+          ⚠️ 请检查 Markdown 语法: ![描述](URL)
+        </div>
       ) : (
-        <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-sm">输入 Markdown 语法以预览</div>
+        <div className="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-sm">
+          输入 Markdown 语法以预览
+        </div>
       )}
     </div>
   );
@@ -285,8 +316,17 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
     <div className="image-display">
       {imageData.isValid && imageData.src ? (
         <div className="relative">
-          {(imageData.isVideo || (cell.metadata?.generationType === 'video')) ? (
-            <video src={imageData.src} controls title={imageData.alt} className="max-w-full h-auto rounded-lg shadow-sm" onError={() => setImageError(true)} onLoadedData={() => setImageError(false)}>您的浏览器不支持视频播放</video>
+          {imageData.isVideo || cell.metadata?.generationType === 'video' ? (
+            <video
+              src={imageData.src}
+              controls
+              title={imageData.alt}
+              className="max-w-full h-auto rounded-lg shadow-sm"
+              onError={() => setImageError(true)}
+              onLoadedData={() => setImageError(false)}
+            >
+              您的浏览器不支持视频播放
+            </video>
           ) : (
             <Image
               src={imageData.src}
@@ -294,7 +334,11 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
               title={imageData.alt}
               className="max-w-full h-auto rounded-lg shadow-sm"
               preview={{
-                mask: <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1 flex items-center justify-center text-white text-sm">Click to View</div>
+                mask: (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1 flex items-center justify-center text-white text-sm">
+                    Click to View
+                  </div>
+                ),
               }}
               onError={() => setImageError(true)}
               onLoad={() => setImageError(false)}
@@ -309,13 +353,24 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
               </div>
             </div>
           )}
-          {imageData.alt && !imageError && <div className="mt-2 text-sm text-gray-600 text-center italic">{imageData.alt}</div>}
+          {imageData.alt && !imageError && (
+            <div className="mt-2 text-sm text-gray-600 text-center italic">{imageData.alt}</div>
+          )}
         </div>
       ) : (
-        <div className="image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer" onClick={startEditing}>
-          <div className="text-gray-600 mb-2">{hasContent ? '⚠️ Markdown 语法错误' : '点击添加媒体'}</div>
+        <div
+          className="image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer"
+          onClick={startEditing}
+        >
+          <div className="text-gray-600 mb-2">
+            {hasContent ? '⚠️ Markdown 语法错误' : '点击添加媒体'}
+          </div>
           <div className="text-sm text-gray-400">格式: ![描述](图片/视频URL)</div>
-          {hasContent && <div className="mt-2 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded">{cell.content}</div>}
+          {hasContent && (
+            <div className="mt-2 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded">
+              {cell.content}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -326,28 +381,51 @@ const ImageCell: React.FC<ImageCellProps> = ({ cell: propCell }) => {
       <div className="relative group" data-cell-id={cell.id}>
         <div
           className="image-cell"
-          onMouseEnter={() => viewMode === "create" && setShowButtons(cell.id, true)}
-          onMouseLeave={() => viewMode === "create" && setShowButtons(cell.id, false)}
+          onMouseEnter={() => viewMode === 'create' && setShowButtons(cell.id, true)}
+          onMouseLeave={() => viewMode === 'create' && setShowButtons(cell.id, false)}
         >
           <div className="flex-grow w-full relative">
             {/* 主渲染区域 */}
-            {shouldShowLoading ? renderGenerationState() : isEditing ? renderEditState() : renderDisplayState()}
+            {shouldShowLoading
+              ? renderGenerationState()
+              : isEditing
+                ? renderEditState()
+                : renderDisplayState()}
 
             {/* 工具栏 */}
-            {viewMode === "create" && (
-              <div className={`absolute -right-14 top-1 flex flex-col items-center transition-opacity duration-200 ${cellShowButtons || isEditing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            {viewMode === 'create' && (
+              <div
+                className={`absolute -right-14 top-1 flex flex-col items-center transition-opacity duration-200 ${cellShowButtons || isEditing ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+              >
                 {isEditing ? (
-                  <button onClick={saveEdit} className="p-1.5 hover:bg-gray-200 rounded" title="保存"><Eye size={16} /></button>
+                  <button
+                    onClick={saveEdit}
+                    className="p-1.5 hover:bg-gray-200 rounded"
+                    title="保存"
+                  >
+                    <Eye size={16} />
+                  </button>
                 ) : (
-                  <button onClick={startEditing} className="p-1.5 hover:bg-gray-200 rounded" title="编辑"><Edit3 size={16} /></button>
+                  <button
+                    onClick={startEditing}
+                    className="p-1.5 hover:bg-gray-200 rounded"
+                    title="编辑"
+                  >
+                    <Edit3 size={16} />
+                  </button>
                 )}
-                <button onClick={() => deleteCell(cell.id)} className="p-1.5 hover:bg-gray-200 rounded text-red-500" title="删除"><Trash2 size={16} /></button>
+                <button
+                  onClick={() => deleteCell(cell.id)}
+                  className="p-1.5 hover:bg-gray-200 rounded text-red-500"
+                  title="删除"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             )}
           </div>
         </div>
       </div>
-
     </>
   );
 };

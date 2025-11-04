@@ -2,7 +2,7 @@
 // Route state management for NotebookApp
 
 import { create } from 'zustand';
-import { storeLog, uiLog } from '../utils/logger';
+import { storeLog, uiLog } from '@Utils/logger';
 
 export type AppView = 'empty' | 'library' | 'workspace' | 'agent' | 'file-preview';
 
@@ -10,12 +10,12 @@ export interface RouteState {
   currentView: AppView;
   currentNotebookId: string | null;
   currentRoute: string;
-  
+
   // Actions
   setView: (view: AppView) => void;
   setNotebookId: (id: string | null) => void;
   setRoute: (route: string) => void;
-  
+
   // Route helpers
   navigateToEmpty: () => void;
   navigateToLibrary: () => void;
@@ -26,20 +26,20 @@ export interface RouteState {
 const getInitialRouteState = () => {
   const currentPath = window.location.pathname;
   storeLog.debug('RouteStore: Initializing with path', { currentPath });
-  
+
   if (currentPath === '/') {
     storeLog.debug('RouteStore: Setting initial state to EMPTY');
     return {
       currentView: 'empty' as AppView,
       currentNotebookId: null,
-      currentRoute: '/'
+      currentRoute: '/',
     };
   } else if (currentPath === '/FoKn/Library') {
     storeLog.debug('RouteStore: Setting initial state to LIBRARY');
     return {
       currentView: 'library' as AppView,
       currentNotebookId: null,
-      currentRoute: '/FoKn/Library'
+      currentRoute: '/FoKn/Library',
     };
   } else if (currentPath.startsWith('/workspace/')) {
     const notebookId = currentPath.split('/workspace/')[1];
@@ -47,7 +47,7 @@ const getInitialRouteState = () => {
     return {
       currentView: 'workspace' as AppView,
       currentNotebookId: notebookId,
-      currentRoute: currentPath
+      currentRoute: currentPath,
     };
   } else {
     storeLog.warn('RouteStore: Unknown path, defaulting to EMPTY', { currentPath });
@@ -55,7 +55,7 @@ const getInitialRouteState = () => {
     return {
       currentView: 'empty' as AppView,
       currentNotebookId: null,
-      currentRoute: currentPath
+      currentRoute: currentPath,
     };
   }
 };
@@ -67,13 +67,13 @@ const useRouteStore = create<RouteState>((set, get) => ({
   currentView: initialState.currentView,
   currentNotebookId: initialState.currentNotebookId,
   currentRoute: initialState.currentRoute,
-  
+
   setView: (view: AppView) => set({ currentView: view }),
   setNotebookId: (id: string | null) => set({ currentNotebookId: id }),
   setRoute: (route: string) => {
     const state = get();
     set({ currentRoute: route });
-    
+
     // Auto-detect view based on route
     if (route === '/') {
       set({ currentView: 'empty' });
@@ -81,23 +81,23 @@ const useRouteStore = create<RouteState>((set, get) => ({
       set({ currentView: 'library' });
     } else if (route.startsWith('/workspace/')) {
       const notebookId = route.split('/workspace/')[1];
-      set({ 
+      set({
         currentView: 'workspace',
-        currentNotebookId: notebookId
+        currentNotebookId: notebookId,
       });
     }
   },
-  
+
   navigateToEmpty: () => {
     window.history.pushState(null, '', '/');
     get().setRoute('/');
   },
-  
+
   navigateToLibrary: () => {
     window.history.pushState(null, '', '/FoKn/Library');
     get().setRoute('/FoKn/Library');
   },
-  
+
   navigateToWorkspace: (notebookId: string) => {
     const route = `/workspace/${notebookId}`;
     window.history.pushState(null, '', route);

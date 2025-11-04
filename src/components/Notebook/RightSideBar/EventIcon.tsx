@@ -1,12 +1,27 @@
 import React from 'react';
-import { 
-  MessageSquare, UploadCloud, Eye, BookOpen, Code, PlayCircle,
-  BarChart2, Bug, AlertTriangle, MessageCircle, Wrench, Server,
-  Edit, ShieldCheck
+import {
+  MessageSquare,
+  UploadCloud,
+  Eye,
+  BookOpen,
+  Code,
+  PlayCircle,
+  BarChart2,
+  Bug,
+  AlertTriangle,
+  MessageCircle,
+  Wrench,
+  Server,
+  Edit,
+  ShieldCheck,
 } from 'lucide-react';
-import { EVENT_TYPES, EventType } from '../../../store/AIAgentStore';
+import { EVENT_TYPES, EventType } from '@Store/AIAgentStore';
 
-export interface EventIconProps { type: EventType; className?: string; onProcess?: boolean }
+export interface EventIconProps {
+  type: EventType;
+  className?: string;
+  onProcess?: boolean;
+}
 
 const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) => {
   const iconConfig = {
@@ -27,7 +42,7 @@ const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) =>
     [EVENT_TYPES.AI_GENERATING_TEXT]: { Icon: Edit, color: 'text-indigo-800' },
   } as Record<string, { Icon: any; color: string }>;
 
-  const { Icon = ShieldCheck, color = 'text-theme-800' } = iconConfig[type] || {} as any;
+  const { Icon = ShieldCheck, color = 'text-theme-800' } = iconConfig[type] || ({} as any);
   return (
     <div className="relative">
       <Icon className={`${className} ${color} transition-colors duration-300`} />
@@ -36,5 +51,3 @@ const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) =>
 };
 
 export default EventIcon;
-
-

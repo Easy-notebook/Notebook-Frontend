@@ -7,8 +7,8 @@ interface Cell {
   id: string;
   type: string;
   content: string;
-  outputs?: any[];
-  [key: string]: any;
+  outputs?: unknown[];
+  [key: string]: unknown;
 }
 
 interface DraggableCellProps {
@@ -25,14 +25,9 @@ const DraggableCell = forwardRef<HTMLDivElement, DraggableCellProps>(
     const [showAddMenu, setShowAddMenu] = useState(false);
     const VUE_SECONDARY = '#35495E';
 
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-      isDragging,
-    } = useSortable({ id: cell.id });
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id: cell.id,
+    });
 
     const style = {
       transform: CSS.Transform.toString(transform),
@@ -193,9 +188,7 @@ const DraggableCell = forwardRef<HTMLDivElement, DraggableCellProps>(
                   </button>
                 </div>
                 <div className="mt-2 pt-2 border-t border-gray-200">
-                  <div className="text-xs text-gray-500 px-2">
-                    按 C/M/I/A 快速添加
-                  </div>
+                  <div className="text-xs text-gray-500 px-2">按 C/M/I/A 快速添加</div>
                 </div>
               </div>
             )}

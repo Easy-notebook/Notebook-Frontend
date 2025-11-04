@@ -4,12 +4,17 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { produce } from 'immer';
 
-import { parseMarkdownCells, findCellsByPhase, findCellsByStep, updateCellsPhaseId } from '../utils/markdownParser';
-import { showToast } from '../components/UI/Toast';
-import notebookAutoSaveInstance, { NotebookAutoSave } from '../services/notebookAutoSave';
-import { notebookLog, storeLog } from '../utils/logger';
+import {
+  parseMarkdownCells,
+  findCellsByPhase,
+  findCellsByStep,
+  updateCellsPhaseId,
+} from '@Utils/markdownParser';
+import { showToast } from '@/components/UI/Toast';
+import notebookAutoSaveInstance, { NotebookAutoSave } from '@Services/notebookAutoSave';
+import { notebookLog, storeLog } from '@Utils/logger';
 
-import useCodeStore from './codeStore';
+import useCodeStore from '@Store/codeStore';
 
 /** 单元格类型 */
 export type CellType = 'code' | 'markdown' | 'raw' | 'hybrid' | 'image' | 'thinking' | 'link';
@@ -167,7 +172,13 @@ export interface NotebookStoreActions {
 
   // 单元格创建
   addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => string;
-  addNewCellWithUniqueIdentifier: (type: CellType, description?: string, enableEdit?: boolean, uniqueIdentifier?: string, prompt?: string) => string;
+  addNewCellWithUniqueIdentifier: (
+    type: CellType,
+    description?: string,
+    enableEdit?: boolean,
+    uniqueIdentifier?: string,
+    prompt?: string
+  ) => string;
   updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<Cell>) => boolean;
   addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
   addNewContent2CurrentCell: (content: string) => void;
@@ -257,7 +268,7 @@ const updateCellOutputsHelper = (
   set: any,
   get: () => NotebookStore,
   cellId: string,
-  outputs: OutputItem[],
+  outputs: OutputItem[]
 ) => {
   const serialized = serializeOutput(outputs);
   const outArr: OutputItem[] = Array.isArray(serialized) ? serialized : [];
@@ -271,18 +282,12 @@ const updateCellOutputsHelper = (
 
       if (outArr.length > 0) {
         cell.outputs = isErr
-          ? [
-              { type: 'text', content: '[error-message-for-debug]', timestamp: '' },
-              ...outArr,
-            ]
+          ? [{ type: 'text', content: '[error-message-for-debug]', timestamp: '' }, ...outArr]
           : [...outArr];
       } else {
-        cell.outputs = [
-          { type: 'text', content: '[without-output]', timestamp: '' },
-          ...outArr,
-        ];
+        cell.outputs = [{ type: 'text', content: '[without-output]', timestamp: '' }, ...outArr];
       }
-    }),
+    })
   );
 };
 
@@ -349,13 +354,12 @@ const useStore = create(
         set((state) => ({
           notebookTitle: title,
           cells: state.cells.map((cell, index) =>
-            index === 0 && cell.metadata?.isDefaultTitle
-              ? { ...cell, content: `# ${title}` }
-              : cell,
+            index === 0 && cell.metadata?.isDefaultTitle ? { ...cell, content: `# ${title}` } : cell
           ),
         })),
 
-      setCurrentPhase: (phaseId: string | null) => set({ currentPhaseId: phaseId, currentStepIndex: 0 }),
+      setCurrentPhase: (phaseId: string | null) =>
+        set({ currentPhaseId: phaseId, currentStepIndex: 0 }),
       setCurrentStepIndex: (index: number) => set({ currentStepIndex: index }),
       setCurrentCell: (cellId: string | null) => set({ currentCellId: cellId }),
       setCurrentRunningPhaseId: (phaseId: string | null) => set({ currentRunningPhaseId: phaseId }),
@@ -364,7 +368,7 @@ const useStore = create(
         set(
           produce((state: NotebookStoreState) => {
             state.showButtons[cellId] = value;
-          }),
+          })
         ),
 
       clearCells: () => {
@@ -389,7 +393,7 @@ const useStore = create(
             state.cells.forEach((cell) => {
               cell.outputs = [];
             });
-          }),
+          })
         ),
 
       clearCellOutputs: (cellId: string) =>
@@ -397,18 +401,25 @@ const useStore = create(
           produce((state: NotebookStoreState) => {
             const cell = state.cells.find((c) => c.id === cellId);
             if (cell) cell.outputs = [];
-          }),
+          })
         ),
 
       setCells: (cells: Cell[]) => {
         if (!Array.isArray(cells)) {
-          console.error('setCells called with non-array:', cells, 'Stack trace:', new Error().stack);
+          storeLog.error('setCells called with non-array', {
+            receivedType: typeof cells,
+            stackTrace: new Error().stack,
+          });
           return;
         }
 
         notebookLog.cellOperation('update', 'batch', {
           cellsCount: cells.length,
-          cellTypes: cells.map((c) => ({ id: c.id, type: c.type, contentLength: c.content?.length || 0 })),
+          cellTypes: cells.map((c) => ({
+            id: c.id,
+            type: c.type,
+            contentLength: c.content?.length || 0,
+          })),
           stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n'),
         });
 
@@ -421,7 +432,11 @@ const useStore = create(
         notebookLog.info('Processed cells', {
           originalCount: cells.length,
           processedCount: processedCells.length,
-          processedTypes: processedCells.map((c) => ({ id: c.id, type: c.type, contentLength: c.content?.length || 0 })),
+          processedTypes: processedCells.map((c) => ({
+            id: c.id,
+            type: c.type,
+            contentLength: c.content?.length || 0,
+          })),
         });
 
         if (processedCells.length === 0) {
@@ -447,7 +462,11 @@ const useStore = create(
         notebookLog.info('setCells final update', {
           finalCellsCount: processedCells.length,
           finalTasksCount: tasks.length,
-          finalCells: processedCells.map((c) => ({ id: c.id, type: c.type, content: (c.content ?? '').substring(0, 50) + '...' })),
+          finalCells: processedCells.map((c) => ({
+            id: c.id,
+            type: c.type,
+            content: (c.content ?? '').substring(0, 50) + '...',
+          })),
         });
 
         set({ cells: processedCells, tasks, isInitialized: true });
@@ -499,7 +518,10 @@ const useStore = create(
             const cell: Cell = {
               id: newCell.id || uuidv4(),
               type: newCell.type || 'markdown',
-              content: typeof newCell.content === 'string' ? newCell.content : String(newCell.content ?? ''),
+              content:
+                typeof newCell.content === 'string'
+                  ? newCell.content
+                  : String(newCell.content ?? ''),
               outputs: Array.isArray(newCell.outputs) ? serializeOutput(newCell.outputs) : [],
               enableEdit: newCell.enableEdit ?? true,
               phaseId: newCell.phaseId ?? null,
@@ -542,7 +564,9 @@ const useStore = create(
                 state.currentStepIndex = 0;
               }
             } else {
-              const currentPhase = state.tasks.flatMap((t) => t.phases).find((p) => p.id === state.currentPhaseId);
+              const currentPhase = state.tasks
+                .flatMap((t) => t.phases)
+                .find((p) => p.id === state.currentPhaseId);
               if (!currentPhase) {
                 const firstPhase = state.tasks[0]?.phases[0];
                 if (firstPhase) {
@@ -552,11 +576,13 @@ const useStore = create(
               }
             }
 
-            const currentPhase = state.tasks.flatMap((t) => t.phases).find((p) => p.id === state.currentPhaseId);
+            const currentPhase = state.tasks
+              .flatMap((t) => t.phases)
+              .find((p) => p.id === state.currentPhaseId);
             if (currentPhase && state.currentStepIndex >= currentPhase.steps.length) {
               state.currentStepIndex = Math.max(0, currentPhase.steps.length - 1);
             }
-          }),
+          })
         ),
 
       updateTitle: (title: string) =>
@@ -581,7 +607,7 @@ const useStore = create(
                 cell.content = `# ${title}`;
               }
             }
-          }),
+          })
         ),
 
       updateCurrentCellDescription: (description: string) =>
@@ -589,7 +615,7 @@ const useStore = create(
           produce((state: NotebookStoreState) => {
             const cell = state.cells.find((c) => c.id === state.currentCellId);
             if (cell) cell.description = description;
-          }),
+          })
         ),
 
       addNewContent2CurrentCellDescription: (content: string) => {
@@ -632,7 +658,9 @@ const useStore = create(
                   state.currentStepIndex = 0;
                 }
               } else {
-                const currentPhase = state.tasks.flatMap((t) => t.phases).find((p) => p.id === state.currentPhaseId);
+                const currentPhase = state.tasks
+                  .flatMap((t) => t.phases)
+                  .find((p) => p.id === state.currentPhaseId);
                 if (currentPhase && state.currentStepIndex >= currentPhase.steps.length) {
                   state.currentStepIndex = Math.max(0, currentPhase.steps.length - 1);
                 }
@@ -644,7 +672,7 @@ const useStore = create(
             }
 
             delete state.showButtons[cellId];
-          }),
+          })
         ),
 
       updateCell: (cellId: string, newContent: string) =>
@@ -652,13 +680,16 @@ const useStore = create(
           produce((state: NotebookStoreState) => {
             const cell = state.cells.find((c) => c.id === cellId);
             if (cell) {
-              const content = typeof newContent === 'string' ? newContent : String(newContent ?? '');
+              const content =
+                typeof newContent === 'string' ? newContent : String(newContent ?? '');
               cell.content = content;
 
               // 如果是默认标题 cell，同步更新 notebookTitle
               if (cell.metadata?.isDefaultTitle) {
                 const titleMatch = content.match(/^#\s*(.*)$/);
-                const title = titleMatch ? titleMatch[1].trim() : content.replace(/^#\s*/, '').trim();
+                const title = titleMatch
+                  ? titleMatch[1].trim()
+                  : content.replace(/^#\s*/, '').trim();
                 state.notebookTitle = title || 'Untitled';
               }
             }
@@ -666,7 +697,7 @@ const useStore = create(
             const updatedTasks = parseMarkdownCells(state.cells as any) as any;
             state.tasks = updatedTasks;
             updateCellsPhaseId(state.cells as any, updatedTasks);
-          }),
+          })
         ),
 
       updateCellOutputs: (cellId: string, outputs: OutputItem[]) => {
@@ -686,7 +717,11 @@ const useStore = create(
 
             const [movedCell] = state.cells.splice(fromIndex, 1);
             // 若 target 等于当前长度，splice 的第二步插入到尾部
-            state.cells.splice(target > state.cells.length ? state.cells.length : target, 0, movedCell);
+            state.cells.splice(
+              target > state.cells.length ? state.cells.length : target,
+              0,
+              movedCell
+            );
 
             notebookLog.cellOperation('move', 'batch', {
               from: fromIndex,
@@ -695,7 +730,7 @@ const useStore = create(
               totalCells: state.cells.length,
             });
           }),
-          false,
+          false
         );
       },
 
@@ -711,14 +746,20 @@ const useStore = create(
                   state.currentStepIndex = 0;
                 }
               } else {
-                const phase = state.tasks.flatMap((t) => t.phases).find((p) => p.id === state.currentPhaseId);
+                const phase = state.tasks
+                  .flatMap((t) => t.phases)
+                  .find((p) => p.id === state.currentPhaseId);
                 const stepsLen = phase?.steps?.length || 0;
-                if (stepsLen === 0 || state.currentStepIndex >= stepsLen || state.currentStepIndex < 0) {
+                if (
+                  stepsLen === 0 ||
+                  state.currentStepIndex >= stepsLen ||
+                  state.currentStepIndex < 0
+                ) {
                   state.currentStepIndex = 0;
                 }
               }
             }
-          }),
+          })
         ),
 
       toggleViewMode: () =>
@@ -732,7 +773,7 @@ const useStore = create(
                 state.currentStepIndex = 0;
               }
             }
-          }),
+          })
         ),
 
       runSingleCell: async (cellId: string): Promise<RunResult> => {
@@ -769,7 +810,9 @@ const useStore = create(
           const codeCells = state.cells.filter((cell) => cell.type === 'code');
 
           for (const cell of codeCells) {
-            const phase = tasks.flatMap((t: any) => t.phases).find((p: any) => p.id === cell.phaseId);
+            const phase = tasks
+              .flatMap((t: any) => t.phases)
+              .find((p: any) => p.id === cell.phaseId);
             if (phase && phase.id !== state.currentRunningPhaseId) {
               set({ currentRunningPhaseId: phase.id });
             }
@@ -801,7 +844,7 @@ const useStore = create(
         await get().runSingleCell(currentCellId);
       },
 
-      addNewCell2End: (type: CellType, description: string = '', enableEdit: boolean = true): string => {
+      addNewCell2End: (type: CellType, description = '', enableEdit = true): string => {
         const id = uuidv4();
         const newCell: Partial<Cell> = {
           id,
@@ -829,10 +872,10 @@ const useStore = create(
 
       addNewCellWithUniqueIdentifier: (
         type: CellType,
-        description: string = '',
-        enableEdit: boolean = true,
+        description = '',
+        enableEdit = true,
         uniqueIdentifier?: string,
-        prompt?: string,
+        prompt?: string
       ): string => {
         const timestamp = Date.now();
         const identifier =
@@ -840,7 +883,10 @@ const useStore = create(
           (() => {
             let id = `gen-${timestamp}`;
             if (prompt) {
-              const promptHash = prompt.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              const promptHash = prompt
+                .substring(0, 20)
+                .replace(/[^a-zA-Z0-9]/g, '')
+                .toLowerCase();
               id += `-${promptHash}`;
             }
             return id;
@@ -881,7 +927,9 @@ const useStore = create(
 
       updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<Cell>): boolean => {
         const state = get();
-        const targetCell = state.cells.find((cell) => cell.metadata?.uniqueIdentifier === uniqueIdentifier);
+        const targetCell = state.cells.find(
+          (cell) => cell.metadata?.uniqueIdentifier === uniqueIdentifier
+        );
 
         if (!targetCell) {
           notebookLog.warn('Cell not found', { uniqueIdentifier });
@@ -899,7 +947,7 @@ const useStore = create(
         return true;
       },
 
-      addNewCell2Next: (type: CellType, description: string = '', enableEdit: boolean = true) => {
+      addNewCell2Next: (type: CellType, description = '', enableEdit = true) => {
         const id = uuidv4();
         const newCell: Partial<Cell> = {
           id,
@@ -947,7 +995,8 @@ const useStore = create(
         return currentCell ? currentCell.type : 'markdown';
       },
 
-      checkOutputsIsError: (outputs: OutputItem[]): boolean => outputs.some((o) => o.type === 'error'),
+      checkOutputsIsError: (outputs: OutputItem[]): boolean =>
+        outputs.some((o) => o.type === 'error'),
 
       checkCurrentCodeCellOutputsIsError: (): boolean => {
         const currentCell = get().getCurrentCell();
@@ -967,7 +1016,7 @@ const useStore = create(
           produce((state: NotebookStoreState) => {
             const cell = state.cells.find((c) => c.id === cellId);
             if (cell) cell.enableEdit = isEditable;
-          }),
+          })
         ),
 
       updateCellMetadata: (cellId: string, metadata: Record<string, any>) =>
@@ -977,7 +1026,7 @@ const useStore = create(
             if (cell) {
               cell.metadata = { ...(cell.metadata || {}), ...metadata };
             }
-          }),
+          })
         ),
 
       convertCurrentCodeCellToHybridCell: () =>
@@ -989,7 +1038,7 @@ const useStore = create(
               return;
             }
             currentCell.type = 'hybrid';
-          }),
+          })
         ),
 
       convertToCodeCell: (cellId: string) =>
@@ -1018,7 +1067,7 @@ const useStore = create(
             const updatedTasks = parseMarkdownCells(state.cells as any) as any;
             updateCellsPhaseId(state.cells as any, updatedTasks);
             state.tasks = updatedTasks;
-          }),
+          })
         ),
 
       updateCellType: (cellId: string, newType: CellType) =>
@@ -1031,7 +1080,7 @@ const useStore = create(
               updateCellsPhaseId(state.cells as any, updatedTasks);
               state.tasks = updatedTasks;
             }
-          }),
+          })
         ),
 
       getHistoryCode: (): string => {
@@ -1069,7 +1118,10 @@ const useStore = create(
         const state = get();
 
         if (!Array.isArray(state.cells)) {
-          console.error('state.cells is not an array:', state.cells);
+          storeLog.error('state.cells is not an array', {
+            cellsType: typeof state.cells,
+            cells: state.cells,
+          });
           return [];
         }
 
@@ -1093,7 +1145,7 @@ const useStore = create(
               state.tasks as any,
               state.currentPhaseId,
               currentStep.id,
-              state.cells as any,
+              state.cells as any
             );
           }
         }
@@ -1119,7 +1171,7 @@ const useStore = create(
           state.tasks as any,
           state.currentPhaseId!,
           currentStep.id,
-          state.cells as any,
+          state.cells as any
         ).map((c) => c.id);
       },
 
@@ -1148,7 +1200,7 @@ const useStore = create(
         const state = get();
         if (!state.detachedCellId) return null;
         return state.cells.find((c) => c.id === state.detachedCellId) || null;
-        },
+      },
       toggleDetachedCellFullscreen: () =>
         set((state) => ({ isDetachedCellFullscreen: !state.isDetachedCellFullscreen })),
 
@@ -1282,7 +1334,7 @@ const useStore = create(
         }
       },
     };
-  }),
+  })
 );
 
 /* ------------------------- 自动保存订阅 ------------------------- */
@@ -1320,7 +1372,7 @@ useStore.subscribe(
         notebookLog.error('Auto-save failed', { error });
       }
     }
-  },
+  }
 );
 
 export default useStore;

@@ -1,189 +1,197 @@
-import { Node, mergeAttributes, RawCommands } from '@tiptap/core'
-import { InputRule } from '@tiptap/core'
-import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react'
-import React, { useState, useRef, useEffect } from 'react'
-import { Upload, X, Edit3, Loader2 } from 'lucide-react'
-import { Image } from 'antd'
-import useStore from '../../../store/notebookStore'
+import { Node, mergeAttributes, RawCommands } from '@tiptap/core';
+import { InputRule } from '@tiptap/core';
+import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Upload, X, Edit3, Loader2 } from 'lucide-react';
+import { Image } from 'antd';
+import useStore from '@Store/notebookStore';
 
 const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
-  const [isEditing, setIsEditing] = useState(false)
-  const [tempMarkdown, setTempMarkdown] = useState('')
-  const [imageError, setImageError] = useState(false)
-  const [elapsedTime, setElapsedTime] = useState(0)
-  const textareaRef = useRef<HTMLInputElement>(null)
-  
-  const { cells, currentCellId, updateCell, viewMode, editingCellId } = useStore()
-  
-  const cellId = node.attrs.cellId || currentCellId
-  
-  const isFocused = cellId === currentCellId || cellId === editingCellId
-  
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempMarkdown, setTempMarkdown] = useState('');
+  const [imageError, setImageError] = useState(false);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const textareaRef = useRef<HTMLInputElement>(null);
+
+  const { cells, currentCellId, updateCell, viewMode, editingCellId } = useStore();
+
+  const cellId = node.attrs.cellId || currentCellId;
+
+  const isFocused = cellId === currentCellId || cellId === editingCellId;
+
   const cell = React.useMemo(() => {
-    const foundCell = cells.find(c => c.id === cellId) || null
-    return foundCell
-  }, [cells, cellId])
-  
-  const cellContent = cell?.content || ''
-  const hasContent = cellContent.trim().length > 0
-  
-  const isGenerating = cell?.metadata?.isGenerating || false
-  const generationType = cell?.metadata?.generationType || 'image'
-  const generationPrompt = cell?.metadata?.prompt || ''
-  const generationParams = cell?.metadata?.generationParams || {}
-  const generationStartTime = cell?.metadata?.generationStartTime
-  const generationError = cell?.metadata?.generationError
-  const generationStatus = cell?.metadata?.generationStatus
-  
-  const shouldShowLoading = isGenerating ||
-    (cell?.metadata?.generationType && !hasContent && !generationError)
-  
-  const isGeneratedContent = cell?.metadata?.generationType && hasContent && !isGenerating && !generationError
-  
+    const foundCell = cells.find((c) => c.id === cellId) || null;
+    return foundCell;
+  }, [cells, cellId]);
+
+  const cellContent = cell?.content || '';
+  const hasContent = cellContent.trim().length > 0;
+
+  const isGenerating = cell?.metadata?.isGenerating || false;
+  const generationType = cell?.metadata?.generationType || 'image';
+  const generationPrompt = cell?.metadata?.prompt || '';
+  const generationParams = cell?.metadata?.generationParams || {};
+  const generationStartTime = cell?.metadata?.generationStartTime;
+  const generationError = cell?.metadata?.generationError;
+  const generationStatus = cell?.metadata?.generationStatus;
+
+  const shouldShowLoading =
+    isGenerating || (cell?.metadata?.generationType && !hasContent && !generationError);
+
+  const isGeneratedContent =
+    cell?.metadata?.generationType && hasContent && !isGenerating && !generationError;
+
   const parseMarkdown = (markdownStr: string) => {
-    const match = markdownStr.match(/!\[([^\]]*)\]\(([^)]+)\)/)
+    const match = markdownStr.match(/!\[([^\]]*)\]\(([^)]+)\)/);
     if (match) {
       const src = match[2] || '';
       const alt = match[1] || '';
 
       const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv'];
-      const isVideo = videoExtensions.some(ext => src.toLowerCase().includes(ext));
-      
+      const isVideo = videoExtensions.some((ext) => src.toLowerCase().includes(ext));
+
       console.log('🎬 Video detection:', { src, isVideo, extensions: videoExtensions });
 
       return {
         alt,
         src,
         isValid: true,
-        isVideo
-      }
+        isVideo,
+      };
     }
     return {
       alt: '',
       src: '',
       isValid: false,
-      isVideo: false
-    }
-  }
+      isVideo: false,
+    };
+  };
 
-  const currentContent = cellContent || ''
-  const previewData = parseMarkdown(currentContent)
+  const currentContent = cellContent || '';
+  const previewData = parseMarkdown(currentContent);
 
   useEffect(() => {
     if (!isFocused && isEditing) {
-      saveEdit()
+      saveEdit();
     }
-  }, [isFocused, isEditing])
-  
+  }, [isFocused, isEditing]);
+
   // 当store中的内容变化时，同步到node属性和临时编辑状态
   useEffect(() => {
     // 仅当 store 中存在有效的内容且与当前 attrs 不一致时才写回，避免在撤销后覆盖历史内容
     if (cellContent) {
-      const parsed = parseMarkdown(cellContent)
+      const parsed = parseMarkdown(cellContent);
       if (parsed.isValid) {
         const nextAttrs = {
           markdown: cellContent,
           src: parsed.src,
           alt: parsed.alt,
           title: parsed.alt,
-          cellId: cellId
-        }
-        const changed = (
+          cellId: cellId,
+        };
+        const changed =
           node.attrs?.markdown !== nextAttrs.markdown ||
           node.attrs?.src !== nextAttrs.src ||
           node.attrs?.alt !== nextAttrs.alt ||
           node.attrs?.title !== nextAttrs.title ||
-          node.attrs?.cellId !== nextAttrs.cellId
-        )
+          node.attrs?.cellId !== nextAttrs.cellId;
         if (changed) {
-          updateAttributes(nextAttrs)
+          updateAttributes(nextAttrs);
         }
       }
       // 同步临时编辑内容
       if (!isEditing && tempMarkdown !== cellContent) {
-        setTempMarkdown(cellContent)
+        setTempMarkdown(cellContent);
       }
     }
-  }, [cellContent, cellId, isEditing, node.attrs?.markdown, node.attrs?.src, node.attrs?.alt, node.attrs?.title, tempMarkdown])
+  }, [
+    cellContent,
+    cellId,
+    isEditing,
+    node.attrs?.markdown,
+    node.attrs?.src,
+    node.attrs?.alt,
+    node.attrs?.title,
+    tempMarkdown,
+  ]);
 
   // 初始化
   useEffect(() => {
     // 初始化时，如果节点已有内容，则仅同步到本地临时状态；避免用占位符覆盖撤销恢复的图片
     if (currentContent) {
-      if (tempMarkdown !== currentContent) setTempMarkdown(currentContent)
+      if (tempMarkdown !== currentContent) setTempMarkdown(currentContent);
     }
     // 不再默认进入编辑模式，除非显式触发
-  }, [cellId, currentContent, tempMarkdown])
+  }, [cellId, currentContent, tempMarkdown]);
 
   // 开始编辑 - 只在创建模式下允许，且不是生成完成的内容，且必须处于聚焦状态
   const startEditing = () => {
-    if (viewMode !== "create" || isGeneratedContent || !isFocused) return;
-    
-    setIsEditing(true)
-    setTempMarkdown(currentContent || '![]()')
+    if (viewMode !== 'create' || isGeneratedContent || !isFocused) return;
+
+    setIsEditing(true);
+    setTempMarkdown(currentContent || '![]()');
     setTimeout(() => {
       if (textareaRef.current) {
-        textareaRef.current.focus()
-        const length = tempMarkdown.length
-        textareaRef.current.setSelectionRange(length, length)
+        textareaRef.current.focus();
+        const length = tempMarkdown.length;
+        textareaRef.current.setSelectionRange(length, length);
       }
-    }, 0)
-  }
+    }, 0);
+  };
 
   // 保存编辑 - 直接更新store
-   function saveEdit() {
+  function saveEdit() {
     if (cellId && updateCell) {
       // 直接更新store中的cell content
-      updateCell(cellId, tempMarkdown)
+      updateCell(cellId, tempMarkdown);
     }
-    
+
     // 同步更新tiptap node属性
-    const parsed = parseMarkdown(tempMarkdown)
+    const parsed = parseMarkdown(tempMarkdown);
     updateAttributes({
       markdown: tempMarkdown,
       src: parsed.src,
       alt: parsed.alt,
       title: parsed.alt,
-      cellId: cellId
-    })
-    
-    setIsEditing(false)
-    setImageError(false)
+      cellId: cellId,
+    });
+
+    setIsEditing(false);
+    setImageError(false);
   }
 
   // 取消编辑
   const cancelEdit = () => {
-    setTempMarkdown(currentContent || '')
-    setIsEditing(false)
-  }
+    setTempMarkdown(currentContent || '');
+    setIsEditing(false);
+  };
 
   // 处理键盘事件
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      e.preventDefault()
-      saveEdit()
+      e.preventDefault();
+      saveEdit();
     } else if (e.key === 'Escape') {
-      e.preventDefault()
-      cancelEdit()
+      e.preventDefault();
+      cancelEdit();
     }
-  }
+  };
 
   // 实时解析临时编辑内容
-  const tempPreviewData = parseMarkdown(tempMarkdown)
-  
+  const tempPreviewData = parseMarkdown(tempMarkdown);
+
   // 处理图片加载错误
   const handleImageError = () => {
-    setImageError(true)
-  }
+    setImageError(true);
+  };
 
   const handleImageLoad = () => {
-    setImageError(false)
-  }
-
+    setImageError(false);
+  };
 
   // Timer effect for generation progress
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: number;
 
     if (shouldShowLoading && generationStartTime) {
       // 立即设置一次，然后每秒更新
@@ -224,7 +232,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
 
   return (
     <>
-      <NodeViewWrapper 
+      <NodeViewWrapper
         className="image-markdown-wrapper color-black"
         key={`${cellId}-${currentContent?.length || 0}`}
         data-cell-id={cellId}
@@ -265,9 +273,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
                   <div className="text-red-800 font-medium mb-2">
                     {generationType === 'video' ? 'Video' : 'Image'} Generation Failed
                   </div>
-                  <div className="text-red-600 mb-3">
-                    {generationError}
-                  </div>
+                  <div className="text-red-600 mb-3">{generationError}</div>
                   <button
                     onClick={() => {
                       // Clear error and allow retry
@@ -296,7 +302,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
                   {generationPrompt && (
                     <div className="mb-3 p-3 bg-white/70 backdrop-blur-sm rounded border border-gray-200">
                       <div className="text-xs text-gray-500 font-medium mb-1">Prompt:</div>
-                      <div className="text-sm text-gray-700">"{generationPrompt}"</div>
+                      <div className="text-sm text-gray-700">&quot;{generationPrompt}&quot;</div>
                     </div>
                   )}
 
@@ -343,7 +349,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
               placeholder="![Image description](Image URL)"
               className="w-full p-2 border border-gray-300 rounded font-mono text-sm focus:outline-none focus:border-theme-400 text-black"
             />
-            
+
             {/* Live media preview */}
             {tempPreviewData.isValid && tempPreviewData.src ? (
               <div className="mt-3">
@@ -367,13 +373,14 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
                     preview={false}
                   />
                 )}
-                
+
                 {imageError && (
                   <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
-                    Failed to load {tempPreviewData.isVideo ? 'video' : 'image'}: {tempPreviewData.src}
+                    Failed to load {tempPreviewData.isVideo ? 'video' : 'image'}:{' '}
+                    {tempPreviewData.src}
                   </div>
                 )}
-                
+
                 {tempPreviewData.alt && !imageError && (
                   <div className="mt-2 text-sm text-gray-600 text-center italic">
                     {tempPreviewData.alt}
@@ -414,24 +421,34 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
                     onError={handleImageError}
                     onLoad={handleImageLoad}
                     className="max-w-full h-auto rounded-lg shadow-sm"
-                    preview={viewMode === "create" ? {
-                      mask: <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1 flex items-center justify-center text-white text-sm">Click to View</div>
-                    } : false}
+                    preview={
+                      viewMode === 'create'
+                        ? {
+                            mask: (
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-50 rounded p-1 flex items-center justify-center text-white text-sm">
+                                Click to View
+                              </div>
+                            ),
+                          }
+                        : false
+                    }
                   />
                 )}
-                
+
                 {imageError && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg">
                     <div className="text-center text-gray-500">
                       <X className="h-8 w-8 mx-auto mb-2" />
-                      <div className="text-sm">Failed to load {previewData.isVideo ? 'video' : 'image'}</div>
+                      <div className="text-sm">
+                        Failed to load {previewData.isVideo ? 'video' : 'image'}
+                      </div>
                       <div className="text-xs">{previewData.src}</div>
                     </div>
                   </div>
                 )}
-                
+
                 {/* Floating toolbar - only show in create mode and when focused */}
-                {viewMode === "create" && isFocused && (
+                {viewMode === 'create' && isFocused && (
                   <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {/* Edit button - only show for non-generated content */}
                     {!isGeneratedContent && (
@@ -452,7 +469,7 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
                     </button>
                   </div>
                 )}
-                
+
                 {/* Media caption */}
                 {previewData.alt && !imageError && (
                   <div className="mt-2 text-sm text-gray-600 text-center italic">
@@ -462,40 +479,43 @@ const ImageComponent = ({ node, updateAttributes, deleteNode }: any) => {
               </div>
             ) : (
               // Empty state or invalid syntax
-              <div 
+              <div
                 className={`image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center ${
-                  viewMode === "create" && isFocused ? "hover:border-gray-400 transition-colors cursor-pointer" : ""
+                  viewMode === 'create' && isFocused
+                    ? 'hover:border-gray-400 transition-colors cursor-pointer'
+                    : ''
                 }`}
-                onClick={viewMode === "create" && isFocused ? startEditing : undefined}
+                onClick={viewMode === 'create' && isFocused ? startEditing : undefined}
               >
                 <Upload className="h-12 w-12 text-gray-400 mb-4 mx-auto" />
                 <div className="text-gray-600 mb-2">
-                  {hasContent ? 'Markdown syntax error' : viewMode === "create" && isFocused ? 'Click to add media' : 'Media content'}
+                  {hasContent
+                    ? 'Markdown syntax error'
+                    : viewMode === 'create' && isFocused
+                      ? 'Click to add media'
+                      : 'Media content'}
                 </div>
-                <div className="text-sm text-gray-400">
-                  Format: ![description](image/video URL)
-                </div>
-                {hasContent && viewMode === "create" && isFocused && !isGeneratedContent && (
-   <div className="mt-2 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded">
-     {cellContent}
-   </div>
- )}
+                <div className="text-sm text-gray-400">Format: ![description](image/video URL)</div>
+                {hasContent && viewMode === 'create' && isFocused && !isGeneratedContent && (
+                  <div className="mt-2 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                    {cellContent}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
       </NodeViewWrapper>
-
     </>
-  )
-}
+  );
+};
 
 // 定义Image节点
 export const ImageExtension = Node.create({
   name: 'markdownImage',
-  
+
   group: 'block',
-  
+
   atom: true,
 
   addAttributes() {
@@ -515,7 +535,7 @@ export const ImageExtension = Node.create({
       cellId: {
         default: null,
       },
-    }
+    };
   },
 
   parseHTML() {
@@ -526,7 +546,7 @@ export const ImageExtension = Node.create({
           src: element.getAttribute('src'),
           alt: element.getAttribute('alt'),
           title: element.getAttribute('title'),
-          markdown: `![${element.getAttribute('alt') || ''}](${element.getAttribute('src') || ''})`
+          markdown: `![${element.getAttribute('alt') || ''}](${element.getAttribute('src') || ''})`,
         }),
       },
       {
@@ -536,7 +556,7 @@ export const ImageExtension = Node.create({
           const dataAlt = element.getAttribute('data-alt') || '';
           const dataMarkdown = element.getAttribute('data-markdown') || '';
           const dataCellId = element.getAttribute('data-cell-id') || '';
-          
+
           return {
             src: dataSrc,
             alt: dataAlt,
@@ -546,35 +566,40 @@ export const ImageExtension = Node.create({
           };
         },
       },
-    ]
+    ];
   },
 
   renderHTML({ HTMLAttributes }) {
     return [
       'div',
-      mergeAttributes({ 'data-type': 'markdown-image' }, {
-        'data-src': HTMLAttributes.src,
-        'data-alt': HTMLAttributes.alt,
-        'data-title': HTMLAttributes.title,
-        'data-markdown': HTMLAttributes.markdown,
-        'data-cell-id': HTMLAttributes.cellId,
-      }),
-    ]
+      mergeAttributes(
+        { 'data-type': 'markdown-image' },
+        {
+          'data-src': HTMLAttributes.src,
+          'data-alt': HTMLAttributes.alt,
+          'data-title': HTMLAttributes.title,
+          'data-markdown': HTMLAttributes.markdown,
+          'data-cell-id': HTMLAttributes.cellId,
+        }
+      ),
+    ];
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(ImageComponent)
+    return ReactNodeViewRenderer(ImageComponent);
   },
 
   addCommands() {
     return {
-      setImage: (options: Record<string, any>) => ({ commands }: { commands: any }) => {
-        return commands.insertContent({
-          type: this.name,
-          attrs: options,
-        })
-      },
-    } as Partial<RawCommands>
+      setImage:
+        (options: Record<string, any>) =>
+        ({ commands }: { commands: any }) => {
+          return commands.insertContent({
+            type: this.name,
+            attrs: options,
+          });
+        },
+    } as Partial<RawCommands>;
   },
 
   addInputRules() {
@@ -582,24 +607,28 @@ export const ImageExtension = Node.create({
       new InputRule({
         find: /!\[([^\]]*)\]\(([^)]+)\)$/,
         handler: ({ state, range, match }) => {
-          const { tr } = state
-          const start = range.from
-          const end = range.to
-          
-          const alt = match[1] || ''
-          const src = match[2] || ''
-          const markdown = match[0]
-          
-          tr.replaceWith(start, end, this.type.create({
-            src,
-            alt,
-            title: alt,
-            markdown
-          }))
-        }
-      })
-    ]
-  },
-})
+          const { tr } = state;
+          const start = range.from;
+          const end = range.to;
 
-export default ImageExtension
+          const alt = match[1] || '';
+          const src = match[2] || '';
+          const markdown = match[0];
+
+          tr.replaceWith(
+            start,
+            end,
+            this.type.create({
+              src,
+              alt,
+              title: alt,
+              markdown,
+            })
+          );
+        },
+      }),
+    ];
+  },
+});
+
+export default ImageExtension;

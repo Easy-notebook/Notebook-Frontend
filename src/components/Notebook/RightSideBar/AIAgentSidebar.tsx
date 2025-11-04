@@ -1,9 +1,16 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, MessageSquare, Layers, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react';
+import {
+  Loader2,
+  MessageSquare,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  MessageCircle,
+} from 'lucide-react';
 
-import useStore from '../../../store/notebookStore';
-import { useAIAgentStore, EVENT_TYPES } from '../../../store/AIAgentStore';
+import useStore from '@Store/notebookStore';
+import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
 import StateMachineDebugger from './StateMachineDebugger';
 import AIPlanningContextDebugger from './AIPlanningContextDebugger';
 import WorkflowTODOPanel from './WorkflowTODOPanel';
@@ -19,13 +26,7 @@ import { getEventLabel } from './eventUtils';
 // ----------------------
 
 const AIAgentSidebar = () => {
-  const {
-    activeView,
-    isLoading,
-    actions,
-    qaList,
-    setActiveView,
-  } = useAIAgentStore();
+  const { activeView, isLoading, actions, qaList, setActiveView } = useAIAgentStore();
   // 追踪哪些合并组是展开状态
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const { t } = useTranslation();
@@ -33,11 +34,16 @@ const AIAgentSidebar = () => {
   const { getCurrentStepCellsIDs, viewMode } = useStore();
 
   const actionsToShow = useMemo(() => {
-    return actions.filter(action =>
-      ((viewMode && action.viewMode === viewMode && viewMode === 'step') &&
-        (getCurrentStepCellsIDs().includes(action.cellId ?? ''))) ||
-      (viewMode && action.viewMode === viewMode && ((viewMode as any) === 'complete' || (viewMode as any) === 'create')) ||
-      (viewMode && action.viewMode === viewMode && (viewMode as any) === 'dslc')
+    return actions.filter(
+      (action) =>
+        (viewMode &&
+          action.viewMode === viewMode &&
+          viewMode === 'step' &&
+          getCurrentStepCellsIDs().includes(action.cellId ?? '')) ||
+        (viewMode &&
+          action.viewMode === viewMode &&
+          ((viewMode as any) === 'complete' || (viewMode as any) === 'create')) ||
+        (viewMode && action.viewMode === viewMode && (viewMode as any) === 'dslc')
     );
   }, [actions, viewMode, getCurrentStepCellsIDs]);
 
@@ -49,7 +55,7 @@ const AIAgentSidebar = () => {
     let currentGroup = {
       ...actionsToShow[0],
       count: 1,
-      originalActions: [actionsToShow[0]]
+      originalActions: [actionsToShow[0]],
     };
 
     for (let i = 1; i < actionsToShow.length; i++) {
@@ -70,7 +76,7 @@ const AIAgentSidebar = () => {
         if (currentAction.relatedQAIds?.length) {
           currentGroup.relatedQAIds = [
             ...(currentGroup.relatedQAIds || []),
-            ...(currentAction.relatedQAIds || [])
+            ...(currentAction.relatedQAIds || []),
           ];
         }
       } else {
@@ -79,7 +85,7 @@ const AIAgentSidebar = () => {
         currentGroup = {
           ...currentAction,
           count: 1,
-          originalActions: [currentAction]
+          originalActions: [currentAction],
         };
       }
     }
@@ -91,9 +97,9 @@ const AIAgentSidebar = () => {
 
   // 处理展开/折叠逻辑
   const toggleGroup = useCallback((actionId: string) => {
-    setExpandedGroups(prev => ({
+    setExpandedGroups((prev) => ({
       ...prev,
-      [actionId]: !prev[actionId]
+      [actionId]: !prev[actionId],
     }));
   }, []);
 
@@ -121,78 +127,79 @@ const AIAgentSidebar = () => {
     return filtered;
   }, [qaList, viewMode, getCurrentStepCellsIDs]);
 
-  const handleJumpToQA = useCallback((qaId: string) => {
-    setActiveView('qa');
-    requestAnimationFrame(() => {
-      const qaElement = document.getElementById(qaId);
-      if (qaElement) {
-        qaElement.scrollIntoView({ behavior: 'smooth' });
-      }
-    });
-  }, [setActiveView]);
+  const handleJumpToQA = useCallback(
+    (qaId: string) => {
+      setActiveView('qa');
+      requestAnimationFrame(() => {
+        const qaElement = document.getElementById(qaId);
+        if (qaElement) {
+          qaElement.scrollIntoView({ behavior: 'smooth' });
+        }
+      });
+    },
+    [setActiveView]
+  );
 
   // 渲染单个action项
-  const renderActionItem = useCallback((action: any, isOriginal = false, index = 0, totalCount = 1) => {
-    return (
-      <div
-        key={isOriginal ? `original-${action.id}-${index}` : action.id}
-        className={`
+  const renderActionItem = useCallback(
+    (action: any, isOriginal = false, index = 0, totalCount = 1) => {
+      return (
+        <div
+          key={isOriginal ? `original-${action.id}-${index}` : action.id}
+          className={`
           p-3 relative transition-all duration-300 min-w-0 break-words overflow-wrap-anywhere
-          ${index === 0 && !isOriginal
-            ? 'bg-white/10 rounded-lg ring-1 ring-theme-200'
-            : 'hover:bg-white/10 hover:rounded-lg hover:shadow-sm'
+          ${
+            index === 0 && !isOriginal
+              ? 'bg-white/10 rounded-lg ring-1 ring-theme-200'
+              : 'hover:bg-white/10 hover:rounded-lg hover:shadow-sm'
           }
         `}
-      >
-        <div className="flex items-center gap-2 mb-2 flex-wrap min-w-0">
-          {!isOriginal && (
-            <span className="text-xs font-semibold text-gray-700">
-              [{totalCount - index}]
+        >
+          <div className="flex items-center gap-2 mb-2 flex-wrap min-w-0">
+            {!isOriginal && (
+              <span className="text-xs font-semibold text-gray-700">[{totalCount - index}]</span>
+            )}
+            <EventIcon type={action.type} onProcess={action.onProcess} />
+            <span className={`text-xs ${getEventLabel(action.type, t).color}`}>
+              {getEventLabel(action.type, t).text}
             </span>
+            {!isOriginal && action.count > 1 && (
+              <button
+                onClick={() => toggleGroup(action.id)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-theme-100 text-theme-800 hover:bg-theme-200 transition-colors duration-300"
+              >
+                <Layers size={12} />
+                <span className="text-xs font-medium">x{action.count}</span>
+                {expandedGroups[action.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              </button>
+            )}
+            <span className="text-xs text-gray-500">{action.timestamp}</span>
+          </div>
+
+          <ExpandableText text={action.content} maxLines={3} />
+
+          {action.result && (
+            <div className="mt-3 p-3 bg-white/10 rounded-lg text-sm text-gray-600 min-w-0 break-words overflow-wrap-anywhere">
+              <ExpandableText text={action.result} maxLines={3} />
+            </div>
           )}
-          <EventIcon
-            type={action.type}
-            onProcess={action.onProcess}
-          />
-          <span className={`text-xs ${getEventLabel(action.type, t).color}`}>
-            {getEventLabel(action.type, t).text}
-          </span>
-          {!isOriginal && action.count > 1 && (
+
+          {action.relatedQAIds?.length > 0 && (
             <button
-              onClick={() => toggleGroup(action.id)}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-theme-100 text-theme-800 hover:bg-theme-200 transition-colors duration-300"
+              onClick={() => handleJumpToQA(action.relatedQAIds[0])}
+              className="flex items-center gap-1 text-xs text-theme-600 hover:text-theme-800 mt-2 transition-colors duration-300"
             >
-              <Layers size={12} />
-              <span className="text-xs font-medium">x{action.count}</span>
-              {expandedGroups[action.id] ?
-                <ChevronUp size={12} /> :
-                <ChevronDown size={12} />
-              }
+              <MessageSquare size={16} />
+              <span>
+                {t('rightSideBar.linkedToQA')} {action.relatedQAIds.join(', ')}
+              </span>
             </button>
           )}
-          <span className="text-xs text-gray-500">{action.timestamp}</span>
         </div>
-
-        <ExpandableText text={action.content} maxLines={3} />
-
-        {action.result && (
-          <div className="mt-3 p-3 bg-white/10 rounded-lg text-sm text-gray-600 min-w-0 break-words overflow-wrap-anywhere">
-            <ExpandableText text={action.result} maxLines={3} />
-          </div>
-        )}
-
-        {action.relatedQAIds?.length > 0 && (
-          <button
-            onClick={() => handleJumpToQA(action.relatedQAIds[0])}
-            className="flex items-center gap-1 text-xs text-theme-600 hover:text-theme-800 mt-2 transition-colors duration-300"
-          >
-            <MessageSquare size={16} />
-            <span>{t('rightSideBar.linkedToQA')} {action.relatedQAIds.join(', ')}</span>
-          </button>
-        )}
-      </div>
-    );
-  }, [expandedGroups, toggleGroup, handleJumpToQA, t]);
+      );
+    },
+    [expandedGroups, toggleGroup, handleJumpToQA, t]
+  );
 
   return (
     <>
@@ -220,7 +227,12 @@ const AIAgentSidebar = () => {
                     <div className="space-y-3 mt-2 pb-2">
                       {action.originalActions.slice(1).map((origAction, origIndex) => (
                         <div key={`${origAction.id}-${origIndex}`}>
-                          {renderActionItem(origAction, true, origIndex, action.originalActions.length - 1)}
+                          {renderActionItem(
+                            origAction,
+                            true,
+                            origIndex,
+                            action.originalActions.length - 1
+                          )}
                         </div>
                       ))}
                     </div>
@@ -235,8 +247,12 @@ const AIAgentSidebar = () => {
               {qasToShow.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 flex flex-col items-center">
                   <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p className="text-sm mx-auto text-gray-500">{t('rightSideBar.noChatMessages')}</p>
-                  <p className="text-xs mt-1 mx-auto text-gray-500">{t('rightSideBar.startConversation')}</p>
+                  <p className="text-sm mx-auto text-gray-500">
+                    {t('rightSideBar.noChatMessages')}
+                  </p>
+                  <p className="text-xs mt-1 mx-auto text-gray-500">
+                    {t('rightSideBar.startConversation')}
+                  </p>
                 </div>
               ) : (
                 qasToShow.map((qa, index) => (
@@ -244,16 +260,20 @@ const AIAgentSidebar = () => {
                     <div
                       className={`
                         relative p-4 rounded-lg shadow-sm w-full transition-all duration-300 min-w-0
-                        ${index === 0
-                          ? 'bg-white/20 ring-1 ring-theme-200'
-                          : qa.type === 'user'
-                            ? 'bg-theme-50 text-left hover:bg-theme-100'
-                            : 'bg-gray-50 text-left hover:bg-gray-100'
+                        ${
+                          index === 0
+                            ? 'bg-white/20 ring-1 ring-theme-200'
+                            : qa.type === 'user'
+                              ? 'bg-theme-50 text-left hover:bg-theme-100'
+                              : 'bg-gray-50 text-left hover:bg-gray-100'
                         }
                       `}
                     >
-                      <div className={`flex items-center gap-2 mb-2 ${qa.type === 'user' ? 'justify-start' : 'justify-start'
-                        }`}>
+                      <div
+                        className={`flex items-center gap-2 mb-2 ${
+                          qa.type === 'user' ? 'justify-start' : 'justify-start'
+                        }`}
+                      >
                         <span className="text-xs font-semibold text-gray-700">
                           [{qasToShow.length - index}]
                         </span>
@@ -265,20 +285,19 @@ const AIAgentSidebar = () => {
                           }
                           onProcess={qa.onProcess}
                         />
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${qa.type === 'user'
-                          ? 'bg-theme-100 text-theme-700'
-                          : 'bg-green-100 text-green-700'
-                          }`}>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            qa.type === 'user'
+                              ? 'bg-theme-100 text-theme-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
                           {qa.type === 'user' ? t('rightSideBar.you') : t('rightSideBar.ai')}
                         </span>
 
                         {/* 显示Agent信息 */}
                         {qa.type === 'assistant' && (
-                          <AgentInfo
-                            agent={qa.agent}
-                            model={qa.model}
-                            type={qa.agentType}
-                          />
+                          <AgentInfo agent={qa.agent} model={qa.model} type={qa.agentType} />
                         )}
 
                         <span className="text-xs text-gray-500">{qa.timestamp}</span>
@@ -287,11 +306,22 @@ const AIAgentSidebar = () => {
                       <div className="text-left break-words overflow-wrap-anywhere min-w-0">
                         {(!qa.content || qa.content.trim() === '') && qa.type === 'assistant' ? (
                           <div className="flex items-center gap-2 text-xs text-gray-600">
-                            <span>{qa.agentType || qa.agent || 'AI'} {t('rightSideBar.thinking') || 'is thinking...'}</span>
+                            <span>
+                              {qa.agentType || qa.agent || 'AI'}{' '}
+                              {t('rightSideBar.thinking') || 'is thinking...'}
+                            </span>
                             {qa.thinkingStartAtMs && (
-                              <span className="text-gray-400">(
-                                {Math.max(0, Math.round(((qa.thinkingEndAtMs || Date.now()) - qa.thinkingStartAtMs) / 1000))}s
-                                )</span>
+                              <span className="text-gray-400">
+                                (
+                                {Math.max(
+                                  0,
+                                  Math.round(
+                                    ((qa.thinkingEndAtMs || Date.now()) - qa.thinkingStartAtMs) /
+                                      1000
+                                  )
+                                )}
+                                s )
+                              </span>
                             )}
                           </div>
                         ) : (
@@ -315,7 +345,8 @@ const AIAgentSidebar = () => {
                       )}
 
                       {/* 解析内容中的XML标签作为工具调用显示 */}
-                      {qa.type === 'assistant' && qa.content && (
+                      {qa.type === 'assistant' &&
+                        qa.content &&
                         (() => {
                           // 简单的XML标签检测
                           const xmlTagRegex = /<([a-z-]+)(?:\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
@@ -329,7 +360,11 @@ const AIAgentSidebar = () => {
                                   <ToolCallIndicator
                                     key={`${qa.id}-xml-${matchIndex}`}
                                     type={match[1]}
-                                    content={match[0].length > 100 ? match[0].substring(0, 100) + '...' : match[0]}
+                                    content={
+                                      match[0].length > 100
+                                        ? match[0].substring(0, 100) + '...'
+                                        : match[0]
+                                    }
                                     agent={qa.agentType || qa.agent}
                                   />
                                 ))}
@@ -342,20 +377,25 @@ const AIAgentSidebar = () => {
                             );
                           }
                           return null;
-                        })()
-                      )}
+                        })()}
 
                       {/* 回答后操作摘要（若无显式 toolCalls，也尽量提示完成了动作） */}
-                      {qa.type === 'assistant' && (!qa.toolCalls || qa.toolCalls.length === 0) && qa.content && /<([a-z-]+)[\s\S]*?<\/\1>/i.test(qa.content) && (
-                        <div className="mt-2 text-xs text-gray-500">✅ {qa.agentType || qa.agent || 'AI'} {t('rightSideBar.completedActions') || 'completed some operations during answering.'}</div>
-                      )}
+                      {qa.type === 'assistant' &&
+                        (!qa.toolCalls || qa.toolCalls.length === 0) &&
+                        qa.content &&
+                        /<([a-z-]+)[\s\S]*?<\/\1>/i.test(qa.content) && (
+                          <div className="mt-2 text-xs text-gray-500">
+                            ✅ {qa.agentType || qa.agent || 'AI'}{' '}
+                            {t('rightSideBar.completedActions') ||
+                              'completed some operations during answering.'}
+                          </div>
+                        )}
                     </div>
                   </div>
                 ))
               )}
             </div>
           )}
-
 
           {(activeView as any) === 'debug' && (
             <div className="space-y-4">

@@ -50,222 +50,226 @@ export const useKeyboardShortcuts = (props: KeyboardShortcutsProps) => {
     onCutCell,
     onUndoAction,
     onRedoAction,
-    disabled = false
+    disabled = false,
   } = props;
 
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if (disabled) return;
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (disabled) return;
 
-    const { ctrlKey, metaKey, shiftKey, altKey, key } = event;
-    const isModifierPressed = ctrlKey || metaKey;
+      const { ctrlKey, metaKey, shiftKey, altKey, key } = event;
+      const isModifierPressed = ctrlKey || metaKey;
 
-    // 检查是否在输入框中
-    const target = event.target as HTMLElement;
-    const isInInput = target.tagName === 'INPUT' || 
-                     target.tagName === 'TEXTAREA' || 
-                     target.contentEditable === 'true' ||
-                     target.closest('.cm-editor'); // CodeMirror编辑器
+      // 检查是否在输入框中
+      const target = event.target as HTMLElement;
+      const isInInput =
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true' ||
+        target.closest('.cm-editor'); // CodeMirror编辑器
 
-    // 全局快捷键（即使在输入框中也生效）
-    if (isModifierPressed) {
-      switch (key) {
-        case 's': // Ctrl/Cmd + S - 保存
-          if (!shiftKey && !altKey) {
-            event.preventDefault();
-            onSaveNotebook?.();
-            return;
-          }
-          break;
-        
-        case 'z': // Ctrl/Cmd + Z - 撤销
-          if (!shiftKey && !altKey) {
-            event.preventDefault();
-            onUndoAction?.();
-            return;
-          }
-          break;
-        
-        case 'y': // Ctrl/Cmd + Y - 重做
-          if (!shiftKey && !altKey) {
-            event.preventDefault();
-            onRedoAction?.();
-            return;
-          }
-          break;
-        
-        case 'Z': // Ctrl/Cmd + Shift + Z - 重做
-          if (shiftKey && !altKey) {
-            event.preventDefault();
-            onRedoAction?.();
-            return;
-          }
-          break;
-      }
-    }
-
-    // 如果在输入框中，只处理特定的快捷键
-    if (isInInput) {
-      if (isModifierPressed && shiftKey) {
+      // 全局快捷键（即使在输入框中也生效）
+      if (isModifierPressed) {
         switch (key) {
-          case 'L': // Ctrl/Cmd + Shift + L - 插入代码块
-            event.preventDefault();
-            onInsertCodeCell?.();
+          case 's': // Ctrl/Cmd + S - 保存
+            if (!shiftKey && !altKey) {
+              event.preventDefault();
+              onSaveNotebook?.();
+              return;
+            }
             break;
-          case 'M': // Ctrl/Cmd + Shift + M - 插入markdown
-            event.preventDefault();
-            onInsertMarkdownCell?.();
+
+          case 'z': // Ctrl/Cmd + Z - 撤销
+            if (!shiftKey && !altKey) {
+              event.preventDefault();
+              onUndoAction?.();
+              return;
+            }
             break;
-          case 'I': // Ctrl/Cmd + Shift + I - 插入图片
-            event.preventDefault();
-            onInsertImageCell?.();
+
+          case 'y': // Ctrl/Cmd + Y - 重做
+            if (!shiftKey && !altKey) {
+              event.preventDefault();
+              onRedoAction?.();
+              return;
+            }
             break;
-          case 'T': // Ctrl/Cmd + Shift + T - 插入表格
-            event.preventDefault();
-            onInsertTable?.();
-            break;
-          case 'B': // Ctrl/Cmd + Shift + B - 插入AI思考
-            event.preventDefault();
-            onInsertThinkingCell?.();
-            break;
-          case 'E': // Ctrl/Cmd + Shift + E - 插入数学公式
-            event.preventDefault();
-            onInsertMath?.();
+
+          case 'Z': // Ctrl/Cmd + Shift + Z - 重做
+            if (shiftKey && !altKey) {
+              event.preventDefault();
+              onRedoAction?.();
+              return;
+            }
             break;
         }
       }
-      
-      // 在CodeMirror中的特殊快捷键
-      if (target.closest('.cm-editor')) {
-        if (isModifierPressed && key === 'Enter') {
-          // Ctrl/Cmd + Enter - 运行cell
-          event.preventDefault();
-          onRunCell?.();
+
+      // 如果在输入框中，只处理特定的快捷键
+      if (isInInput) {
+        if (isModifierPressed && shiftKey) {
+          switch (key) {
+            case 'L': // Ctrl/Cmd + Shift + L - 插入代码块
+              event.preventDefault();
+              onInsertCodeCell?.();
+              break;
+            case 'M': // Ctrl/Cmd + Shift + M - 插入markdown
+              event.preventDefault();
+              onInsertMarkdownCell?.();
+              break;
+            case 'I': // Ctrl/Cmd + Shift + I - 插入图片
+              event.preventDefault();
+              onInsertImageCell?.();
+              break;
+            case 'T': // Ctrl/Cmd + Shift + T - 插入表格
+              event.preventDefault();
+              onInsertTable?.();
+              break;
+            case 'B': // Ctrl/Cmd + Shift + B - 插入AI思考
+              event.preventDefault();
+              onInsertThinkingCell?.();
+              break;
+            case 'E': // Ctrl/Cmd + Shift + E - 插入数学公式
+              event.preventDefault();
+              onInsertMath?.();
+              break;
+          }
         }
+
+        // 在CodeMirror中的特殊快捷键
+        if (target.closest('.cm-editor')) {
+          if (isModifierPressed && key === 'Enter') {
+            // Ctrl/Cmd + Enter - 运行cell
+            event.preventDefault();
+            onRunCell?.();
+          }
+        }
+
+        return;
       }
-      
-      return;
-    }
 
-    // 非输入框中的快捷键
-    if (isModifierPressed) {
-      if (shiftKey) {
+      // 非输入框中的快捷键
+      if (isModifierPressed) {
+        if (shiftKey) {
+          switch (key) {
+            case 'L': // Ctrl/Cmd + Shift + L - 插入代码块
+              event.preventDefault();
+              onInsertCodeCell?.();
+              break;
+            case 'M': // Ctrl/Cmd + Shift + M - 插入markdown
+              event.preventDefault();
+              onInsertMarkdownCell?.();
+              break;
+            case 'I': // Ctrl/Cmd + Shift + I - 插入图片
+              event.preventDefault();
+              onInsertImageCell?.();
+              break;
+            case 'T': // Ctrl/Cmd + Shift + T - 插入表格
+              event.preventDefault();
+              onInsertTable?.();
+              break;
+            case 'B': // Ctrl/Cmd + Shift + B - 插入AI思考
+              event.preventDefault();
+              onInsertThinkingCell?.();
+              break;
+            case 'E': // Ctrl/Cmd + Shift + E - 插入数学公式
+              event.preventDefault();
+              onInsertMath?.();
+              break;
+            case 'P': // Ctrl/Cmd + Shift + P - 打开命令面板
+              event.preventDefault();
+              onOpenCommandPalette?.();
+              break;
+
+            case 'Enter': // Ctrl/Cmd + Shift + Enter - 运行所有cells
+              event.preventDefault();
+              onRunAllCells?.();
+              break;
+          }
+        } else {
+          switch (key) {
+            case 'Enter': // Ctrl/Cmd + Enter - 运行当前cell
+              event.preventDefault();
+              onRunCell?.();
+              break;
+            case 'c': // Ctrl/Cmd + C - 复制cell
+              event.preventDefault();
+              onCopyCell?.();
+              break;
+            case 'v': // Ctrl/Cmd + V - 粘贴cell
+              event.preventDefault();
+              onPasteCell?.();
+              break;
+            case 'x': // Ctrl/Cmd + X - 剪切cell
+              event.preventDefault();
+              onCutCell?.();
+              break;
+          }
+        }
+      } else if (altKey) {
         switch (key) {
-          case 'L': // Ctrl/Cmd + Shift + L - 插入代码块
+          case 'ArrowUp': // Alt + ↑ - 向上移动cell
             event.preventDefault();
-            onInsertCodeCell?.();
+            onMoveUp?.();
             break;
-          case 'M': // Ctrl/Cmd + Shift + M - 插入markdown
+          case 'ArrowDown': // Alt + ↓ - 向下移动cell
             event.preventDefault();
-            onInsertMarkdownCell?.();
-            break;
-          case 'I': // Ctrl/Cmd + Shift + I - 插入图片
-            event.preventDefault();
-            onInsertImageCell?.();
-            break;
-          case 'T': // Ctrl/Cmd + Shift + T - 插入表格
-            event.preventDefault();
-            onInsertTable?.();
-            break;
-          case 'B': // Ctrl/Cmd + Shift + B - 插入AI思考
-            event.preventDefault();
-            onInsertThinkingCell?.();
-            break;
-          case 'E': // Ctrl/Cmd + Shift + E - 插入数学公式
-            event.preventDefault();
-            onInsertMath?.();
-            break;
-          case 'P': // Ctrl/Cmd + Shift + P - 打开命令面板
-            event.preventDefault();
-            onOpenCommandPalette?.();
-            break;
-
-          case 'Enter': // Ctrl/Cmd + Shift + Enter - 运行所有cells
-            event.preventDefault();
-            onRunAllCells?.();
+            onMoveDown?.();
             break;
         }
       } else {
+        // 无修饰键的快捷键
         switch (key) {
-          case 'Enter': // Ctrl/Cmd + Enter - 运行当前cell
+          case 'Delete': // Delete - 删除cell
+          case 'Backspace': // Backspace - 删除cell
             event.preventDefault();
-            onRunCell?.();
+            onDeleteCell?.();
             break;
-          case 'c': // Ctrl/Cmd + C - 复制cell
+          case 'Enter': // Enter - 切换编辑模式
             event.preventDefault();
-            onCopyCell?.();
+            onToggleEditMode?.();
             break;
-          case 'v': // Ctrl/Cmd + V - 粘贴cell
+          case 'ArrowUp': // ↑ - 选择上一个cell
             event.preventDefault();
-            onPasteCell?.();
+            onSelectPreviousCell?.();
             break;
-          case 'x': // Ctrl/Cmd + X - 剪切cell
+          case 'ArrowDown': // ↓ - 选择下一个cell
             event.preventDefault();
-            onCutCell?.();
+            onSelectNextCell?.();
+            break;
+          case 'Escape': // Esc - 退出编辑模式
+            event.preventDefault();
+            onToggleEditMode?.();
             break;
         }
       }
-    } else if (altKey) {
-      switch (key) {
-        case 'ArrowUp': // Alt + ↑ - 向上移动cell
-          event.preventDefault();
-          onMoveUp?.();
-          break;
-        case 'ArrowDown': // Alt + ↓ - 向下移动cell
-          event.preventDefault();
-          onMoveDown?.();
-          break;
-      }
-    } else {
-      // 无修饰键的快捷键
-      switch (key) {
-        case 'Delete': // Delete - 删除cell
-        case 'Backspace': // Backspace - 删除cell
-          event.preventDefault();
-          onDeleteCell?.();
-          break;
-        case 'Enter': // Enter - 切换编辑模式
-          event.preventDefault();
-          onToggleEditMode?.();
-          break;
-        case 'ArrowUp': // ↑ - 选择上一个cell
-          event.preventDefault();
-          onSelectPreviousCell?.();
-          break;
-        case 'ArrowDown': // ↓ - 选择下一个cell
-          event.preventDefault();
-          onSelectNextCell?.();
-          break;
-        case 'Escape': // Esc - 退出编辑模式
-          event.preventDefault();
-          onToggleEditMode?.();
-          break;
-      }
-    }
-  }, [
-    disabled,
-    onInsertCodeCell,
-    onInsertMarkdownCell,
-    onInsertImageCell,
-    onInsertThinkingCell,
-    onInsertTable,
-    onInsertMath,
-    onDeleteCell,
-    onRunCell,
-    onRunAllCells,
-    onSaveNotebook,
-    onOpenCommandPalette,
+    },
+    [
+      disabled,
+      onInsertCodeCell,
+      onInsertMarkdownCell,
+      onInsertImageCell,
+      onInsertThinkingCell,
+      onInsertTable,
+      onInsertMath,
+      onDeleteCell,
+      onRunCell,
+      onRunAllCells,
+      onSaveNotebook,
+      onOpenCommandPalette,
 
-    onToggleEditMode,
-    onMoveUp,
-    onMoveDown,
-    onSelectPreviousCell,
-    onSelectNextCell,
-    onCopyCell,
-    onPasteCell,
-    onCutCell,
-    onUndoAction,
-    onRedoAction,
-  ]);
+      onToggleEditMode,
+      onMoveUp,
+      onMoveDown,
+      onSelectPreviousCell,
+      onSelectNextCell,
+      onCopyCell,
+      onPasteCell,
+      onCutCell,
+      onUndoAction,
+      onRedoAction,
+    ]
+  );
 
   useEffect(() => {
     if (!disabled) {
@@ -304,8 +308,7 @@ export const useKeyboardShortcuts = (props: KeyboardShortcutsProps) => {
     command: [
       { keys: ['Ctrl/Cmd', '/'], description: '打开命令面板' },
       { keys: ['Ctrl/Cmd', 'Shift', 'P'], description: '打开命令面板' },
-
-    ]
+    ],
   };
 
   return { shortcuts };

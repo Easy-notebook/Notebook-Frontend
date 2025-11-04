@@ -41,18 +41,18 @@ export const focusTextInputAtEnd = (element: HTMLInputElement | HTMLTextAreaElem
 /**
  * Find and focus the appropriate editor element within a cell
  */
-export const focusCellEditor = (cellElement: HTMLElement, focusAtEnd: boolean = true): boolean => {
+export const focusCellEditor = (cellElement: HTMLElement, focusAtEnd = true): boolean => {
   const editors = [
     cellElement.querySelector('.cm-editor .cm-content'),
     cellElement.querySelector('textarea'),
     cellElement.querySelector('input[type="text"]'),
-    cellElement.querySelector('[contenteditable="true"]')
+    cellElement.querySelector('[contenteditable="true"]'),
   ].filter(Boolean) as HTMLElement[];
 
   for (const editor of editors) {
     try {
       editor.focus();
-      
+
       if (focusAtEnd) {
         // Try different positioning methods based on editor type
         if (editor.classList.contains('cm-content')) {
@@ -81,13 +81,14 @@ export const focusCellEditor = (cellElement: HTMLElement, focusAtEnd: boolean = 
  * Check if an element is a blank/empty area that should trigger end-focus behavior
  */
 export const isBlankArea = (element: HTMLElement): boolean => {
-  return !!(element && (
-    element.classList.contains('ProseMirror') ||
-    element.classList.contains('tiptap-notebook-editor') ||
-    element.classList.contains('tiptap-notebook-editor-container') ||
-    element.classList.contains('jupyter-notebook-editor') ||
-    (element.tagName === 'DIV' && !element.textContent?.trim() && !element.querySelector('*'))
-  ));
+  return !!(
+    element &&
+    (element.classList.contains('ProseMirror') ||
+      element.classList.contains('tiptap-notebook-editor') ||
+      element.classList.contains('tiptap-notebook-editor-container') ||
+      element.classList.contains('jupyter-notebook-editor') ||
+      (element.tagName === 'DIV' && !element.textContent?.trim() && !element.querySelector('*')))
+  );
 };
 
 /**
@@ -98,7 +99,7 @@ export const focusNotebookAtEnd = (containerElement: HTMLElement): boolean => {
   try {
     const cellElements = containerElement.querySelectorAll('[data-cell-id]');
     const lastCell = cellElements[cellElements.length - 1] as HTMLElement;
-    
+
     if (lastCell) {
       const success = focusCellEditor(lastCell, true);
       if (success) {
@@ -116,8 +117,8 @@ export const focusNotebookAtEnd = (containerElement: HTMLElement): boolean => {
 /**
  * Debounced focus function to prevent rapid fire focusing
  */
-let focusTimeout: NodeJS.Timeout | null = null;
-export const debouncedFocus = (focusFunction: () => void, delay: number = 10): void => {
+let focusTimeout: ReturnType<typeof setTimeout> | null = null;
+export const debouncedFocus = (focusFunction: () => void, delay = 10): void => {
   if (focusTimeout) {
     clearTimeout(focusTimeout);
   }

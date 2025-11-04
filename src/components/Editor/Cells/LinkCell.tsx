@@ -1,11 +1,11 @@
-import React, { useMemo} from 'react';
+import React, { useMemo } from 'react';
 import { ExternalLink, Trash2, Minimize2, Maximize2, Split } from 'lucide-react';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
-import useStore, { Cell as StoreCell } from '../../../store/notebookStore';
-import usePreviewStore from '../../../store/previewStore';
-import { Backend_BASE_URL } from '../../../config/base_url';
-import { uiLog } from '../../../utils/logger';
+import useStore, { Cell as StoreCell } from '@Store/notebookStore';
+import usePreviewStore from '@Store/previewStore';
+import { Backend_BASE_URL } from '@Config/base_url';
+import { uiLog } from '@Utils/logger';
 
 // Initialize file type icons
 initializeFileTypeIcons();
@@ -23,7 +23,7 @@ interface LinkCellProps {
 
 function parseContent(content: string): { href: string; label: string } {
   uiLog.debug('parseContent: Input content', { content });
-  
+
   // 使用更宽松的匹配，寻找最后一个括号对
   const match = content.match(/^\[([^\]]*)\]\((.+)\)$/);
   if (match) {
@@ -32,27 +32,27 @@ function parseContent(content: string): { href: string; label: string } {
     uiLog.debug('parseContent: Successfully parsed', { label, href });
     return { href, label };
   }
-  
+
   uiLog.debug('parseContent: No markdown match found, using content as href');
   const href = (content || '').trim();
   const label = href.split(/[\\/]/).pop() || href;
   return { href, label };
 }
-const LinkCell: React.FC<LinkCellProps> = ({ 
-  cell, 
-  readOnly = false, 
-  onDelete, 
-  className = '', 
-  onFocus, 
-  onBlur, 
-  isInDetachedView = false 
+const LinkCell: React.FC<LinkCellProps> = ({
+  cell,
+  readOnly = false,
+  onDelete,
+  className = '',
+  onFocus,
+  onBlur,
+  isInDetachedView = false,
 }) => {
-  const updateCell = useStore(s => s.updateCell);
-  const notebookId = useStore(s => s.notebookId);
-  const setDetachedCellId = useStore(s => s.setDetachedCellId);
-  const detachedCellId = useStore(s => s.detachedCellId);
-  const isDetachedCellFullscreen = useStore(s => s.isDetachedCellFullscreen);
-  const toggleDetachedCellFullscreen = useStore(s => s.toggleDetachedCellFullscreen);
+  const updateCell = useStore((s) => s.updateCell);
+  const notebookId = useStore((s) => s.notebookId);
+  const setDetachedCellId = useStore((s) => s.setDetachedCellId);
+  const detachedCellId = useStore((s) => s.detachedCellId);
+  const isDetachedCellFullscreen = useStore((s) => s.isDetachedCellFullscreen);
+  const toggleDetachedCellFullscreen = useStore((s) => s.toggleDetachedCellFullscreen);
 
   // Check if this cell is currently detached
   const isDetached = detachedCellId === cell.id;
@@ -90,17 +90,17 @@ const LinkCell: React.FC<LinkCellProps> = ({
     const extension = fileExtension || 'generic';
     return getFileTypeIconProps({
       extension,
-      size: 32
+      size: 32,
     });
   }, [href, fileExtension]);
 
   const normalizeFilePath = (url: string): string | null => {
     uiLog.debug('normalizeFilePath: Processing URL', { url });
     uiLog.debug('normalizeFilePath: Configuration', { Backend_BASE_URL, notebookId });
-    
+
     try {
       const base = Backend_BASE_URL?.replace(/\/$/, '');
-      
+
       // Check for download_file pattern
       const downloadPattern = new RegExp(`^${base}/download_file/${notebookId}/(.+)$`);
       const downloadMatch = url.match(downloadPattern);
@@ -109,7 +109,7 @@ const LinkCell: React.FC<LinkCellProps> = ({
         uiLog.debug('normalizeFilePath: Matched download_file pattern', { filePath });
         return filePath;
       }
-      
+
       // Check for assets pattern - should return .assets/filename
       const assetsPattern = new RegExp(`^${base}/assets/${notebookId}/(.+)$`);
       const assetsMatch = url.match(assetsPattern);
@@ -123,13 +123,15 @@ const LinkCell: React.FC<LinkCellProps> = ({
       uiLog.warn('normalizeFilePath: Pattern matching error', { error: e });
     }
 
-    const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.(assets|sandbox)\\/|\\.(assets|sandbox)\\/)');
+    const relPattern = new RegExp(
+      '^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.(assets|sandbox)\\/|\\.(assets|sandbox)\\/)'
+    );
     if (relPattern.test(url)) {
       const filePath = url.replace(new RegExp('^\\./'), '');
       uiLog.debug('normalizeFilePath: Matched relative pattern', { filePath });
       return filePath;
     }
-    
+
     if (!/^[a-z]+:\/\//i.test(url) && url.indexOf('/') === -1) {
       uiLog.debug('normalizeFilePath: Simple filename', { url });
       return url;
@@ -140,14 +142,17 @@ const LinkCell: React.FC<LinkCellProps> = ({
   };
 
   const openInSplitPreview = async () => {
-    uiLog.userInteraction('openInSplitPreview', 'LinkCell', { cellContent: cell.content, notebookId });
+    uiLog.userInteraction('openInSplitPreview', 'LinkCell', {
+      cellContent: cell.content,
+      notebookId,
+    });
     setDetachedCellId(cell.id);
 
     if (!href || !notebookId) {
       uiLog.warn('LinkCell: Missing href or notebookId');
       return;
     }
-    
+
     // Parse the content to get the actual URL (href is already parsed from content)
     uiLog.debug('LinkCell: Using parsed href', { href });
     const filePath = normalizeFilePath(href);
@@ -166,18 +171,25 @@ const LinkCell: React.FC<LinkCellProps> = ({
     }
 
     try {
-      const fileObj = { name: filePath.split('/').pop() || filePath, path: filePath, type: 'file' } as any;
+      const fileObj = {
+        name: filePath.split('/').pop() || filePath,
+        path: filePath,
+        type: 'file' as const,
+      };
       uiLog.info('LinkCell: Calling previewFileInSplit', { notebookId, filePath, fileObj });
-      await usePreviewStore.getState().previewFileInSplit(notebookId, filePath, { file: fileObj } as any);
+      await usePreviewStore.getState().previewFileInSplit(notebookId, filePath, { file: fileObj });
       uiLog.info('LinkCell: previewFileInSplit completed successfully');
-    } catch (err: any) {
-      uiLog.error('LinkCell: Open split preview failed', { error: err });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      uiLog.error('LinkCell: Open split preview failed', { error });
       try {
         const baseName = (filePath || href).split('/').pop() || '';
         uiLog.info('LinkCell: Trying fallback with baseName', { baseName });
         if (baseName && baseName !== filePath) {
-          const fileObj2 = { name: baseName, path: baseName, type: 'file' } as any;
-          await usePreviewStore.getState().previewFileInSplit(notebookId, baseName, { file: fileObj2 } as any);
+          const fileObj2 = { name: baseName, path: baseName, type: 'file' as const };
+          await usePreviewStore
+            .getState()
+            .previewFileInSplit(notebookId, baseName, { file: fileObj2 });
           uiLog.info('LinkCell: Fallback previewFileInSplit completed');
         }
       } catch (e) {
@@ -215,7 +227,9 @@ const LinkCell: React.FC<LinkCellProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ExternalLink className="w-4 h-4 text-theme-500" />
-              <span className="text-sm font-medium text-theme-700">Attachment opened in split view</span>
+              <span className="text-sm font-medium text-theme-700">
+                Attachment opened in split view
+              </span>
             </div>
             <button
               onClick={() => setDetachedCellId(null)}
@@ -239,95 +253,98 @@ const LinkCell: React.FC<LinkCellProps> = ({
         onBlur={onBlur}
         data-cell-id={cell.id}
       >
-      <div className="flex items-center p-3 gap-3">
-        {/* File Icon */}
-        <div className="flex-shrink-0">
-          <div
-            className="w-10 h-10 flex items-center justify-center rounded"
-            style={{
-              backgroundColor: (iconProps as any).iconColor ? `${(iconProps as any).iconColor}15` : '#f3f4f6'
-            }}
-          >
-            <Icon {...iconProps} />
+        <div className="flex items-center p-3 gap-3">
+          {/* File Icon */}
+          <div className="flex-shrink-0">
+            <div
+              className="w-10 h-10 flex items-center justify-center rounded"
+              style={{
+                backgroundColor: (iconProps as any).iconColor
+                  ? `${(iconProps as any).iconColor}15`
+                  : '#f3f4f6',
+              }}
+            >
+              <Icon {...iconProps} />
+            </div>
           </div>
-        </div>
 
-        {/* File Info */}
-        <div className="flex-1 min-w-0">
-          <div 
-            className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-theme-600 transition-colors"
-            title={label}
-          >
-            {label}
+          {/* File Info */}
+          <div className="flex-1 min-w-0">
+            <div
+              className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-theme-600 transition-colors"
+              title={label}
+            >
+              {label}
+            </div>
+            <div className="text-xs text-gray-500 mt-0.5">
+              {fileExtension && <span className="uppercase">{fileExtension} • </span>}
+            </div>
           </div>
-          <div className="text-xs text-gray-500 mt-0.5">
-            {fileExtension && (
-              <span className="uppercase">{fileExtension} • </span>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Debug info */}
+            {/* Debug: isInDetachedView=${isInDetachedView}, isDetached=${isDetached} */}
+            {isInDetachedView ? (
+              /* Detached view toolbar */
+              <>
+                <button
+                  onClick={toggleDetachedCellFullscreen}
+                  className="p-1.5 hover:bg-gray-200 rounded"
+                  title={isDetachedCellFullscreen ? 'Switch to split view' : 'Switch to fullscreen'}
+                  type="button"
+                >
+                  {isDetachedCellFullscreen ? <Split size={16} /> : <Maximize2 size={16} />}
+                </button>
+                <button
+                  onClick={() => setDetachedCellId(null)}
+                  className="p-1.5 hover:bg-red-200 rounded text-red-600"
+                  title="Close detached view"
+                  type="button"
+                >
+                  <Minimize2 size={16} />
+                </button>
+              </>
+            ) : (
+              /* Normal view actions */
+              <>
+                <button
+                  onClick={(e) => {
+                    uiLog.userInteraction(
+                      'split_preview_button_click',
+                      'LinkCell.actions.splitPreview'
+                    );
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openInSplitPreview();
+                  }}
+                  className="p-1.5 text-gray-500 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
+                  title="split preview"
+                  type="button"
+                >
+                  <ExternalLink size={16} />
+                </button>
+
+                {onDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    title="delete"
+                    type="button"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Debug info */}
-          {/* Debug: isInDetachedView=${isInDetachedView}, isDetached=${isDetached} */}
-          {isInDetachedView ? (
-            /* Detached view toolbar */
-            <>
-              <button
-                onClick={toggleDetachedCellFullscreen}
-                className="p-1.5 hover:bg-gray-200 rounded"
-                title={isDetachedCellFullscreen ? "Switch to split view" : "Switch to fullscreen"}
-                type="button"
-              >
-                {isDetachedCellFullscreen ? <Split size={16} /> : <Maximize2 size={16} />}
-              </button>
-              <button
-                onClick={() => setDetachedCellId(null)}
-                className="p-1.5 hover:bg-red-200 rounded text-red-600"
-                title="Close detached view"
-                type="button"
-              >
-                <Minimize2 size={16} />
-              </button>
-            </>
-          ) : (
-            /* Normal view actions */
-            <>
-              <button
-                onClick={(e) => {
-                  uiLog.userInteraction('split_preview_button_click', 'LinkCell.actions.splitPreview');
-                  e.preventDefault();
-                  e.stopPropagation();
-                  openInSplitPreview();
-                }}
-                className="p-1.5 text-gray-500 hover:text-theme-600 hover:bg-theme-50 rounded transition-colors"
-                title="split preview"
-                type="button"
-              >
-                <ExternalLink size={16} />
-              </button>
-
-              {onDelete && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                  title="delete"
-                  type="button"
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Edit input (if not readonly and content exists)
+        {/* Edit input (if not readonly and content exists)
       {!readOnly && href && (
         <div className="px-3 pb-3">
           <input
@@ -340,14 +357,14 @@ const LinkCell: React.FC<LinkCellProps> = ({
         </div>
       )} */}
 
-      {/* Warning for file:// protocol */}
-      {href.startsWith('file://') && (
-        <div className="px-3 pb-3">
-          <div className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">
-            ⚠️ Browser may restrict file:// protocol, it is recommended to use relative paths
+        {/* Warning for file:// protocol */}
+        {href.startsWith('file://') && (
+          <div className="px-3 pb-3">
+            <div className="text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">
+              ⚠️ Browser may restrict file:// protocol, it is recommended to use relative paths
+            </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
     </div>
   );

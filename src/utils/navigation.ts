@@ -1,7 +1,7 @@
 // src/utils/navigation.ts
 // Navigation utilities for the application
 
-import useRouteStore from '../store/routeStore';
+import useRouteStore from '@Store/routeStore';
 
 /**
  * Navigate to the home page (EmptyState)
@@ -33,20 +33,20 @@ export const navigateToWorkspace = (notebookId: string): void => {
  */
 export const getCurrentRoute = () => {
   const path = window.location.pathname;
-  
+
   if (path === '/') {
     return { type: 'home' } as const;
   }
-  
+
   if (path === '/FoKn/Library') {
     return { type: 'library' } as const;
   }
-  
+
   if (path.startsWith('/workspace/')) {
     const notebookId = path.split('/workspace/')[1];
     return { type: 'workspace', notebookId } as const;
   }
-  
+
   return { type: 'unknown', path } as const;
 };
 

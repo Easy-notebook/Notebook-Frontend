@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
 import { Node as ProseMirrorNode } from 'prosemirror-model';
-import useStore from '../../../../store/notebookStore';
-import { handleFileUpload } from '../../../../utils/fileUtils';
-import { notebookApiIntegration } from '../../../../services/notebookServices';
-import { Backend_BASE_URL } from '../../../../config/base_url';
+import useStore from '@Store/notebookStore';
+import { handleFileUpload } from '@Utils/fileUtils';
+import { notebookApiIntegration } from '@Services/notebookServices';
+import { Backend_BASE_URL } from '@Config/base_url';
 
 interface SimpleDragManagerProps {
   editor: Editor | null;
@@ -16,14 +16,10 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
   const [isDragging] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hideTimeoutRef = useRef<number | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const { cells, notebookId } = useStore();
 
@@ -46,72 +42,82 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
   }, [clearHideTimeout, isDragging]);
 
   // 根据DOM元素找到对应的cell
-  const findCellByElement = useCallback((element: HTMLElement): string | null => {
-    const cellElement = element.closest('[data-cell-id], [data-type="executable-code-block"], [data-type="thinking-cell"], [data-type="markdown-image"]');
-    
-    if (cellElement) {
-      const cellId = (cellElement as HTMLElement).getAttribute('data-cell-id');
-      if (cellId) return cellId;
-    }
+  const findCellByElement = useCallback(
+    (element: HTMLElement): string | null => {
+      const cellElement = element.closest(
+        '[data-cell-id], [data-type="executable-code-block"], [data-type="thinking-cell"], [data-type="markdown-image"]'
+      );
 
-    // 通过ProseMirror位置推断
-    if (editor) {
-      try {
-        const blockElement = element.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre');
-        
-        if (blockElement) {
-          const rect = blockElement.getBoundingClientRect();
-          const x = rect.left + rect.width / 2;
-          const y = rect.top + rect.height / 2;
-          
-          const coords = editor.view.posAtCoords({ left: x, top: y });
-          if (coords) {
-            let blockIndex = 0;
-            let found = false;
-            
-            editor.state.doc.descendants((node: ProseMirrorNode, pos: number) => {
-              if (found) return false;
-              
-              if (node.isBlock) {
-                const nodeStart = pos;
-                const nodeEnd = pos + node.nodeSize;
-                
-                if (coords.pos >= nodeStart && coords.pos < nodeEnd) {
-                  found = true;
-                  return false;
+      if (cellElement) {
+        const cellId = (cellElement as HTMLElement).getAttribute('data-cell-id');
+        if (cellId) return cellId;
+      }
+
+      // 通过ProseMirror位置推断
+      if (editor) {
+        try {
+          const blockElement = element.closest(
+            '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+          );
+
+          if (blockElement) {
+            const rect = blockElement.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+
+            const coords = editor.view.posAtCoords({ left: x, top: y });
+            if (coords) {
+              let blockIndex = 0;
+              let found = false;
+
+              editor.state.doc.descendants((node: ProseMirrorNode, pos: number) => {
+                if (found) return false;
+
+                if (node.isBlock) {
+                  const nodeStart = pos;
+                  const nodeEnd = pos + node.nodeSize;
+
+                  if (coords.pos >= nodeStart && coords.pos < nodeEnd) {
+                    found = true;
+                    return false;
+                  }
+
+                  if (coords.pos >= nodeEnd) {
+                    blockIndex++;
+                  }
                 }
-                
-                if (coords.pos >= nodeEnd) {
-                  blockIndex++;
-                }
+                return true;
+              });
+
+              if (blockIndex < cells.length) {
+                return cells[blockIndex].id;
               }
-              return true;
-            });
-            
-            if (blockIndex < cells.length) {
-              return cells[blockIndex].id;
             }
           }
+        } catch (error) {
+          console.warn('查找cell失败:', error);
         }
-      } catch (error) {
-        console.warn('查找cell失败:', error);
       }
-    }
 
-    return null;
-  }, [editor, cells]);
+      return null;
+    },
+    [editor, cells]
+  );
 
   // 显示工具栏
-  const showToolbarForElement = useCallback((element: HTMLElement) => {
-    clearHideTimeout();
-    
-    const cellId = findCellByElement(element);
-    if (!cellId) return;
-    
-    if (cellId !== currentCellId) {
-      setCurrentCellId(cellId);
-    }
-  }, [currentCellId, findCellByElement, clearHideTimeout]);
+  const showToolbarForElement = useCallback(
+    (element: HTMLElement) => {
+      clearHideTimeout();
+
+      const cellId = findCellByElement(element);
+      if (!cellId) return;
+
+      if (cellId !== currentCellId) {
+        setCurrentCellId(cellId);
+      }
+    },
+    [currentCellId, findCellByElement, clearHideTimeout]
+  );
 
   // 鼠标移动处理
   useEffect(() => {
@@ -125,7 +131,9 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
       const target = event.target as HTMLElement;
 
       // 查找块级元素
-      const blockElement = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre, [data-cell-id], [data-type="executable-code-block"], [data-type="thinking-cell"], [data-type="markdown-image"]');
+      const blockElement = target.closest(
+        '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre, [data-cell-id], [data-type="executable-code-block"], [data-type="thinking-cell"], [data-type="markdown-image"]'
+      );
 
       if (blockElement) {
         showToolbarForElement(blockElement as HTMLElement);
@@ -160,15 +168,48 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
         maxFileSize: 50 * 1024 * 1024,
         maxFiles: files.length,
         allowedTypes: [
-          '.txt', '.md', '.json', '.js', '.py', '.html', '.css', '.csv', '.pdf', '.zip', '.tar', '.gz',
-          '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
-          '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp',
-          '.mp4', '.webm', '.mov', '.avi', '.mkv'
+          '.txt',
+          '.md',
+          '.json',
+          '.js',
+          '.py',
+          '.html',
+          '.css',
+          '.csv',
+          '.pdf',
+          '.zip',
+          '.tar',
+          '.gz',
+          '.doc',
+          '.docx',
+          '.ppt',
+          '.pptx',
+          '.xls',
+          '.xlsx',
+          '.png',
+          '.jpg',
+          '.jpeg',
+          '.gif',
+          '.svg',
+          '.webp',
+          '.mp4',
+          '.webm',
+          '.mov',
+          '.avi',
+          '.mkv',
         ],
-        targetDir: '.assets'
-      } as any;
+        targetDir: '.assets',
+      };
 
-      const toast = ({ title, description, variant }: any) => {
+      const toast = ({
+        title,
+        description,
+        variant,
+      }: {
+        title: string;
+        description: string;
+        variant?: string;
+      }) => {
         console.log(`${variant || 'info'}: ${title} - ${description}`);
       };
 
@@ -178,41 +219,61 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
           files,
           notebookApiIntegration,
           uploadConfig,
-          setUploading,
-          setUploadProgress,
-          setError: setUploadError,
-          fileInputRef: fileInputRef as any,
+          setUploading: () => {},
+          setUploadProgress: () => {},
+          setError: () => {},
+          fileInputRef,
           setIsPreview: () => {},
           toast,
           onUpdate: (_cellId: string, { uploadedFiles }: { uploadedFiles: string[] }) => {
             if (!editor) return;
             (uploadedFiles || []).forEach((name) => {
               const lower = name.toLowerCase();
-              const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].some(ext => lower.endsWith(ext));
+              const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].some((ext) =>
+                lower.endsWith(ext)
+              );
               const relPath = `.assets/${name}`;
               const url = `${Backend_BASE_URL}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
               if (isImage) {
                 try {
                   // 使用自定义的 markdownImage 节点，保证 TipTap 能稳定解析
-                  editor.chain().focus().insertContent(
-                    `<div data-type="markdown-image" data-src="${url}" data-alt="${name}" data-title="${name}" data-markdown="![${name}](${url})"></div>`
-                  ).run();
+                  editor
+                    .chain()
+                    .focus()
+                    .insertContent(
+                      `<div data-type="markdown-image" data-src="${url}" data-alt="${name}" data-title="${name}" data-markdown="![${name}](${url})"></div>`
+                    )
+                    .run();
                 } catch {
                   // 兜底为普通的 <img>，ImageExtension 也支持 parseHTML(img[src])
-                  editor.chain().focus().insertContent(`<img src="${url}" alt="${name}" title="${name}" />`).run();
+                  editor
+                    .chain()
+                    .focus()
+                    .insertContent(`<img src="${url}" alt="${name}" title="${name}" />`)
+                    .run();
                 }
               } else {
                 // 其他文件使用 file-attachment 节点，渲染为 LinkCell 卡片
                 const markdown = `[${name}](${url})`;
-                editor.chain().focus().insertContent(
-                  `<div data-type="file-attachment" data-markdown="${markdown}"></div>`
-                ).run();
+                editor
+                  .chain()
+                  .focus()
+                  .insertContent(
+                    `<div data-type="file-attachment" data-markdown="${markdown}"></div>`
+                  )
+                  .run();
               }
             });
           },
           cellId: '',
           abortControllerRef: abortControllerRef as any,
-          fetchFileList: async () => { try { await notebookApiIntegration.listFiles(notebookId); } catch {} },
+          fetchFileList: async () => {
+            try {
+              await notebookApiIntegration.listFiles(notebookId);
+            } catch {
+              // Ignore file list errors
+            }
+          },
         });
       } catch (err) {
         console.error('TipTap drop upload failed:', err);

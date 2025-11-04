@@ -1,30 +1,20 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Editor } from '@tiptap/react';
-import { 
-  GripVertical,
-  Plus,
-  Copy,
-  Trash2,
-  ChevronUp,
-  ChevronDown
-} from 'lucide-react';
+import { GripVertical, Plus, Copy, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface DraggableBlockManagerProps {
   editor: Editor | null;
   children: React.ReactNode;
 }
 
-const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
-  editor,
-  children
-}) => {
+const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({ editor, children }) => {
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [currentBlock, setCurrentBlock] = useState<HTMLElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedBlock, setDraggedBlock] = useState<HTMLElement | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hideTimeoutRef = useRef<number | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   // 清除隐藏定时器
@@ -45,21 +35,24 @@ const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
   }, [clearHideTimeout]);
 
   // 显示工具栏
-  const showToolbarForBlock = useCallback((blockElement: HTMLElement) => {
-    clearHideTimeout();
-    
-    if (blockElement !== currentBlock) {
-      setCurrentBlock(blockElement);
-      
-      const rect = blockElement.getBoundingClientRect();
-      setToolbarPosition({
-        x: rect.left - 60,
-        y: rect.top + window.scrollY
-      });
-    }
-    
-    setShowToolbar(true);
-  }, [currentBlock, clearHideTimeout]);
+  const showToolbarForBlock = useCallback(
+    (blockElement: HTMLElement) => {
+      clearHideTimeout();
+
+      if (blockElement !== currentBlock) {
+        setCurrentBlock(blockElement);
+
+        const rect = blockElement.getBoundingClientRect();
+        setToolbarPosition({
+          x: rect.left - 60,
+          y: rect.top + window.scrollY,
+        });
+      }
+
+      setShowToolbar(true);
+    },
+    [currentBlock, clearHideTimeout]
+  );
 
   useEffect(() => {
     if (!editor || !containerRef.current) return;
@@ -68,18 +61,20 @@ const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
 
     const handleMouseMove = (event: MouseEvent) => {
       if (isDragging) return; // 拖拽时不处理hover
-      
+
       const target = event.target as HTMLElement;
-      
+
       // 检查是否在工具栏上
       if (toolbarRef.current && toolbarRef.current.contains(target)) {
         clearHideTimeout();
         return;
       }
-      
+
       // 查找块级元素
-      const blockElement = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre');
-      
+      const blockElement = target.closest(
+        '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+      );
+
       if (blockElement) {
         showToolbarForBlock(blockElement as HTMLElement);
       } else {
@@ -118,34 +113,44 @@ const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
   // 简单的块操作函数
   const moveBlockUp = () => {
     if (!editor || !currentBlock) return;
-    
-    const blocks = Array.from(containerRef.current?.querySelectorAll('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre') || []);
+
+    const blocks = Array.from(
+      containerRef.current?.querySelectorAll(
+        '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+      ) || []
+    );
     const currentIndex = blocks.indexOf(currentBlock);
-    
+
     if (currentIndex > 0) {
       const prevBlock = blocks[currentIndex - 1];
       swapBlocks(currentBlock, prevBlock as HTMLElement);
     }
-    
+
     setShowToolbar(false);
   };
 
   const moveBlockDown = () => {
     if (!editor || !currentBlock) return;
-    
-    const blocks = Array.from(containerRef.current?.querySelectorAll('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre') || []);
+
+    const blocks = Array.from(
+      containerRef.current?.querySelectorAll(
+        '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+      ) || []
+    );
     const currentIndex = blocks.indexOf(currentBlock);
-    
+
     if (currentIndex < blocks.length - 1) {
       const nextBlock = blocks[currentIndex + 1];
       swapBlocks(currentBlock, nextBlock as HTMLElement);
     }
-    
+
     setShowToolbar(false);
   };
 
   // 通过DOM元素获取对应的ProseMirror块信息
-  const getBlockInfoFromElement = (blockElement: HTMLElement | null): { pos: number; node: any } | null => {
+  const getBlockInfoFromElement = (
+    blockElement: HTMLElement | null
+  ): { pos: number; node: any } | null => {
     if (!editor || !blockElement) return null;
     const { state } = editor;
     let result: { pos: number; node: any } | null = null;
@@ -167,7 +172,12 @@ const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
     return result;
   };
 
-  const moveNodeRelative = (sourcePos: number, targetPos: number, targetNodeSize: number, place: 'before' | 'after') => {
+  const moveNodeRelative = (
+    sourcePos: number,
+    targetPos: number,
+    targetNodeSize: number,
+    place: 'before' | 'after'
+  ) => {
     if (!editor) return;
     const { state, view } = editor;
     const sourceNode = state.doc.nodeAt(sourcePos);
@@ -276,13 +286,17 @@ const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
     if (!editor || !draggedBlock) return;
 
     const target = e.target as HTMLElement;
-    const targetBlock = target.closest('.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre') as HTMLElement | null;
+    const targetBlock = target.closest(
+      '.ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror h5, .ProseMirror h6, .ProseMirror ul, .ProseMirror ol, .ProseMirror blockquote, .ProseMirror pre'
+    ) as HTMLElement | null;
 
     if (targetBlock && targetBlock !== draggedBlock) {
       // 使用ProseMirror事务移动节点
       const srcInfo = getBlockInfoFromElement(draggedBlock);
       const dstInfo = getBlockInfoFromElement(targetBlock);
       if (srcInfo && dstInfo) {
+        // TODO: Implement moveNodeBefore function
+        // eslint-disable-next-line no-undef
         moveNodeBefore(srcInfo.pos, dstInfo.pos);
       }
     }
@@ -293,11 +307,11 @@ const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
   // 添加CSS样式
   useEffect(() => {
     const styleId = 'draggable-block-styles';
-    
+
     if (document.getElementById(styleId)) {
       return;
     }
-    
+
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
@@ -364,14 +378,9 @@ const DraggableBlockManager: React.FC<DraggableBlockManagerProps> = ({
   }, []);
 
   return (
-    <div 
-      ref={containerRef} 
-      className="relative"
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
+    <div ref={containerRef} className="relative" onDragOver={handleDragOver} onDrop={handleDrop}>
       {children}
-      
+
       {/* 可拖拽的工具栏 */}
       {showToolbar && currentBlock && (
         <div
