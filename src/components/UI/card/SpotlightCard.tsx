@@ -103,7 +103,7 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
       <div
         className="absolute inset-0 pointer-events-none rounded-3xl"
         style={{
-          backgroundColor: `rgba(var(--acrylic-tint), ${tintOpacity * config.tint})`,
+          backgroundColor: `rgb(var(--acrylic-tint) / ${tintOpacity * config.tint})`,
           mixBlendMode: 'normal',
         }}
       />

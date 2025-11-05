@@ -835,40 +835,331 @@
 }
 
 /* ====================================================================
-     Dark Mode Support (Future Enhancement)
+     Enhanced Dark Mode Support
      ==================================================================== */
 
-/* Currently commented out as the main design uses light mode
-     Uncomment and adjust when dark mode support is needed */
+/* Button Dark Mode Styles */
+.dark .ant-btn-primary {
+  background: #52c896 !important;
+  box-shadow: 0 2px 4px rgba(82, 200, 150, 0.3) !important;
+}
 
-/*
-  @media (prefers-color-scheme: dark) {
-    .ant-btn-primary {
-      background: linear-gradient(135deg, #41B883, #3490DC) !important;
-      color: #ffffff !important;
-    }
-    
-    .ant-btn-default {
-      background: #1f2937 !important;
-      border-color: #374151 !important;
-      color: #d1d5db !important;
-    }
-    
-    .ant-input {
-      background: #1f2937 !important;
-      border-color: #374151 !important;
-      color: #d1d5db !important;
-    }
-    
-    .ant-table-thead > tr > th {
-      background: #41B883 !important;
-      color: #ffffff !important;
-    }
-    
-    .ant-table-tbody > tr > td {
-      background: #1f2937 !important;
-      color: #d1d5db !important;
-      border-bottom-color: #374151 !important;
-    }
-  }
-  */
+.dark .ant-btn-primary:hover {
+  background: #6fd9ac !important;
+}
+
+.dark .ant-btn-primary:active {
+  background: #41b883 !important;
+}
+
+.dark .ant-btn-default {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-btn-default:hover {
+  background: rgba(82, 200, 150, 0.08) !important;
+  border-color: #52c896 !important;
+  color: #52c896 !important;
+}
+
+.dark .ant-btn-background-ghost {
+  border-color: #52c896 !important;
+  color: #52c896 !important;
+}
+
+.dark .ant-btn-background-ghost:hover {
+  background: rgba(82, 200, 150, 0.15) !important;
+  border-color: #6fd9ac !important;
+  color: #6fd9ac !important;
+}
+
+.dark .ant-btn-text {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-btn-text:hover {
+  color: #52c896 !important;
+  background: rgba(82, 200, 150, 0.08) !important;
+}
+
+.dark .ant-btn-link {
+  color: #52c896 !important;
+}
+
+.dark .ant-btn-link:hover {
+  color: #6fd9ac !important;
+}
+
+/* Input Dark Mode Styles */
+.dark .ant-input,
+.dark .ant-input-affix-wrapper {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-input::placeholder,
+.dark .ant-input-affix-wrapper input::placeholder {
+  color: #8b92a5 !important;
+}
+
+.dark .ant-input:hover,
+.dark .ant-input-affix-wrapper:hover {
+  border-color: rgba(82, 200, 150, 0.4) !important;
+}
+
+.dark .ant-input:focus,
+.dark .ant-input-focused,
+.dark .ant-input-affix-wrapper-focused {
+  border-color: #52c896 !important;
+  box-shadow: 0 0 0 2px rgba(82, 200, 150, 0.15) !important;
+}
+
+/* Select Dark Mode Styles */
+.dark .ant-select-selector {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-select-dropdown {
+  background: #232329 !important;
+  border-color: rgba(82, 200, 150, 0.2) !important;
+}
+
+.dark .ant-select-item {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-select-item-option-selected {
+  background: rgba(82, 200, 150, 0.15) !important;
+  color: #52c896 !important;
+}
+
+.dark .ant-select-item-option-active {
+  background: rgba(82, 200, 150, 0.08) !important;
+}
+
+/* Table Dark Mode Styles */
+.dark .ant-table {
+  background: transparent !important;
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-table-thead > tr > th {
+  background: rgba(82, 200, 150, 0.2) !important;
+  color: #e5e5e7 !important;
+  border-bottom-color: rgba(82, 200, 150, 0.3) !important;
+}
+
+.dark .ant-table-tbody > tr > td {
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: #e5e5e7 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark .ant-table-tbody > tr:hover > td {
+  background: rgba(82, 200, 150, 0.08) !important;
+}
+
+.dark .ant-table-tbody > tr:nth-child(even) > td {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.dark .ant-table-tbody > tr:nth-child(even):hover > td {
+  background: rgba(82, 200, 150, 0.08) !important;
+}
+
+/* Modal Dark Mode Styles */
+.dark .ant-modal-content {
+  background: #232329 !important;
+}
+
+.dark .ant-modal-header {
+  background: #232329 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark .ant-modal-title {
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-modal-body {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-modal-footer {
+  background: #232329 !important;
+  border-top-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark .ant-modal-close-x {
+  color: #8b92a5 !important;
+}
+
+.dark .ant-modal-close-x:hover {
+  color: #b8bcc8 !important;
+}
+
+/* Card Dark Mode Styles */
+.dark .ant-card {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark .ant-card-head {
+  background: transparent !important;
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark .ant-card-head-title {
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-card-body {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-card-hoverable:hover {
+  box-shadow: 0 8px 16px rgba(82, 200, 150, 0.2) !important;
+}
+
+/* Menu/Dropdown Dark Mode Styles */
+.dark .ant-menu {
+  background: transparent !important;
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-menu-item {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-menu-item:hover {
+  background: rgba(82, 200, 150, 0.08) !important;
+  color: #52c896 !important;
+}
+
+.dark .ant-menu-item-selected {
+  background: rgba(82, 200, 150, 0.15) !important;
+  color: #52c896 !important;
+}
+
+.dark .ant-dropdown-menu {
+  background: #232329 !important;
+}
+
+.dark .ant-dropdown-menu-item {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-dropdown-menu-item:hover {
+  background: rgba(82, 200, 150, 0.08) !important;
+  color: #52c896 !important;
+}
+
+/* Form Dark Mode Styles */
+.dark .ant-form-item-label > label {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-form-item-explain-error {
+  color: #f87171 !important;
+}
+
+/* Checkbox/Radio/Switch Dark Mode Styles */
+.dark .ant-checkbox-wrapper,
+.dark .ant-radio-wrapper {
+  color: #b8bcc8 !important;
+}
+
+.dark .ant-checkbox-checked .ant-checkbox-inner,
+.dark .ant-checkbox-indeterminate .ant-checkbox-inner {
+  background-color: #52c896 !important;
+  border-color: #52c896 !important;
+}
+
+.dark .ant-radio-checked .ant-radio-inner {
+  border-color: #52c896 !important;
+}
+
+.dark .ant-radio-checked .ant-radio-inner::after {
+  background-color: #52c896 !important;
+}
+
+.dark .ant-switch-checked {
+  background: #52c896 !important;
+}
+
+.dark .ant-switch-checked:hover {
+  background: #6fd9ac !important;
+}
+
+/* Alert Dark Mode Styles */
+.dark .ant-alert-success {
+  background: rgba(82, 200, 150, 0.1) !important;
+  border-color: rgba(82, 200, 150, 0.3) !important;
+}
+
+.dark .ant-alert-info {
+  background: rgba(93, 173, 226, 0.1) !important;
+  border-color: rgba(93, 173, 226, 0.3) !important;
+}
+
+.dark .ant-alert-warning {
+  background: rgba(251, 191, 36, 0.1) !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+}
+
+.dark .ant-alert-error {
+  background: rgba(248, 113, 113, 0.1) !important;
+  border-color: rgba(248, 113, 113, 0.3) !important;
+}
+
+.dark .ant-alert-message {
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-alert-description {
+  color: #b8bcc8 !important;
+}
+
+/* Notification/Message Dark Mode Styles */
+.dark .ant-notification-notice,
+.dark .ant-message-notice {
+  background: #232329 !important;
+  border-color: rgba(82, 200, 150, 0.2) !important;
+}
+
+.dark .ant-notification-notice-message,
+.dark .ant-message-notice-content {
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-notification-notice-description {
+  color: #b8bcc8 !important;
+}
+
+/* Tooltip/Popover Dark Mode Styles */
+.dark .ant-tooltip-inner {
+  background: rgba(35, 35, 42, 0.95) !important;
+  color: #e5e5e7 !important;
+}
+
+.dark .ant-tooltip-arrow::before {
+  background: rgba(35, 35, 42, 0.95) !important;
+}
+
+.dark .ant-popover-inner {
+  background: #232329 !important;
+}
+
+.dark .ant-popover-title {
+  color: #e5e5e7 !important;
+  border-bottom-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark .ant-popover-inner-content {
+  color: #b8bcc8 !important;
+}

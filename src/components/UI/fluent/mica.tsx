@@ -26,8 +26,8 @@ const Mica = forwardRef<HTMLDivElement, MicaProps>(
         <div
           className="absolute inset-0"
           style={{
-            backdropFilter: 'blur(80px) saturate(120%)',
-            WebkitBackdropFilter: 'blur(80px) saturate(120%)',
+            backdropFilter: 'blur(var(--blur-lg)) saturate(120%)',
+            WebkitBackdropFilter: 'blur(var(--blur-lg)) saturate(120%)',
           }}
         />
 
@@ -37,8 +37,8 @@ const Mica = forwardRef<HTMLDivElement, MicaProps>(
           style={{
             backgroundColor:
               variant === 'base'
-                ? 'rgba(var(--mica-tint, 245 245 245), 0.9)'
-                : 'rgba(var(--mica-alt-tint, 240 240 245), 0.92)',
+                ? 'rgb(var(--mica-tint, 245 245 245) / 0.9)'
+                : 'rgb(var(--mica-alt-tint, 240 240 245) / 0.92)',
           }}
         />
 

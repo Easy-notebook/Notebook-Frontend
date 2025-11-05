@@ -1,13 +1,12 @@
 // src/components/Notebook/components/MainContentArea.tsx
 // Main content area without header (header is now in NotebookApp)
 
-import { useMemo, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import GlobalTabList from '../Display/GlobalTabList';
 import ErrorAlert from '../../UI/ErrorAlert';
 import CommandInputOrig from '../FunctionBar/AITerminal';
 import { useAIAgentStore } from '@Store/AIAgentStore';
 import OutlineSidebar from '../LeftSideBar/Main/Workspace/OutlineView/OutlineSidebar';
-import KnowledgeForestSidebar from '../LeftSideBar/Main/KnowledgeForest/KnowledgeForestSidebar';
 import { EmptySidebar } from '../LeftSideBar/Main/Empty';
 import { AgentType } from '@Services/agentMemoryService';
 import { Mica } from '@/components/UI/fluent';
@@ -131,20 +130,9 @@ export const MainContentArea = ({
           />
         );
       case 'knowledge-forest':
-        return (
-          <KnowledgeForestSidebar
-            tasks={tasks}
-            currentPhaseId={currentPhaseId || ''}
-            onPhaseSelect={onPhaseSelect}
-          />
-        );
+        return null;
       case 'easynet':
-        return (
-          <div className="p-4">
-            <h3 className="text-lg font-medium mb-2">EasyNet</h3>
-            <p className="text-gray-500">EasyNet tools coming soon...</p>
-          </div>
-        );
+        return null;
       case 'new-notebook':
         return <EmptySidebar />;
       case 'settings':
@@ -179,7 +167,7 @@ export const MainContentArea = ({
         {/* Expanded Sidebar (when not collapsed) */}
         {!isCollapsed && (
           <div className="flex h-full" style={{ width: leftSidebarWidth }}>
-            <div className="flex-1 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden">
+            <div className="flex-1 rounded-xl shadow-lg overflow-hidden">
               <div className="h-full overflow-y-auto scroll-smooth">{renderExpandedSidebar()}</div>
             </div>
 
@@ -195,7 +183,7 @@ export const MainContentArea = ({
         )}
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg">
+        <Mica className="flex-1 flex flex-col overflow-hidden rounded-xl shadow-lg">
           <GlobalTabList />
 
           <div className="flex-1 overflow-y-auto scroll-smooth w-full h-full">
@@ -203,7 +191,7 @@ export const MainContentArea = ({
           </div>
 
           {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
-        </div>
+        </Mica>
 
         {/* Right Sidebar */}
         <RightSidebar

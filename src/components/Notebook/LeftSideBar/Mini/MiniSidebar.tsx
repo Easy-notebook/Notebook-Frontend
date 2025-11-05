@@ -40,7 +40,7 @@ interface MiniSidebarProps {
 const PRIMARY_ITEMS: MiniSidebarItem[] = [
   { id: 'workspace', icon: Folder, title: 'Workspace' },
   { id: 'knowledge-forest', icon: Trees, title: 'Knowledge Forest' },
-  { id: 'easynet', icon: Network, title: 'EasyNet' },
+  // { id: 'easynet', icon: Network, title: 'EasyNet' },
 ];
 
 /** 固定底部的功能区（只放设置，避免与中部重复且横排） */

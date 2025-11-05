@@ -30,8 +30,8 @@ export const RightSidebar = ({
   return (
     <div className="flex h-full">
       <RightSidebarResizer onMouseDown={onResize} />
-      <div
-        className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden transition-all duration-500 ease-in-out opacity-100 flex-shrink-0"
+      <Mica
+        className="rounded-xl shadow-lg overflow-hidden transition-all duration-500 ease-in-out opacity-100 flex-shrink-0"
         style={{ width: `${width}px` }}
       >
         <AIAgentSidebar
@@ -39,7 +39,7 @@ export const RightSidebar = ({
           currentPhaseId={currentPhaseId}
           currentStepIndex={currentStepIndex}
         />
-      </div>
+      </Mica>
     </div>
   );
 };

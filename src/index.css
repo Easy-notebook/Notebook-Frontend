@@ -11,7 +11,7 @@
    ==================================================================== */
 
 :root {
-  /* Fluent Design - Acrylic/Mica material tint colors (RGB for rgba usage) */
+  /* Fluent Design - Acrylic/Mica material tint colors (RGB triplets for rgb(var(--x) / a)) */
   --acrylic-tint: 252 252 253;
   --mica-tint: 248 248 250;
   --mica-alt-tint: 245 245 248;
@@ -73,9 +73,14 @@
   /* Sidebar specific transitions - matching EasyPaper */
   --sidebar-transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Mica/Acrylic Material Effects */
-  --mica-tint: 245, 245, 245;
-  --mica-alt-tint: 240, 240, 245;
+  /* Note: keep tints space-separated to work with rgb(var(--tint) / alpha) */
+
+  /* Material base colors (oklch with alpha) */
+  --acrylic-base: oklch(0.98 0.001 260 / 0.7);
+  --mica-base: oklch(0.97 0.002 260 / 0.85);
+
+  /* Card / glass borders */
+  --card-border: rgba(0, 0, 0, 0.08);
 }
 
 /* ====================================================================
@@ -2549,10 +2554,41 @@ vds-cleaning-report {
   --mica-tint: 32 32 38;
   --mica-alt-tint: 28 28 35;
 
-  /* Adjust primary colors for dark mode */
+  /* Color System - Dark Mode */
   --color-primary: #52c896;
   --color-primary-light: #6fd9ac;
   --color-primary-dark: #41b883;
+  --color-secondary: #5dade2;
+  --color-accent: #8b95e8;
+  --color-neutral: #b8bcc8;
+  --color-neutral-dark: #8b92a5;
+
+  /* Color with Alpha - Dark Mode */
+  --color-primary-50: rgba(82, 200, 150, 0.08);
+  --color-primary-100: rgba(82, 200, 150, 0.15);
+  --color-primary-200: rgba(82, 200, 150, 0.25);
+  --color-primary-300: rgba(82, 200, 150, 0.35);
+
+  /* Text Colors - Dark Mode */
+  --text-primary: #e5e5e7;
+  --text-secondary: #b8bcc8;
+  --text-tertiary: #8b92a5;
+  --text-disabled: #5f6677;
+
+  /* Background Colors - Dark Mode */
+  --bg-primary: #1a1a1f;
+  --bg-secondary: #232329;
+  --bg-tertiary: #2c2c35;
+
+  /* Border Colors - Dark Mode */
+  --border-primary: rgba(82, 200, 150, 0.3);
+  --border-secondary: rgba(82, 200, 150, 0.15);
+  --border-light: rgba(255, 255, 255, 0.12);
+  --card-border: rgba(255, 255, 255, 0.12);
+
+  /* Shadows - Dark Mode */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 1px rgba(82, 200, 150, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 1px rgba(82, 200, 150, 0.3);
 
   /* Dark mode background adjustments */
   background-color: #1a1a1f;
@@ -2565,42 +2601,69 @@ vds-cleaning-report {
   color: #e5e5e7;
 }
 
-/* Dark mode text color strategy - only paragraphs are white */
+/* Dark mode border color strategy */
 .dark * {
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
-/* Only paragraph text is white in dark mode */
-.dark p {
-  color: #f5f5f7;
+/* Text colors in dark mode - only markdown-cell p should be white */
+.dark .markdown-cell p {
+  color: #e5e5e7;
 }
 
-/* Headings keep their natural colors or inherit from parent */
-.dark h1,
-.dark h2,
-.dark h3,
-.dark h4,
-.dark h5,
-.dark h6 {
-  color: inherit;
+/* Dark mode glass morphism effects */
+.dark .glass-morphism {
+  background: rgba(35, 35, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* Other elements inherit their colors naturally */
-.dark span,
-.dark div,
-.dark button {
-  color: inherit;
+.dark .glass-subtle {
+  background: rgba(35, 35, 42, 0.95);
+}
+
+/* Dark mode gradient background */
+.dark .gradient-bg {
+  background: linear-gradient(to bottom right, #1a1a1f, #232329);
+}
+
+.dark .gradient-bg::before {
+  background-image:
+    radial-gradient(ellipse 600px 600px at 20% 20%, rgba(82, 200, 150, 0.08), transparent),
+    radial-gradient(ellipse 500px 500px at 80% 80%, rgba(93, 173, 226, 0.06), transparent),
+    radial-gradient(ellipse 400px 400px at 50% 50%, rgba(139, 149, 232, 0.05), transparent),
+    radial-gradient(ellipse 350px 350px at 90% 10%, rgba(82, 200, 150, 0.04), transparent);
 }
 
 /* Fluent Design Utility Classes */
 .acrylic-base {
   backdrop-filter: saturate(180%) blur(var(--blur-sm));
   -webkit-backdrop-filter: saturate(180%) blur(var(--blur-sm));
-  background-color: rgba(var(--acrylic-tint), 0.7);
+  background: var(--acrylic-base, rgb(var(--acrylic-tint) / 0.7));
 }
 
 .mica-base {
   backdrop-filter: blur(var(--blur-lg));
   -webkit-backdrop-filter: blur(var(--blur-lg));
-  background-color: rgba(var(--mica-tint), 0.9);
+  background: var(--mica-base, rgb(var(--mica-tint) / 0.9));
+}
+
+/* Aliases used by components (e.g., SelectContent) */
+.acrylic {
+  backdrop-filter: saturate(180%) blur(var(--blur-sm));
+  -webkit-backdrop-filter: saturate(180%) blur(var(--blur-sm));
+  background: var(--acrylic-base, rgb(var(--acrylic-tint) / 0.7));
+  border: 1px solid var(--card-border);
+}
+
+.mica {
+  backdrop-filter: blur(var(--blur-lg));
+  -webkit-backdrop-filter: blur(var(--blur-lg));
+  background: var(--mica-base, rgb(var(--mica-tint) / 0.9));
+  border: 1px solid var(--card-border);
+}
+
+/* Hover utility for Fluent cards */
+.fluent-card:hover {
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }

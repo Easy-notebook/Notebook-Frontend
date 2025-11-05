@@ -140,10 +140,10 @@ const OutlineSidebar = ({
     if (viewMode === 'step' && currentPhaseId) {
       const currentPhase = allPhases.find((p) => p.id === currentPhaseId);
       return (
-        <div className="w-full h-20 pl-7 flex items-center border-t border-gray-200 relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
+        <div className="w-full h-20 pl-7 flex items-center relative">
+          <div className="absolute inset-0" />
           <StatusDot status="in-progress" />
-          <span className="font-medium tracking-wide text-theme-800 relative text-base ml-4">
+          <span className="font-medium tracking-wide text-theme-800 dark:text-gray-300 relative text-base ml-4">
             {currentPhase?.title || ''}
           </span>
         </div>
@@ -152,8 +152,8 @@ const OutlineSidebar = ({
 
     if (activeTab === 'file' && isHovered) {
       return (
-        <div className="w-full h-10 pl-7 flex items-center justify-start border-t border-gray-200 relative">
-          <span className="font-medium tracking-wide text-theme-800 relative text-base truncate overflow-hidden whitespace-nowrap">
+        <div className="w-full h-10 pl-7 flex items-center justify-start relative">
+          <span className="font-medium tracking-wide text-theme-800 dark:text-gray-300 relative text-base truncate overflow-hidden whitespace-nowrap">
             Drop files to upload
           </span>
         </div>

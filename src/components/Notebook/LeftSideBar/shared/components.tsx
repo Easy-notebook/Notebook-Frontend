@@ -99,7 +99,7 @@ export const TabSwitcher = memo<{
         >
           <span className="relative z-10">{tab.label}</span>
           {activeTab === tab.id && (
-            <div className="absolute inset-0 bg-white shadow-sm rounded-md border border-slate-300/50" />
+            <div className="absolute inset-0 bg-white dark:bg-gray-800 shadow-sm rounded-md border border-slate-300/50 dark:border-gray-600" />
           )}
         </button>
       ))}
@@ -204,7 +204,9 @@ RunningIndicator.displayName = 'RunningIndicator';
 
 // 任务计数器
 export const TaskCounter = memo<{ count: number }>(({ count }) => (
-  <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{count}</span>
+  <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+    {count}
+  </span>
 ));
 
 TaskCounter.displayName = 'TaskCounter';

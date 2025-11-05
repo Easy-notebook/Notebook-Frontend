@@ -28,8 +28,8 @@ export const SHARED_STYLES = {
 
   // Obsidian风格容器样式
   container: {
-    base: 'relative h-full flex flex-col bg-white shadow-sm',
-    header: 'h-14 flex items-center justify-between px-4 border-b backdrop-blur-sm shrink-0',
+    base: 'relative h-full flex flex-col bg-transparent shadow-none',
+    header: 'h-14 flex items-center justify-between px-4 shrink-0',
     content: 'flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent',
   },
 

@@ -59,7 +59,7 @@ const Acrylic = forwardRef<HTMLDivElement, AcrylicProps>(
         <div
           className="absolute inset-0"
           style={{
-            backgroundColor: `rgba(var(--acrylic-tint, 255 255 255), ${tintOpacity * config.tint})`,
+            backgroundColor: `rgb(var(--acrylic-tint, 255 255 255) / ${tintOpacity * config.tint})`,
             mixBlendMode: 'normal',
           }}
         />

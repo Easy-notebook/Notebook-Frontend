@@ -1,5 +1,5 @@
 // src/components/UI/fluent/index.tsx
-export { Mica } from './Mica';
-export { Acrylic } from './Acrylic';
-export type { MicaProps, MicaVariant } from './Mica';
-export type { AcrylicProps, AcrylicVariant } from './Acrylic';
+export { Mica } from './mica';
+export { Acrylic } from './acrylic';
+export type { MicaProps, MicaVariant } from './mica';
+export type { AcrylicProps, AcrylicVariant } from './acrylic';

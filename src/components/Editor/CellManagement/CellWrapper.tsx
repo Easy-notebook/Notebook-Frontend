@@ -151,7 +151,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
         ${isSelected ? 'ring-2 ring-theme-500 ring-opacity-50' : ''}
         ${isFocused ? 'shadow-lg' : 'shadow-sm'}
         ${isEditing ? 'ring-2 ring-green-500 ring-opacity-50' : ''}
-        bg-white rounded-lg transition-all duration-200
+        bg-white dark:bg-gray-800/90 rounded-lg transition-all duration-200
         ${className}
       `}
       onClick={handleClick}
@@ -176,7 +176,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
         onMouseEnter={() => setShowInsertMenu('above')}
       >
         {showInsertMenu === 'above' && (
-          <div className="flex items-center gap-1 bg-white shadow-lg rounded-lg px-2 py-1 border">
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 shadow-lg rounded-lg px-2 py-1 border dark:border-gray-700">
             {insertMenuItems.map((item) => (
               <button
                 key={item.type}
@@ -185,7 +185,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
                   onInsertAbove(item.type);
                   setShowInsertMenu(null);
                 }}
-                className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-gray-100 rounded"
+                className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                 title={`在上方插入${item.label}`}
               >
                 <span>{item.icon}</span>
@@ -198,14 +198,14 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
 
       {/* 左侧工具栏 */}
       {showToolbar && isSelected && (
-        <div className="absolute -left-12 top-2 flex flex-col gap-1 bg-white shadow-lg rounded-lg p-1 border">
+        <div className="absolute -left-12 top-2 flex flex-col gap-1 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-1 border dark:border-gray-700">
           {onRun && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onRun();
               }}
-              className="p-1 hover:bg-gray-100 rounded text-green-600"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-green-600"
               title="运行"
             >
               <Play size={14} />
@@ -218,7 +218,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
                 e.stopPropagation();
                 onStop();
               }}
-              className="p-1 hover:bg-gray-100 rounded text-red-600"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-red-600"
               title="停止"
             >
               <Square size={14} />
@@ -231,7 +231,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
                 e.stopPropagation();
                 onMoveUp();
               }}
-              className="p-1 hover:bg-gray-100 rounded text-gray-600"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400"
               title="向上移动"
             >
               <ChevronUp size={14} />
@@ -244,7 +244,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
                 e.stopPropagation();
                 onMoveDown();
               }}
-              className="p-1 hover:bg-gray-100 rounded text-gray-600"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400"
               title="向下移动"
             >
               <ChevronDown size={14} />
@@ -256,7 +256,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
               e.stopPropagation();
               onDuplicate();
             }}
-            className="p-1 hover:bg-gray-100 rounded text-gray-600"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-400"
             title="复制"
           >
             <Copy size={14} />
@@ -267,7 +267,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
               e.stopPropagation();
               onDelete();
             }}
-            className="p-1 hover:bg-gray-100 rounded text-red-600"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-red-600"
             title="删除"
           >
             <Trash2 size={14} />
@@ -284,7 +284,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
         onMouseEnter={() => setShowInsertMenu('below')}
       >
         {showInsertMenu === 'below' && (
-          <div className="flex items-center gap-1 bg-white shadow-lg rounded-lg px-2 py-1 border">
+          <div className="flex items-center gap-1 bg-white dark:bg-gray-800 shadow-lg rounded-lg px-2 py-1 border dark:border-gray-700">
             {insertMenuItems.map((item) => (
               <button
                 key={item.type}
@@ -293,7 +293,7 @@ const CellWrapper: React.FC<CellWrapperProps> = ({
                   onInsertBelow(item.type);
                   setShowInsertMenu(null);
                 }}
-                className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-gray-100 rounded"
+                className="flex items-center gap-1 px-2 py-1 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
                 title={`在下方插入${item.label}`}
               >
                 <span>{item.icon}</span>

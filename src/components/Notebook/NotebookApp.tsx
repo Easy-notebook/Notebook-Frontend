@@ -289,62 +289,7 @@ const NotebookApp = () => {
     <div className="h-screen overflow-hidden relative bg-background text-foreground transition-colors duration-300">
       <SettingsPage />
 
-      {/* Background System - Acrylic effect inspired by EasyPaper */}
-      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        {/* Base gradient background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-50 via-gray-100 to-gray-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900" />
-        {/* Floating orbs with colorful gradients */}
-        <div
-          className="absolute top-20 right-32 h-96 w-96 rounded-full blur-3xl animate-pulse"
-          style={{
-            animationDuration: '8s',
-            background: 'radial-gradient(circle, rgba(65, 184, 131, 0.12), transparent 70%)',
-          }}
-        />
-        <div
-          className="absolute bottom-32 left-20 h-80 w-80 rounded-full blur-3xl animate-pulse"
-          style={{
-            animationDuration: '10s',
-            animationDelay: '2s',
-            background: 'radial-gradient(circle, rgba(101, 116, 205, 0.1), transparent 70%)',
-          }}
-        />
-        <div
-          className="absolute top-1/2 right-1/4 h-72 w-72 rounded-full blur-3xl animate-pulse"
-          style={{
-            animationDuration: '12s',
-            animationDelay: '4s',
-            background: 'radial-gradient(circle, rgba(34, 197, 94, 0.08), transparent 70%)',
-          }}
-        />
-        <div
-          className="absolute bottom-10 right-10 h-64 w-64 rounded-full blur-3xl animate-pulse"
-          style={{
-            animationDuration: '15s',
-            animationDelay: '6s',
-            background: 'radial-gradient(circle, rgba(245, 158, 11, 0.06), transparent 70%)',
-          }}
-        />
-
-        {/* Mesh gradient overlay */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse at top, rgba(65, 184, 131, 0.05), transparent 70%)',
-          }}
-        />
-
-        {/* Subtle noise texture */}
-        <div
-          className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='4.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-            backgroundSize: '200px 200px',
-            mixBlendMode: 'soft-light',
-          }}
-        />
-      </div>
+      {/* Global background layers now live at App level */}
 
       {/* Content Layer on top of background */}
       <div className="relative z-20 h-screen flex">
