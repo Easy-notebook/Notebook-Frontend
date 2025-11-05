@@ -21,8 +21,8 @@ interface CellStats {
   markdown: number;
 }
 
-const CELL_SEPARATOR: string = '\n\n---\n\n';
-const CODE_BLOCK_DELIMITER: string = '```';
+const CELL_SEPARATOR = '\n\n---\n\n';
+const CODE_BLOCK_DELIMITER = '```';
 
 /**
  * Convert a cell's outputs to markdown format
@@ -32,18 +32,20 @@ const CODE_BLOCK_DELIMITER: string = '```';
 const formatOutputs = (outputs: CellOutput[] | undefined): string => {
   if (!outputs || outputs.length === 0) return '';
 
-  return outputs.map((output: CellOutput) => {
-    if (output.type === 'image') {
-      // For images, create a markdown image tag with base64 content
-      return `![Output](${output.content})`;
-    } else if (output.type === 'error') {
-      // For errors, create a code block with error formatting
-      return `\n❌ Error:\n${CODE_BLOCK_DELIMITER}\n${output.content}\n${CODE_BLOCK_DELIMITER}\n`;
-    } else {
-      // For regular text output
-      return `\nOutput:\n${CODE_BLOCK_DELIMITER}\n${output.content}\n${CODE_BLOCK_DELIMITER}\n`;
-    }
-  }).join('\n');
+  return outputs
+    .map((output: CellOutput) => {
+      if (output.type === 'image') {
+        // For images, create a markdown image tag with base64 content
+        return `![Output](${output.content})`;
+      } else if (output.type === 'error') {
+        // For errors, create a code block with error formatting
+        return `\n❌ Error:\n${CODE_BLOCK_DELIMITER}\n${output.content}\n${CODE_BLOCK_DELIMITER}\n`;
+      } else {
+        // For regular text output
+        return `\nOutput:\n${CODE_BLOCK_DELIMITER}\n${output.content}\n${CODE_BLOCK_DELIMITER}\n`;
+      }
+    })
+    .join('\n');
 };
 
 /**
@@ -52,9 +54,9 @@ const formatOutputs = (outputs: CellOutput[] | undefined): string => {
  * @returns Markdown formatted code cell
  */
 const convertCodeCellToMarkdown = (cell: Cell): string => {
-  const codeBlock: string = `${CODE_BLOCK_DELIMITER}python\n${cell.content || ''}\n${CODE_BLOCK_DELIMITER}`;
+  const codeBlock = `${CODE_BLOCK_DELIMITER}python\n${cell.content || ''}\n${CODE_BLOCK_DELIMITER}`;
   const outputs: string = formatOutputs(cell.outputs);
-  
+
   return `${codeBlock}\n${outputs}`;
 };
 
@@ -86,7 +88,7 @@ cells:
  * @param cells - Array of notebook cells
  * @param filename - Output filename
  */
-const exportToMarkdown = (cells: Cell[], filename: string = 'notebook.md'): void => {
+const exportToMarkdown = (cells: Cell[], filename = 'notebook.md'): void => {
   try {
     // Create frontmatter
     let markdownContent: string = createFrontmatter(cells);
@@ -107,7 +109,6 @@ const exportToMarkdown = (cells: Cell[], filename: string = 'notebook.md'): void
     // Create and save the file
     const blob: Blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
     saveAs(blob, filename);
-
   } catch (error: unknown) {
     console.error('Error generating Markdown:', error);
     throw error;

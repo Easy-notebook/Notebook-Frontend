@@ -8,7 +8,7 @@ interface AgentMemory {
   notebook_id: string;
   created_at: number;
   last_updated: number;
-  
+
   // 用户意图观测
   user_intent_observations: {
     stated_goals: string[];
@@ -19,7 +19,7 @@ interface AgentMemory {
       blocked_on: string[];
     };
   };
-  
+
   // 实际情况记录
   situation_tracking: {
     debug_attempts: {
@@ -46,7 +46,7 @@ interface AgentMemory {
     failed_attempts: any[];
     current_context?: any[];
   };
-  
+
   // 触发条件和终止机制
   termination_conditions: {
     max_iterations: {
@@ -62,7 +62,7 @@ interface AgentMemory {
     success_criteria: string[];
     failure_indicators: string[];
   };
-  
+
   // 交互历史
   interactions: {
     user_input: string;
@@ -75,7 +75,7 @@ interface AgentMemory {
       debug_cycle: number;
     };
   }[];
-  
+
   // 学习到的模式
   learned_patterns: {
     effective_solutions: Record<string, string>;
@@ -105,7 +105,7 @@ export class AgentMemoryService {
   // 初始化Agent记忆
   static initializeAgentMemory(notebookId: string, agentType: AgentType): AgentMemory {
     const agent_id = this.generateAgentId(notebookId, agentType);
-    
+
     if (this.memories[agent_id]) {
       return this.memories[agent_id];
     }
@@ -115,67 +115,67 @@ export class AgentMemoryService {
       notebook_id: notebookId,
       created_at: Date.now(),
       last_updated: Date.now(),
-      
+
       user_intent_observations: {
         stated_goals: [],
         inferred_goals: [],
         progress_markers: {
           completed_steps: [],
           current_focus: '',
-          blocked_on: []
-        }
+          blocked_on: [],
+        },
       },
-      
+
       situation_tracking: {
         debug_attempts: {
           attempted_directions: [],
           failed_approaches: [],
           remaining_strategies: [],
           debug_cycle_count: 0,
-          max_debug_attempts: 5
+          max_debug_attempts: 5,
         },
         code_evolution: {
           working_versions: [],
           current_version: '',
           broken_versions: [],
-          version_notes: {}
+          version_notes: {},
         },
         task_completion: {
           total_requirements: [],
           completed_requirements: [],
           pending_requirements: [],
-          blocked_requirements: []
+          blocked_requirements: [],
         },
         successful_interactions: [],
-        failed_attempts: []
+        failed_attempts: [],
       },
-      
+
       termination_conditions: {
         max_iterations: {
           debug_cycles: 5,
           code_generations: 10,
-          question_rounds: 20
+          question_rounds: 20,
         },
         current_counts: {
           debug_cycles: 0,
           code_generations: 0,
-          question_rounds: 0
+          question_rounds: 0,
         },
         success_criteria: [],
-        failure_indicators: []
+        failure_indicators: [],
       },
-      
+
       interactions: [],
-      
+
       learned_patterns: {
         effective_solutions: {},
         user_preferences: {
           coding_style: [],
           preferred_libraries: [],
-          explanation_detail: 'detailed'
+          explanation_detail: 'detailed',
         },
-        warning_signs: []
-      }
+        warning_signs: [],
+      },
     };
 
     this.memories[agent_id] = memory;
@@ -190,10 +190,14 @@ export class AgentMemoryService {
   }
 
   // 更新Agent记忆
-  static updateAgentMemory(notebookId: string, agentType: AgentType, updates: Partial<AgentMemory>): void {
+  static updateAgentMemory(
+    notebookId: string,
+    agentType: AgentType,
+    updates: Partial<AgentMemory>
+  ): void {
     const agent_id = this.generateAgentId(notebookId, agentType);
     const currentMemory = this.memories[agent_id];
-    
+
     if (!currentMemory) {
       console.warn(`No memory found for ${agent_id}`);
       return;
@@ -202,19 +206,19 @@ export class AgentMemoryService {
     this.memories[agent_id] = {
       ...currentMemory,
       ...updates,
-      last_updated: Date.now()
+      last_updated: Date.now(),
     };
-    
+
     this.saveToStorage();
-    
+
     // 触发具体agent更新事件
     const event = new CustomEvent('agentMemoryUpdated', {
-      detail: { 
-        notebookId, 
-        agentType, 
+      detail: {
+        notebookId,
+        agentType,
         timestamp: Date.now(),
-        updateType: 'memory_update'
-      }
+        updateType: 'memory_update',
+      },
     });
     window.dispatchEvent(event);
   }
@@ -240,13 +244,13 @@ export class AgentMemoryService {
       context_snapshot: {
         debug_cycle: memory.termination_conditions.current_counts.debug_cycles,
         code_generations: memory.termination_conditions.current_counts.code_generations,
-        question_rounds: memory.termination_conditions.current_counts.question_rounds
-      }
+        question_rounds: memory.termination_conditions.current_counts.question_rounds,
+      },
     };
 
     // 添加到情况跟踪
     const situation = memory.situation_tracking;
-    
+
     if (success) {
       situation.successful_interactions.push(interaction);
       // 只保留最近20次成功交互
@@ -271,15 +275,15 @@ export class AgentMemoryService {
     }
 
     this.saveToStorage();
-    
+
     // 触发交互记录事件
     const event = new CustomEvent('agentMemoryUpdated', {
-      detail: { 
-        notebookId, 
-        agentType, 
+      detail: {
+        notebookId,
+        agentType,
         timestamp: Date.now(),
-        updateType: 'operation_interaction'
-      }
+        updateType: 'operation_interaction',
+      },
     });
     window.dispatchEvent(event);
   }
@@ -309,12 +313,12 @@ export class AgentMemoryService {
       context_snapshot: {
         cell_id: context.cell_id,
         task_phase: context.task_phase,
-        debug_cycle: memory.termination_conditions.current_counts.debug_cycles
-      }
+        debug_cycle: memory.termination_conditions.current_counts.debug_cycles,
+      },
     };
 
     memory.interactions.unshift(interaction); // 最新的在前面
-    
+
     // 只保留最近50次交互
     if (memory.interactions.length > 50) {
       memory.interactions = memory.interactions.slice(0, 50);
@@ -330,15 +334,15 @@ export class AgentMemoryService {
     }
 
     this.updateAgentMemory(notebookId, agentType, memory);
-    
+
     // 触发交互记录事件
     const event = new CustomEvent('agentMemoryUpdated', {
-      detail: { 
-        notebookId, 
-        agentType, 
+      detail: {
+        notebookId,
+        agentType,
         timestamp: Date.now(),
-        updateType: 'interaction_record'
-      }
+        updateType: 'interaction_record',
+      },
     });
     window.dispatchEvent(event);
   }
@@ -356,7 +360,7 @@ export class AgentMemoryService {
     }
 
     const debugAttempts = memory.situation_tracking.debug_attempts;
-    
+
     if (!debugAttempts.attempted_directions.includes(direction)) {
       debugAttempts.attempted_directions.push(direction);
     }
@@ -368,7 +372,7 @@ export class AgentMemoryService {
     if (codeVersion) {
       const codeEvolution = memory.situation_tracking.code_evolution;
       codeEvolution.current_version = codeVersion;
-      
+
       if (success) {
         if (!codeEvolution.working_versions.includes(codeVersion)) {
           codeEvolution.working_versions.push(codeVersion);
@@ -405,7 +409,7 @@ export class AgentMemoryService {
     agentType: AgentType,
     statedGoals: string[] = [],
     inferredGoals: string[] = [],
-    currentFocus: string = '',
+    currentFocus = '',
     blockedOn: string[] = []
   ): void {
     let memory = this.getAgentMemory(notebookId, agentType);
@@ -414,15 +418,15 @@ export class AgentMemoryService {
     }
 
     const intent = memory.user_intent_observations;
-    
+
     // 添加新的目标，避免重复
-    statedGoals.forEach(goal => {
+    statedGoals.forEach((goal) => {
       if (!intent.stated_goals.includes(goal)) {
         intent.stated_goals.push(goal);
       }
     });
-    
-    inferredGoals.forEach(goal => {
+
+    inferredGoals.forEach((goal) => {
       if (!intent.inferred_goals.includes(goal)) {
         intent.inferred_goals.push(goal);
       }
@@ -431,7 +435,7 @@ export class AgentMemoryService {
     if (currentFocus) {
       intent.progress_markers.current_focus = currentFocus;
     }
-    
+
     intent.progress_markers.blocked_on = blockedOn;
 
     this.updateAgentMemory(notebookId, agentType, memory);
@@ -452,19 +456,22 @@ export class AgentMemoryService {
     const contextRecord = {
       context_update: contextData,
       timestamp: Date.now(),
-      agent_type: agentType
+      agent_type: agentType,
     };
 
     // 如果没有专门的上下文存储字段，我们可以将其添加到situation_tracking中
     if (!memory.situation_tracking.current_context) {
       memory.situation_tracking.current_context = [];
     }
-    
+
     memory.situation_tracking.current_context.unshift(contextRecord);
-    
+
     // 只保留最近10个上下文记录
     if (memory.situation_tracking.current_context.length > 10) {
-      memory.situation_tracking.current_context = memory.situation_tracking.current_context.slice(0, 10);
+      memory.situation_tracking.current_context = memory.situation_tracking.current_context.slice(
+        0,
+        10
+      );
     }
 
     this.updateAgentMemory(notebookId, agentType, memory);
@@ -488,50 +495,59 @@ export class AgentMemoryService {
   ): any {
     // 如果notebookId为null，生成一个临时的session ID
     const effectiveNotebookId = notebookId || `temp-session-${Date.now()}`;
-    
+
     console.log('prepareMemoryContextForBackend:', {
       original_notebookId: notebookId,
       effective_notebookId: effectiveNotebookId,
-      agentType
+      agentType,
     });
-    
+
     const memory = this.getAgentMemory(effectiveNotebookId, agentType);
-    
+
     return {
       agent_memory: memory,
       current_context: currentContext,
       notebook_id: effectiveNotebookId,
-      agent_type: agentType
+      agent_type: agentType,
     };
   }
 
   // 检查是否应该终止
-  static shouldTerminate(notebookId: string, agentType: AgentType): { shouldTerminate: boolean; reason: string } {
+  static shouldTerminate(
+    notebookId: string,
+    agentType: AgentType
+  ): { shouldTerminate: boolean; reason: string } {
     const memory = this.getAgentMemory(notebookId, agentType);
     if (!memory) {
       return { shouldTerminate: false, reason: '' };
     }
 
     const { current_counts, max_iterations } = memory.termination_conditions;
-    
+
     if (agentType === 'debug' && current_counts.debug_cycles >= max_iterations.debug_cycles) {
-      return { 
-        shouldTerminate: true, 
-        reason: `已进行${current_counts.debug_cycles}次debug尝试，建议换个思路或寻求帮助` 
+      return {
+        shouldTerminate: true,
+        reason: `已进行${current_counts.debug_cycles}次debug尝试，建议换个思路或寻求帮助`,
       };
     }
-    
-    if (agentType === 'command' && current_counts.code_generations >= max_iterations.code_generations) {
-      return { 
-        shouldTerminate: true, 
-        reason: `已生成${current_counts.code_generations}个代码版本，建议暂停整理思路` 
+
+    if (
+      agentType === 'command' &&
+      current_counts.code_generations >= max_iterations.code_generations
+    ) {
+      return {
+        shouldTerminate: true,
+        reason: `已生成${current_counts.code_generations}个代码版本，建议暂停整理思路`,
       };
     }
-    
-    if (agentType === 'general' && current_counts.question_rounds >= max_iterations.question_rounds) {
-      return { 
-        shouldTerminate: true, 
-        reason: `问答轮次过多，建议总结当前进展` 
+
+    if (
+      agentType === 'general' &&
+      current_counts.question_rounds >= max_iterations.question_rounds
+    ) {
+      return {
+        shouldTerminate: true,
+        reason: `问答轮次过多，建议总结当前进展`,
       };
     }
 
@@ -539,7 +555,11 @@ export class AgentMemoryService {
   }
 
   // 重置特定类型的计数器
-  static resetCounter(notebookId: string, agentType: AgentType, counterType: 'debug_cycles' | 'code_generations' | 'question_rounds'): void {
+  static resetCounter(
+    notebookId: string,
+    agentType: AgentType,
+    counterType: 'debug_cycles' | 'code_generations' | 'question_rounds'
+  ): void {
     const memory = this.getAgentMemory(notebookId, agentType);
     if (memory) {
       memory.termination_conditions.current_counts[counterType] = 0;
@@ -553,7 +573,7 @@ export class AgentMemoryService {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.memories));
       // 触发自定义事件通知组件更新
       const event = new CustomEvent('agentMemoryUpdated', {
-        detail: { timestamp: Date.now() }
+        detail: { timestamp: Date.now() },
       });
       window.dispatchEvent(event);
     } catch (error) {
@@ -575,15 +595,15 @@ export class AgentMemoryService {
 
   // 清理过期记忆
   static cleanupExpiredMemories(): void {
-    const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-    
-    Object.keys(this.memories).forEach(agent_id => {
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    Object.keys(this.memories).forEach((agent_id) => {
       const memory = this.memories[agent_id];
       if (memory && memory.last_updated < oneWeekAgo) {
         delete this.memories[agent_id];
       }
     });
-    
+
     this.saveToStorage();
   }
 
@@ -603,21 +623,21 @@ export class AgentMemoryService {
     try {
       let total = 0;
       let used = 0;
-      
+
       // 估算localStorage使用量
       for (let key in localStorage) {
-        if (localStorage.hasOwnProperty(key)) {
+        if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
           used += localStorage[key].length + key.length;
         }
       }
-      
+
       // 大多数浏览器localStorage限制为5-10MB
       total = 5 * 1024 * 1024; // 5MB
-      
+
       return {
         used,
         total,
-        percentage: Math.round((used / total) * 100)
+        percentage: Math.round((used / total) * 100),
       };
     } catch (error) {
       console.error('获取存储使用情况失败:', error);
@@ -627,26 +647,26 @@ export class AgentMemoryService {
 
   // 压缩存储数据
   static compressMemories(): void {
-    Object.keys(this.memories).forEach(agent_id => {
+    Object.keys(this.memories).forEach((agent_id) => {
       const memory = this.memories[agent_id];
       if (memory) {
         // 减少交互历史保留数量
         if (memory.interactions.length > 20) {
           memory.interactions = memory.interactions.slice(0, 20);
         }
-        
+
         // 减少成功交互记录
         if (memory.situation_tracking.successful_interactions.length > 10) {
-          memory.situation_tracking.successful_interactions = 
+          memory.situation_tracking.successful_interactions =
             memory.situation_tracking.successful_interactions.slice(-10);
         }
-        
+
         // 减少失败尝试记录
         if (memory.situation_tracking.failed_attempts.length > 15) {
-          memory.situation_tracking.failed_attempts = 
+          memory.situation_tracking.failed_attempts =
             memory.situation_tracking.failed_attempts.slice(-15);
         }
-        
+
         // 清理过长的代码版本历史
         const codeEvolution = memory.situation_tracking.code_evolution;
         if (codeEvolution.working_versions.length > 5) {
@@ -657,7 +677,7 @@ export class AgentMemoryService {
         }
       }
     });
-    
+
     this.saveToStorage();
     console.log('记忆数据已压缩');
   }
@@ -667,13 +687,13 @@ export class AgentMemoryService {
     const stats = {
       total_agents: Object.keys(this.memories).length,
       by_type: {} as Record<AgentType, number>,
-      by_notebook: {} as Record<string, number>
+      by_notebook: {} as Record<string, number>,
     };
 
-    Object.values(this.memories).forEach(memory => {
+    Object.values(this.memories).forEach((memory) => {
       // 按类型统计
       stats.by_type[memory.agent_type] = (stats.by_type[memory.agent_type] || 0) + 1;
-      
+
       // 按notebook统计
       stats.by_notebook[memory.notebook_id] = (stats.by_notebook[memory.notebook_id] || 0) + 1;
     });

@@ -3,7 +3,12 @@
  */
 
 interface NavigationEvent {
-  type: 'navigation_attempt' | 'navigation_success' | 'navigation_blocked' | 'focus_change' | 'edit_mode_change';
+  type:
+    | 'navigation_attempt'
+    | 'navigation_success'
+    | 'navigation_blocked'
+    | 'focus_change'
+    | 'edit_mode_change';
   cellId: string;
   cellType: string;
   direction?: 'up' | 'down' | 'left' | 'right';
@@ -36,9 +41,9 @@ class EditorLogger {
 
   private addLog(event: NavigationEvent) {
     if (!this.enabled) return;
-    
+
     this.logs.push(event);
-    
+
     // 保持日志数量在限制内
     if (this.logs.length > this.maxLogs) {
       this.logs = this.logs.slice(-this.maxLogs);
@@ -47,48 +52,61 @@ class EditorLogger {
     // 输出到控制台（开发环境）
     if (process.env.NODE_ENV === 'development') {
       const color = this.getLogColor(event.type);
-      console.log(
-        `%c[EditorNav] ${event.type}`,
-        `color: ${color}; font-weight: bold;`,
-        {
-          cellId: event.cellId.substring(0, 8),
-          cellType: event.cellType,
-          direction: event.direction,
-          isEditing: event.isEditing,
-          cursorPos: event.cursorPosition,
-          reason: event.reason,
-          fromCell: event.fromCell?.substring(0, 8),
-          toCell: event.toCell?.substring(0, 8),
-        }
-      );
+      console.log(`%c[EditorNav] ${event.type}`, `color: ${color}; font-weight: bold;`, {
+        cellId: event.cellId.substring(0, 8),
+        cellType: event.cellType,
+        direction: event.direction,
+        isEditing: event.isEditing,
+        cursorPos: event.cursorPosition,
+        reason: event.reason,
+        fromCell: event.fromCell?.substring(0, 8),
+        toCell: event.toCell?.substring(0, 8),
+      });
     }
   }
 
   private getLogColor(type: NavigationEvent['type']): string {
     switch (type) {
-      case 'navigation_attempt': return '#3b82f6'; // 蓝色
-      case 'navigation_success': return '#10b981'; // 绿色
-      case 'navigation_blocked': return '#ef4444'; // 红色
-      case 'focus_change': return '#f59e0b'; // 橙色
-      case 'edit_mode_change': return '#8b5cf6'; // 紫色
-      default: return '#6b7280'; // 灰色
+      case 'navigation_attempt':
+        return '#3b82f6'; // 蓝色
+      case 'navigation_success':
+        return '#10b981'; // 绿色
+      case 'navigation_blocked':
+        return '#ef4444'; // 红色
+      case 'focus_change':
+        return '#f59e0b'; // 橙色
+      case 'edit_mode_change':
+        return '#8b5cf6'; // 紫色
+      default:
+        return '#6b7280'; // 灰色
     }
   }
 
   // 记录导航尝试
-  logNavigationAttempt(cellId: string, cellType: string, direction: 'up' | 'down' | 'left' | 'right', cursorInfo: any) {
+  logNavigationAttempt(
+    cellId: string,
+    cellType: string,
+    direction: 'up' | 'down' | 'left' | 'right',
+    cursorInfo: any
+  ) {
     this.addLog({
       type: 'navigation_attempt',
       cellId,
       cellType,
       direction,
       cursorPosition: cursorInfo,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
   // 记录导航成功
-  logNavigationSuccess(fromCellId: string, toCellId: string, fromType: string, toType: string, direction: 'up' | 'down' | 'left' | 'right') {
+  logNavigationSuccess(
+    fromCellId: string,
+    toCellId: string,
+    fromType: string,
+    toType: string,
+    direction: 'up' | 'down' | 'left' | 'right'
+  ) {
     this.addLog({
       type: 'navigation_success',
       cellId: toCellId,
@@ -96,19 +114,24 @@ class EditorLogger {
       direction,
       fromCell: fromCellId,
       toCell: toCellId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
   // 记录导航被阻止
-  logNavigationBlocked(cellId: string, cellType: string, direction: 'up' | 'down' | 'left' | 'right', reason: string) {
+  logNavigationBlocked(
+    cellId: string,
+    cellType: string,
+    direction: 'up' | 'down' | 'left' | 'right',
+    reason: string
+  ) {
     this.addLog({
       type: 'navigation_blocked',
       cellId,
       cellType,
       direction,
       reason,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -119,7 +142,7 @@ class EditorLogger {
       cellId,
       cellType,
       reason: hasFocus ? 'gained_focus' : 'lost_focus',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -131,12 +154,12 @@ class EditorLogger {
       cellType,
       isEditing,
       reason: isEditing ? 'enter_edit_mode' : 'exit_edit_mode',
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
   // 获取最近的日志
-  getRecentLogs(count: number = 10): NavigationEvent[] {
+  getRecentLogs(count = 10): NavigationEvent[] {
     return this.logs.slice(-count);
   }
 
@@ -153,10 +176,10 @@ class EditorLogger {
       navigation_blocked: 0,
       focus_change: 0,
       edit_mode_change: 0,
-      total: this.logs.length
+      total: this.logs.length,
     };
 
-    this.logs.forEach(log => {
+    this.logs.forEach((log) => {
       stats[log.type]++;
     });
 
@@ -175,7 +198,7 @@ class EditorLogger {
       mostCommonDirection: '',
       blockedNavigations: 0,
       successfulNavigations: 0,
-      averageNavigationTime: 0
+      averageNavigationTime: 0,
     };
 
     const cellActivity: { [key: string]: number } = {};
@@ -183,7 +206,7 @@ class EditorLogger {
     const navigationTimes: number[] = [];
     let lastNavigationTime = 0;
 
-    this.logs.forEach(log => {
+    this.logs.forEach((log) => {
       // 统计cell活动
       const shortId = log.cellId.substring(0, 8);
       cellActivity[shortId] = (cellActivity[shortId] || 0) + 1;
@@ -198,7 +221,7 @@ class EditorLogger {
         patterns.blockedNavigations++;
       } else if (log.type === 'navigation_success') {
         patterns.successfulNavigations++;
-        
+
         // 计算导航间隔时间
         if (lastNavigationTime > 0) {
           navigationTimes.push(log.timestamp - lastNavigationTime);
@@ -208,18 +231,21 @@ class EditorLogger {
     });
 
     // 找出最活跃的cell
-    patterns.mostActiveCell = Object.keys(cellActivity).reduce((a, b) => 
-      cellActivity[a] > cellActivity[b] ? a : b, ''
+    patterns.mostActiveCell = Object.keys(cellActivity).reduce(
+      (a, b) => (cellActivity[a] > cellActivity[b] ? a : b),
+      ''
     );
 
     // 找出最常用的方向
-    patterns.mostCommonDirection = Object.keys(directionCount).reduce((a, b) => 
-      directionCount[a] > directionCount[b] ? a : b, ''
+    patterns.mostCommonDirection = Object.keys(directionCount).reduce(
+      (a, b) => (directionCount[a] > directionCount[b] ? a : b),
+      ''
     );
 
     // 计算平均导航时间
     if (navigationTimes.length > 0) {
-      patterns.averageNavigationTime = navigationTimes.reduce((a, b) => a + b, 0) / navigationTimes.length;
+      patterns.averageNavigationTime =
+        navigationTimes.reduce((a, b) => a + b, 0) / navigationTimes.length;
     }
 
     return patterns;

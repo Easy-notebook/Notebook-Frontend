@@ -1,18 +1,39 @@
-import React from 'react';
+import * as React from 'react';
+import * as ProgressPrimitive from '@radix-ui/react-progress';
 
-interface ProgressProps {
-  value?: number;
-  max?: number;
-  className?: string;
+import { cn } from '@/lib/utils';
+
+function Progress({
+  className,
+  value,
+  ...props
+}: React.ComponentProps<typeof ProgressPrimitive.Root>) {
+  return (
+    <ProgressPrimitive.Root
+      data-slot="progress"
+      className={cn(
+        // Base container styles - Fluent Design
+        'relative h-1.5 w-full overflow-hidden rounded-full',
+        'bg-secondary',
+
+        className
+      )}
+      {...props}
+    >
+      <ProgressPrimitive.Indicator
+        data-slot="progress-indicator"
+        className={cn(
+          // Fluent progress bar
+          'h-full w-full flex-1',
+          'bg-primary',
+
+          // Smooth animations
+          'transition-all duration-300 ease-out'
+        )}
+        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
+      />
+    </ProgressPrimitive.Root>
+  );
 }
 
-const Progress: React.FC<ProgressProps> = ({ value = 0, max = 100, className = '' }) => (
-  <div className={`w-full bg-gray-200 rounded-full h-2.5 ${className}`}>
-    <div 
-      className="bg-theme-600 h-2.5 rounded-full transition-all duration-300"
-      style={{ width: `${Math.min((value / max) * 100, 100)}%` }}
-    />
-  </div>
-);
-
-export default Progress;
+export { Progress };

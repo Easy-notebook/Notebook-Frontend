@@ -1,6 +1,7 @@
 import { useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlusCircle, Sparkles } from 'lucide-react';
+import { Acrylic } from '@/components/UI/fluent';
 
 const VUE_SECONDARY = '#35495E';
 
@@ -21,36 +22,27 @@ const CellDivider = memo<CellDividerProps>(({ index, onAddCell, viewMode }) => {
       onMouseLeave={() => setIsHovered(false)}
     >
       {isHovered && (viewMode === 'complete' || viewMode === 'create') && (
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 bg-white/80 backdrop-blur-md shadow-lg rounded-2xl p-2 z-10">
-          <button
-            onClick={() => onAddCell('code', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <PlusCircle size={16} />
+        <Acrylic
+          variant="default"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 p-2 z-10"
+        >
+          <button onClick={() => onAddCell('code', index)} className="btn btn-secondary btn-sm">
+            <PlusCircle className="icon-sm" />
             {t('cell.addCodeCell')}
           </button>
-          <button
-            onClick={() => onAddCell('markdown', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <PlusCircle size={16} />
+          <button onClick={() => onAddCell('markdown', index)} className="btn btn-secondary btn-sm">
+            <PlusCircle className="icon-sm" />
             {t('cell.addTextCell')}
           </button>
-          <button
-            onClick={() => onAddCell('image', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <PlusCircle size={16} />
+          <button onClick={() => onAddCell('image', index)} className="btn btn-secondary btn-sm">
+            <PlusCircle className="icon-sm" />
             图片
           </button>
-          <button
-            onClick={() => onAddCell('file', index)}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm" style={{ color: VUE_SECONDARY }}
-          >
-            <Sparkles size={16} />
+          <button onClick={() => onAddCell('file', index)} className="btn btn-primary btn-sm">
+            <Sparkles className="icon-sm" />
             {t('cell.aiGenerate')}
           </button>
-        </div>
+        </Acrylic>
       )}
     </div>
   );

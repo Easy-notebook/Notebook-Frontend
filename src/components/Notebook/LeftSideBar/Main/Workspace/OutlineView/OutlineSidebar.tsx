@@ -17,9 +17,8 @@ import {
   TabSwitcher,
   SidebarContainer,
   SidebarHeader,
-  SidebarContent
+  SidebarContent,
 } from '@LeftSidebar/shared/components';
-
 
 interface OutlineSidebarProps {
   tasks: Array<{
@@ -47,7 +46,6 @@ const OutlineSidebar = ({
   viewMode,
   onAgentSelect,
 }: OutlineSidebarProps) => {
-
   const isCollapsed = useStore((state) => state.isCollapsed);
   const setIsCollapsed = useStore((state) => state.setIsCollapsed);
   const settingstore = useSettingsStore();
@@ -59,7 +57,7 @@ const OutlineSidebar = ({
     if (settingstore.settingsOpen) {
       return 'settings';
     }
-    
+
     switch (currentView) {
       case 'empty':
         return 'new-notebook';
@@ -84,8 +82,8 @@ const OutlineSidebar = ({
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
     const initialState: Record<string, boolean> = {};
-    tasks.forEach(task => {
-      task.phases.forEach(phase => {
+    tasks.forEach((task) => {
+      task.phases.forEach((phase) => {
         initialState[phase.id] = phase.id === currentPhaseId;
       });
     });
@@ -94,9 +92,7 @@ const OutlineSidebar = ({
 
   const currentTask = useMemo(() => {
     if (!currentPhaseId) return null;
-    return tasks.find(task =>
-      task.phases.some(phase => phase.id === currentPhaseId)
-    );
+    return tasks.find((task) => task.phases.some((phase) => phase.id === currentPhaseId));
   }, [tasks, currentPhaseId]);
 
   const projectName = currentTask?.title || (tasks && tasks.length > 0 ? tasks[0].title : '');
@@ -106,37 +102,43 @@ const OutlineSidebar = ({
   }, [setIsCollapsed, isCollapsed]);
 
   const toggleSection = useCallback((sectionId: string) => {
-    setExpandedSections(prev => ({
+    setExpandedSections((prev) => ({
       ...prev,
-      [sectionId]: !prev[sectionId]
+      [sectionId]: !prev[sectionId],
     }));
   }, []);
 
-  const handlePhaseClick = useCallback((phaseId: string | null) => {
-    if (phaseId === null) {
-      toggleCollapse();
-      return;
-    }
-    const phase = tasks.flatMap(task => task.phases).find(p => p.id === phaseId);
-    if (phase && phase.steps.length > 0) {
-      onPhaseSelect(phaseId, phase.steps[0].id);
-      setExpandedSections(prev => ({
-        ...prev,
-        [phaseId]: true
-      }));
-    }
-  }, [toggleCollapse, onPhaseSelect, tasks]);
+  const handlePhaseClick = useCallback(
+    (phaseId: string | null) => {
+      if (phaseId === null) {
+        toggleCollapse();
+        return;
+      }
+      const phase = tasks.flatMap((task) => task.phases).find((p) => p.id === phaseId);
+      if (phase && phase.steps.length > 0) {
+        onPhaseSelect(phaseId, phase.steps[0].id);
+        setExpandedSections((prev) => ({
+          ...prev,
+          [phaseId]: true,
+        }));
+      }
+    },
+    [toggleCollapse, onPhaseSelect, tasks]
+  );
 
-  const handleAgentSelect = useCallback((agentType: AgentType) => {
-    setSelectedAgentType(agentType);
-    onAgentSelect?.(agentType);
-  }, [onAgentSelect]);
+  const handleAgentSelect = useCallback(
+    (agentType: AgentType) => {
+      setSelectedAgentType(agentType);
+      onAgentSelect?.(agentType);
+    },
+    [onAgentSelect]
+  );
 
-  const allPhases = useMemo(() => tasks.flatMap(task => task.phases), [tasks]);
+  const allPhases = useMemo(() => tasks.flatMap((task) => task.phases), [tasks]);
 
   const renderBottomSection = useCallback(() => {
     if (viewMode === 'step' && currentPhaseId) {
-      const currentPhase = allPhases.find(p => p.id === currentPhaseId);
+      const currentPhase = allPhases.find((p) => p.id === currentPhaseId);
       return (
         <div className="w-full h-20 pl-7 flex items-center border-t border-gray-200 relative">
           <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
@@ -163,14 +165,14 @@ const OutlineSidebar = ({
 
   useEffect(() => {
     if (currentStepId) {
-      const allPhasesFlat = tasks.flatMap(task => task.phases);
-      const phaseOfcurrentStep = allPhasesFlat.find(phase =>
-        phase.steps.some(step => step.id === currentStepId)
+      const allPhasesFlat = tasks.flatMap((task) => task.phases);
+      const phaseOfcurrentStep = allPhasesFlat.find((phase) =>
+        phase.steps.some((step) => step.id === currentStepId)
       );
       if (phaseOfcurrentStep) {
-        setExpandedSections(prev => ({
+        setExpandedSections((prev) => ({
           ...prev,
-          [phaseOfcurrentStep.id]: true
+          [phaseOfcurrentStep.id]: true,
         }));
       }
     }
@@ -210,12 +212,9 @@ const OutlineSidebar = ({
         >
           {/* 简化的头部区域：只显示 Tab 切换 + 设置按钮 */}
           <SidebarHeader>
-            <div className="flex items-center bg-white align-center w-full justify-center flex-col">
+            <div className="flex items-center bg-transparent dark:bg-transparent align-center w-full justify-center flex-col">
               {/* Tab 切换器 */}
-              <TabSwitcher
-                activeTab={activeTab}
-                onTabChange={setActiveTab}
-              />
+              <TabSwitcher activeTab={activeTab} onTabChange={setActiveTab} />
             </div>
           </SidebarHeader>
 

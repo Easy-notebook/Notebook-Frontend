@@ -15,6 +15,4 @@ export interface NotebookHistoryCardProps {
   onToggleStar: (notebookId: string, e: React.MouseEvent) => void;
 }
 
-export interface EmptySidebarProps {
-  // Additional props if needed in the future
-}
+export type EmptySidebarProps = Record<string, never>;

@@ -20,7 +20,7 @@ export const CompactModeView: React.FC<CompactModeViewProps> = ({
 }) => {
   return (
     <div className="code-cell-container bg-white/90 shadow-sm rounded-lg backdrop-blur-sm border-2 border-theme-300">
-      <div className="flex items-center justify-between p-3 rounded-lg bg-theme-50/50">
+      <div className="flex items-center justify-between p-3 rounded-lg">
         <div className="flex items-center gap-2">
           <ExternalLink className="w-4 h-4 text-theme-500" />
           <span className="text-sm font-medium text-theme-700">Cell opened in split view</span>

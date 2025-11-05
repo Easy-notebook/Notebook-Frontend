@@ -54,10 +54,11 @@ const scrollToTarget = (elementId: string): void => {
     requestAnimationFrame(() => {
       const targetElement = document.getElementById(elementId);
       if (targetElement) {
-        const scrollContainer = document.querySelector('.flex-1.overflow-y-auto.scroll-smooth') ||
-                               document.querySelector('.flex-1.overflow-y-auto') ||
-                               document.querySelector('[class*="overflow-y-auto"]') ||
-                               document.documentElement;
+        const scrollContainer =
+          document.querySelector('.flex-1.overflow-y-auto.scroll-smooth') ||
+          document.querySelector('.flex-1.overflow-y-auto') ||
+          document.querySelector('[class*="overflow-y-auto"]') ||
+          document.documentElement;
 
         const targetRect = targetElement.getBoundingClientRect();
         const containerRect = scrollContainer.getBoundingClientRect();
@@ -68,7 +69,7 @@ const scrollToTarget = (elementId: string): void => {
           const scrollTop = targetRect.top - containerRect.top + scrollContainer.scrollTop - 20;
           scrollContainer.scrollTo({
             top: scrollTop,
-            behavior: 'smooth'
+            behavior: 'smooth',
           });
         }
         return;
@@ -79,12 +80,16 @@ const scrollToTarget = (elementId: string): void => {
       if (tiptapContainer) {
         const [baseId, key] = elementId.includes('--') ? elementId.split('--') : [elementId, ''];
         let heading = null as HTMLElement | null;
-        
+
         if (key) {
-          heading = tiptapContainer.querySelector(`[data-base-id="${CSS.escape(baseId)}"][data-heading-key="${CSS.escape(key)}"]`) as HTMLElement | null;
+          heading = tiptapContainer.querySelector(
+            `[data-base-id="${CSS.escape(baseId)}"][data-heading-key="${CSS.escape(key)}"]`
+          ) as HTMLElement | null;
         }
         if (!heading) {
-          heading = tiptapContainer.querySelector(`#${CSS.escape(elementId)}`) as HTMLElement | null;
+          heading = tiptapContainer.querySelector(
+            `#${CSS.escape(elementId)}`
+          ) as HTMLElement | null;
         }
 
         if (heading) {
@@ -109,10 +114,7 @@ export const StepButton = memo(({ step, isActive, onClick }: StepButtonProps) =>
     onClick={onClick}
     className={`${NB_TEXT_CLASS} ${NB_TRANSITION}`}
   >
-    <StatusDot
-      status={isActive ? 'in-progress' : 'pending'}
-      size="sm"
-    />
+    <StatusDot status={isActive ? 'in-progress' : 'pending'} size="sm" />
     <span className="font-normal">{step.title}</span>
   </SidebarButton>
 ));
@@ -127,166 +129,199 @@ interface PhaseSectionProps {
   isTitle: boolean;
 }
 
-export const PhaseSection = memo(({
-  phase,
-  isExpanded,
-  onToggle,
-  onStepSelect,
-  isActive,
-  currentStepId,
-  isTitle
-}: PhaseSectionProps) => {
-  // 使用 useMemo 缓存计算值，提升性能
-  const IconComponent = useMemo(() => 
-    iconMapping[phase.icon as keyof typeof iconMapping] || CheckCircle2, 
-    [phase.icon]
-  );
-  
-  const { introStep, regularSteps } = useMemo(() => ({
-    introStep: phase.steps[0],
-    regularSteps: phase.steps.slice(1)
-  }), [phase.steps]);
+export const PhaseSection = memo(
+  ({
+    phase,
+    isExpanded,
+    onToggle,
+    onStepSelect,
+    isActive,
+    currentStepId,
+    isTitle,
+  }: PhaseSectionProps) => {
+    // 使用 useMemo 缓存计算值，提升性能
+    const IconComponent = useMemo(
+      () => iconMapping[phase.icon as keyof typeof iconMapping] || CheckCircle2,
+      [phase.icon]
+    );
 
-  const { isCurrentStep, hasSubSteps } = useMemo(() => ({
-    isCurrentStep: currentStepId === introStep?.id,
-    hasSubSteps: regularSteps.length > 0
-  }), [currentStepId, introStep?.id, regularSteps.length]);
+    const { introStep, regularSteps } = useMemo(
+      () => ({
+        introStep: phase.steps[0],
+        regularSteps: phase.steps.slice(1),
+      }),
+      [phase.steps]
+    );
 
-  // 生成唯一的 element ID，与编辑器保持一致
-  const generateUniqueElementId = useCallback((stepId: string): string => {
-    const stepTitle = phase.steps.find(s => s.id === stepId)?.title;
-    if (!stepTitle) return phase.id;
+    const { isCurrentStep, hasSubSteps } = useMemo(
+      () => ({
+        isCurrentStep: currentStepId === introStep?.id,
+        hasSubSteps: regularSteps.length > 0,
+      }),
+      [currentStepId, introStep?.id, regularSteps.length]
+    );
 
-    const baseId = phase.id;
-    const rawSlug = generateSlug(stepTitle);
-    const siblings = phase.steps.filter(s => s.title === stepTitle);
-    
-    if (siblings.length <= 1) {
-      return `${baseId}--${rawSlug}`;
-    }
+    // 生成唯一的 element ID，与编辑器保持一致
+    const generateUniqueElementId = useCallback(
+      (stepId: string): string => {
+        const stepTitle = phase.steps.find((s) => s.id === stepId)?.title;
+        if (!stepTitle) return phase.id;
 
-    const indexAmongSame = siblings.findIndex(s => s.id === stepId);
-    const uniqueSlug = indexAmongSame > 0 ? `${rawSlug}-${indexAmongSame + 1}` : rawSlug;
-    return `${baseId}--${uniqueSlug}`;
-  }, [phase.id, phase.steps]);
+        const baseId = phase.id;
+        const rawSlug = generateSlug(stepTitle);
+        const siblings = phase.steps.filter((s) => s.title === stepTitle);
 
-  const handleStepClick = useCallback((stepId: string) => {
-    onStepSelect(phase.id, stepId);
+        if (siblings.length <= 1) {
+          return `${baseId}--${rawSlug}`;
+        }
 
-    // 生成唯一的元素 ID 并滚动
-    const elementId = generateUniqueElementId(stepId);
-    scrollToTarget(elementId);
+        const indexAmongSame = siblings.findIndex((s) => s.id === stepId);
+        const uniqueSlug = indexAmongSame > 0 ? `${rawSlug}-${indexAmongSame + 1}` : rawSlug;
+        return `${baseId}--${uniqueSlug}`;
+      },
+      [phase.id, phase.steps]
+    );
 
-    // Fallback: 尝试不带序号的版本
-    const stepTitle = phase.steps.find(s => s.id === stepId)?.title;
-    if (stepTitle) {
-      const fallbackId = `${phase.id}--${generateSlug(stepTitle)}`;
-      setTimeout(() => {
-        scrollToTarget(fallbackId);
-      }, 150);
-    }
-  }, [phase.id, phase.steps, onStepSelect, generateUniqueElementId]);
+    const handleStepClick = useCallback(
+      (stepId: string) => {
+        onStepSelect(phase.id, stepId);
 
-  const handleTitleClick = useCallback(() => {
-    if (!introStep) return;
-    
-    onStepSelect(phase.id, introStep.id);
-    if (hasSubSteps) {
-      onToggle();
-    }
+        // 生成唯一的元素 ID 并滚动
+        const elementId = generateUniqueElementId(stepId);
+        scrollToTarget(elementId);
 
-    // 滚动到对应元素
-    scrollToTarget(phase.id);
-  }, [phase.id, introStep, onStepSelect, onToggle, hasSubSteps]);
+        // Fallback: 尝试不带序号的版本
+        const stepTitle = phase.steps.find((s) => s.id === stepId)?.title;
+        if (stepTitle) {
+          const fallbackId = `${phase.id}--${generateSlug(stepTitle)}`;
+          setTimeout(() => {
+            scrollToTarget(fallbackId);
+          }, 150);
+        }
+      },
+      [phase.id, phase.steps, onStepSelect, generateUniqueElementId]
+    );
 
-  // 计算动态样式类
-  const buttonClasses = useMemo(() => `
+    const handleTitleClick = useCallback(() => {
+      if (!introStep) return;
+
+      onStepSelect(phase.id, introStep.id);
+      if (hasSubSteps) {
+        onToggle();
+      }
+
+      // 滚动到对应元素
+      scrollToTarget(phase.id);
+    }, [phase.id, introStep, onStepSelect, onToggle, hasSubSteps]);
+
+    // 计算动态样式类
+    const buttonClasses = useMemo(
+      () => `
     w-full flex items-center p-2.5 rounded-lg
     ${SHARED_STYLES.button.base} ${SHARED_STYLES.button.hover}
     ${isActive ? SHARED_STYLES.button.active : ''}
     ${isCurrentStep ? `border-2 border-theme-500 ${NB_SHADOW}` : ''}
     ${NB_TRANSITION}
-  `, [isActive, isCurrentStep]);
+  `,
+      [isActive, isCurrentStep]
+    );
 
-  const iconWrapperClasses = useMemo(() => `
+    const iconWrapperClasses = useMemo(
+      () => `
     w-10 h-10 flex items-center justify-center
     ${StatusStyles.colors[isActive ? 'in-progress' : 'pending']}
     ${NB_TRANSITION}
     relative
     before:absolute before:inset-0 
-  `, [isActive]);
+  `,
+      [isActive]
+    );
 
-  const stepsContainerClasses = useMemo(() => `
+    const stepsContainerClasses = useMemo(
+      () => `
     pl-8 mt-1.5 overflow-hidden ${NB_TRANSITION}
     ${isExpanded ? 'max-h-screen' : 'max-h-0'}
-  `, [isExpanded]);
+  `,
+      [isExpanded]
+    );
 
-  if (!introStep) {
-    console.warn('PhaseSection: introStep is undefined for phase', phase.id);
-    return null;
-  }
+    if (!introStep) {
+      console.warn('PhaseSection: introStep is undefined for phase', phase.id);
+      return null;
+    }
 
-  return (
-    <div className="px-2.5">
-      <div className={`rounded-xl ${NB_TRANSITION}`}>
-        <button
-          onClick={handleTitleClick}
-          className={buttonClasses}
-          aria-expanded={hasSubSteps ? isExpanded : undefined}
-          aria-controls={hasSubSteps ? `steps-${phase.id}` : undefined}
-        >
-          {!isTitle && (
-            <>
-              <div className={iconWrapperClasses}>
-                <IconComponent size={NB_ICON_SIZE} />
+    return (
+      <div className="px-2.5">
+        <div className={`rounded-xl ${NB_TRANSITION}`}>
+          <button
+            onClick={handleTitleClick}
+            className={buttonClasses}
+            aria-expanded={hasSubSteps ? isExpanded : undefined}
+            aria-controls={hasSubSteps ? `steps-${phase.id}` : undefined}
+          >
+            {!isTitle && (
+              <>
+                <div className={iconWrapperClasses}>
+                  <IconComponent size={NB_ICON_SIZE} />
+                </div>
+                <div className="flex-1 min-w-0 flex items-start ml-2">
+                  <h3
+                    className={`font-bold tracking-wide text-base text-black ${NB_TRANSITION} break-words`}
+                  >
+                    {phase.title}
+                  </h3>
+                </div>
+              </>
+            )}
+
+            {isTitle && (
+              <h2
+                className={`pl-2 text-lg font-semibold text-theme-800 ${NB_TRANSITION} break-words`}
+              >
+                {phase.title}
+              </h2>
+            )}
+
+            {hasSubSteps && (
+              <div className="relative px-1.5">
+                {isExpanded ? (
+                  <ChevronDown
+                    size={NB_ICON_SIZE}
+                    className={`text-gray-600 dark:text-gray-400 ${NB_TRANSITION}`}
+                  />
+                ) : (
+                  <ChevronRight
+                    size={NB_ICON_SIZE}
+                    className={`text-gray-600 dark:text-gray-400 ${NB_TRANSITION}`}
+                  />
+                )}
               </div>
-              <div className="flex-1 min-w-0 flex items-start ml-2">
-                <h3 className={`font-bold tracking-wide text-base text-black ${NB_TRANSITION} break-words`}>
-                  {phase.title}
-                </h3>
-              </div>
-            </>
-          )}
+            )}
 
-          {isTitle && (
-            <h2 className={`pl-2 text-lg font-semibold text-theme-800 ${NB_TRANSITION} break-words`}>
-              {phase.title}
-            </h2>
-          )}
+            {isActive && <StatusIcon status="in-progress" />}
+          </button>
 
           {hasSubSteps && (
-            <div className="relative px-1.5">
-              {isExpanded ? (
-                <ChevronDown size={NB_ICON_SIZE} className={`text-gray-600 ${NB_TRANSITION}`} />
-              ) : (
-                <ChevronRight size={NB_ICON_SIZE} className={`text-gray-600 ${NB_TRANSITION}`} />
-              )}
+            <div
+              id={`steps-${phase.id}`}
+              className={stepsContainerClasses}
+              role="region"
+              aria-labelledby={`phase-title-${phase.id}`}
+            >
+              {regularSteps.map((step) => (
+                <StepButton
+                  key={step.id}
+                  step={step}
+                  isActive={currentStepId === step.id}
+                  onClick={() => handleStepClick(step.id)}
+                />
+              ))}
             </div>
           )}
-
-          {isActive && <StatusIcon status="in-progress" />}
-        </button>
-
-        {hasSubSteps && (
-          <div 
-            id={`steps-${phase.id}`}
-            className={stepsContainerClasses}
-            role="region"
-            aria-labelledby={`phase-title-${phase.id}`}
-          >
-            {regularSteps.map((step) => (
-              <StepButton
-                key={step.id}
-                step={step}
-                isActive={currentStepId === step.id}
-                onClick={() => handleStepClick(step.id)}
-              />
-            ))}
-          </div>
-        )}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  }
+);
 
 export default PhaseSection;

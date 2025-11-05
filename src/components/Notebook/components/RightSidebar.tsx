@@ -3,6 +3,7 @@
 
 import AIAgentSidebarOrig from '../RightSideBar/AIAgentSidebar';
 import { RightSidebarResizer } from './RightSidebarResizer';
+import { Mica } from '@/components/UI/fluent';
 
 // Cast component to any to relax prop type constraints
 const AIAgentSidebar: any = AIAgentSidebarOrig;
@@ -27,10 +28,10 @@ export const RightSidebar = ({
   if (!isCollapsed) return null;
 
   return (
-    <div className="flex border-l border-black">
+    <div className="flex h-full">
       <RightSidebarResizer onMouseDown={onResize} />
       <div
-        className="transition-all duration-500 ease-in-out opacity-100 overflow-hidden flex-shrink-0"
+        className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden transition-all duration-500 ease-in-out opacity-100 flex-shrink-0"
         style={{ width: `${width}px` }}
       >
         <AIAgentSidebar

@@ -10,7 +10,7 @@ const ExportToFile = ({
   onExportJson,
   onExportDocx,
   onExportPdf,
-  onExportMarkdown
+  onExportMarkdown,
 }) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -20,20 +20,12 @@ const ExportToFile = ({
     setIsOpen(!isOpen);
   };
 
-  // Main button style
-  const buttonStyle = {
-    backgroundColor: disabled ? '#f1f1f1' : 'white',
-    color: disabled ? '#aaa' : VUE_SECONDARY,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-  };
-
   return (
     <div className="relative">
       <button
         onClick={toggleDropdown}
         disabled={disabled}
-        className="flex items-center gap-2 px-4 py-2 font-medium hover:bg-white/90 rounded-lg transition-colors"
-        style={buttonStyle}
+        className="flex items-center gap-2 px-4 py-2 font-medium rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 dark:text-gray-200"
       >
         <Download size={16} />
         {t('fileOperations.export')}
@@ -41,31 +33,43 @@ const ExportToFile = ({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 py-2 w-48 bg-white rounded-lg shadow-xl z-10">
+        <div className="absolute right-0 mt-2 py-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl z-10 border border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => { onExportJson(); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+            onClick={() => {
+              onExportJson();
+              setIsOpen(false);
+            }}
+            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors"
           >
             <FileDown size={16} />
             {t('exportOptions.exportToJSON')}
           </button>
           <button
-            onClick={() => { onExportDocx(); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+            onClick={() => {
+              onExportDocx();
+              setIsOpen(false);
+            }}
+            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors"
           >
             <FileDown size={16} />
             {t('exportOptions.exportToDocx')}
           </button>
           <button
-            onClick={() => { onExportPdf(); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+            onClick={() => {
+              onExportPdf();
+              setIsOpen(false);
+            }}
+            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors"
           >
             <FileDown size={16} />
             {t('exportOptions.exportToPDF')}
           </button>
           <button
-            onClick={() => { onExportMarkdown(); setIsOpen(false); }}
-            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+            onClick={() => {
+              onExportMarkdown();
+              setIsOpen(false);
+            }}
+            className="flex items-center gap-3 w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors"
           >
             <FileDown size={16} />
             {t('exportOptions.exportToMarkdown')}

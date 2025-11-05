@@ -178,7 +178,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
     const notebookPreviewCover = useMemo(
       () => (
         <div className="h-20 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative">
-          <div className="p-2 space-y-1 bg-theme-50/50">
+          <div className="p-2 space-y-1">
             {loading ? (
               <Skeleton active paragraph={{ rows: 2 }} />
             ) : previewCells.length > 0 ? (
@@ -246,7 +246,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
         </div>
 
         {/* Hover overlay */}
-        <div className="absolute inset-0 bg-theme-500/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+        <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
       </div>
     );
   }

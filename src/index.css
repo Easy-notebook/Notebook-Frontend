@@ -5,238 +5,588 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ====================================================================
+   Fluent Design System - Windows 11 Style (Mica/Acrylic Materials)
+   Inspired by EasyPaper for modern, layered backgrounds
+   ==================================================================== */
+
+:root {
+  /* Fluent Design - Acrylic/Mica material tint colors (RGB for rgba usage) */
+  --acrylic-tint: 252 252 253;
+  --mica-tint: 248 248 250;
+  --mica-alt-tint: 245 245 248;
+
+  /* Fluent Design - Blur amounts for materials */
+  --blur-sm: 20px;
+  --blur-md: 40px;
+  --blur-lg: 80px;
+
+  /* Fluent Design - Motion curves */
+  --motion-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-emphasized: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-decelerate: cubic-bezier(0, 0, 0.2, 1);
+
+  /* Fluent Design - Duration */
+  --duration-fast: 100ms;
+  --duration-normal: 167ms;
+  --duration-slow: 250ms;
+
+  /* Color System - Vue Green Theme */
+  --color-primary: #41b883;
+  --color-primary-light: #52c896;
+  --color-primary-dark: #369870;
+  --color-secondary: #3490dc;
+  --color-accent: #6574cd;
+  --color-neutral: #35495e;
+  --color-neutral-dark: #2c3e50;
+
+  /* Color with Alpha */
+  --color-primary-50: rgba(65, 184, 131, 0.05);
+  --color-primary-100: rgba(65, 184, 131, 0.1);
+  --color-primary-200: rgba(65, 184, 131, 0.2);
+  --color-primary-300: rgba(65, 184, 131, 0.3);
+
+  /* Layout Variables */
+  --sidebar-mini-width: 64px;
+  --sidebar-expanded-width: 384px;
+  --sidebar-collapsed-width: 64px;
+  --sidebar-right-width: 300px;
+
+  /* Dynamic sidebar width - updated by JavaScript */
+  --nb-sidebar-width: 64px; /* Default: collapsed (mini only) */
+
+  /* Effects */
+  --glass-blur: blur(30px) saturate(180%);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.1);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2);
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Sidebar specific transitions - matching EasyPaper */
+  --sidebar-transition: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Mica/Acrylic Material Effects */
+  --mica-tint: 245, 245, 245;
+  --mica-alt-tint: 240, 240, 245;
+}
+
+/* ====================================================================
+   Background Material System - Acrylic Glass Morphism
+   Inspired by EasyPaper's multi-layer background approach
+   ==================================================================== */
+
+/* Glass morphism effect - can be applied to any container */
+.glass-morphism {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* Subtle glass effect for sidebars */
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px) saturate(150%);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+}
+
+/* Noise texture overlay - adds subtle grain for depth */
+.noise-texture::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Gradient background for main container - Enhanced Acrylic effect */
+.gradient-bg {
+  position: relative;
+  background: linear-gradient(to bottom right, #f9fafb, #f3f4f6);
+}
+
+.gradient-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 600px 600px at 20% 20%, rgba(65, 184, 131, 0.15), transparent),
+    radial-gradient(ellipse 500px 500px at 80% 80%, rgba(52, 144, 220, 0.12), transparent),
+    radial-gradient(ellipse 400px 400px at 50% 50%, rgba(101, 116, 205, 0.1), transparent),
+    radial-gradient(ellipse 350px 350px at 90% 10%, rgba(65, 184, 131, 0.08), transparent);
+  animation: float 20s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Enhanced shadow system */
+.shadow-theme-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+.shadow-theme-md {
+  box-shadow: var(--shadow-md);
+}
+
+/* ====================================================================
+   MiniSidebar Active Indicator - Inspired by EasyPaper SidebarTabs
+   Gradient active indicator for visual feedback
+   ==================================================================== */
+
+/* Active indicator for sidebar items */
+.sidebar-item-active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  border-radius: 2px 0 0 2px;
+  transition: var(--transition-normal);
+}
+
+/* Hover effect for sidebar items */
+.sidebar-item-hover {
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-item-hover:hover {
+  background-color: var(--color-primary-50);
+}
+
+.sidebar-item-hover:active {
+  background-color: var(--color-primary-100);
+  transform: scale(0.95);
+}
+
+/* Icon glow effect for active items */
+.icon-glow-active {
+  filter: drop-shadow(0 0 4px var(--color-primary-200));
+}
+
+/* ====================================================================
+   统一按钮系统 - Inspired by Fluent Design
+   ==================================================================== */
+
+/* 按钮基础样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+/* 按钮尺寸 */
+.btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+}
+
+.btn-md {
+  height: 36px;
+  padding: 0 16px;
+}
+
+.btn-lg {
+  height: 40px;
+  padding: 0 20px;
+  font-size: 0.9375rem;
+}
+
+/* 主按钮 */
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: white;
+  box-shadow: 0 2px 4px rgba(65, 184, 131, 0.2);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--color-primary-dark), var(--color-primary));
+  box-shadow: 0 4px 8px rgba(65, 184, 131, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(65, 184, 131, 0.2);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 次要按钮 */
+.btn-secondary {
+  background: var(--color-primary-50);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-100);
+}
+
+.btn-secondary:hover {
+  background: var(--color-primary-100);
+  border-color: var(--color-primary-200);
+}
+
+.btn-secondary:active {
+  background: var(--color-primary-200);
+}
+
+/* 幽灵按钮 */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-neutral);
+}
+
+.btn-ghost:hover {
+  background: var(--color-primary-50);
+  color: var(--color-primary);
+}
+
+.btn-ghost:active {
+  background: var(--color-primary-100);
+}
+
+/* 图标按钮 */
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+.btn-icon-sm {
+  width: 32px;
+  height: 32px;
+}
+
+.btn-icon-lg {
+  width: 40px;
+  height: 40px;
+}
+
+/* ====================================================================
+   输入框系统
+   ==================================================================== */
+
+.input {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  border: 1px solid var(--color-primary-100);
+  border-radius: var(--radius-md);
+  background: white;
+  color: var(--color-neutral-dark);
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-50);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  background: var(--color-primary-50);
+  cursor: not-allowed;
+}
+
+.input::placeholder {
+  color: #9ca3af;
+}
+
+/* Textarea */
+.textarea {
+  min-height: 80px;
+  padding: 8px 12px;
+  resize: vertical;
+}
+
+/* ====================================================================
+   图标统一尺寸
+   ==================================================================== */
+
+.icon-sm {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-md {
+  width: 20px;
+  height: 20px;
+}
+
+.icon-lg {
+  width: 24px;
+  height: 24px;
+}
+
 .prose.max-w-none.p-6.text-lg.leading-relaxed.markdown-cell {
-    padding: 0;
+  padding: 0;
 }
 
 * {
-    /* font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; */
-    font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
-    line-height: 1.4;
-    font-size: 12px;
-    text-align: left;
-    margin-bottom: 0;
+  /* font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"; */
+  font-family:
+    ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji' !important;
+  line-height: 1.4;
+  font-size: 12px;
+  text-align: left;
+  margin-bottom: 0;
 }
 
 /* 确保内部元素也遵循这些样式 */
 .markdown-cell #untitled-cell * {
-    color: inherit !important;
-    border: none !important;
-    background: transparent !important;
+  color: inherit !important;
+  border: none !important;
+  background: transparent !important;
 }
 
 /* 一级标题：渐变文字 */
 .markdown-cell h1 {
-    font-size: 1.8rem;
-    font-weight: 700;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-    color: transparent;
-    -webkit-background-clip: text;
-    background-clip: text;
-    line-height: 1.6;
+  font-size: 1.8rem;
+  font-weight: 700;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  line-height: 1.6;
 }
 
 /* 二级标题：渐变背景 & 白字 */
 .markdown-cell h2 {
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: #fff;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-    border-radius: 5px;
-    padding: 0.2rem 0.5rem;
-    margin-top: 1.5rem;
-    line-height: 1.5;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #fff;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
+  border-radius: 5px;
+  padding: 0.2rem 0.5rem;
+  margin-top: 1.5rem;
+  line-height: 1.5;
 }
 
 /* 三级标题：渐变文字 */
 .markdown-cell h3 {
-    font-size: 1.2rem;
-    font-weight: 600;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-    color: transparent;
-    -webkit-background-clip: text;
-    background-clip: text;
-    margin-top: 1rem;
-    line-height: 1.2;
-    padding-bottom: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  margin-top: 1rem;
+  line-height: 1.2;
+  padding-bottom: 0;
 }
 
 /* 四级标题：渐变文字 + 左侧标记 */
 .markdown-cell h4 {
-    font-size: 1.1rem;
-    font-weight: 500;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-    color: transparent;
-    -webkit-background-clip: text;
-    background-clip: text;
-    margin-top: 1rem;
-    line-height: 1.2rem;
-    padding-left: 0.5rem;
-    border-left: 3px solid #3490DC;
-    padding-bottom: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  margin-top: 1rem;
+  line-height: 1.2rem;
+  padding-left: 0.5rem;
+  border-left: 3px solid #3490dc;
+  padding-bottom: 0;
 }
 
 /* 五级标题：Vue 深蓝文字 */
 .markdown-cell h5 {
-    font-size: 1rem;
-    font-weight: 400;
-    color: #35495E;
-    margin-top: 0.8rem;
-    line-height: 1.2;
+  font-size: 1rem;
+  font-weight: 400;
+  color: #35495e;
+  margin-top: 0.8rem;
+  line-height: 1.2;
 }
 
 /* 六级标题：Vue 深蓝斜体 */
 .markdown-cell h6 {
-    font-size: 0.9rem;
-    font-weight: 400;
-    color: #35495E;
-    margin-top: 0.8rem;
-    line-height: 1.2;
-    font-style: italic;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #35495e;
+  margin-top: 0.8rem;
+  line-height: 1.2;
+  font-style: italic;
 }
 
 .markdown-cell p {
-    font-size: 1rem;
-    line-height: 1.6;
+  font-size: 1rem;
+  line-height: 1.6;
 }
 
 /* 链接：Vue 绿 */
 .markdown-cell a {
-    color: #41B883;
-    text-decoration: none;
-    border-bottom: 1.5px solid #41B883;
-    transition: all 0.2s;
-    font-weight: 500;
+  color: #41b883;
+  text-decoration: none;
+  border-bottom: 1.5px solid #41b883;
+  transition: all 0.2s;
+  font-weight: 500;
 }
 
 .markdown-cell a:hover {
-    color: #3490DC;
-    border-bottom-color: #3490DC;
+  color: #3490dc;
+  border-bottom-color: #3490dc;
 }
 
 /* 代码块背景：Vue 绿淡色 */
 .markdown-cell pre {
-    background-color: rgba(65, 184, 131, 0.05);
-    padding: 1.25rem;
-    border-radius: 0.5rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.875rem;
-    overflow-x: auto;
-    line-height: 1.6;
-    border: 1px solid rgba(65, 184, 131, 0.1);
+  background-color: rgba(65, 184, 131, 0.05);
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  overflow-x: auto;
+  line-height: 1.6;
+  border: 1px solid rgba(65, 184, 131, 0.1);
 }
 
 .markdown-cell code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.875rem;
-    background-color: rgba(65, 184, 131, 0.05);
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    color: #41B883;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  background-color: rgba(65, 184, 131, 0.05);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  color: #41b883;
 }
 
 .cell-cursor {
-    position: absolute;
-    left: -16px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 4px;
-    height: 16px;
-    background-color: #41B883;
-    box-shadow: 0 0 8px rgba(65, 184, 131, 0.5);
-    animation: cursorBlink 1s ease-in-out infinite;
-    border-radius: 2px;
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 16px;
+  background-color: #41b883;
+  box-shadow: 0 0 8px rgba(65, 184, 131, 0.5);
+  animation: cursorBlink 1s ease-in-out infinite;
+  border-radius: 2px;
 }
 
 .cell-highlight {
-    transition: all 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .cell-highlight:hover {
-    background-color: rgba(65, 184, 131, 0.05);
+  background-color: rgba(65, 184, 131, 0.05);
 }
 
 /* 滚动条样式 */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #F9FAFB;
-    border-radius: 4px;
+  background: #f9fafb;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(65, 184, 131, 0.2);
-    border-radius: 4px;
-    transition: background 0.2s;
+  background: rgba(65, 184, 131, 0.2);
+  border-radius: 4px;
+  transition: background 0.2s;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: rgba(65, 184, 131, 0.3);
+  background: rgba(65, 184, 131, 0.3);
 }
 
 * {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(65, 184, 131, 0.2) #F9FAFB;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(65, 184, 131, 0.2) #f9fafb;
 }
 
 /* 列表样式增强 - 支持有序和无序列表 */
 .markdown-cell ul,
 .markdown-cell ol {
-    padding-left: 0.5rem;
-    line-height: 1.6;
-    color: black;
+  padding-left: 0.5rem;
+  line-height: 1.6;
+  color: black;
 }
 
 /* 无序列表样式 */
 .markdown-cell ul {
-    list-style: none;
-    position: relative;
+  list-style: none;
+  position: relative;
 }
 
 .markdown-cell ul li {
-    position: relative;
-    padding-left: 1rem;
-    margin-bottom: 0.2rem;
-    line-height: 1.6;
+  position: relative;
+  padding-left: 1rem;
+  margin-bottom: 0.2rem;
+  line-height: 1.6;
 }
 
 .markdown-cell ul li::before {
-    content: "•";
-    color: #41B883;
-    font-weight: bold;
-    position: absolute;
-    left: 0;
-    top: 0;
-    font-size: 1.2em;
+  content: '•';
+  color: #41b883;
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 1.2em;
 }
 
 /* 有序列表样式 */
 .markdown-cell ol {
-    list-style: none;
-    counter-reset: list-counter;
+  list-style: none;
+  counter-reset: list-counter;
 }
 
 .markdown-cell ol li {
-    position: relative;
-    padding-left: 2rem;
-    margin-bottom: 0.5rem;
-    line-height: 1.6;
-    counter-increment: list-counter;
+  position: relative;
+  padding-left: 2rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+  counter-increment: list-counter;
 }
 
 .markdown-cell ol li::before {
-    content: counter(list-counter) ".";
-    color: #3490DC;
-    font-weight: bold;
-    position: absolute;
-    left: 0;
-    top: 0;
-    min-width: 1.5rem;
-    text-align: right;
+  content: counter(list-counter) '.';
+  color: #3490dc;
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+  top: 0;
+  min-width: 1.5rem;
+  text-align: right;
 }
 
 /* 嵌套列表样式 */
@@ -244,198 +594,201 @@
 .markdown-cell ul ol,
 .markdown-cell ol ul,
 .markdown-cell ol ol {
-    margin: 0.5rem 0;
-    padding-left: 1.5rem;
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
 }
 
 /* 二级无序列表 */
 .markdown-cell ul ul li::before {
-    content: "◦";
-    color: #41B883;
-    font-size: 1.1em;
+  content: '◦';
+  color: #41b883;
+  font-size: 1.1em;
 }
 
 /* 三级无序列表 */
 .markdown-cell ul ul ul li::before {
-    content: "▪";
-    color: #41B883;
-    font-size: 1em;
+  content: '▪';
+  color: #41b883;
+  font-size: 1em;
 }
 
 /* 二级有序列表 */
 .markdown-cell ol ol {
-    counter-reset: sublist-counter;
+  counter-reset: sublist-counter;
 }
 
 .markdown-cell ol ol li {
-    counter-increment: sublist-counter;
+  counter-increment: sublist-counter;
 }
 
 .markdown-cell ol ol li::before {
-    content: counter(list-counter) "." counter(sublist-counter) ".";
-    color: #3490DC;
+  content: counter(list-counter) '.' counter(sublist-counter) '.';
+  color: #3490dc;
 }
 
 /* 三级有序列表 */
 .markdown-cell ol ol ol {
-    counter-reset: subsublist-counter;
+  counter-reset: subsublist-counter;
 }
 
 .markdown-cell ol ol ol li {
-    counter-increment: subsublist-counter;
+  counter-increment: subsublist-counter;
 }
 
 .markdown-cell ol ol ol li::before {
-    content: counter(list-counter) "." counter(sublist-counter) "." counter(subsublist-counter) ".";
-    color: #3490DC;
-    font-size: 0.9em;
+  content: counter(list-counter) '.' counter(sublist-counter) '.' counter(subsublist-counter) '.';
+  color: #3490dc;
+  font-size: 0.9em;
 }
 
 /* 列表项内容样式 */
 .markdown-cell li p {
-    margin: 0.25rem 0;
-    display: inline;
+  margin: 0.25rem 0;
+  display: inline;
 }
 
 .markdown-cell li p:first-child {
-    display: inline;
+  display: inline;
 }
 
 .markdown-cell li p:not(:first-child) {
-    display: block;
-    margin-top: 0.5rem;
+  display: block;
+  margin-top: 0.5rem;
 }
 
 /* 列表悬停效果 */
 .markdown-cell li:hover {
-    background-color: rgba(65, 184, 131, 0.02);
-    border-radius: 4px;
-    transition: background-color 0.2s ease;
+  background-color: rgba(65, 184, 131, 0.02);
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
 }
 
 /* 引用样式 */
 .markdown-cell blockquote {
-    border-left: 4px solid #41B883;
-    background-color: rgba(65, 184, 131, 0.05);
-    padding: 0.5rem 1rem;
-    margin: 1.5rem 0;
-    color: #35495E;
-    font-style: italic;
+  border-left: 4px solid #41b883;
+  background-color: rgba(65, 184, 131, 0.05);
+  padding: 0.5rem 1rem;
+  margin: 1.5rem 0;
+  color: #35495e;
+  font-style: italic;
 }
 
 /* 苹果风格表格样式 */
 .markdown-cell table {
-    width: auto;
-    min-width: 50%;
-    max-width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    margin: 1rem 0 2rem;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.1);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    border: 1px solid rgba(65, 184, 131, 0.08);
-    color: black;
+  width: auto;
+  min-width: 50%;
+  max-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1rem 0 2rem;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 0 1px rgba(65, 184, 131, 0.1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  border: 1px solid rgba(65, 184, 131, 0.08);
+  color: black;
 }
 
 .markdown-cell th,
 .markdown-cell td {
-    padding: 0.5rem;
-    text-align: left;
-    border: none;
-    border-bottom: 1px solid rgba(65, 184, 131, 0.06);
+  padding: 0.5rem;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid rgba(65, 184, 131, 0.06);
 }
 
 .markdown-cell th {
-    background-color: #41B883;
-    color: #000000;
-    font-weight: 500;
-    font-size: 0.875rem;
-    letter-spacing: 0.01em;
-    text-transform: uppercase;
+  background-color: #41b883;
+  color: #000000;
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
 }
 
 .markdown-cell thead tr:first-child th:first-child {
-    border-top-left-radius: 12px;
+  border-top-left-radius: 12px;
 }
 
 .markdown-cell thead tr:first-child th:last-child {
-    border-top-right-radius: 12px;
+  border-top-right-radius: 12px;
 }
 
 .markdown-cell tbody tr:last-child td:first-child {
-    border-bottom-left-radius: 12px;
+  border-bottom-left-radius: 12px;
 }
 
 .markdown-cell tbody tr:last-child td:last-child {
-    border-bottom-right-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .markdown-cell tbody tr:last-child td {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 .markdown-cell tr {
-    transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
 .markdown-cell tbody tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.01);
+  background-color: rgba(0, 0, 0, 0.01);
 }
 
 .markdown-cell tbody tr:hover {
-    background-color: rgba(65, 184, 131, 0.04);
+  background-color: rgba(65, 184, 131, 0.04);
 }
 
 /* 表格标题 */
 .markdown-cell table caption {
-    padding: 1rem 0;
-    font-weight: 500;
-    color: #35495E;
-    text-align: left;
-    font-size: 1.125rem;
+  padding: 1rem 0;
+  font-weight: 500;
+  color: #35495e;
+  text-align: left;
+  font-size: 1.125rem;
 }
 
 /* 响应式支持 */
 @media (max-width: 768px) {
-    .markdown-cell th,
-    .markdown-cell td {
-        padding: 0.75rem 1rem;
-    }
+  .markdown-cell th,
+  .markdown-cell td {
+    padding: 0.75rem 1rem;
+  }
 }
 
 /* 图片样式 */
 .markdown-cell img {
-    max-width: 100%;
-    height: auto;
-    margin: 1rem 0;
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
 }
 
 /* 水平线 */
 .markdown-cell hr {
-    border: none;
-    border-top: 1px solid rgba(65, 184, 131, 0.2);
-    margin: 2rem 0;
+  border: none;
+  border-top: 1px solid rgba(65, 184, 131, 0.2);
+  margin: 2rem 0;
 }
 
 /* 强调 */
 .markdown-cell strong {
-    font-weight: 700;
-    color: #41B883;
+  font-weight: 700;
+  color: #41b883;
 }
 
 .markdown-cell em {
-    font-style: italic;
-    color: #41B883;
+  font-style: italic;
+  color: #41b883;
 }
 
 /* Safety rules to hide any leaked markdown syntax tokens in display mode */
 .markdown-cell:not(.editing-mode) {
-    /* Hide markdown header syntax that might leak through */
-    *:before, *:after {
-        content: none !important;
-    }
+  /* Hide markdown header syntax that might leak through */
+  *:before,
+  *:after {
+    content: none !important;
+  }
 }
 
 /* Ensure ReactMarkdown properly renders headers without showing # tokens */
@@ -445,24 +798,24 @@
 .markdown-cell .markdown-render h4:before,
 .markdown-cell .markdown-render h5:before,
 .markdown-cell .markdown-render h6:before {
-    content: none !important;
+  content: none !important;
 }
 
 /* Ensure blockquotes don't show > tokens */
 .markdown-cell .markdown-render blockquote:before {
-    content: none !important;
+  content: none !important;
 }
 
 /* Clean up any raw text that starts with markdown syntax */
 .markdown-cell p:not(.editing-mode) {
-    /* This catches any paragraph that might accidentally contain raw markdown */
-    text-rendering: optimizeLegibility;
+  /* This catches any paragraph that might accidentally contain raw markdown */
+  text-rendering: optimizeLegibility;
 }
 
 /* Specific handling for ReactMarkdown rendered content */
 .markdown-cell .react-markdown-content {
-    /* Ensure clean rendering of all markdown elements */
-    line-height: inherit;
+  /* Ensure clean rendering of all markdown elements */
+  line-height: inherit;
 }
 
 .markdown-cell .react-markdown-content h1,
@@ -471,20 +824,20 @@
 .markdown-cell .react-markdown-content h4,
 .markdown-cell .react-markdown-content h5,
 .markdown-cell .react-markdown-content h6 {
-    /* Ensure headers render without syntax tokens */
-    display: block;
-    text-indent: 0;
+  /* Ensure headers render without syntax tokens */
+  display: block;
+  text-indent: 0;
 }
 
 .markdown-cell .react-markdown-content blockquote {
-    /* Ensure blockquotes render without syntax tokens */
-    quotes: none;
+  /* Ensure blockquotes render without syntax tokens */
+  quotes: none;
 }
 
 .markdown-cell .react-markdown-content ul,
 .markdown-cell .react-markdown-content ol {
-    /* Ensure lists render without syntax tokens */
-    list-style-position: inside;
+  /* Ensure lists render without syntax tokens */
+  list-style-position: inside;
 }
 
 /* 暗色模式 - 暂时注释掉，统一使用明亮模式 */
@@ -565,8 +918,13 @@
 */
 
 @keyframes cursorBlink {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 /* ====================================================================
@@ -576,216 +934,226 @@
 
 /* CodeMirror 主容器 - 移除边框和背景 */
 .markdown-editor-codemirror .cm-editor {
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    outline: none !important;
-    font-family: system-ui, -apple-system, sans-serif !important;
-    font-size: 1rem !important;
-    line-height: 1.6 !important;
-    color: #202124 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif !important;
+  font-size: 1rem !important;
+  line-height: 1.6 !important;
+  color: #202124 !important;
 }
 
 /* CodeMirror 编辑区域 */
 .markdown-editor-codemirror .cm-content {
-    padding: 0 !important;
-    padding-left: 0 !important; /* 确保没有行号空间 */
-    background: transparent !important;
-    border: none !important;
-    outline: none !important;
-    font-family: system-ui, -apple-system, sans-serif !important;
-    font-size: 1rem !important;
-    line-height: 1.6 !important;
-    color: #202124 !important;
-    min-height: auto !important;
+  padding: 0 !important;
+  padding-left: 0 !important; /* 确保没有行号空间 */
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif !important;
+  font-size: 1rem !important;
+  line-height: 1.6 !important;
+  color: #202124 !important;
+  min-height: auto !important;
 }
 
 /* CodeMirror 焦点状态 - 移除默认焦点样式 */
 .markdown-editor-codemirror .cm-focused {
-    outline: none !important;
-    box-shadow: none !important;
-    border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 /* CodeMirror 滚动区域 */
 .markdown-editor-codemirror .cm-scroller {
-    background: transparent !important;
-    padding: 0 !important;
-    font-family: system-ui, -apple-system, sans-serif !important;
+  background: transparent !important;
+  padding: 0 !important;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif !important;
 }
 
 /* CodeMirror 光标样式 - 使用主题色 */
 .markdown-editor-codemirror .cm-cursor {
-    border-left: 2px solid #41B883 !important;
-    margin-left: -1px !important;
+  border-left: 2px solid #41b883 !important;
+  margin-left: -1px !important;
 }
 
 /* CodeMirror 选择区域 - 使用主题色 */
 .markdown-editor-codemirror .cm-selectionBackground {
-    background: rgba(65, 184, 131, 0.2) !important;
+  background: rgba(65, 184, 131, 0.2) !important;
 }
 
 /* Markdown 语法高亮样式 - 与当前设计风格一致 */
 .markdown-editor-codemirror .cm-line {
-    font-family: system-ui, -apple-system, sans-serif !important;
-    font-size: 1rem !important;
-    line-height: 1.6 !important;
-    color: #202124 !important;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif !important;
+  font-size: 1rem !important;
+  line-height: 1.6 !important;
+  color: #202124 !important;
 }
 
 /* Markdown 标题样式 - 匹配现有标题样式 */
 .markdown-editor-codemirror .tok-heading1 {
-    font-size: 1.8rem !important;
-    font-weight: 700 !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    color: transparent !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    line-height: 1.6 !important;
+  font-size: 1.8rem !important;
+  font-weight: 700 !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  line-height: 1.6 !important;
 }
 
 .markdown-editor-codemirror .tok-heading2 {
-    font-size: 1.3rem !important;
-    font-weight: 600 !important;
-    color: #fff !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    border-radius: 5px !important;
-    padding: 0.2rem 0.5rem !important;
-    margin-top: 1.5rem !important;
-    line-height: 1.5 !important;
+  font-size: 1.3rem !important;
+  font-weight: 600 !important;
+  color: #fff !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  border-radius: 5px !important;
+  padding: 0.2rem 0.5rem !important;
+  margin-top: 1.5rem !important;
+  line-height: 1.5 !important;
 }
 
 .markdown-editor-codemirror .tok-heading3 {
-    font-size: 1.2rem !important;
-    font-weight: 600 !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    color: transparent !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    margin-top: 1rem !important;
-    line-height: 1.2 !important;
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  margin-top: 1rem !important;
+  line-height: 1.2 !important;
 }
 
 .markdown-editor-codemirror .tok-heading4 {
-    font-size: 1.1rem !important;
-    font-weight: 500 !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    color: transparent !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    margin-top: 1rem !important;
-    line-height: 1.2rem !important;
-    padding-left: 0.5rem !important;
-    border-left: 3px solid #3490DC !important;
+  font-size: 1.1rem !important;
+  font-weight: 500 !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  margin-top: 1rem !important;
+  line-height: 1.2rem !important;
+  padding-left: 0.5rem !important;
+  border-left: 3px solid #3490dc !important;
 }
 
 .markdown-editor-codemirror .tok-heading5 {
-    font-size: 1rem !important;
-    font-weight: 400 !important;
-    color: #35495E !important;
-    margin-top: 0.8rem !important;
-    line-height: 1.2 !important;
+  font-size: 1rem !important;
+  font-weight: 400 !important;
+  color: #35495e !important;
+  margin-top: 0.8rem !important;
+  line-height: 1.2 !important;
 }
 
 .markdown-editor-codemirror .tok-heading6 {
-    font-size: 0.9rem !important;
-    font-weight: 400 !important;
-    color: #35495E !important;
-    margin-top: 0.8rem !important;
-    line-height: 1.2 !important;
-    font-style: italic !important;
+  font-size: 0.9rem !important;
+  font-weight: 400 !important;
+  color: #35495e !important;
+  margin-top: 0.8rem !important;
+  line-height: 1.2 !important;
+  font-style: italic !important;
 }
 
 /* Markdown 粗体和斜体 */
 .markdown-editor-codemirror .tok-strong {
-    font-weight: 700 !important;
-    color: #41B883 !important;
+  font-weight: 700 !important;
+  color: #41b883 !important;
 }
 
 .markdown-editor-codemirror .tok-emphasis {
-    font-style: italic !important;
-    color: #41B883 !important;
+  font-style: italic !important;
+  color: #41b883 !important;
 }
 
 /* Markdown 链接 */
 .markdown-editor-codemirror .tok-link {
-    color: #41B883 !important;
-    text-decoration: none !important;
-    border-bottom: 1.5px solid #41B883 !important;
+  color: #41b883 !important;
+  text-decoration: none !important;
+  border-bottom: 1.5px solid #41b883 !important;
 }
 
 /* Markdown 代码 */
 .markdown-editor-codemirror .tok-monospace {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 0.875rem !important;
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    padding: 0.25rem 0.5rem !important;
-    border-radius: 0.375rem !important;
-    font-weight: 500 !important;
-    color: #41B883 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.875rem !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.375rem !important;
+  font-weight: 500 !important;
+  color: #41b883 !important;
 }
 
 /* Markdown 代码块 */
 .markdown-editor-codemirror .tok-processingInstruction {
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    padding: 1.25rem !important;
-    border-radius: 0.5rem !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 0.875rem !important;
-    line-height: 1.6 !important;
-    border: 1px solid rgba(65, 184, 131, 0.1) !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  padding: 1.25rem !important;
+  border-radius: 0.5rem !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.875rem !important;
+  line-height: 1.6 !important;
+  border: 1px solid rgba(65, 184, 131, 0.1) !important;
 }
 
 /* Markdown 列表标记 */
 .markdown-editor-codemirror .tok-list {
-    color: #41B883 !important;
-    font-weight: bold !important;
+  color: #41b883 !important;
+  font-weight: bold !important;
 }
 
 /* Markdown 引用 */
 .markdown-editor-codemirror .tok-quote {
-    border-left: 4px solid #41B883 !important;
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    padding: 0.5rem 1rem !important;
-    margin: 1.5rem 0 !important;
-    color: #35495E !important;
-    font-style: italic !important;
+  border-left: 4px solid #41b883 !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  padding: 0.5rem 1rem !important;
+  margin: 1.5rem 0 !important;
+  color: #35495e !important;
+  font-style: italic !important;
 }
 
 /* 修正编辑时的字体大小与非编辑状态一致 */
 .markdown-editor-codemirror .cm-line {
-    min-height: 1.6em !important;
+  min-height: 1.6em !important;
 }
 
 /* 移除任何可能的外边距和内边距 */
 .markdown-editor-codemirror {
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
 }
 
 /* 确保编辑器高度自适应 */
 .markdown-editor-codemirror .cm-editor.cm-focused {
-    outline: none !important;
+  outline: none !important;
 }
 
 /* 移除默认的包装器样式 */
 .markdown-editor-codemirror .cm-wrap {
-    border: none !important;
-    background: transparent !important;
+  border: none !important;
+  background: transparent !important;
 }
 
 /* 隐藏 Markdown 编辑器的行号 - Markdown 单元格不需要行号 */
 .markdown-editor-codemirror .cm-lineNumbers {
-    display: none !important;
+  display: none !important;
 }
 
 /* 确保行号槽（gutter）也被隐藏，避免留下空白区域 */
 .markdown-editor-codemirror .cm-gutters {
-    display: none !important;
+  display: none !important;
 }
-
-
 
 /* ====================================================================
    TipTap 编辑器优化 - 提升编辑体验和性能
@@ -793,350 +1161,359 @@
 
 /* TipTap 主编辑器容器优化 */
 .tiptap-notebook-editor-container {
-    transition: all 0.2s ease-in-out;
-    position: relative;
+  transition: all 0.2s ease-in-out;
+  position: relative;
 }
 
 /* ProseMirror 编辑器核心样式优化 */
 .tiptap-notebook-editor .ProseMirror {
-    outline: none !important;
-    border: none !important;
-    background: transparent !important;
-    font-family: system-ui, -apple-system, sans-serif !important;
-    line-height: 1.6 !important;
-    color: #202124 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    
-    /* 优化光标显示 - 使用主题色 */
-    caret-color: #41B883 !important;
+  outline: none !important;
+  border: none !important;
+  background: transparent !important;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif !important;
+  line-height: 1.6 !important;
+  color: #202124 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+
+  /* 优化光标显示 - 使用主题色 */
+  caret-color: #41b883 !important;
 }
 
 /* TipTap 选择区域优化 - 使用主题色 */
 .tiptap-notebook-editor .ProseMirror ::selection {
-    background: rgba(65, 184, 131, 0.25) !important;
-    color: inherit !important;
+  background: rgba(65, 184, 131, 0.25) !important;
+  color: inherit !important;
 }
 
 /* TipTap 焦点状态优化 */
 .tiptap-notebook-editor .ProseMirror:focus {
-    outline: none !important;
-    box-shadow: none !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* TipTap 段落样式优化 - 与 markdown-cell 保持一致 */
 .tiptap-notebook-editor .ProseMirror p {
-    margin: 0.75rem 0 !important;
-    padding: 0 !important;
-    line-height: 1.6 !important;
-    font-size: 1rem !important;
-    color: #202124 !important;
+  margin: 0.75rem 0 !important;
+  padding: 0 !important;
+  line-height: 1.6 !important;
+  font-size: 1rem !important;
+  color: #202124 !important;
 }
 
 /* TipTap 标题样式优化 - 与 MarkdownCell 保持完全一致 */
 .tiptap-notebook-editor .ProseMirror h1 {
-    font-size: 1.8rem !important;
-    font-weight: 700 !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    color: transparent !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    line-height: 1.6 !important;
-    margin: 1.5rem 0 1rem 0 !important;
-    padding: 0 !important;
-    caret-color: #3b82f6 !important; /* 蓝色光标 */
+  font-size: 1.8rem !important;
+  font-weight: 700 !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  line-height: 1.6 !important;
+  margin: 1.5rem 0 1rem 0 !important;
+  padding: 0 !important;
+  caret-color: #3b82f6 !important; /* 蓝色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror h2 {
-    font-size: 1.3rem !important;
-    font-weight: 600 !important;
-    color: #fff !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    border-radius: 5px !important;
-    padding: 0.2rem 0.5rem !important;
-    margin: 1.5rem 0 1rem 0 !important;
-    line-height: 1.5 !important;
-    display: inline-block !important;
-    min-width: fit-content !important;
-    caret-color: #ffffff !important; /* 白色光标在渐变背景上 */
+  font-size: 1.3rem !important;
+  font-weight: 600 !important;
+  color: #fff !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  border-radius: 5px !important;
+  padding: 0.2rem 0.5rem !important;
+  margin: 1.5rem 0 1rem 0 !important;
+  line-height: 1.5 !important;
+  display: inline-block !important;
+  min-width: fit-content !important;
+  caret-color: #ffffff !important; /* 白色光标在渐变背景上 */
 }
 
 .tiptap-notebook-editor .ProseMirror h3 {
-    font-size: 1.2rem !important;
-    font-weight: 600 !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    color: transparent !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    margin: 1rem 0 0.5rem 0 !important;
-    line-height: 1.2 !important;
-    padding: 0 !important;
-    caret-color: #dc2626 !important; /* 红色光标 */
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  margin: 1rem 0 0.5rem 0 !important;
+  line-height: 1.2 !important;
+  padding: 0 !important;
+  caret-color: #dc2626 !important; /* 红色光标 */
 }
 
 /* TipTap h4-h6 标题样式 - 补充缺失的样式 */
 .tiptap-notebook-editor .ProseMirror h4 {
-    font-size: 1.1rem !important;
-    font-weight: 500 !important;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD) !important;
-    color: transparent !important;
-    -webkit-background-clip: text !important;
-    background-clip: text !important;
-    margin: 1rem 0 0.5rem 0 !important;
-    line-height: 1.2rem !important;
-    padding-left: 0.5rem !important;
-    border-left: 3px solid #3490DC !important;
-    caret-color: #7c3aed !important; /* 紫色光标 */
+  font-size: 1.1rem !important;
+  font-weight: 500 !important;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd) !important;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  margin: 1rem 0 0.5rem 0 !important;
+  line-height: 1.2rem !important;
+  padding-left: 0.5rem !important;
+  border-left: 3px solid #3490dc !important;
+  caret-color: #7c3aed !important; /* 紫色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror h5 {
-    font-size: 1rem !important;
-    font-weight: 400 !important;
-    color: #35495E !important;
-    margin: 0.8rem 0 0.5rem 0 !important;
-    line-height: 1.2 !important;
-    caret-color: #7c3aed !important;
+  font-size: 1rem !important;
+  font-weight: 400 !important;
+  color: #35495e !important;
+  margin: 0.8rem 0 0.5rem 0 !important;
+  line-height: 1.2 !important;
+  caret-color: #7c3aed !important;
 }
 
 .tiptap-notebook-editor .ProseMirror h6 {
-    font-size: 0.9rem !important;
-    font-weight: 400 !important;
-    color: #35495E !important;
-    margin: 0.8rem 0 0.5rem 0 !important;
-    line-height: 1.2 !important;
-    font-style: italic !important;
-    caret-color: #7c3aed !important;
+  font-size: 0.9rem !important;
+  font-weight: 400 !important;
+  color: #35495e !important;
+  margin: 0.8rem 0 0.5rem 0 !important;
+  line-height: 1.2 !important;
+  font-style: italic !important;
+  caret-color: #7c3aed !important;
 }
 
 /* TipTap 列表样式优化 - 与 markdown-cell 保持一致 */
 .tiptap-notebook-editor .ProseMirror ul {
-    list-style: none !important;
-    padding-left: 0.5rem !important;
-    margin: 1rem 0 !important;
-    color: #202124 !important;
+  list-style: none !important;
+  padding-left: 0.5rem !important;
+  margin: 1rem 0 !important;
+  color: #202124 !important;
 }
 
 .tiptap-notebook-editor .ProseMirror ul li {
-    position: relative !important;
-    padding-left: 1rem !important;
-    margin-bottom: 0.2rem !important;
-    line-height: 1.6 !important;
-    color: #202124 !important;
-    caret-color: #f59e0b !important; /* 橙色光标 */
+  position: relative !important;
+  padding-left: 1rem !important;
+  margin-bottom: 0.2rem !important;
+  line-height: 1.6 !important;
+  color: #202124 !important;
+  caret-color: #f59e0b !important; /* 橙色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror ul li::before {
-    content: "•" !important;
-    color: #41B883 !important;
-    font-weight: bold !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    font-size: 1.2em !important;
+  content: '•' !important;
+  color: #41b883 !important;
+  font-weight: bold !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  font-size: 1.2em !important;
 }
 
 /* TipTap 有序列表样式 */
 .tiptap-notebook-editor .ProseMirror ol {
-    list-style: none !important;
-    counter-reset: list-counter !important;
-    padding-left: 0.5rem !important;
-    margin: 1rem 0 !important;
-    color: #202124 !important;
+  list-style: none !important;
+  counter-reset: list-counter !important;
+  padding-left: 0.5rem !important;
+  margin: 1rem 0 !important;
+  color: #202124 !important;
 }
 
 .tiptap-notebook-editor .ProseMirror ol li {
-    position: relative !important;
-    padding-left: 2rem !important;
-    margin-bottom: 0.5rem !important;
-    line-height: 1.6 !important;
-    counter-increment: list-counter !important;
-    color: #202124 !important;
-    caret-color: #f59e0b !important;
+  position: relative !important;
+  padding-left: 2rem !important;
+  margin-bottom: 0.5rem !important;
+  line-height: 1.6 !important;
+  counter-increment: list-counter !important;
+  color: #202124 !important;
+  caret-color: #f59e0b !important;
 }
 
 .tiptap-notebook-editor .ProseMirror ol li::before {
-    content: counter(list-counter) "." !important;
-    color: #3490DC !important;
-    font-weight: bold !important;
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    min-width: 1.5rem !important;
-    text-align: right !important;
+  content: counter(list-counter) '.' !important;
+  color: #3490dc !important;
+  font-weight: bold !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  min-width: 1.5rem !important;
+  text-align: right !important;
 }
 
 /* TipTap 列表悬停效果 */
 .tiptap-notebook-editor .ProseMirror li:hover {
-    background-color: rgba(65, 184, 131, 0.02) !important;
-    border-radius: 4px !important;
-    transition: background-color 0.2s ease !important;
+  background-color: rgba(65, 184, 131, 0.02) !important;
+  border-radius: 4px !important;
+  transition: background-color 0.2s ease !important;
 }
 
 /* TipTap 代码样式优化 - 与 markdown-cell 保持一致 */
 .tiptap-notebook-editor .ProseMirror code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 0.875rem !important;
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    padding: 0.25rem 0.5rem !important;
-    border-radius: 0.375rem !important;
-    font-weight: 500 !important;
-    color: #41B883 !important;
-    caret-color: #ef4444 !important; /* 红色光标 */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.875rem !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 0.375rem !important;
+  font-weight: 500 !important;
+  color: #41b883 !important;
+  caret-color: #ef4444 !important; /* 红色光标 */
 }
 
 /* TipTap 代码块样式 */
 .tiptap-notebook-editor .ProseMirror pre {
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    padding: 1.25rem !important;
-    border-radius: 0.5rem !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 0.875rem !important;
-    overflow-x: auto !important;
-    line-height: 1.6 !important;
-    border: 1px solid rgba(65, 184, 131, 0.1) !important;
-    margin: 1rem 0 !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  padding: 1.25rem !important;
+  border-radius: 0.5rem !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.875rem !important;
+  overflow-x: auto !important;
+  line-height: 1.6 !important;
+  border: 1px solid rgba(65, 184, 131, 0.1) !important;
+  margin: 1rem 0 !important;
 }
 
 .tiptap-notebook-editor .ProseMirror pre code {
-    background: none !important;
-    padding: 0 !important;
-    color: #202124 !important;
+  background: none !important;
+  padding: 0 !important;
+  color: #202124 !important;
 }
 
 /* TipTap 引用样式优化 - 与 markdown-cell 保持一致 */
 .tiptap-notebook-editor .ProseMirror blockquote {
-    border-left: 4px solid #41B883 !important;
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    padding: 0.5rem 1rem !important;
-    margin: 1.5rem 0 !important;
-    color: #35495E !important;
-    font-style: italic !important;
-    caret-color: #6b7280 !important; /* 灰色光标 */
+  border-left: 4px solid #41b883 !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  padding: 0.5rem 1rem !important;
+  margin: 1.5rem 0 !important;
+  color: #35495e !important;
+  font-style: italic !important;
+  caret-color: #6b7280 !important; /* 灰色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror blockquote p {
-    margin: 0.5rem 0 !important;
+  margin: 0.5rem 0 !important;
 }
 
 /* TipTap 链接样式优化 - 与 markdown-cell 保持一致 */
 .tiptap-notebook-editor .ProseMirror a {
-    color: #41B883 !important;
-    text-decoration: none !important;
-    border-bottom: 1.5px solid #41B883 !important;
-    transition: all 0.2s !important;
-    font-weight: 500 !important;
+  color: #41b883 !important;
+  text-decoration: none !important;
+  border-bottom: 1.5px solid #41b883 !important;
+  transition: all 0.2s !important;
+  font-weight: 500 !important;
 }
 
 .tiptap-notebook-editor .ProseMirror a:hover {
-    color: #3490DC !important;
-    border-bottom-color: #3490DC !important;
+  color: #3490dc !important;
+  border-bottom-color: #3490dc !important;
 }
 
 /* TipTap 强调样式 */
 .tiptap-notebook-editor .ProseMirror strong {
-    font-weight: 700 !important;
-    color: #41B883 !important;
+  font-weight: 700 !important;
+  color: #41b883 !important;
 }
 
 .tiptap-notebook-editor .ProseMirror em {
-    font-style: italic !important;
-    color: #41B883 !important;
+  font-style: italic !important;
+  color: #41b883 !important;
 }
 
 /* TipTap 水平线 */
 .tiptap-notebook-editor .ProseMirror hr {
-    border: none !important;
-    border-top: 1px solid rgba(65, 184, 131, 0.2) !important;
-    margin: 2rem 0 !important;
+  border: none !important;
+  border-top: 1px solid rgba(65, 184, 131, 0.2) !important;
+  margin: 2rem 0 !important;
 }
 
 /* TipTap 表格样式优化 - 与 markdown-cell 苹果风格表格保持一致 */
 .tiptap-notebook-editor .ProseMirror table {
-    width: auto !important;
-    min-width: 50% !important;
-    max-width: 100% !important;
-    border-collapse: separate !important;
-    border-spacing: 0 !important;
-    margin: 1rem 0 2rem !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.1) !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-    border: 1px solid rgba(65, 184, 131, 0.08) !important;
-    color: black !important;
+  width: auto !important;
+  min-width: 50% !important;
+  max-width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  margin: 1rem 0 2rem !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    0 0 1px rgba(65, 184, 131, 0.1) !important;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+  border: 1px solid rgba(65, 184, 131, 0.08) !important;
+  color: black !important;
 }
 
 .tiptap-notebook-editor .ProseMirror th,
 .tiptap-notebook-editor .ProseMirror td {
-    padding: 0.5rem !important;
-    text-align: left !important;
-    border: none !important;
-    border-bottom: 1px solid rgba(65, 184, 131, 0.06) !important;
-    caret-color: #8b5cf6 !important; /* 紫色光标 */
+  padding: 0.5rem !important;
+  text-align: left !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(65, 184, 131, 0.06) !important;
+  caret-color: #8b5cf6 !important; /* 紫色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror th {
-    background-color: #41B883 !important;
-    color: #000000 !important;
-    font-weight: 500 !important;
-    font-size: 0.875rem !important;
-    letter-spacing: 0.01em !important;
-    text-transform: uppercase !important;
+  background-color: #41b883 !important;
+  color: #000000 !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  letter-spacing: 0.01em !important;
+  text-transform: uppercase !important;
 }
 
 /* TipTap 表格圆角处理 */
 .tiptap-notebook-editor .ProseMirror thead tr:first-child th:first-child {
-    border-top-left-radius: 12px !important;
+  border-top-left-radius: 12px !important;
 }
 
 .tiptap-notebook-editor .ProseMirror thead tr:first-child th:last-child {
-    border-top-right-radius: 12px !important;
+  border-top-right-radius: 12px !important;
 }
 
 .tiptap-notebook-editor .ProseMirror tbody tr:last-child td:first-child {
-    border-bottom-left-radius: 12px !important;
+  border-bottom-left-radius: 12px !important;
 }
 
 .tiptap-notebook-editor .ProseMirror tbody tr:last-child td:last-child {
-    border-bottom-right-radius: 12px !important;
+  border-bottom-right-radius: 12px !important;
 }
 
 .tiptap-notebook-editor .ProseMirror tbody tr:last-child td {
-    border-bottom: none !important;
+  border-bottom: none !important;
 }
 
 /* TipTap 表格行效果 */
 .tiptap-notebook-editor .ProseMirror tr {
-    transition: background-color 0.2s ease !important;
+  transition: background-color 0.2s ease !important;
 }
 
 .tiptap-notebook-editor .ProseMirror tbody tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.01) !important;
+  background-color: rgba(0, 0, 0, 0.01) !important;
 }
 
 .tiptap-notebook-editor .ProseMirror tbody tr:hover {
-    background-color: rgba(65, 184, 131, 0.04) !important;
+  background-color: rgba(65, 184, 131, 0.04) !important;
 }
 
 /* TipTap 空编辑器占位符优化 */
 .tiptap-notebook-editor .ProseMirror p.is-editor-empty:first-child::before {
-    color: #9CA3AF !important;
-    content: attr(data-placeholder) !important;
-    float: left !important;
-    height: 0 !important;
-    pointer-events: none !important;
-    font-style: italic !important;
-    opacity: 0.8 !important;
+  color: #9ca3af !important;
+  content: attr(data-placeholder) !important;
+  float: left !important;
+  height: 0 !important;
+  pointer-events: none !important;
+  font-style: italic !important;
+  opacity: 0.8 !important;
 }
 
 /* TipTap 焦点时的占位符淡化 */
 .tiptap-notebook-editor .ProseMirror:focus p.is-editor-empty:first-child::before {
-    opacity: 0.5 !important;
+  opacity: 0.5 !important;
 }
 
 /* TipTap 编辑器动画优化 */
 .tiptap-notebook-editor .ProseMirror * {
-    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease !important;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease !important;
 }
 
 /* TipTap 标题编辑时的视觉反馈 */
@@ -1146,18 +1523,18 @@
 .tiptap-notebook-editor .ProseMirror h4:focus,
 .tiptap-notebook-editor .ProseMirror h5:focus,
 .tiptap-notebook-editor .ProseMirror h6:focus {
-    outline: 2px solid rgba(65, 184, 131, 0.2) !important;
-    outline-offset: 4px !important;
-    border-radius: 4px !important;
+  outline: 2px solid rgba(65, 184, 131, 0.2) !important;
+  outline-offset: 4px !important;
+  border-radius: 4px !important;
 }
 
 /* TipTap 图片样式 */
 .tiptap-notebook-editor .ProseMirror img {
-    max-width: 100% !important;
-    height: auto !important;
-    margin: 1rem 0 !important;
-    border-radius: 8px !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  max-width: 100% !important;
+  height: auto !important;
+  margin: 1rem 0 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
 }
 
 /* ====================================================================
@@ -1167,106 +1544,118 @@
 
 /* Border Colors */
 .border-theme-100 {
-    border-color: rgba(65, 184, 131, 0.1) !important;
+  border-color: rgba(65, 184, 131, 0.1) !important;
 }
 
 .border-theme-200 {
-    border-color: rgba(65, 184, 131, 0.2) !important;
+  border-color: rgba(65, 184, 131, 0.2) !important;
 }
 
 .border-theme-500 {
-    border-color: #41B883 !important;
+  border-color: #41b883 !important;
 }
 
 /* Background Colors */
 .bg-theme-25 {
-    background-color: rgba(65, 184, 131, 0.025) !important;
+  background-color: rgba(65, 184, 131, 0.025) !important;
 }
 
 .bg-theme-50 {
-    background-color: rgba(65, 184, 131, 0.05) !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
 }
 
 .bg-theme-100 {
-    background-color: rgba(65, 184, 131, 0.1) !important;
+  background-color: rgba(65, 184, 131, 0.1) !important;
 }
 
 .bg-theme-500 {
-    background-color: #41B883 !important;
+  background-color: #41b883 !important;
 }
 
 /* Text Colors */
 .text-theme-600 {
-    color: #41B883 !important;
+  color: #41b883 !important;
 }
 
 .text-theme-700 {
-    color: #369870 !important;
+  color: #369870 !important;
 }
 
 .text-theme-800 {
-    color: #35495E !important;
+  color: #35495e !important;
 }
 
 .text-theme-900 {
-    color: #2c3e50 !important;
+  color: #2c3e50 !important;
 }
 
 /* Enhanced theme colors for Ant Design integration */
 .ant-theme-primary {
-    color: #41B883 !important;
+  color: #41b883 !important;
 }
 
 .ant-theme-secondary {
-    color: #3490DC !important;
+  color: #3490dc !important;
 }
 
 .ant-theme-accent {
-    color: #6574CD !important;
+  color: #6574cd !important;
 }
 
 /* 边框宽度 */
 .border-r-3 {
-    border-right-width: 3px !important;
+  border-right-width: 3px !important;
 }
 
 /* 渐变背景类 */
 .bg-gradient-theme {
-    background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04)) !important;
+  background: linear-gradient(
+    135deg,
+    rgba(65, 184, 131, 0.04),
+    rgba(52, 144, 220, 0.04)
+  ) !important;
 }
 
 /* 主题阴影 */
 .shadow-theme {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2) !important;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.1),
+    0 0 1px rgba(65, 184, 131, 0.2) !important;
 }
 
 /* Slash Commands 菜单主题样式优化 */
 .slash-command-menu {
-    background: white !important;
-    border: 1px solid rgba(65, 184, 131, 0.2) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 0 1px rgba(65, 184, 131, 0.2) !important;
+  background: white !important;
+  border: 1px solid rgba(65, 184, 131, 0.2) !important;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.1),
+    0 0 1px rgba(65, 184, 131, 0.2) !important;
 }
 
 .slash-command-menu .command-item-selected {
-    background: linear-gradient(to right, rgba(65, 184, 131, 0.1), rgba(65, 184, 131, 0.05)) !important;
-    border-right: 3px solid #41B883 !important;
+  background: linear-gradient(
+    to right,
+    rgba(65, 184, 131, 0.1),
+    rgba(65, 184, 131, 0.05)
+  ) !important;
+  border-right: 3px solid #41b883 !important;
 }
 
 .slash-command-menu .command-item:hover {
-    background-color: rgba(65, 184, 131, 0.05) !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
 }
 
 .codeCell {
-    ::-webkit-scrollbar-thumb {
-        background: rgba(65, 184, 131, 0.3);
-    }
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgba(65, 184, 131, 0.4);
-    }
-    * {
-        scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
-        scrollbar-width: thin;
-    }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(65, 184, 131, 0.3);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(65, 184, 131, 0.4);
+  }
+  * {
+    scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
+    scrollbar-width: thin;
+  }
 }
 
 /* ====================================================================
@@ -1276,100 +1665,104 @@
 
 /* Code Cell HTML 输出容器 - 支持水平滚动 */
 .output-html-container {
-    overflow-x: auto;
-    overflow-y: visible;
-    width: 100%;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(65, 184, 131, 0.3) transparent;
-    -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+  overflow-y: visible;
+  width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(65, 184, 131, 0.3) transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Code Cell HTML 输出容器滚动条样式 */
 .output-html-container::-webkit-scrollbar {
-    height: 10px;
+  height: 10px;
 }
 
 .output-html-container::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 5px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 5px;
 }
 
 .output-html-container::-webkit-scrollbar-thumb {
-    background: rgba(65, 184, 131, 0.4);
-    border-radius: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(65, 184, 131, 0.4);
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .output-html-container::-webkit-scrollbar-thumb:hover {
-    background: rgba(65, 184, 131, 0.6);
+  background: rgba(65, 184, 131, 0.6);
 }
-
 
 /* Code Cell 输出表格头部样式 */
 .output-html-container th {
-    background: #41B883;
-    color: #000000 !important;
-    font-weight: 500;
-    font-size: 0.75rem;
-    text-align: left;
-    padding: 0.3rem 0.5rem;
-    border: none;
-    letter-spacing: 0.01em;
-    text-transform: uppercase;
-    white-space: nowrap;
+  background: #41b883;
+  color: #000000 !important;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border: none;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* Code Cell 输出表格数据单元格 - 正常模式下黑色文字 */
 .output-html-container td {
-    padding: 0.2rem 0.5rem;
-    text-align: left;
-    border: none;
-    border-bottom: 1px solid rgba(65, 184, 131, 0.08);
-    vertical-align: top;
-    white-space: nowrap;
-    overflow: visible;
-    color: #000000 !important;
+  padding: 0.2rem 0.5rem;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid rgba(65, 184, 131, 0.08);
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: visible;
+  color: #000000 !important;
 }
 
 /* Code Cell 输出表格背景 - 确保正常模式下是白色背景 */
 .output-html-container table {
-    width: max-content;
-    min-width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    border-radius: 8px;
-    margin:1px;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
-    border: 1px solid rgba(65, 184, 131, 0.12);
-    margin: 0;
-    font-family: system-ui, -apple-system, sans-serif;
-    color: #000000;
-    table-layout: auto;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  margin: 1px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.08),
+    0 0 1px rgba(65, 184, 131, 0.15);
+  border: 1px solid rgba(65, 184, 131, 0.12);
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: #000000;
+  table-layout: auto;
 }
 
 /* Code Cell 输出表格行悬停效果 */
 .output-html-container tr:hover {
-    background-color: rgba(65, 184, 131, 0.03);
+  background-color: rgba(65, 184, 131, 0.03);
 }
 
 /* Code Cell 输出表格交替行背景 - 正常模式下浅灰色 */
 .output-html-container tbody tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.01);
+  background-color: rgba(0, 0, 0, 0.01);
 }
 
 /* Code Cell 输出表格正常行背景 - 确保是白色 */
 .output-html-container tbody tr:nth-child(odd) {
-    background-color: #ffffff;
+  background-color: #ffffff;
 }
 
 /* Code Cell 输出中的数值样式 */
-.output-html-container td[style*="text-align: right"],
+.output-html-container td[style*='text-align: right'],
 .output-html-container td.numeric {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    text-align: right;
-    color: #3490DC !important;
-    font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-align: right;
+  color: #3490dc !important;
+  font-weight: 500;
 }
 
 /* ====================================================================
@@ -1380,13 +1773,16 @@
 
 /* VDS 容器 - 主要包装器 */
 vds-container {
-    display: block;
-    margin: 0.5rem 0;
-    padding: 0;
-    font-family: system-ui, -apple-system, sans-serif;
-    line-height: 1.4;
-    font-size: 0.9rem;
-    color: #000000 !important; /* 强制黑色 */
+  display: block;
+  margin: 0.5rem 0;
+  padding: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  line-height: 1.4;
+  font-size: 0.9rem;
+  color: #000000 !important; /* 强制黑色 */
 }
 
 /* 确保所有VDS子元素都是黑色 */
@@ -1400,374 +1796,379 @@ vds-tbody *,
 vds-tr *,
 vds-td *,
 vds-code-block * {
-    color: #000000 !important; /* 强制黑色，除非特殊指定 */
+  color: #000000 !important; /* 强制黑色，除非特殊指定 */
 }
 
 /* VDS标题保持渐变色 */
 vds-title {
-    color: transparent !important; /* 让渐变色生效 */
+  color: transparent !important; /* 让渐变色生效 */
 }
 
 /* VDS表格头部改为黑色文字 */
 vds-th,
 vds-th * {
-    color: #ffffff !important; /* 表头保持白色 */
+  color: #ffffff !important; /* 表头保持白色 */
 }
 
 /* 特殊颜色保持原样 */
 .vds-cell.vds-numeric,
 .vds-cell.vds-numeric * {
-    color: #3490DC !important; /* 数值类型保持蓝色 */
+  color: #3490dc !important; /* 数值类型保持蓝色 */
 }
 
 .vds-null,
 .vds-null * {
-    color: #EF4444 !important; /* 空值保持红色 */
+  color: #ef4444 !important; /* 空值保持红色 */
 }
 
 .vds-col-unique,
 .vds-col-unique * {
-    color: #41B883 !important; /* 唯一值统计保持绿色 */
+  color: #41b883 !important; /* 唯一值统计保持绿色 */
 }
 
 .vds-col-missing,
 .vds-col-missing * {
-    color: #EF4444 !important; /* 缺失值统计保持红色 */
+  color: #ef4444 !important; /* 缺失值统计保持红色 */
 }
 
 .vds-error-label,
 .vds-error-label *,
 .vds-error-value,
 .vds-error-value * {
-    color: #EF4444 !important; /* 错误信息保持红色 */
+  color: #ef4444 !important; /* 错误信息保持红色 */
 }
 
 /* VDS 帮助面板 */
 vds-help-panel {
-    display: block;
-    background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
-    border: 1px solid rgba(65, 184, 131, 0.15);
-    border-radius: 8px;
-    padding: 0.8rem;
-    margin: 0.5rem 0;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  display: block;
+  background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
+  border: 1px solid rgba(65, 184, 131, 0.15);
+  border-radius: 8px;
+  padding: 0.8rem;
+  margin: 0.5rem 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 /* VDS 信息面板 - 显示基本统计信息 */
 vds-info-panel {
-    display: block;
-    background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
-    border: 1px solid rgba(65, 184, 131, 0.15);
-    border-radius: 8px;
-    padding: 0.8rem;
-    margin: 0.5rem 0;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  display: block;
+  background: linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04));
+  border: 1px solid rgba(65, 184, 131, 0.15);
+  border-radius: 8px;
+  padding: 0.8rem;
+  margin: 0.5rem 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 /* VDS 区域 - 内容分区，支持水平滚动 */
 vds-section {
-    display: block;
-    margin: 0.5rem 0;
-    padding: 0;
-    /* 为包含表格的section添加水平滚动 */
-    overflow-x: auto;
-    overflow-y: visible;
-    width: 100%;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(65, 184, 131, 0.3) transparent;
-    -webkit-overflow-scrolling: touch;
+  display: block;
+  margin: 0.5rem 0;
+  padding: 0;
+  /* 为包含表格的section添加水平滚动 */
+  overflow-x: auto;
+  overflow-y: visible;
+  width: 100%;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(65, 184, 131, 0.3) transparent;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* VDS 标题 - 与markdown h3风格统一 */
 vds-title {
-    display: block;
-    font-size: 1rem;
-    font-weight: 600;
-    background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-    color: transparent;
-    -webkit-background-clip: text;
-    background-clip: text;
-    margin: 0.5rem 0 0.3rem 0;
-    padding-bottom: 0.2rem;
-    border-bottom: 1px solid rgba(65, 184, 131, 0.2);
-    line-height: 1.2;
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  margin: 0.5rem 0 0.3rem 0;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid rgba(65, 184, 131, 0.2);
+  line-height: 1.2;
 }
-
 
 /* VDS section 滚动条样式 */
 vds-section::-webkit-scrollbar {
-    height: 10px;
+  height: 10px;
 }
 
 vds-section::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 5px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 5px;
 }
 
 vds-section::-webkit-scrollbar-thumb {
-    background: rgba(65, 184, 131, 0.4);
-    border-radius: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(65, 184, 131, 0.4);
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 vds-section::-webkit-scrollbar-thumb:hover {
-    background: rgba(65, 184, 131, 0.6);
+  background: rgba(65, 184, 131, 0.6);
 }
 
 /* VDS 表格 - 紧凑现代化设计 */
 vds-table {
-    display: table;
-    width: max-content;
-    min-width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 0 1px rgba(65, 184, 131, 0.15);
-    border: 1px solid rgba(65, 184, 131, 0.12);
-    margin: 0;
-    font-family: system-ui, -apple-system, sans-serif;
-    color: #202124;
-    table-layout: auto;
+  display: table;
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.08),
+    0 0 1px rgba(65, 184, 131, 0.15);
+  border: 1px solid rgba(65, 184, 131, 0.12);
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: #202124;
+  table-layout: auto;
 }
 
 /* VDS 表格头部 */
 vds-thead {
-    display: table-header-group;
+  display: table-header-group;
 }
 
 /* VDS 表格主体 */
 vds-tbody {
-    display: table-row-group;
+  display: table-row-group;
 }
 
 /* VDS 表格行 */
 vds-tr {
-    display: table-row;
-    transition: background-color 0.2s ease;
+  display: table-row;
+  transition: background-color 0.2s ease;
 }
 
 /* VDS 表格头部单元格 - 简洁设计 */
 vds-th {
-    display: table-cell;
-    background: #41B883;
-    color: #000000;
-    font-weight: 500;
-    font-size: 0.75rem;
-    text-align: left;
-    padding: 0.3rem 0.5rem;
-    border: none;
-    letter-spacing: 0.01em;
-    text-transform: uppercase;
-    white-space: nowrap;
+  display: table-cell;
+  background: #41b883;
+  color: #000000;
+  font-weight: 500;
+  font-size: 0.75rem;
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border: none;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* VDS 表格数据单元格 */
 vds-td {
-    display: table-cell;
-    padding: 0.2rem 0.5rem;
-    text-align: left;
-    border: none;
-    border-bottom: 1px solid rgba(65, 184, 131, 0.08);
-    vertical-align: top;
-    white-space: nowrap;
-    overflow: visible;
+  display: table-cell;
+  padding: 0.2rem 0.5rem;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid rgba(65, 184, 131, 0.08);
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 /* VDS 单元格基础样式 */
 .vds-cell {
-    font-size: 0.75rem;
-    line-height: 1.3;
-    word-wrap: break-word;
-    color: black;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  word-wrap: break-word;
+  color: black;
 }
 
 /* 数值类型单元格 */
 .vds-cell.vds-numeric {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    text-align: right;
-    color: #3490DC;
-    font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-align: right;
+  color: #3490dc;
+  font-weight: 500;
 }
 
 /* 分类/文本类型单元格 */
 .vds-cell.vds-categorical {
-    color: black;
+  color: black;
 }
 
 /* 缺失值单元格 */
 .vds-cell.vds-missing {
-    background-color: rgba(239, 68, 68, 0.05);
-    border-left: 3px solid #EF4444;
+  background-color: rgba(239, 68, 68, 0.05);
+  border-left: 3px solid #ef4444;
 }
 
 /* 空值标记 */
 .vds-null {
-    color: #EF4444;
-    font-style: italic;
-    font-weight: 500;
-    font-size: 0.75rem;
+  color: #ef4444;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 0.75rem;
 }
 
 /* 行索引单元格 */
 .vds-row-index {
-    background-color: rgba(65, 184, 131, 0.05);
-    font-weight: 500;
-    color: #41B883;
-    text-align: center;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background-color: rgba(65, 184, 131, 0.05);
+  font-weight: 500;
+  color: #41b883;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* 列名样式 */
 .vds-col-name {
-    font-weight: 500;
-    color: black;
+  font-weight: 500;
+  color: black;
 }
 
 /* 数据类型显示 */
 .vds-col-type {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.75rem;
-    color: #6574CD;
-    background-color: rgba(101, 116, 205, 0.1);
-    padding: 0.2rem 0.4rem;
-    border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #6574cd;
+  background-color: rgba(101, 116, 205, 0.1);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
 }
 
 /* 缺失值统计 */
 .vds-col-missing {
-    color: #EF4444;
-    font-weight: 500;
+  color: #ef4444;
+  font-weight: 500;
 }
 
 /* 唯一值统计 */
 .vds-col-unique {
-    color: #41B883;
-    font-weight: 500;
+  color: #41b883;
+  font-weight: 500;
 }
 
 /* 表格行悬停效果 */
 vds-tr:hover {
-    background-color: rgba(65, 184, 131, 0.03);
+  background-color: rgba(65, 184, 131, 0.03);
 }
 
 /* 表格体内行的交替背景 */
 vds-tbody vds-tr:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.01);
+  background-color: rgba(0, 0, 0, 0.01);
 }
 
 /* 信息表格样式 */
 .vds-info-table {
-    width: 100%;
-    border-collapse: collapse;
+  width: 100%;
+  border-collapse: collapse;
 }
 
 .vds-info-table td {
-    padding: 0.3rem 0;
-    border: none;
-    border-bottom: 1px solid rgba(65, 184, 131, 0.05);
+  padding: 0.3rem 0;
+  border: none;
+  border-bottom: 1px solid rgba(65, 184, 131, 0.05);
 }
 
 .vds-info-table td:last-child {
-    border-bottom: none;
+  border-bottom: none;
 }
 
 /* 标签-值样式 */
 .vds-label {
-    font-weight: 500;
-    color: #35495E;
-    width: 40%;
+  font-weight: 500;
+  color: #35495e;
+  width: 40%;
 }
 
 .vds-value {
-    color: #41B883;
-    font-weight: 600;
+  color: #41b883;
+  font-weight: 600;
 }
 
 /* 代码块样式 */
 vds-code-block {
-    display: block;
-    background-color: rgba(65, 184, 131, 0.05);
-    border: 1px solid rgba(65, 184, 131, 0.1);
-    border-radius: 4px;
-    padding: 0.5rem;
-    margin: 0.2rem 0;
+  display: block;
+  background-color: rgba(65, 184, 131, 0.05);
+  border: 1px solid rgba(65, 184, 131, 0.1);
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin: 0.2rem 0;
 }
 
 vds-code-block code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 11px;
-    color: #35495E;
-    line-height: 1.3;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #35495e;
+  line-height: 1.3;
 }
 
 /* 错误面板 */
 vds-error-panel {
-    display: block;
-    background-color: rgba(239, 68, 68, 0.05);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    border-radius: 4px;
-    padding: 0.5rem;
-    margin: 0.3rem 0;
+  display: block;
+  background-color: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+  padding: 0.5rem;
+  margin: 0.3rem 0;
 }
 
 .vds-error-table {
-    width: 100%;
+  width: 100%;
 }
 
 .vds-error-label {
-    font-weight: 600;
-    color: #DC2626;
+  font-weight: 600;
+  color: #dc2626;
 }
 
 .vds-error-value {
-    color: #EF4444;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.875rem;
+  color: #ef4444;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
 }
 
 /* 清理报告样式 */
 vds-cleaning-report {
-    display: block;
-    background: linear-gradient(135deg, rgba(65, 184, 131, 0.03), rgba(52, 144, 220, 0.03));
-    border: 1px solid rgba(65, 184, 131, 0.1);
-    border-radius: 6px;
-    padding: 0.6rem;
-    margin: 0.3rem 0;
+  display: block;
+  background: linear-gradient(135deg, rgba(65, 184, 131, 0.03), rgba(52, 144, 220, 0.03));
+  border: 1px solid rgba(65, 184, 131, 0.1);
+  border-radius: 6px;
+  padding: 0.6rem;
+  margin: 0.3rem 0;
 }
 
 .vds-report-table {
-    width: 100%;
-    margin-bottom: 0.5rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
 }
 
 .vds-report-header {
-    background: linear-gradient(135deg, #41B883, #3490DC);
-    color: #fff;
-    padding: 0.4rem;
-    font-weight: 500;
-    border-radius: 3px 3px 0 0;
+  background: linear-gradient(135deg, #41b883, #3490dc);
+  color: #fff;
+  padding: 0.4rem;
+  font-weight: 500;
+  border-radius: 3px 3px 0 0;
 }
 
 .vds-issue-item {
-    padding: 0.3rem;
-    color: #35495E;
-    border-bottom: 1px solid rgba(65, 184, 131, 0.05);
+  padding: 0.3rem;
+  color: #35495e;
+  border-bottom: 1px solid rgba(65, 184, 131, 0.05);
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-    vds-table {
-        font-size: 11px;
-    }
-    
-    vds-th, vds-td {
-        padding: 0.4rem 0.3rem;
-    }
-    
-    .vds-cell {
-        font-size: 11px;
-    }
+  vds-table {
+    font-size: 11px;
+  }
+
+  vds-th,
+  vds-td {
+    padding: 0.4rem 0.3rem;
+  }
+
+  .vds-cell {
+    font-size: 11px;
+  }
 }
 
 /* 暗色模式支持 - 暂时注释掉，统一使用明亮模式 */
@@ -1845,89 +2246,91 @@ vds-cleaning-report {
 
 /* LaTeX 渲染样式优化 */
 .tiptap-notebook-editor .latex-markdown-wrapper {
-    margin: 1rem 0 !important;
-    position: relative !important;
+  margin: 1rem 0 !important;
+  position: relative !important;
 }
 
 .tiptap-notebook-editor .latex-display {
-    margin: 1rem 0 !important;
-    text-align: center !important;
+  margin: 1rem 0 !important;
+  text-align: center !important;
 }
 
 .tiptap-notebook-editor .latex-inline {
-    display: inline-block !important;
-    vertical-align: middle !important;
-    margin: 0 0.2rem !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+  margin: 0 0.2rem !important;
 }
 
 .tiptap-notebook-editor .katex {
-    color: #202124 !important;
-    font-size: 1.1em !important;
+  color: #202124 !important;
+  font-size: 1.1em !important;
 }
 
 .tiptap-notebook-editor .katex-display {
-    margin: 1rem 0 !important;
+  margin: 1rem 0 !important;
 }
 
 /* 修复 LaTeX 编辑器样式 */
 .tiptap-notebook-editor .latex-editor input {
-    width: 100% !important;
-    padding: 0.5rem !important;
-    border: 2px solid #41B883 !important;
-    border-radius: 4px !important;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-size: 0.875rem !important;
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    color: #202124 !important;
-    transition: border-color 0.2s ease !important;
+  width: 100% !important;
+  padding: 0.5rem !important;
+  border: 2px solid #41b883 !important;
+  border-radius: 4px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.875rem !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  color: #202124 !important;
+  transition: border-color 0.2s ease !important;
 }
 
 .tiptap-notebook-editor .latex-editor input:focus {
-    outline: none !important;
-    border-color: #3490DC !important;
-    box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.1) !important;
+  outline: none !important;
+  border-color: #3490dc !important;
+  box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.1) !important;
 }
 
 /* 图片扩展样式优化 */
 .tiptap-notebook-editor .image-markdown-wrapper {
-    margin: 1rem 0 !important;
-    position: relative !important;
+  margin: 1rem 0 !important;
+  position: relative !important;
 }
 
 .tiptap-notebook-editor .image-display {
-    margin: 1rem 0 !important;
-    text-align: center !important;
+  margin: 1rem 0 !important;
+  text-align: center !important;
 }
 
 .tiptap-notebook-editor .image-display img {
-    max-width: 100% !important;
-    height: auto !important;
-    border-radius: 8px !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
-    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+  max-width: 100% !important;
+  height: auto !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease !important;
 }
 
 .tiptap-notebook-editor .image-display img:hover {
-    transform: scale(1.02) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+  transform: scale(1.02) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
 }
 
 /* 图片编辑器样式 */
 .tiptap-notebook-editor .image-editor input {
-    width: 100% !important;
-    padding: 0.5rem !important;
-    border: 2px solid #41B883 !important;
-    border-radius: 4px !important;
-    font-size: 0.875rem !important;
-    background-color: rgba(65, 184, 131, 0.05) !important;
-    color: #202124 !important;
-    transition: border-color 0.2s ease !important;
+  width: 100% !important;
+  padding: 0.5rem !important;
+  border: 2px solid #41b883 !important;
+  border-radius: 4px !important;
+  font-size: 0.875rem !important;
+  background-color: rgba(65, 184, 131, 0.05) !important;
+  color: #202124 !important;
+  transition: border-color 0.2s ease !important;
 }
 
 .tiptap-notebook-editor .image-editor input:focus {
-    outline: none !important;
-    border-color: #3490DC !important;
-    box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.1) !important;
+  outline: none !important;
+  border-color: #3490dc !important;
+  box-shadow: 0 0 0 3px rgba(65, 184, 131, 0.1) !important;
 }
 
 /* ====================================================================
@@ -1936,55 +2339,56 @@ vds-cleaning-report {
 
 /* 动态光标效果 */
 @keyframes cursorPulse {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.6;
-    }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* 光标增强但不使用动画（避免影响整体内容） */
 .tiptap-notebook-editor .ProseMirror {
-    caret-color: #41B883 !important;
+  caret-color: #41b883 !important;
 }
 
 /* 不同内容类型的光标颜色保持但增强可见性 */
 .tiptap-notebook-editor .ProseMirror h1 {
-    caret-color: #3b82f6 !important;
+  caret-color: #3b82f6 !important;
 }
 
 .tiptap-notebook-editor .ProseMirror h2 {
-    caret-color: #ffffff !important;
+  caret-color: #ffffff !important;
 }
 
 /* 选中文本效果增强 */
 .tiptap-notebook-editor .ProseMirror ::selection {
-    background: rgba(65, 184, 131, 0.3) !important;
-    color: inherit !important;
-    text-shadow: 0 0 2px rgba(255, 255, 255, 0.8) !important;
+  background: rgba(65, 184, 131, 0.3) !important;
+  color: inherit !important;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.8) !important;
 }
 
 /* 活跃元素指示器 */
 .tiptap-notebook-editor .ProseMirror .ProseMirror-focused {
-    position: relative !important;
+  position: relative !important;
 }
 
 .tiptap-notebook-editor .ProseMirror .ProseMirror-focused::before {
-    content: '' !important;
-    position: absolute !important;
-    left: -4px !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    width: 3px !important;
-    background: #41B883 !important;
-    border-radius: 2px !important;
-    opacity: 0 !important;
-    transition: opacity 0.2s ease !important;
+  content: '' !important;
+  position: absolute !important;
+  left: -4px !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 3px !important;
+  background: #41b883 !important;
+  border-radius: 2px !important;
+  opacity: 0 !important;
+  transition: opacity 0.2s ease !important;
 }
 
 .tiptap-notebook-editor .ProseMirror:focus .ProseMirror-focused::before {
-    opacity: 1 !important;
+  opacity: 1 !important;
 }
 
 /* ====================================================================
@@ -1992,63 +2396,67 @@ vds-cleaning-report {
    ==================================================================== */
 
 .tiptap-notebook-editor .thinking-cell-wrapper {
-    margin: 1.5rem 0 !important;
-    position: relative !important;
-    transition: all 0.2s ease !important;
+  margin: 1.5rem 0 !important;
+  position: relative !important;
+  transition: all 0.2s ease !important;
 }
 
 /* 思考单元格收起状态样式 */
 .thinking-cell-container {
-    position: relative !important;
-    transition: all 0.2s ease !important;
+  position: relative !important;
+  transition: all 0.2s ease !important;
 }
 
 /* 收起状态的悬停效果 */
 .thinking-cell-container:not(.expanded):hover {
-    transform: translateX(2px) !important;
+  transform: translateX(2px) !important;
 }
 
 /* 展开状态的思考单元格 */
 .thinking-cell-container.expanded {
-    background: linear-gradient(135deg, rgba(65, 184, 131, 0.05), rgba(52, 144, 220, 0.05)) !important;
-    border: 1px solid rgba(65, 184, 131, 0.15) !important;
-    border-radius: 8px !important;
-    padding: 1rem !important;
+  background: linear-gradient(
+    135deg,
+    rgba(65, 184, 131, 0.05),
+    rgba(52, 144, 220, 0.05)
+  ) !important;
+  border: 1px solid rgba(65, 184, 131, 0.15) !important;
+  border-radius: 8px !important;
+  padding: 1rem !important;
 }
 
 .thinking-cell-container.expanded:hover {
-    border-color: rgba(65, 184, 131, 0.3) !important;
-    box-shadow: 0 2px 8px rgba(65, 184, 131, 0.1) !important;
+  border-color: rgba(65, 184, 131, 0.3) !important;
+  box-shadow: 0 2px 8px rgba(65, 184, 131, 0.1) !important;
 }
 
 /* 收起状态的展开图标动画 */
 .thinking-cell-container .chevron-icon {
-    transition: transform 0.2s ease !important;
+  transition: transform 0.2s ease !important;
 }
 
 .thinking-cell-container:hover .chevron-icon {
-    transform: translateX(2px) !important;
+  transform: translateX(2px) !important;
 }
 
 /* AI 思考块的加载动画 - 确保在收起状态也能看到 */
 @keyframes thinking-rotation {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 收起状态的紧凑布局 */
 .thinking-cell-container:not(.expanded) {
-    min-height: auto !important;
-    padding: 0 !important;
+  min-height: auto !important;
+  padding: 0 !important;
 }
 
 /* 收起状态的边框样式 */
 .thinking-cell-container:not(.expanded):hover {
-    border-color: rgba(65, 184, 131, 0.3) !important;
+  border-color: rgba(65, 184, 131, 0.3) !important;
 }
 
 /* ====================================================================
@@ -2056,40 +2464,143 @@ vds-cleaning-report {
    ==================================================================== */
 
 .tiptap-notebook-editor .executable-code-block-wrapper {
-    margin: 1.5rem 0 !important;
-    border-radius: 8px !important;
-    overflow: hidden !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
-    transition: box-shadow 0.2s ease !important;
+  margin: 1.5rem 0 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
+  transition: box-shadow 0.2s ease !important;
 }
 
 .tiptap-notebook-editor .executable-code-block-wrapper:hover {
-    box-shadow: 0 2px 8px rgba(65, 184, 131, 0.15) !important;
+  box-shadow: 0 2px 8px rgba(65, 184, 131, 0.15) !important;
 }
 
 /* 统一主题色定义 - 保持原有定义但移到文件末尾 */
-.theme-50 { background-color: #f0fdf4; }
-.theme-100 { background-color: #dcfce7; }
-.theme-200 { background-color: #bbf7d0; }
-.theme-400 { background-color: #4ade80; }
-.theme-500 { background-color: #22c55e; }
-.theme-600 { color: #16a34a; }
-.theme-700 { color: #15803d; }
-.theme-800 { color: #166534; }
-.theme-900 { color: #14532d; }
-.theme-25 { background-color: #f7fee7; }
+.theme-50 {
+  background-color: #f0fdf4;
+}
+.theme-100 {
+  background-color: #dcfce7;
+}
+.theme-200 {
+  background-color: #bbf7d0;
+}
+.theme-400 {
+  background-color: #4ade80;
+}
+.theme-500 {
+  background-color: #22c55e;
+}
+.theme-600 {
+  color: #16a34a;
+}
+.theme-700 {
+  color: #15803d;
+}
+.theme-800 {
+  color: #166534;
+}
+.theme-900 {
+  color: #14532d;
+}
+.theme-25 {
+  background-color: #f7fee7;
+}
 
-.border-theme-100 { border-color: #dcfce7; }
-.border-theme-200 { border-color: #bbf7d0; }
-.border-theme-400 { border-color: #4ade80; }
-.border-theme-500 { border-color: #22c55e; }
+.border-theme-100 {
+  border-color: #dcfce7;
+}
+.border-theme-200 {
+  border-color: #bbf7d0;
+}
+.border-theme-400 {
+  border-color: #4ade80;
+}
+.border-theme-500 {
+  border-color: #22c55e;
+}
 
-.text-theme-600 { color: #16a34a; }
-.text-theme-700 { color: #15803d; }
-.text-theme-800 { color: #166534; }
-.text-theme-900 { color: #14532d; }
+.text-theme-600 {
+  color: #16a34a;
+}
+.text-theme-700 {
+  color: #15803d;
+}
+.text-theme-800 {
+  color: #166534;
+}
+.text-theme-900 {
+  color: #14532d;
+}
 
 /* 移除 Ant Design Tabs 导航栏的 margin-bottom */
 .ant-tabs-nav {
-    margin-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* ====================================================================
+   Fluent Design - Dark Mode Support
+   Inspired by EasyPaper's dark theme with Mica/Acrylic materials
+   ==================================================================== */
+
+.dark {
+  /* Material tint colors (RGB for rgba usage) - darker for dark mode */
+  --acrylic-tint: 35 35 42;
+  --mica-tint: 32 32 38;
+  --mica-alt-tint: 28 28 35;
+
+  /* Adjust primary colors for dark mode */
+  --color-primary: #52c896;
+  --color-primary-light: #6fd9ac;
+  --color-primary-dark: #41b883;
+
+  /* Dark mode background adjustments */
+  background-color: #1a1a1f;
+  color: #e5e5e7;
+}
+
+/* Dark mode body styles */
+.dark body {
+  background-color: #1a1a1f;
+  color: #e5e5e7;
+}
+
+/* Dark mode text color strategy - only paragraphs are white */
+.dark * {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Only paragraph text is white in dark mode */
+.dark p {
+  color: #f5f5f7;
+}
+
+/* Headings keep their natural colors or inherit from parent */
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: inherit;
+}
+
+/* Other elements inherit their colors naturally */
+.dark span,
+.dark div,
+.dark button {
+  color: inherit;
+}
+
+/* Fluent Design Utility Classes */
+.acrylic-base {
+  backdrop-filter: saturate(180%) blur(var(--blur-sm));
+  -webkit-backdrop-filter: saturate(180%) blur(var(--blur-sm));
+  background-color: rgba(var(--acrylic-tint), 0.7);
+}
+
+.mica-base {
+  backdrop-filter: blur(var(--blur-lg));
+  -webkit-backdrop-filter: blur(var(--blur-lg));
+  background-color: rgba(var(--mica-tint), 0.9);
 }

@@ -101,25 +101,30 @@ interface HandleDeleteFileParams {
  * 获取文件列表
  * @param params - 参数对象
  */
-export const fetchFileList = async ({ notebookId, notebookApiIntegration, setFileList, toast }: FetchFileListParams): Promise<void> => {
-    if (!notebookId) return;
+export const fetchFileList = async ({
+  notebookId,
+  notebookApiIntegration,
+  setFileList,
+  toast,
+}: FetchFileListParams): Promise<void> => {
+  if (!notebookId) return;
 
-    try {
-        const data: ApiResponse = await notebookApiIntegration.listFiles(notebookId);
-        if (data.status === 'ok') {
-            setFileList(data.files);
-        } else {
-            throw new Error(data.message || 'Failed to fetch file list');
-        }
-    } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        toast({
-            title: "Error",
-            description: `Failed to fetch file list: ${errorMessage}`,
-            variant: "destructive",
-        });
-        setFileList([]);
+  try {
+    const data: ApiResponse = await notebookApiIntegration.listFiles(notebookId);
+    if (data.status === 'ok') {
+      setFileList(data.files);
+    } else {
+      throw new Error(data.message || 'Failed to fetch file list');
     }
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    toast({
+      title: 'Error',
+      description: `Failed to fetch file list: ${errorMessage}`,
+      variant: 'destructive',
+    });
+    setFileList([]);
+  }
 };
 
 /**
@@ -129,19 +134,19 @@ export const fetchFileList = async ({ notebookId, notebookApiIntegration, setFil
  * @returns 验证通过返回 true，否则抛出错误
  */
 export const validateFile = (file: File, uploadConfig: UploadConfig): boolean => {
-    if (file.size > uploadConfig.maxFileSize) {
-        throw new Error(
-            `File ${file.name} exceeds maximum size of ${uploadConfig.maxFileSize / 1024 / 1024}MB`
-        );
-    }
+  if (file.size > uploadConfig.maxFileSize) {
+    throw new Error(
+      `File ${file.name} exceeds maximum size of ${uploadConfig.maxFileSize / 1024 / 1024}MB`
+    );
+  }
 
-    if (uploadConfig.mode === 'restricted') {
-        const ext: string = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
-        if (!uploadConfig.allowedTypes.includes(ext)) {
-            throw new Error(`File type ${ext} is not allowed`);
-        }
+  if (uploadConfig.mode === 'restricted') {
+    const ext = `.${file.name.split('.').pop()?.toLowerCase() || ''}`;
+    if (!uploadConfig.allowedTypes.includes(ext)) {
+      throw new Error(`File type ${ext} is not allowed`);
     }
-    return true;
+  }
+  return true;
 };
 
 /**
@@ -149,93 +154,93 @@ export const validateFile = (file: File, uploadConfig: UploadConfig): boolean =>
  * @param params - 参数对象
  */
 export const handleFileUpload = async ({
-    notebookId,
-    files,
-    notebookApiIntegration,
-    uploadConfig,
-    setUploading,
-    setUploadProgress,
-    setError,
-    fileInputRef,
-    setIsPreview,
-    toast,
-    onUpdate,
-    cellId,
-    abortControllerRef,
-    fetchFileList,
+  notebookId,
+  files,
+  notebookApiIntegration,
+  uploadConfig,
+  setUploading,
+  setUploadProgress,
+  setError,
+  fileInputRef,
+  setIsPreview,
+  toast,
+  onUpdate,
+  cellId,
+  abortControllerRef,
+  fetchFileList,
 }: HandleFileUploadParams): Promise<void> => {
-    if (!files || files.length === 0) return;
+  if (!files || files.length === 0) return;
 
-    abortControllerRef.current = new AbortController();
+  abortControllerRef.current = new AbortController();
 
-    setUploading(true);
-    setUploadProgress(0);
-    setError(null);
+  setUploading(true);
+  setUploadProgress(0);
+  setError(null);
 
-    try {
-        if (
-            uploadConfig.mode === 'restricted' &&
-            uploadConfig.maxFiles &&
-            files.length > uploadConfig.maxFiles
-        ) {
-            throw new Error(`Maximum ${uploadConfig.maxFiles} files allowed`);
-        }
-
-        files.forEach((file: File) => validateFile(file, uploadConfig));
-
-        const result: ApiResponse = await notebookApiIntegration.uploadFiles(
-            notebookId,
-            files,
-            uploadConfig,
-            (progressEvent: ProgressEvent) => {
-                const percentCompleted: number = Math.round(
-                    (progressEvent.loaded * 100) / progressEvent.total
-                );
-                setUploadProgress(percentCompleted);
-            },
-            abortControllerRef.current!.signal
-        );
-
-        if (result.status === 'ok') {
-            await fetchFileList();
-            setIsPreview(true);
-            toast({
-                title: "Upload Successful",
-                description: `Successfully uploaded ${files.length} file(s)`,
-                variant: "success",
-            });
-
-            if (onUpdate) {
-                onUpdate(cellId, { uploadedFiles: files.map((file: File) => file.name) });
-            }
-        } else {
-            throw new Error(result.message || 'Upload failed');
-        }
-    } catch (err: unknown) {
-        const error = err as Error;
-        if (error.name === 'AbortError') {
-            setError('Upload cancelled');
-            toast({
-                title: "Upload Cancelled",
-                description: "File upload was cancelled",
-                variant: "info",
-            });
-        } else {
-            const errorMessage = error.message || 'Unknown error';
-            setError(errorMessage);
-            toast({
-                title: "Upload Failed",
-                description: errorMessage,
-                variant: "destructive",
-            });
-        }
-    } finally {
-        setUploading(false);
-        setUploadProgress(0);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+  try {
+    if (
+      uploadConfig.mode === 'restricted' &&
+      uploadConfig.maxFiles &&
+      files.length > uploadConfig.maxFiles
+    ) {
+      throw new Error(`Maximum ${uploadConfig.maxFiles} files allowed`);
     }
+
+    files.forEach((file: File) => validateFile(file, uploadConfig));
+
+    const result: ApiResponse = await notebookApiIntegration.uploadFiles(
+      notebookId,
+      files,
+      uploadConfig,
+      (progressEvent: ProgressEvent) => {
+        const percentCompleted: number = Math.round(
+          (progressEvent.loaded * 100) / progressEvent.total
+        );
+        setUploadProgress(percentCompleted);
+      },
+      abortControllerRef.current!.signal
+    );
+
+    if (result.status === 'ok') {
+      await fetchFileList();
+      setIsPreview(true);
+      toast({
+        title: 'Upload Successful',
+        description: `Successfully uploaded ${files.length} file(s)`,
+        variant: 'success',
+      });
+
+      if (onUpdate) {
+        onUpdate(cellId, { uploadedFiles: files.map((file: File) => file.name) });
+      }
+    } else {
+      throw new Error(result.message || 'Upload failed');
+    }
+  } catch (err: unknown) {
+    const error = err as Error;
+    if (error.name === 'AbortError') {
+      setError('Upload cancelled');
+      toast({
+        title: 'Upload Cancelled',
+        description: 'File upload was cancelled',
+        variant: 'info',
+      });
+    } else {
+      const errorMessage = error.message || 'Unknown error';
+      setError(errorMessage);
+      toast({
+        title: 'Upload Failed',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    }
+  } finally {
+    setUploading(false);
+    setUploadProgress(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
 };
 
 /**
@@ -243,89 +248,100 @@ export const handleFileUpload = async ({
  * @param params - 参数对象
  */
 export const handlePreview = async ({
-    notebookId,
-    filename,
-    notebookApiIntegration,
-    setSelectedFile,
-    setPreviewContent,
-    setPreviewType,
-    setIsPreviewOpen,
-    toast,
-    PREVIEWABLE_IMAGE_TYPES,
-    PREVIEWABLE_TEXT_TYPES,
+  notebookId,
+  filename,
+  notebookApiIntegration,
+  setSelectedFile,
+  setPreviewContent,
+  setPreviewType,
+  setIsPreviewOpen,
+  toast,
+  PREVIEWABLE_IMAGE_TYPES,
+  PREVIEWABLE_TEXT_TYPES,
 }: HandlePreviewParams): Promise<void> => {
-    if (!notebookId) return;
+  if (!notebookId) return;
 
-    try {
-        const ext: string = `.${filename.split('.').pop()?.toLowerCase() || ''}`;
-        setSelectedFile(filename);
+  try {
+    const ext = `.${filename.split('.').pop()?.toLowerCase() || ''}`;
+    setSelectedFile(filename);
 
-        if (PREVIEWABLE_IMAGE_TYPES.includes(ext)) {
-            const imageUrl: string = await notebookApiIntegration.getFilePreviewUrl(notebookId, filename);
-            setPreviewContent(imageUrl);
-            setPreviewType('image');
-        } else if (PREVIEWABLE_TEXT_TYPES.includes(ext)) {
-            const content: string = await notebookApiIntegration.getFileContent(notebookId, filename);
-            setPreviewContent(content);
-            setPreviewType('text');
-        }
-
-        setIsPreviewOpen(true);
-    } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        toast({
-            title: "Error",
-            description: `Failed to preview file: ${errorMessage}`,
-            variant: "destructive",
-        });
+    if (PREVIEWABLE_IMAGE_TYPES.includes(ext)) {
+      const imageUrl: string = await notebookApiIntegration.getFilePreviewUrl(notebookId, filename);
+      setPreviewContent(imageUrl);
+      setPreviewType('image');
+    } else if (PREVIEWABLE_TEXT_TYPES.includes(ext)) {
+      const content: string = await notebookApiIntegration.getFileContent(notebookId, filename);
+      setPreviewContent(content);
+      setPreviewType('text');
     }
+
+    setIsPreviewOpen(true);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    toast({
+      title: 'Error',
+      description: `Failed to preview file: ${errorMessage}`,
+      variant: 'destructive',
+    });
+  }
 };
 
 /**
  * 处理文件下载
  * @param params - 参数对象
  */
-export const handleDownload = async ({ notebookId, filename, notebookApiIntegration, toast }: HandleDownloadParams): Promise<void> => {
-    if (!notebookId) return;
+export const handleDownload = async ({
+  notebookId,
+  filename,
+  notebookApiIntegration,
+  toast,
+}: HandleDownloadParams): Promise<void> => {
+  if (!notebookId) return;
 
-    try {
-        await notebookApiIntegration.downloadFile(notebookId, filename);
-        toast({
-            title: "Success",
-            description: `${filename} downloaded successfully`,
-            variant: "success",
-        });
-    } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        toast({
-            title: "Error",
-            description: `Failed to download file: ${errorMessage}`,
-            variant: "destructive",
-        });
-    }
+  try {
+    await notebookApiIntegration.downloadFile(notebookId, filename);
+    toast({
+      title: 'Success',
+      description: `${filename} downloaded successfully`,
+      variant: 'success',
+    });
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    toast({
+      title: 'Error',
+      description: `Failed to download file: ${errorMessage}`,
+      variant: 'destructive',
+    });
+  }
 };
 
 /**
  * 处理文件删除
  * @param params - 参数对象
  */
-export const handleDeleteFile = async ({ notebookId, filename, notebookApiIntegration, fetchFileList, toast }: HandleDeleteFileParams): Promise<void> => {
-    if (!notebookId) return;
+export const handleDeleteFile = async ({
+  notebookId,
+  filename,
+  notebookApiIntegration,
+  fetchFileList,
+  toast,
+}: HandleDeleteFileParams): Promise<void> => {
+  if (!notebookId) return;
 
-    try {
-        await notebookApiIntegration.deleteFile(notebookId, filename);
-        await fetchFileList();
-        toast({
-            title: "Success",
-            description: `${filename} deleted successfully`,
-            variant: "success",
-        });
-    } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        toast({
-            title: "Error",
-            description: `Failed to delete file: ${errorMessage}`,
-            variant: "destructive",
-        });
-    }
+  try {
+    await notebookApiIntegration.deleteFile(notebookId, filename);
+    await fetchFileList();
+    toast({
+      title: 'Success',
+      description: `${filename} deleted successfully`,
+      variant: 'success',
+    });
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    toast({
+      title: 'Error',
+      description: `Failed to delete file: ${errorMessage}`,
+      variant: 'destructive',
+    });
+  }
 };

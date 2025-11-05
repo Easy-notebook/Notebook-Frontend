@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { SendHorizontal, FileText, X, PlusCircle, Sparkles, ArrowRight } from 'lucide-react';
+import { Acrylic } from '@/components/UI/fluent';
 
 import {
   usePipelineStore,
@@ -403,16 +404,14 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   return (
     <div className="relative mb-6">
       {/* 输入框容器 */}
-      <div
+      <Acrylic
+        variant="default"
+        tintOpacity={0.9}
         className={`
           relative rounded-full transition-all duration-300 ease-in-out
           border-0 margin-0 p-0 transform
-          ${isFocused ? 'shadow-lg shadow-theme-200/50' : 'shadow-sm'}
-          ${input && input.startsWith('/') ? 'bg-slate-50' : 'bg-white'}
-          focus:outline-none border-2 transition-all duration-300
-          ${isFocused ? 'border-theme-400 scale-[1.02]' : 'border-black'}
+          ${isFocused ? 'scale-[1.02]' : ''}
           ${input && input.startsWith('/') ? 'font-mono' : 'font-normal'}
-          hover:shadow-md
         `}
       >
         <button
@@ -454,7 +453,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
                 ? t('emptyState.commandPlaceholder')
                 : t('emptyState.questionPlaceholder')
           }
-          className="w-full h-full pl-16 pr-36 py-3 pt-4 rounded-3xl text-base placeholder:text-gray-400 resize-none leading-6 focus:outline-none focus:ring-0"
+          className="w-full h-full pl-16 pr-36 py-3 pt-4 rounded-3xl text-base placeholder:text-gray-400 resize-none leading-6 focus:outline-none focus:ring-0 bg-transparent"
           rows={1}
           style={{ wordWrap: 'break-word', whiteSpace: 'pre-wrap' }}
         />
@@ -471,16 +470,11 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           disabled={!input.trim()}
           className={`
             absolute right-2 top-7 -translate-y-1/2
-            flex items-center gap-1.5 px-4 py-1.5 rounded-full
-            transition-all duration-300 ease-in-out text-sm font-medium transform
-            ${
-              input.trim()
-                ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'
-            }
+            btn btn-sm
+            ${input.trim() ? 'btn-primary' : 'opacity-50 cursor-not-allowed'}
           `}
         >
-          <SendHorizontal className="w-4 h-4" />
+          <SendHorizontal className="icon-sm" />
           {input && input.startsWith('/')
             ? t('emptyState.executeBtnText')
             : t('emptyState.askBtnText')}
@@ -548,7 +542,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             ))}
           </div>
         )}
-      </div>
+      </Acrylic>
 
       {/* 模式提示 */}
       {input && (
@@ -569,13 +563,11 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             <button
               key={idx}
               onClick={() => setInput(q.problem_description)}
-              className="p-3 text-left bg-gray-50 hover:bg-gray-100 border rounded-xl transition-all group"
+              className="btn btn-secondary btn-sm justify-start text-left"
             >
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-theme-500 flex-shrink-0" />
-                <span className="font-medium text-gray-800 text-sm truncate">{q.problem_name}</span>
-                <ArrowRight className="w-3 h-3 text-gray-400 group-hover:text-theme-500 transition-colors" />
-              </div>
+              <Sparkles className="icon-sm text-theme-500 flex-shrink-0" />
+              <span className="font-medium truncate">{q.problem_name}</span>
+              <ArrowRight className="icon-sm ml-auto group-hover:text-theme-500 transition-colors" />
             </button>
           ))}
         </div>

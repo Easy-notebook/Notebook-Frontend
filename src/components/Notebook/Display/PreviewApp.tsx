@@ -247,7 +247,7 @@ const PreviewApp: React.FC = () => {
                           document.body.removeChild(ta);
                         }
                       }}
-                      className="px-2 py-1 text-xs bg-gray-700/90 text-white rounded hover:bg-gray-600 transition-colors backdrop-blur-sm"
+                      className="px-2 py-1 text-xs text-white rounded hover:bg-gray-600 transition-colors backdrop-blur-sm"
                       title="Copy HTML source"
                     >
                       Copy

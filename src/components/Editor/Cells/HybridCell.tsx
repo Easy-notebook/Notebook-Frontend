@@ -65,7 +65,6 @@ const HybridCell = ({ cell, onDelete }) => {
 
       <div className="absolute inset-0 rounded-lg">
         <div className="absolute inset-0 bg-gradient-to-r from-theme-100 via-purple-100 to-pink-100 animate-pulse"></div>
-        <div className="absolute inset-0 bg-white/50"></div>
       </div>
 
       {/* Content container */}

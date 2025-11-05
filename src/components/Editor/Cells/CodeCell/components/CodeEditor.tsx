@@ -62,7 +62,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         >
           <button
             onClick={onCopyCode}
-            className="px-2 py-1 text-xs bg-gray-700/90 text-white rounded hover:bg-gray-600 transition-colors backdrop-blur-sm"
+            className="px-2 py-1 text-xs text-white rounded hover:bg-gray-600 transition-colors backdrop-blur-sm"
             title="Copy code"
             style={{
               minWidth: '44px',
@@ -94,7 +94,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             ref={editorRef}
           />
           {isExecuting && (
-            <div className="absolute inset-0 bg-gray-800/50 flex items-center justify-center rounded-b-lg">
+            <div className="absolute inset-0 flex items-center justify-center rounded-b-lg">
               <Loader2 className="w-16 h-16 animate-spin text-red-500" />
             </div>
           )}
@@ -110,7 +110,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             {!isExpanded ? (
               <button
                 onClick={onExpand}
-                className="px-4 py-1.5 text-sm bg-gray-900/90 text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
+                className="px-4 py-1.5 text-sm text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
                 title="Expand"
               >
                 <span>Expand</span>
@@ -119,7 +119,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             ) : (
               <button
                 onClick={onCollapse}
-                className="px-4 py-1.5 text-sm bg-gray-900/90 text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
+                className="px-4 py-1.5 text-sm text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
                 title="Collapse"
               >
                 <span>Collapse</span>

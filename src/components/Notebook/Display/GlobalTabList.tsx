@@ -235,11 +235,14 @@ const GlobalTabList: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0 max-w-48">
             {getFileTabIcon(t.type)}
             <span
-              className={`truncate text-sm ${t.isCurrentNotebook ? 'font-bold text-theme-800' : 'font-medium'}`}
+              className={`truncate text-sm ${t.isCurrentNotebook ? 'font-bold text-primary dark:text-primary-light' : 'font-medium text-gray-700 dark:text-gray-300'}`}
             >
               {t.name}
               {t.isDirty ? (
-                <span className="text-orange-500 ml-1" aria-label="Unsaved changes">
+                <span
+                  className="text-orange-500 dark:text-orange-400 ml-1"
+                  aria-label="Unsaved changes"
+                >
                   *
                 </span>
               ) : null}
@@ -266,7 +269,7 @@ const GlobalTabList: React.FC = () => {
   return (
     <Tabs
       type="editable-card"
-      className="bg-white mb-0 mt-0 p-0"
+      className="bg-transparent dark:bg-transparent mb-0 mt-0 p-0 text-gray-900 dark:text-gray-100"
       style={{ margin: '0px !important' }}
       hideAdd
       items={items}

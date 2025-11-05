@@ -1,38 +1,57 @@
 // tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,jsx,ts,tsx}"
-  ],
+  content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      height: {
+        dvh: '100dvh', // 动态视口高度支持
+      },
       colors: {
         // 全局主题色阶
         theme: {
-          50:  '#F0FCF9',
+          50: '#F0FCF9',
           100: '#C6F7E9',
           200: '#8EEDD1',
           300: '#5FE3C0',
-          400: '#2DCCA7',  // 轻盈主体色
+          400: '#2DCCA7', // 轻盈主体色
           500: '#24B79F',
-          600: '#1FA093',  // 稳重深色
+          600: '#1FA093', // 稳重深色
           700: '#187D6D',
           800: '#0F5246',
           900: '#071E19',
         },
         'gray-50': '#F6F6F6',
+        // Fluent Design System colors from CSS variables
+        background: '#f9fafb',
+        foreground: '#1f2937',
+        primary: {
+          DEFAULT: 'var(--color-primary)',
+          light: 'var(--color-primary-light)',
+          dark: 'var(--color-primary-dark)',
+        },
+        secondary: 'var(--color-secondary)',
+        accent: 'var(--color-accent)',
+        success: '#22c55e', // green-500
+        warning: '#f59e0b', // amber-500
+        neutral: {
+          DEFAULT: 'var(--color-neutral)',
+          dark: 'var(--color-neutral-dark)',
+        },
       },
       backgroundImage: {
+        'gradient-radial': 'radial-gradient(ellipse at top, var(--tw-gradient-stops))',
         // 渐变背景样式
-        'theme-gradient-x': 'linear-gradient(to right, theme("colors.theme.600"), theme("colors.theme.400"), theme("colors.theme.200"))',
-        'theme-gradient-y': 'linear-gradient(to bottom, theme("colors.theme.600"), theme("colors.theme.400"), theme("colors.theme.200"))',
+        'theme-gradient-x':
+          'linear-gradient(to right, theme("colors.theme.600"), theme("colors.theme.400"), theme("colors.theme.200"))',
+        'theme-gradient-y':
+          'linear-gradient(to bottom, theme("colors.theme.600"), theme("colors.theme.400"), theme("colors.theme.200"))',
       },
       keyframes: {
         // 渐变左右移动动画
         'gradient-x': {
           '0%, 100%': { 'background-position': '0% 50%' },
-          '50%':      { 'background-position': '100% 50%' },
+          '50%': { 'background-position': '100% 50%' },
         },
       },
       animation: {
@@ -48,7 +67,7 @@ export default {
         'background-image': 'linear-gradient(to right, #41B883, #3490DC, #6574CD)',
         '-webkit-background-clip': 'text',
         'background-clip': 'text',
-        'color': 'transparent',
+        color: 'transparent',
       },
     },
   },
@@ -60,11 +79,11 @@ export default {
         */
         '.theme-grad-text': {
           'background-image': 'linear-gradient(to right, #41B883, #3490DC, #6574CD)',
-          'color': 'transparent',
+          color: 'transparent',
           '-webkit-background-clip': 'text',
           'background-clip': 'text',
         },
-      })
-    }
+      });
+    },
   ],
-}
+};

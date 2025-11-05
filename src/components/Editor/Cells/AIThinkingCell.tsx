@@ -145,7 +145,7 @@ const AIThinkingCell: React.FC<AIThinkingCellProps> = ({
       onMouseEnter={() => setShowToolbar(true)}
       onMouseLeave={() => setShowToolbar(false)}
     >
-      <div className="flex items-center justify-between p-3 rounded-lg bg-green-50/50">
+      <div className="flex items-center justify-between p-3 rounded-lg">
         <div className="flex items-center gap-2">
           <ExternalLink className="w-4 h-4 text-green-500" />
           <span className="text-sm font-medium text-green-700">

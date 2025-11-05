@@ -8,31 +8,35 @@ import { CheckCircle2 } from 'lucide-react';
 import { SHARED_STYLES, TabId, TAB_CONFIG } from './constants';
 
 // 状态指示器组件
-export const StatusIcon = memo<{ status: 'completed' | 'in-progress' | 'pending' }>(({ status }) => {
-  if (status === 'completed') {
-    return <CheckCircle2 size={16} className="text-theme-500" />;
+export const StatusIcon = memo<{ status: 'completed' | 'in-progress' | 'pending' }>(
+  ({ status }) => {
+    if (status === 'completed') {
+      return <CheckCircle2 size={16} className="text-theme-500" />;
+    }
+    return null;
   }
-  return null;
-});
+);
 
 StatusIcon.displayName = 'StatusIcon';
 
 // 状态圆点组件
-export const StatusDot = memo<{ 
+export const StatusDot = memo<{
   status: 'completed' | 'in-progress' | 'pending';
   size?: 'sm' | 'md' | 'lg';
 }>(({ status, size = 'md' }) => {
   const sizeClasses = {
     sm: 'w-3 h-3',
-    md: 'w-4 h-4', 
-    lg: 'w-5 h-5'
+    md: 'w-4 h-4',
+    lg: 'w-5 h-5',
   };
 
   return (
-    <div className={`
+    <div
+      className={`
       ${sizeClasses[size]} rounded-full flex-shrink-0
       ${SHARED_STYLES.status.steps[status]}
-    `} />
+    `}
+    />
   );
 });
 
@@ -49,7 +53,7 @@ export const SidebarButton = memo<{
   const sizeClasses = {
     sm: 'px-2.5 py-1.5 text-sm',
     md: 'px-3 py-2 text-sm',
-    lg: 'px-4 py-2.5 text-base'
+    lg: 'px-4 py-2.5 text-base',
   };
 
   return (
@@ -59,17 +63,16 @@ export const SidebarButton = memo<{
         w-full flex items-center gap-2.5 rounded-md group
         ${SHARED_STYLES.button.base}
         ${sizeClasses[size]}
-        ${isActive
-          ? SHARED_STYLES.button.active
-          : `${SHARED_STYLES.button.inactive} ${SHARED_STYLES.button.hover}`
+        ${
+          isActive
+            ? SHARED_STYLES.button.active
+            : `${SHARED_STYLES.button.inactive} ${SHARED_STYLES.button.hover}`
         }
         ${className}
       `}
     >
       {children}
-      {isActive && (
-        <div className="ml-auto w-1.5 h-1.5 bg-slate-600 rounded-full" />
-      )}
+      {isActive && <div className="ml-auto w-1.5 h-1.5 bg-slate-600 rounded-full" />}
     </button>
   );
 });
@@ -83,17 +86,14 @@ export const TabSwitcher = memo<{
   className?: string;
 }>(({ activeTab, onTabChange, className = '' }) => {
   return (
-    <div className={`flex space-x-0.5 bg-slate-100/60 p-1 rounded-lg ${className}`}>
+    <div className={`flex space-x-0.5 p-1 rounded-lg ${className}`}>
       {TAB_CONFIG.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onTabChange(tab.id)}
           className={`
             ${SHARED_STYLES.tab.base}
-            ${activeTab === tab.id
-              ? SHARED_STYLES.tab.active
-              : SHARED_STYLES.tab.inactive
-            }
+            ${activeTab === tab.id ? SHARED_STYLES.tab.active : SHARED_STYLES.tab.inactive}
             relative overflow-hidden
           `}
         >
@@ -134,11 +134,7 @@ export const SidebarHeader = memo<{
   children: ReactNode;
   className?: string;
 }>(({ children, className = '' }) => {
-  return (
-    <div className={`${SHARED_STYLES.container.header} ${className}`}>
-      {children}
-    </div>
-  );
+  return <div className={`${SHARED_STYLES.container.header} ${className}`}>{children}</div>;
 });
 
 SidebarHeader.displayName = 'SidebarHeader';
@@ -184,14 +180,12 @@ export const LoadingIndicator = memo<{
   const sizeClasses = {
     sm: 'text-sm',
     md: 'text-base',
-    lg: 'text-lg'
+    lg: 'text-lg',
   };
 
   return (
     <div className="py-4 px-3 flex justify-center items-center h-full">
-      <div className={`animate-pulse text-theme-600 ${sizeClasses[size]}`}>
-        {text}
-      </div>
+      <div className={`animate-pulse text-theme-600 ${sizeClasses[size]}`}>{text}</div>
     </div>
   );
 });
@@ -210,9 +204,7 @@ RunningIndicator.displayName = 'RunningIndicator';
 
 // 任务计数器
 export const TaskCounter = memo<{ count: number }>(({ count }) => (
-  <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-    {count}
-  </span>
+  <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">{count}</span>
 ));
 
 TaskCounter.displayName = 'TaskCounter';
