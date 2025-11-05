@@ -9,7 +9,7 @@ import { useAIAgentStore } from '@Store/AIAgentStore';
 import OutlineSidebar from '../LeftSideBar/Main/Workspace/OutlineView/OutlineSidebar';
 import { EmptySidebar } from '../LeftSideBar/Main/Empty';
 import { AgentType } from '@Services/agentMemoryService';
-import { Mica } from '@/components/UI/fluent';
+import { Card } from '@/components/UI/card';
 import { RightSidebar } from './RightSidebar';
 
 // Cast component to any to relax prop type constraints
@@ -44,11 +44,8 @@ interface MainContentAreaProps {
 }
 
 export const MainContentArea = ({
-  routeView = 'workspace',
   viewMode,
   isCollapsed,
-  cells,
-  isExecuting,
   isRightSidebarCollapsed,
   error,
   children,
@@ -58,13 +55,6 @@ export const MainContentArea = ({
   currentStepIndex,
   activeSidebarItem,
   rightSidebarWidth,
-  onModeChange,
-  onRunAll,
-  onExportJson,
-  onExportDocx,
-  onExportPdf,
-  onExportMarkdown,
-  onToggleRightSidebar,
   onSetError,
   onPhaseSelect,
   onAgentSelect,
@@ -111,6 +101,26 @@ export const MainContentArea = ({
     },
     [leftSidebarWidth]
   );
+
+  // Helper function to check if sidebar has content
+  const hasSidebarContent = useCallback(() => {
+    const activeItem = activeSidebarItem;
+    switch (activeItem) {
+      case 'workspace':
+        // Workspace has content if there are tasks
+        return tasks && tasks.length > 0;
+      case 'knowledge-forest':
+      case 'easynet':
+      case 'settings':
+        // These views don't have content to display
+        return false;
+      case 'new-notebook':
+        // Only new-notebook always has content
+        return true;
+      default:
+        return false;
+    }
+  }, [activeSidebarItem, tasks]);
 
   // Helper function to render expanded sidebar content
   const renderExpandedSidebar = useCallback(() => {
@@ -163,27 +173,27 @@ export const MainContentArea = ({
       <CommandInput onClick={() => setShowCommandInput(true)} />
 
       {/* Content area - no header here anymore */}
-      <div className="flex-1 flex overflow-hidden gap-3 p-3">
-        {/* Expanded Sidebar (when not collapsed) */}
-        {!isCollapsed && (
+      <div className="flex-1 flex overflow-hidden gap-1.5 p-3">
+        {/* Expanded Sidebar (when not collapsed and has content) */}
+        {!isCollapsed && hasSidebarContent() && (
           <div className="flex h-full" style={{ width: leftSidebarWidth }}>
-            <div className="flex-1 rounded-xl shadow-lg overflow-hidden">
+            <Card className="flex-1 overflow-hidden">
               <div className="h-full overflow-y-auto scroll-smooth">{renderExpandedSidebar()}</div>
-            </div>
+            </Card>
 
             {/* Resize handle */}
             <div
-              className="w-1 hover:bg-primary/50 cursor-col-resize transition-colors duration-150 relative group shrink-0 ml-2"
+              className="w-1 cursor-col-resize transition-all duration-150 relative group shrink-0 ml-2"
               onMouseDown={handleLeftResize}
               style={{ touchAction: 'none' }}
             >
-              <div className="absolute inset-y-0 w-1 rounded-full bg-gray-300/50 dark:bg-gray-700/50 group-hover:bg-primary transition-colors" />
+              <div className="absolute inset-y-0 w-1 rounded-full bg-transparent group-hover:bg-primary transition-all opacity-0 group-hover:opacity-100" />
             </div>
           </div>
         )}
 
         {/* Main Content */}
-        <Mica className="flex-1 flex flex-col overflow-hidden rounded-xl shadow-lg">
+        <Card className="flex-1 flex flex-col overflow-hidden">
           <GlobalTabList />
 
           <div className="flex-1 overflow-y-auto scroll-smooth w-full h-full">
@@ -191,7 +201,7 @@ export const MainContentArea = ({
           </div>
 
           {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
-        </Mica>
+        </Card>
 
         {/* Right Sidebar */}
         <RightSidebar

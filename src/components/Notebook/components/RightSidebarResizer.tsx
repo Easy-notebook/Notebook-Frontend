@@ -8,11 +8,11 @@ interface RightSidebarResizerProps {
 export const RightSidebarResizer = ({ onMouseDown }: RightSidebarResizerProps) => {
   return (
     <div
-      className="w-1 hover:bg-primary/50 cursor-col-resize transition-colors duration-150 relative group shrink-0 mr-2"
+      className="w-1 cursor-col-resize transition-all duration-150 relative group shrink-0 mr-2"
       onMouseDown={onMouseDown}
       style={{ touchAction: 'none' }}
     >
-      <div className="absolute inset-y-0 w-1 rounded-full group-hover:bg-primary transition-colors" />
+      <div className="absolute inset-y-0 w-1 rounded-full bg-transparent group-hover:bg-primary transition-all opacity-0 group-hover:opacity-100" />
     </div>
   );
 };

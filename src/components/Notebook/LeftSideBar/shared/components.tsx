@@ -94,13 +94,10 @@ export const TabSwitcher = memo<{
           className={`
             ${SHARED_STYLES.tab.base}
             ${activeTab === tab.id ? SHARED_STYLES.tab.active : SHARED_STYLES.tab.inactive}
-            relative overflow-hidden
+            relative
           `}
         >
           <span className="relative z-10">{tab.label}</span>
-          {activeTab === tab.id && (
-            <div className="absolute inset-0 bg-white dark:bg-gray-800 shadow-sm rounded-md border border-slate-300/50 dark:border-gray-600" />
-          )}
         </button>
       ))}
     </div>

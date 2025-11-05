@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, Button, Dropdown } from 'antd';
+import { Button, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   Star,
@@ -21,8 +21,7 @@ import FileTags from './FileTags';
 import NotebookStats from './NotebookStats';
 import { formatTime, formatSize } from './utils';
 import type { NotebookCardProps } from './types';
-
-const { Meta } = Card;
+import { Card, CardContent } from '@/components/UI/card';
 
 interface PreviewCell {
   id: string;
@@ -218,7 +217,7 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
           </div>
 
           {/* Bottom fade gradient */}
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-gray-100 to-transparent pointer-events-none" />
+          <div className="absolute bottom-0 left-0 right-0 h-16" />
 
           {/* Star indicator */}
           {notebook.isStarred && (
@@ -228,7 +227,7 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
           )}
 
           {/* Last accessed time */}
-          <div className="absolute top-3 left-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-lg px-2 py-1 text-xs text-gray-600">
+          <div className="absolute top-3 left-3 rounded-lg px-2 py-1 text-xs text-gray-600">
             <div className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {formatTime(notebook.lastAccessedAt)}
@@ -241,18 +240,31 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
 
     if (viewMode === 'grid') {
       return (
-        <Card
-          hoverable
-          className="transition-all duration-300 cursor-pointer hover:shadow-md bg-white border-0"
-          style={{
-            borderRadius: 12,
-            boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-          }}
-          cover={notebookPreviewCover}
-          onClick={handleCardClick}
-          actions={[
+        <Card className="cursor-pointer overflow-hidden" onClick={handleCardClick}>
+          {/* Cover/Preview */}
+          {notebookPreviewCover}
+
+          {/* Content */}
+          <CardContent className="p-4">
+            <div className="truncate text-base font-semibold text-gray-900 mb-2">
+              {notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
+            </div>
+            <div className="space-y-2">
+              {notebook.description && (
+                <p className="text-sm text-gray-600 line-clamp-2">{notebook.description}</p>
+              )}
+              <NotebookStats
+                fileCount={notebook.fileCount}
+                accessCount={notebook.accessCount}
+                totalSize={notebook.totalSize}
+              />
+              {/* <FileTags files={notebook.lastOpenedFiles} /> */}
+            </div>
+          </CardContent>
+
+          {/* Actions */}
+          <div className="flex items-center justify-around border-t border-gray-100 bg-gray-50">
             <Button
-              key="star"
               type="text"
               icon={
                 notebook.isStarred ? (
@@ -262,88 +274,64 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
                 )
               }
               onClick={handleStarClick as any}
-            />,
-            <Button key="files" type="text" icon={<FileText className="w-4 h-4" />} />,
-            <Dropdown key="more" menu={{ items: menuItems }} trigger={['click']}>
+            />
+            <Button type="text" icon={<FileText className="w-4 h-4" />} />
+            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
               <Button
                 type="text"
                 icon={<MoreHorizontal className="w-4 h-4" />}
                 onClick={(e) => e.stopPropagation()}
               />
-            </Dropdown>,
-          ]}
-        >
-          <Meta
-            title={
-              <div className="truncate text-base font-semibold text-gray-900">
-                {notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
-              </div>
-            }
-            description={
-              <div className="space-y-2">
-                {notebook.description && (
-                  <p className="text-sm text-gray-600 line-clamp-2">{notebook.description}</p>
-                )}
-                <NotebookStats
-                  fileCount={notebook.fileCount}
-                  accessCount={notebook.accessCount}
-                  totalSize={notebook.totalSize}
-                />
-                {/* <FileTags files={notebook.lastOpenedFiles} /> */}
-              </div>
-            }
-          />
+            </Dropdown>
+          </div>
         </Card>
       );
     }
 
     // List view
     return (
-      <Card
-        hoverable
-        className="mb-2 cursor-pointer hover:shadow-sm transition-shadow bg-white"
-        style={{ borderRadius: 8 }}
-        onClick={handleCardClick}
-      >
-        <div className="flex items-center justify-between py-1">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-gray-900 truncate text-base">
-                  {notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
-                </h3>
-                {notebook.isStarred && (
-                  <Star className="w-4 h-4 text-yellow-500 fill-current flex-shrink-0" />
-                )}
-              </div>
-              <div className="text-sm text-gray-600 mt-1">
-                {notebook.description || 'No description'}
-              </div>
-              <div className="mt-2">
-                <FileTags files={notebook.lastOpenedFiles} maxVisible={5} />
+      <Card className="mb-2 cursor-pointer" onClick={handleCardClick}>
+        <CardContent className="py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900 truncate text-base">
+                    {notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
+                  </h3>
+                  {notebook.isStarred && (
+                    <Star className="w-4 h-4 text-yellow-500 fill-current flex-shrink-0" />
+                  )}
+                </div>
+                <div className="text-sm text-gray-600 mt-1">
+                  {notebook.description || 'No description'}
+                </div>
+                <div className="mt-2">
+                  <FileTags files={notebook.lastOpenedFiles} maxVisible={5} />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-6 text-sm text-gray-500 ml-4">
-            <div className="text-right">
-              <div className="font-medium">{notebook.fileCount ?? 0} files</div>
-              <div className="text-xs">{formatSize(notebook.totalSize)}</div>
+            <div className="flex items-center gap-6 text-sm text-gray-500 ml-4">
+              <div className="text-right">
+                <div className="font-medium">{notebook.fileCount ?? 0} files</div>
+                <div className="text-xs">{formatSize(notebook.totalSize)}</div>
+              </div>
+              <div className="text-right">
+                <div className="font-medium">{formatTime(notebook.lastAccessedAt)}</div>
+                <div className="text-xs">{notebook.accessCount ?? 0} visits</div>
+              </div>
+              <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<MoreHorizontal className="w-4 h-4" />}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Dropdown>
             </div>
-            <div className="text-right">
-              <div className="font-medium">{formatTime(notebook.lastAccessedAt)}</div>
-              <div className="text-xs">{notebook.accessCount ?? 0} visits</div>
-            </div>
-            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-              <Button
-                type="text"
-                size="small"
-                icon={<MoreHorizontal className="w-4 h-4" />}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </Dropdown>
           </div>
-        </div>
+        </CardContent>
       </Card>
     );
   }

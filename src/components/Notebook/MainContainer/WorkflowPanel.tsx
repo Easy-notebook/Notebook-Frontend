@@ -10,6 +10,7 @@ import {
 import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import { extractSectionTitle } from '../utils/String';
 import WorkflowErrorBoundary from './WorkflowErrorBoundary';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/UI/card';
 
 // ----------------------
 // Type Definitions
@@ -53,14 +54,14 @@ const UpdateConfirmationDialog: React.FC<UpdateConfirmationDialogProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
       aria-modal="true"
     >
-      <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-xl m-4">
+      <Card className="relative w-full max-w-lg m-4">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
+        <CardHeader className="flex flex-row items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
             <AlertCircle className="w-6 h-6 text-theme-500" />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <CardTitle className="text-lg font-semibold text-gray-900">
               The PCS agent suggests updating the TODO
-            </h3>
+            </CardTitle>
           </div>
           <button
             onClick={onReject}
@@ -69,10 +70,10 @@ const UpdateConfirmationDialog: React.FC<UpdateConfirmationDialogProps> = ({
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
-        </div>
+        </CardHeader>
 
         {/* Content */}
-        <div className="p-6">
+        <CardContent className="p-6">
           {/* <p className="text-gray-600 mb-4">
             The AI agent suggests updating the plan to better match your goal.
           </p> */}
@@ -91,10 +92,10 @@ const UpdateConfirmationDialog: React.FC<UpdateConfirmationDialogProps> = ({
               ))}
             </ul>
           </div>
-        </div>
+        </CardContent>
 
         {/* Footer */}
-        <div className="flex justify-end gap-4 p-6 bg-gray-50 rounded-b-2xl">
+        <CardFooter className="flex justify-end gap-4 p-6 bg-gray-50">
           <button
             onClick={onReject}
             className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
@@ -107,8 +108,8 @@ const UpdateConfirmationDialog: React.FC<UpdateConfirmationDialogProps> = ({
           >
             Accept Update
           </button>
-        </div>
-      </div>
+        </CardFooter>
+      </Card>
     </div>
   );
 };

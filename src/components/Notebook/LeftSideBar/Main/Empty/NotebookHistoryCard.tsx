@@ -7,6 +7,7 @@ import { Star, Clock } from 'lucide-react';
 import { FileORM } from '@Storage/index';
 import { CodeCell, MarkdownCell, HybridCell, ImageCell, LinkCell } from '@Editor/Cells';
 import { formatTime } from '@/components/Scenario/State/LibraryState/utils';
+import { Card, CardContent } from '@/components/UI/card';
 import type { NotebookHistoryCardProps } from './types';
 
 interface PreviewCell {
@@ -214,15 +215,15 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
     );
 
     return (
-      <div
-        className="group relative bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-md hover:border-theme-300 transition-all duration-200 cursor-pointer"
+      <Card
+        className="group relative overflow-hidden hover:border-theme-300 transition-all duration-200 cursor-pointer"
         onClick={handleCardClick}
       >
         {/* Preview Cover */}
         {notebookPreviewCover}
 
         {/* Content */}
-        <div className="p-3">
+        <CardContent className="p-3">
           {/* Title and actions */}
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-sm text-gray-900 truncate group-hover:text-theme-700 transition-colors flex-1">
@@ -243,11 +244,11 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
               className="opacity-0 group-hover:opacity-100 transition-opacity"
             />
           </div>
-        </div>
+        </CardContent>
 
         {/* Hover overlay */}
         <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-      </div>
+      </Card>
     );
   }
 );

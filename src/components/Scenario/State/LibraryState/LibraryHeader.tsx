@@ -20,7 +20,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
     onViewModeChange,
     onRefresh,
   }) => (
-    <div className="bg-white shadow-sm border-b px-6 py-4">
+    <div className="px-6 py-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div>

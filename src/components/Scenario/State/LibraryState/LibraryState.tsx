@@ -167,7 +167,7 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
   return (
     <div
       ref={containerRef}
-      className="h-full bg-gray-50 overflow-hidden relative"
+      className="h-full overflow-hidden relative"
       {...handlers}
       style={{
         transform: `translateX(${swipeDistance * 0.3}px)`,

@@ -49,28 +49,28 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
   const config = variantConfig[variant];
 
   const handleMouseMove: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (!divRef.current || isFocused) return;
-
-    const rect = divRef.current.getBoundingClientRect();
-    setPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    // Disabled hover effect
+    return;
   };
 
   const handleFocus = () => {
-    setIsFocused(true);
-    setOpacity(0.6);
+    // Disabled hover effect
+    return;
   };
 
   const handleBlur = () => {
-    setIsFocused(false);
-    setOpacity(0);
+    // Disabled hover effect
+    return;
   };
 
   const handleMouseEnter = () => {
-    setOpacity(0.6);
+    // Disabled hover effect
+    return;
   };
 
   const handleMouseLeave = () => {
-    setOpacity(0);
+    // Disabled hover effect
+    return;
   };
 
   return (
@@ -81,7 +81,7 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
       onBlur={handleBlur}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`relative rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-xl hover:scale-[1.01] border border-white/[0.18] dark:border-white/[0.12] ${className}`}
+      className={`relative rounded-3xl overflow-hidden border border-white/[0.18] dark:border-white/[0.12] ${className}`}
       style={{
         position: 'relative',
         isolation: 'isolate',

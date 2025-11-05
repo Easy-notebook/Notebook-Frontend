@@ -3,7 +3,7 @@
 
 import AIAgentSidebarOrig from '../RightSideBar/AIAgentSidebar';
 import { RightSidebarResizer } from './RightSidebarResizer';
-import { Mica } from '@/components/UI/fluent';
+import { Card } from '@/components/UI/card';
 
 // Cast component to any to relax prop type constraints
 const AIAgentSidebar: any = AIAgentSidebarOrig;
@@ -30,8 +30,8 @@ export const RightSidebar = ({
   return (
     <div className="flex h-full">
       <RightSidebarResizer onMouseDown={onResize} />
-      <Mica
-        className="rounded-xl shadow-lg overflow-hidden transition-all duration-500 ease-in-out opacity-100 flex-shrink-0"
+      <Card
+        className="overflow-hidden transition-all duration-500 ease-in-out opacity-100 flex-shrink-0"
         style={{ width: `${width}px` }}
       >
         <AIAgentSidebar
@@ -39,7 +39,7 @@ export const RightSidebar = ({
           currentPhaseId={currentPhaseId}
           currentStepIndex={currentStepIndex}
         />
-      </Mica>
+      </Card>
     </div>
   );
 };

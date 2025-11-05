@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion';
 import { Card } from '@/components/UI/card';
-import { cn } from '@/lib/utils';
 
 interface AnimatedCardProps extends React.ComponentProps<typeof Card> {
   delay?: number;
