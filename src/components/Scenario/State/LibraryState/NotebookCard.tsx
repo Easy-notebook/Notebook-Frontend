@@ -204,7 +204,7 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
     // Notebook preview cover
     const notebookPreviewCover = useMemo(
       () => (
-        <div className="h-48 bg-gradient-to-b from-gray-50 to-gray-100 overflow-hidden relative">
+        <div className="h-48 bg-gradient-to-b from-gray-50 to-gray-100 overflow-hidden relative rounded-t-3xl">
           <div className="p-10 space-y-0  bg-theme-100">
             {previewCells.length > 0 ? (
               previewCells.map((cell) => renderCellPreview(cell))
@@ -240,7 +240,7 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
 
     if (viewMode === 'grid') {
       return (
-        <Card className="cursor-pointer overflow-hidden" onClick={handleCardClick}>
+        <Card className="cursor-pointer" onClick={handleCardClick}>
           {/* Cover/Preview */}
           {notebookPreviewCover}
 

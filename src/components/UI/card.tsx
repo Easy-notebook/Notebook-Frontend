@@ -2,9 +2,13 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import SpotlightCard from '@/components/UI/card/SpotlightCard';
 
-function Card({ className, children, ...props }: React.ComponentProps<'div'>) {
+interface CardProps extends React.ComponentProps<'div'> {
+  overflowHidden?: boolean;
+}
+
+function Card({ className, children, overflowHidden, ...props }: CardProps) {
   return (
-    <SpotlightCard className={cn(className)} {...props}>
+    <SpotlightCard className={cn(className)} overflowHidden={overflowHidden} {...props}>
       {children}
     </SpotlightCard>
   );

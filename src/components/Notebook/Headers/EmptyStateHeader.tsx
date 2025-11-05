@@ -19,7 +19,7 @@ const EmptyStateHeader: React.FC<EmptyStateHeaderProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full h-14 flex items-center justify-end px-4">
+    <div className="w-full h-18 tm-1 flex items-center justify-end px-4">
       {onTriggerFileInput && onHandleImport && fileInputRef && (
         <div className="flex items-center gap-2">
           <button

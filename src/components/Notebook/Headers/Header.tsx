@@ -42,7 +42,7 @@ const Header: React.FC<HeaderProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="h-14 flex items-center justify-between px-4">
+    <div className="h-16 flex items-center justify-between px-4">
       <div className="flex items-center gap-3">
         <ModeToggle viewMode={viewMode} onModeChange={onModeChange} />
       </div>

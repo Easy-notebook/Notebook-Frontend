@@ -45,7 +45,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full h-14 flex items-center justify-between px-4">
+    <div className="w-full h-18 mt-2 flex items-center justify-between px-4">
       <div className="flex items-center gap-3">
         <ModeToggle viewMode={viewMode} onModeChange={onModeChange} />
       </div>

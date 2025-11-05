@@ -100,9 +100,9 @@ const DemoMode: React.FC<DemoModeProps> = ({
     : [];
 
   return (
-    <div className="min-h-full flex flex-col relative">
-      <div className="flex-1 p-12">
-        <div className="relative space-y-6 max-w-screen-xl mx-auto min-h-[calc(100vh-12rem)]">
+    <div className="w-full flex flex-col relative">
+      <div className="p-12">
+        <div className="relative space-y-6 max-w-screen-xl mx-auto">
           {/* Step Content Display (using StepMode's cell filtering logic) */}
           {stepCells.length > 0 && (
             <div>

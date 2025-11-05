@@ -53,6 +53,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       // Skip if a transition is already in progress
       if (isTransitioningRef.current) {
         applyTheme();
+        // Ensure storage reflects the latest effective theme even during transitions
+        root.style.colorScheme = effectiveTheme;
+        localStorage.setItem('theme', theme);
+        localStorage.setItem('resolved-theme', effectiveTheme);
         return;
       }
 
@@ -82,8 +86,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Set color-scheme property for better performance
     root.style.colorScheme = effectiveTheme;
 
-    // Save to localStorage
+    // Persist selected theme and resolved theme
+    // - `theme`: user's choice ('light' | 'dark' | 'system')
+    // - `resolved-theme`: actual applied theme ('light' | 'dark')
     localStorage.setItem('theme', theme);
+    localStorage.setItem('resolved-theme', effectiveTheme);
   }, [theme]);
 
   // Listen for system theme changes
@@ -96,6 +103,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         setResolvedTheme(systemTheme);
         document.documentElement.classList.remove('light', 'dark');
         document.documentElement.classList.add(systemTheme);
+        // Keep resolved theme in sync when system preference changes
+        localStorage.setItem('resolved-theme', systemTheme);
       }
     };
 

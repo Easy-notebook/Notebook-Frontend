@@ -283,13 +283,13 @@ const NotebookApp = () => {
   };
 
   return (
-    <div className="h-screen overflow-hidden relative bg-background text-foreground transition-colors duration-300">
+    <div className="h-screen overflow-hidden relative text-foreground transition-colors duration-300">
       <SettingsPage />
 
       {/* Global background layers now live at App level */}
 
       {/* Content Layer on top of background */}
-      <div className="relative z-20 h-screen flex">
+      <div className="relative z-10 h-screen flex">
         {/* Left: MiniSidebar (80px wide, full height) */}
         <div className="w-20 shrink-0">
           <LeftSideBar
@@ -308,8 +308,8 @@ const NotebookApp = () => {
           <div className="h-14 shrink-0">{renderHeader()}</div>
 
           {/* Bottom: Main Content */}
-          <main className="flex-1 overflow-hidden">
-            <div className="h-full overflow-hidden flex flex-col">
+          <main className="flex-1 min-h-0">
+            <div className="h-full flex flex-col">
               <MainContentArea
                 routeView={routeView}
                 viewMode={viewMode}

@@ -173,11 +173,11 @@ export const MainContentArea = ({
       <CommandInput onClick={() => setShowCommandInput(true)} />
 
       {/* Content area - no header here anymore */}
-      <div className="flex-1 flex overflow-hidden gap-1.5 p-3">
+      <div className="flex-1 flex gap-1.5 p-3 min-h-0">
         {/* Expanded Sidebar (when not collapsed and has content) */}
         {!isCollapsed && hasSidebarContent() && (
           <div className="flex h-full" style={{ width: leftSidebarWidth }}>
-            <Card className="flex-1 overflow-hidden">
+            <Card className="flex-1">
               <div className="h-full overflow-y-auto scroll-smooth">{renderExpandedSidebar()}</div>
             </Card>
 
@@ -193,11 +193,11 @@ export const MainContentArea = ({
         )}
 
         {/* Main Content */}
-        <Card className="flex-1 flex flex-col overflow-hidden">
+        <Card className="flex-1 flex flex-col min-h-0" overflowHidden={false}>
           <GlobalTabList />
 
-          <div className="flex-1 overflow-y-auto scroll-smooth w-full h-full">
-            <div className="w-full h-full relative z-0">{children}</div>
+          <div className="flex-1 overflow-y-scroll scroll-smooth w-full min-h-0">
+            <div className="w-full relative z-0">{children}</div>
           </div>
 
           {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}

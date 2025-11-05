@@ -11,6 +11,7 @@ interface SpotlightCardProps extends React.PropsWithChildren<React.HTMLAttribute
   variant?: 'default' | 'strong' | 'thin';
   tintOpacity?: number;
   noise?: boolean;
+  overflowHidden?: boolean;
 }
 
 const SpotlightCard: React.FC<SpotlightCardProps> = ({
@@ -20,6 +21,7 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
   variant = 'default',
   tintOpacity = 0.7,
   noise = true,
+  overflowHidden = true,
   ...restProps
 }) => {
   const divRef = useRef<HTMLDivElement>(null);
@@ -81,7 +83,7 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
       onBlur={handleBlur}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`relative rounded-3xl overflow-hidden border border-white/[0.18] dark:border-white/[0.12] ${className}`}
+      className={`relative rounded-3xl ${overflowHidden ? 'overflow-hidden' : 'overflow-scroll'} border border-white/[0.18] dark:border-white/[0.12] bg-white dark:bg-transparent ${className}`}
       style={{
         position: 'relative',
         isolation: 'isolate',
@@ -90,55 +92,58 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
       }}
       {...restProps}
     >
-      {/* Backdrop blur layer - glassmorphism effect */}
-      <div
-        className="absolute inset-0 pointer-events-none rounded-3xl"
-        style={{
-          backdropFilter: `blur(${config.blur}px) saturate(${config.saturate}%)`,
-          WebkitBackdropFilter: `blur(${config.blur}px) saturate(${config.saturate}%)`,
-        }}
-      />
-
-      {/* Tint overlay with theme support */}
-      <div
-        className="absolute inset-0 pointer-events-none rounded-3xl"
-        style={{
-          backgroundColor: `rgb(var(--acrylic-tint) / ${tintOpacity * config.tint})`,
-          mixBlendMode: 'normal',
-        }}
-      />
-
-      {/* Luminosity layer for depth */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-30 rounded-3xl"
-        style={{
-          background:
-            'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 100%)',
-          mixBlendMode: 'overlay',
-        }}
-      />
-
-      {/* Noise texture */}
-      {noise && (
+      {/* Fixed overlay container - does not scroll with content */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-3xl">
+        {/* Backdrop blur layer - glassmorphism effect */}
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.08] rounded-3xl"
+          className="absolute inset-0 pointer-events-none rounded-3xl dark:block hidden"
           style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='4.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
-            backgroundSize: '200px 200px',
+            backdropFilter: `blur(${config.blur}px) saturate(${config.saturate}%)`,
+            WebkitBackdropFilter: `blur(${config.blur}px) saturate(${config.saturate}%)`,
+          }}
+        />
+
+        {/* Tint overlay with theme support */}
+        <div
+          className="absolute inset-0 pointer-events-none rounded-3xl dark:block hidden"
+          style={{
+            backgroundColor: `rgba(var(--acrylic-tint), ${tintOpacity * config.tint})`,
+            mixBlendMode: 'normal',
+          }}
+        />
+
+        {/* Luminosity layer for depth */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-30 rounded-3xl dark:block hidden"
+          style={{
+            background:
+              'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 100%)',
+            mixBlendMode: 'overlay',
+          }}
+        />
+
+        {/* Noise texture */}
+        {noise && (
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.08] rounded-3xl dark:block hidden"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='4.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+              backgroundSize: '200px 200px',
+              mixBlendMode: 'soft-light',
+            }}
+          />
+        )}
+
+        {/* Spotlight effect */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 ease-in-out rounded-3xl dark:block hidden"
+          style={{
+            opacity,
+            background: `radial-gradient(circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 80%)`,
             mixBlendMode: 'soft-light',
           }}
         />
-      )}
-
-      {/* Spotlight effect */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 ease-in-out rounded-3xl"
-        style={{
-          opacity,
-          background: `radial-gradient(circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 80%)`,
-          mixBlendMode: 'soft-light',
-        }}
-      />
+      </div>
 
       {/* Content */}
       <div className="relative z-10">{children}</div>

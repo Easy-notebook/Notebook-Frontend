@@ -22,15 +22,11 @@ const CreateMode: React.FC<CreateModeProps> = ({ className = '', readOnly = fals
   if (editorType === 'tiptap') {
     // Render Tiptap-based notebook editor
     return (
-      <div className={`w-full h-full flex flex-col ${className}`}>
-        <div className="flex-1 w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col">
+      <div className={`w-full flex flex-col ${className}`}>
+        <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col">
           <div className="h-10 w-full flex-shrink-0"></div>
-          <div className="relative flex-1 flex flex-col" style={{ minHeight: '500px' }}>
-            <TiptapNotebookEditor
-              className="w-full h-full"
-              placeholder="Untitled"
-              readOnly={readOnly}
-            />
+          <div className="relative flex flex-col" style={{ minHeight: '500px' }}>
+            <TiptapNotebookEditor className="w-full" placeholder="Untitled" readOnly={readOnly} />
           </div>
           <div className="h-20 w-full flex-shrink-0"></div>
         </div>
@@ -39,15 +35,11 @@ const CreateMode: React.FC<CreateModeProps> = ({ className = '', readOnly = fals
   } else {
     // Render Jupyter-style notebook editor
     return (
-      <div className={`w-full h-full flex flex-col ${className}`}>
-        <div className="flex-1 w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col">
+      <div className={`w-full flex flex-col ${className}`}>
+        <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col">
           <div className="h-10 w-full flex-shrink-0"></div>
-          <div className="relative flex-1 flex flex-col" style={{ minHeight: '500px' }}>
-            <JupyterNotebookEditor
-              className="w-full h-full"
-              placeholder="Untitled"
-              readOnly={readOnly}
-            />
+          <div className="relative flex flex-col" style={{ minHeight: '500px' }}>
+            <JupyterNotebookEditor className="w-full" placeholder="Untitled" readOnly={readOnly} />
           </div>
           <div className="h-20 w-full flex-shrink-0"></div>
         </div>

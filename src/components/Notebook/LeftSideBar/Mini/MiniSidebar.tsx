@@ -116,7 +116,7 @@ const MiniSidebar = memo(function MiniSidebar({
   return (
     <div className={['w-20 h-full', 'flex flex-col', 'relative'].join(' ')}>
       {/* Logo - only controls expand/collapse */}
-      <div className="h-12 flex items-center justify-center shrink-0 mt-2 pb-3">
+      <div className="h-20 flex items-center justify-center shrink-0 mt-2 pb-3">
         <button
           onClick={handleExpandClick}
           className="rounded-lg transition-all hover:scale-110 hover:rotate-3"
@@ -164,7 +164,7 @@ const MiniSidebar = memo(function MiniSidebar({
         {shouldShowFolderIcon && 
         ( */}
         {/* Primary items - show all items including workspace */}
-        <ul className="space-y-1">
+        <ul className="space-y-3">
           {PRIMARY_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeItemId === item.id;
@@ -177,7 +177,7 @@ const MiniSidebar = memo(function MiniSidebar({
                     onClick={() => handleItemClick(item.id)}
                     title={item.title}
                   >
-                    <Icon size={20} />
+                    <Icon size={24} />
                   </ItemButton>
                 </div>
               </li>
