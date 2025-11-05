@@ -3,25 +3,17 @@
 
 import React, { memo, useCallback } from 'react';
 import { Empty, Button, Skeleton } from 'antd';
-import { Plus, Star,Trees, Repeat ,PanelLeftClose } from 'lucide-react';
+import { Plus, Star, Trees, Repeat, PanelLeftClose } from 'lucide-react';
 import { navigateToWorkspace, navigateToLibrary } from '@Utils/navigation';
 import NotebookHistoryCard from './NotebookHistoryCard';
 import { useNotebooks } from './hooks';
 
-interface EmptySidebarProps {
-  // Any additional props if needed
-}
+type EmptySidebarProps = Record<string, never>;
 
 const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
   // Use similar hooks pattern as LibraryState
-  const {
-    notebooks,
-    loading,
-    refreshNotebooks,
-    isCreatingNotebook,
-    createNotebook,
-    toggleStar,
-  } = useNotebooks();
+  const { notebooks, loading, refreshNotebooks, isCreatingNotebook, createNotebook, toggleStar } =
+    useNotebooks();
 
   // Handle notebook selection - navigate to workspace
   const handleSelectNotebook = useCallback((notebookId: string) => {
@@ -29,8 +21,8 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
   }, []);
 
   // Separate starred and recent notebooks
-  const starredNotebooks = notebooks.filter(nb => nb.isStarred);
-  const recentNotebooks = notebooks.filter(nb => !nb.isStarred).slice(0, 6);
+  const starredNotebooks = notebooks.filter((nb) => nb.isStarred);
+  const recentNotebooks = notebooks.filter((nb) => !nb.isStarred).slice(0, 6);
 
   // Loading skeleton
   if (loading) {
@@ -50,48 +42,45 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-white">
+    <div className="h-full overflow-y-auto">
       <div className="p-4 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 align-middle justify-center my-auto">
-              <h1 className="text-lg font-semibold text-gray-900">Recent</h1>
-              <span className="text-xs text-gray-400">({recentNotebooks.length})</span>
+            <h1 className="text-lg font-semibold text-gray-900">Recent</h1>
+            <span className="text-xs text-gray-400">({recentNotebooks.length})</span>
           </div>
           <div className="flex items-center gap-2">
-          <Button 
-            type="primary" 
-            icon={<Plus className="w-4 h-4" />}
-            onClick={createNotebook}
-            loading={isCreatingNotebook}
-            size="small"
-            style={{
-              borderRadius: 8,
-              boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.05)'
-            }}
-          >
-          </Button>
-          <Button 
-            type="primary" 
-            icon={<Trees className="w-4 h-4" />}
-            onClick={navigateToLibrary}
-            loading={isCreatingNotebook}
-            size="small"
-            style={{
-              borderRadius: 8,
-              boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.05)'
-            }}
-          >
-          </Button>
-          <Button 
-            type="primary" 
-            icon={<Repeat className="w-4 h-4" />}
-            onClick={refreshNotebooks}
-            loading={isCreatingNotebook}
-            size="small"
-          >
-          </Button>
-          {/* <Button 
+            <Button
+              type="primary"
+              icon={<Plus className="w-4 h-4" />}
+              onClick={createNotebook}
+              loading={isCreatingNotebook}
+              size="small"
+              style={{
+                borderRadius: 8,
+                boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.05)',
+              }}
+            ></Button>
+            <Button
+              type="primary"
+              icon={<Trees className="w-4 h-4" />}
+              onClick={navigateToLibrary}
+              loading={isCreatingNotebook}
+              size="small"
+              style={{
+                borderRadius: 8,
+                boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.05)',
+              }}
+            ></Button>
+            <Button
+              type="primary"
+              icon={<Repeat className="w-4 h-4" />}
+              onClick={refreshNotebooks}
+              loading={isCreatingNotebook}
+              size="small"
+            ></Button>
+            {/* <Button 
             type="primary" 
             icon={<PanelLeftClose className="w-4 h-4" />}
             onClick={closeSidebar}
@@ -111,7 +100,7 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
               <span className="text-xs text-gray-400">({starredNotebooks.length})</span>
             </div>
             <div className="space-y-2">
-              {starredNotebooks.map(notebook => (
+              {starredNotebooks.map((notebook) => (
                 <NotebookHistoryCard
                   key={notebook.id}
                   notebook={notebook}
@@ -127,7 +116,7 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
         {recentNotebooks.length > 0 && (
           <div>
             <div className="space-y-2">
-              {recentNotebooks.map(notebook => (
+              {recentNotebooks.map((notebook) => (
                 <NotebookHistoryCard
                   key={notebook.id}
                   notebook={notebook}
@@ -148,18 +137,14 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
               description={
                 <div className="text-center space-y-3">
                   <p className="text-gray-500 text-sm">No notebooks yet</p>
-                  <Button 
-                    type="primary" 
-                    icon={<Plus className="w-4 h-4" />}
+                  <button
+                    className="btn btn-primary btn-md"
                     onClick={createNotebook}
-                    loading={isCreatingNotebook}
-                    style={{
-                      borderRadius: 8,
-                      boxShadow: '0 2px 4px 0 rgb(0 0 0 / 0.05)'
-                    }}
+                    disabled={isCreatingNotebook}
                   >
+                    <Plus className="icon-sm" />
                     Create your first notebook
-                  </Button>
+                  </button>
                 </div>
               }
             />
