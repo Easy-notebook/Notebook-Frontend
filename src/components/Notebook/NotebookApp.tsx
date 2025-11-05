@@ -28,7 +28,6 @@ import {
 
 // UI Components
 import { MainContentArea } from './components';
-import { Mica } from '@/components/UI/fluent';
 import { WorkspaceHeader, EmptyStateHeader } from './Headers';
 import { useRef } from 'react';
 
@@ -61,8 +60,6 @@ const NotebookApp = () => {
     getCurrentViewCells,
     getTotalSteps,
     isExecuting,
-    currentRunningPhaseId,
-    allowPagination,
     error,
     isCollapsed,
     lastAddedCellId,

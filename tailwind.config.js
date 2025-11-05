@@ -23,8 +23,8 @@ export default {
         },
         'gray-50': '#F6F6F6',
         // Fluent Design System colors from CSS variables
-        background: '#f9fafb',
-        foreground: '#1f2937',
+        background: 'rgb(var(--background) / <alpha-value>)',
+        foreground: 'rgb(var(--foreground) / <alpha-value>)',
         primary: {
           DEFAULT: 'var(--color-primary)',
           light: 'var(--color-primary-light)',

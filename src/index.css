@@ -11,6 +11,10 @@
    ==================================================================== */
 
 :root {
+  /* Base background color (RGB triplets for rgb(var(--x) / a)) */
+  --background: 250 250 252;
+  --foreground: 26 26 31;
+
   /* Fluent Design - Acrylic/Mica material tint colors (RGB triplets for rgb(var(--x) / a)) */
   --acrylic-tint: 252 252 253;
   --mica-tint: 248 248 250;
@@ -2549,10 +2553,18 @@ vds-cleaning-report {
    ==================================================================== */
 
 .dark {
+  /* Base background color (RGB triplets for rgb(var(--x) / a)) - dark mode */
+  --background: 26 26 31;
+  --foreground: 229 229 231;
+
   /* Material tint colors (RGB for rgba usage) - darker for dark mode */
   --acrylic-tint: 35 35 42;
   --mica-tint: 32 32 38;
   --mica-alt-tint: 28 28 35;
+
+  /* Material base colors (oklch with alpha) - dark mode versions */
+  --acrylic-base: oklch(0.18 0.01 260 / 0.7);
+  --mica-base: oklch(0.16 0.01 260 / 0.85);
 
   /* Color System - Dark Mode */
   --color-primary: #52c896;
