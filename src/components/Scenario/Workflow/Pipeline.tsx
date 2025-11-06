@@ -57,7 +57,7 @@ const WorkflowInProgressView = () => {
  * The main pipeline component that routes to the correct view based on the application's state.
  */
 interface DSLCPipelineProps {
-  onAddCell: () => void;
+  onAddCell: (type: string, index?: number) => void;
 }
 
 const DSLCPipeline: React.FC<DSLCPipelineProps> = ({ onAddCell }) => {

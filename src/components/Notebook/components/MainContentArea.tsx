@@ -177,9 +177,7 @@ export const MainContentArea = ({
         {/* Expanded Sidebar (when not collapsed and has content) */}
         {!isCollapsed && hasSidebarContent() && (
           <div className="flex h-full" style={{ width: leftSidebarWidth }}>
-            <Card className="flex-1">
-              <div className="h-full overflow-y-auto scroll-smooth">{renderExpandedSidebar()}</div>
-            </Card>
+            <Card className="flex-1 h-full flex flex-col">{renderExpandedSidebar()}</Card>
 
             {/* Resize handle */}
             <div

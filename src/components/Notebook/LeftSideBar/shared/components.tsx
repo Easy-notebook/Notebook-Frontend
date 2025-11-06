@@ -72,7 +72,9 @@ export const SidebarButton = memo<{
       `}
     >
       {children}
-      {isActive && <div className="ml-auto w-1.5 h-1.5 bg-slate-600 rounded-full" />}
+      {isActive && (
+        <div className="ml-auto w-1.5 h-1.5 bg-slate-600 dark:bg-slate-400 rounded-full" />
+      )}
     </button>
   );
 });
@@ -151,15 +153,24 @@ export const SidebarContent = memo<{
           background: transparent;
         }
         .scrollbar-thin::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.3);
+          background: rgba(148, 163, 184, 0.3);
           border-radius: 4px;
         }
         .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.5);
+          background: rgba(148, 163, 184, 0.5);
         }
         .scrollbar-thin {
           scrollbar-width: thin;
-          scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+          scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+        }
+        .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: rgba(203, 213, 225, 0.3);
+        }
+        .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background: rgba(203, 213, 225, 0.5);
+        }
+        .dark .scrollbar-thin {
+          scrollbar-color: rgba(203, 213, 225, 0.3) transparent;
         }
       `}</style>
       {children}
@@ -182,7 +193,9 @@ export const LoadingIndicator = memo<{
 
   return (
     <div className="py-4 px-3 flex justify-center items-center h-full">
-      <div className={`animate-pulse text-theme-600 ${sizeClasses[size]}`}>{text}</div>
+      <div className={`animate-pulse text-theme-600 dark:text-theme-400 ${sizeClasses[size]}`}>
+        {text}
+      </div>
     </div>
   );
 });
@@ -192,8 +205,8 @@ LoadingIndicator.displayName = 'LoadingIndicator';
 // 运行状态指示器
 export const RunningIndicator = memo(() => (
   <div className="flex items-center">
-    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-1"></div>
-    <span className="text-xs text-green-600">Running</span>
+    <div className="w-2 h-2 bg-green-500 dark:bg-green-400 rounded-full animate-pulse mr-1"></div>
+    <span className="text-xs text-green-600 dark:text-green-400">Running</span>
   </div>
 ));
 

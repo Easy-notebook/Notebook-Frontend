@@ -37,8 +37,8 @@ export const AGENT_PROFILES: Record<AgentType, AgentProfile> = {
     type: 'general',
     name: 'General Agent',
     icon: 'GEN',
-    color: 'bg-theme-100 text-theme-800',
-    borderColor: 'border-theme-200',
+    color: 'bg-theme-100 dark:bg-theme-800 text-theme-800 dark:text-theme-200',
+    borderColor: 'border-theme-200 dark:border-theme-700',
     description: 'Handles general questions and conversations',
     role: 'You are AI Agent behind easyremote notebook.',
     introduction: `Hi! I'm your General Agent, your primary assistant in the Claude Code environment. 
@@ -50,34 +50,34 @@ I'm particularly good at explaining concepts, providing guidance, and helping yo
       {
         name: 'Question Answering',
         description: 'Provide detailed answers to technical and conceptual questions',
-        icon: 'Q&A'
+        icon: 'Q&A',
       },
       {
         name: 'Problem Analysis',
         description: 'Break down complex problems into manageable steps',
-        icon: 'ANALYZE'
+        icon: 'ANALYZE',
       },
       {
         name: 'Concept Explanation',
         description: 'Explain technical concepts in clear, understandable terms',
-        icon: 'EXPLAIN'
+        icon: 'EXPLAIN',
       },
       {
         name: 'Project Guidance',
         description: 'Provide strategic advice and planning support',
-        icon: 'GUIDE'
-      }
+        icon: 'GUIDE',
+      },
     ],
     modes: [
       { name: 'Interactive Q&A', description: 'Real-time question answering', enabled: true },
       { name: 'Tutorial Mode', description: 'Step-by-step learning guidance', enabled: true },
-      { name: 'Research Assistant', description: 'Help with research and analysis', enabled: true }
+      { name: 'Research Assistant', description: 'Help with research and analysis', enabled: true },
     ],
     maxIterations: {
-      question_rounds: 20
+      question_rounds: 20,
     },
     engine: 'o4-mini',
-    specialty: ['General Support', 'Education', 'Problem Solving', 'Conceptual Guidance']
+    specialty: ['General Support', 'Education', 'Problem Solving', 'Conceptual Guidance'],
   },
 
   command: {
@@ -103,34 +103,38 @@ Just tell me what you want to accomplish, and I'll generate the code to make it 
       {
         name: 'Code Generation',
         description: 'Generate Python code based on user instructions',
-        icon: 'CODE'
+        icon: 'CODE',
       },
       {
         name: 'Data Processing',
         description: 'Create code for data manipulation and analysis',
-        icon: 'DATA'
+        icon: 'DATA',
       },
       {
         name: 'Visualization',
         description: 'Generate plotting and visualization code',
-        icon: 'VIZ'
+        icon: 'VIZ',
       },
       {
         name: 'Task Automation',
         description: 'Write code to automate repetitive tasks',
-        icon: 'AUTO'
-      }
+        icon: 'AUTO',
+      },
     ],
     modes: [
-      { name: 'Code Generation', description: 'Direct code output from instructions', enabled: true },
+      {
+        name: 'Code Generation',
+        description: 'Direct code output from instructions',
+        enabled: true,
+      },
       { name: 'Function Creation', description: 'Generate reusable functions', enabled: true },
-      { name: 'Script Writing', description: 'Create complete scripts', enabled: true }
+      { name: 'Script Writing', description: 'Create complete scripts', enabled: true },
     ],
     maxIterations: {
-      code_generations: 10
+      code_generations: 10,
     },
     engine: 'gpt-4o',
-    specialty: ['Python Programming', 'Data Analysis', 'Visualization', 'Automation']
+    specialty: ['Python Programming', 'Data Analysis', 'Visualization', 'Automation'],
   },
 
   debug: {
@@ -157,34 +161,34 @@ I work systematically through debugging challenges and can handle everything fro
       {
         name: 'Error Analysis',
         description: 'Analyze error messages and execution results',
-        icon: 'ERROR'
+        icon: 'ERROR',
       },
       {
         name: 'Code Fixing',
         description: 'Identify and fix bugs in existing code',
-        icon: 'REPAIR'
+        icon: 'REPAIR',
       },
       {
         name: 'Performance Optimization',
         description: 'Improve code performance and efficiency',
-        icon: 'OPTIMIZE'
+        icon: 'OPTIMIZE',
       },
       {
         name: 'Testing Support',
         description: 'Help create tests and validate fixes',
-        icon: 'TEST'
-      }
+        icon: 'TEST',
+      },
     ],
     modes: [
       { name: 'Error Diagnosis', description: 'Analyze and explain errors', enabled: true },
       { name: 'Code Review', description: 'Review code for potential issues', enabled: true },
-      { name: 'Fix Generation', description: 'Generate corrected code versions', enabled: true }
+      { name: 'Fix Generation', description: 'Generate corrected code versions', enabled: true },
     ],
     maxIterations: {
-      debug_cycles: 5
+      debug_cycles: 5,
     },
     engine: 'gpt-4o',
-    specialty: ['Debugging', 'Error Handling', 'Code Review', 'Performance Tuning']
+    specialty: ['Debugging', 'Error Handling', 'Code Review', 'Performance Tuning'],
   },
 
   output: {
@@ -211,33 +215,46 @@ I bridge the gap between raw output and actionable insights, helping you underst
       {
         name: 'Result Interpretation',
         description: 'Explain and interpret code execution results',
-        icon: 'RESULT'
+        icon: 'RESULT',
       },
       {
         name: 'Data Analysis',
         description: 'Analyze and summarize data outputs',
-        icon: 'ANALYSIS'
+        icon: 'ANALYSIS',
       },
       {
         name: 'Visualization Review',
         description: 'Interpret charts, plots, and visual outputs',
-        icon: 'VISUAL'
+        icon: 'VISUAL',
       },
       {
         name: 'Insight Generation',
         description: 'Extract insights and suggest next steps',
-        icon: 'INSIGHT'
-      }
+        icon: 'INSIGHT',
+      },
     ],
     modes: [
-      { name: 'Output Analysis', description: 'Analyze and explain execution results', enabled: true },
-      { name: 'Data Interpretation', description: 'Interpret data and statistical outputs', enabled: true },
-      { name: 'Visual Analysis', description: 'Analyze charts and visualizations', enabled: true }
+      {
+        name: 'Output Analysis',
+        description: 'Analyze and explain execution results',
+        enabled: true,
+      },
+      {
+        name: 'Data Interpretation',
+        description: 'Interpret data and statistical outputs',
+        enabled: true,
+      },
+      { name: 'Visual Analysis', description: 'Analyze charts and visualizations', enabled: true },
     ],
     maxIterations: {
-      question_rounds: 15
+      question_rounds: 15,
     },
     engine: 'gpt-4o',
-    specialty: ['Output Analysis', 'Data Interpretation', 'Result Explanation', 'Insight Generation']
-  }
+    specialty: [
+      'Output Analysis',
+      'Data Interpretation',
+      'Result Explanation',
+      'Insight Generation',
+    ],
+  },
 };

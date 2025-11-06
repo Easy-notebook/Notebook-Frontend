@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+// AICommandInput.ant.responsive.tsx
+import React, { useMemo, useRef, useState, useCallback, useLayoutEffect, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { SendHorizontal, FileText, X, PlusCircle, Sparkles, ArrowRight } from 'lucide-react';
-import { Acrylic } from '@/components/UI/fluent';
-
+import { Input, Button, Tooltip } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { SendHorizontal } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   usePipelineStore,
   PIPELINE_STAGES,
@@ -19,40 +21,54 @@ import useCodeStore from '@Store/codeStore';
 import { notebookApiIntegration } from '@Services/notebookServices';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 
-import { UploadFile, AICommandInputProps, VDSQuestion } from './types';
+import type { UploadFile, AICommandInputProps, VDSQuestion } from './types';
+
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const ACCEPT = '.csv,.xlsx,.xls';
 
 const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const { t, i18n } = useTranslation();
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [input, setInput] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isVDSMode, setIsVDSMode] = useState(false);
+  const { resolvedTheme } = useTheme();
 
-  const defaultPresetQuestions = useMemo(
+  // -------- UI refs / state --------
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [input, setInput] = useState<string>('');
+  const [isFocused, setIsFocused] = useState<boolean>(false);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [isMultiline, setIsMultiline] = useState<boolean>(false);
+
+  // -------- Biz state --------
+  const [isVDSMode, setIsVDSMode] = useState<boolean>(false);
+
+  // Safely extract the underlying HTMLTextAreaElement from AntD's TextArea instance
+  const extractHtmlTextArea = useCallback((node: unknown): HTMLTextAreaElement | null => {
+    if (!node) return null;
+    // AntD v5 wraps the native textarea inside resizableTextArea
+    const anyNode = node as { resizableTextArea?: { textArea?: unknown } } | HTMLTextAreaElement;
+    const inner = (anyNode as { resizableTextArea?: { textArea?: unknown } })?.resizableTextArea
+      ?.textArea;
+    if (inner instanceof HTMLTextAreaElement) return inner;
+    if (anyNode instanceof HTMLTextAreaElement) return anyNode;
+    return null;
+  }, []);
+
+  const defaultPresetQuestions = useMemo<VDSQuestion[]>(
     () => [
-      {
-        problem_name: '代码解释与优化',
-        problem_description: '/explain 帮我解释这段代码的功能并提供优化建议',
-      },
-      {
-        problem_name: '数据分析咨询',
-        problem_description: '如何对我的数据进行统计分析？',
-      },
-      {
-        problem_name: '代码生成',
-        problem_description: '/gen 生成一个Python函数来处理数据',
-      },
+      // { problem_name: '代码解释与优化', problem_description: '/explain 帮我解释这段代码的功能并提供优化建议' },
+      // { problem_name: '数据分析咨询', problem_description: '如何对我的数据进行统计分析？' },
+      // { problem_name: '代码生成', problem_description: '/gen 生成一个Python函数来处理数据' },
     ],
     []
   );
-
   const [presetQuestions, setPresetQuestions] = useState<VDSQuestion[]>(defaultPresetQuestions);
 
   const { setPreStage } = usePipelineStore();
   const sendOperation = useOperatorStore((s) => s.sendOperation);
+
   const { addAction, setIsLoading, setActiveView, actions, qaList, addQA } = useAIAgentStore();
+
   const {
     notebookId,
     viewMode,
@@ -63,42 +79,78 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     setIsRightSidebarCollapsed,
   } = useStore();
 
-  // 调整文本域高度 - 所有情况下起始都是2行高度
-  const adjustTextareaHeight = useCallback(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = 'auto';
-    const lh = 24;
-    const mh = lh * 2; // 固定为2行高度
-    const nh = Math.min(ta.scrollHeight, mh);
-    ta.style.height = `${nh}px`;
-    ta.style.overflowY = ta.scrollHeight > mh ? 'auto' : 'hidden';
-  }, []);
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [input, adjustTextareaHeight]);
+  // ---------- autosize 行数计算（控制单行/多行布局切换） ----------
+  const calcIsMultiline = useCallback(() => {
+    const el = taRef.current;
+    if (!el) return;
+    const style = window.getComputedStyle(el);
+    const lineHeight = parseFloat(style.lineHeight || '22');
+    const paddingTop = parseFloat(style.paddingTop || '0');
+    const paddingBottom = parseFloat(style.paddingBottom || '0');
+    const contentHeight = el.scrollHeight - paddingTop - paddingBottom;
+    const rows = Math.round(contentHeight / lineHeight);
+    setIsMultiline(rows > 1 || input.includes('\n'));
+  }, [input]);
 
-  // 根据VDS模式状态动态显示预设问题
+  useLayoutEffect(() => {
+    calcIsMultiline();
+  }, [input, calcIsMultiline]);
+
+  // Keep the resize handler typed to satisfy AntD's onResize signature
+  const handleTextAreaResize = useCallback(
+    (_: { width: number; height: number }) => {
+      calcIsMultiline();
+    },
+    [calcIsMultiline]
+  );
+
+  // Force dark mode text color via DOM manipulation
+  useEffect(() => {
+    const textarea = taRef.current;
+    if (textarea && resolvedTheme === 'dark') {
+      textarea.style.color = '#4a5568';
+      textarea.style.setProperty('color', '#4a5568', 'important');
+      textarea.style.webkitTextFillColor = '#4a5568';
+    } else if (textarea) {
+      textarea.style.color = '';
+      textarea.style.webkitTextFillColor = '';
+    }
+  }, [resolvedTheme, input]);
+
+  // ---------- 根据 VDS 模式和文件变化重置预设问题 ----------
   useEffect(() => {
     if (!isVDSMode && files.length === 0) {
       setPresetQuestions(defaultPresetQuestions);
     }
   }, [isVDSMode, files.length, defaultPresetQuestions]);
 
-  // 处理上传
+  // ---------- 上传逻辑 ----------
   const handleFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
+      console.log('[DEBUG] AICommandInput - File upload initiated');
       const selectedFiles = Array.from(e.target.files ?? []);
-      if (!selectedFiles.length) return;
-      const csv = selectedFiles.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
-      if (!csv) {
-        alert('Please select a CSV or Excel file');
+      console.log('[DEBUG] AICommandInput - Selected files count:', selectedFiles.length);
+
+      if (!selectedFiles.length) {
+        console.log('[DEBUG] AICommandInput - No files selected, returning');
         return;
       }
 
-      const maxSize = 10 * 1024 * 1024; // 10MB
-      if (csv.size > maxSize) {
-        alert(`File is too large. Maximum size allowed is ${maxSize / 1024 / 1024}MB`);
+      const csv = selectedFiles.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
+      console.log('[DEBUG] AICommandInput - CSV file found:', csv ? csv.name : 'none');
+
+      if (!csv) {
+        console.log('[DEBUG] AICommandInput - No valid CSV/Excel file found');
+        alert('Please select a CSV or Excel file');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      console.log('[DEBUG] AICommandInput - File validation - name:', csv.name, 'size:', csv.size);
+      if (csv.size > MAX_SIZE) {
+        console.log('[DEBUG] AICommandInput - File too large:', csv.size, 'max:', MAX_SIZE);
+        alert(`File is too large. Maximum size allowed is ${MAX_SIZE / 1024 / 1024}MB`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
 
@@ -120,37 +172,65 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           '.txt',
           '.md',
         ],
-        maxFileSize: maxSize,
+        maxFileSize: MAX_SIZE,
         targetDir: '.assets',
       };
+      console.log('[DEBUG] AICommandInput - Upload config created:', uploadConfig);
 
-      // 如果没有 notebookId，先创建一个
+      // 确保有 notebookId
       let currentNotebookId = notebookId;
+      console.log('[DEBUG] AICommandInput - Current notebookId from store:', currentNotebookId);
+
       if (!currentNotebookId) {
+        console.log('[DEBUG] AICommandInput - No notebookId, initializing new notebook');
         try {
           currentNotebookId = await notebookApiIntegration.initializeNotebook();
+          console.log('[DEBUG] AICommandInput - New notebook initialized:', currentNotebookId);
           useStore.getState().setNotebookId(currentNotebookId);
           useCodeStore.getState().setKernelReady(true);
+          console.log('[DEBUG] AICommandInput - Notebook ID and kernel status updated');
         } catch (initError) {
-          console.error('Failed to create notebook:', initError);
+          console.error('[DEBUG] AICommandInput - Failed to create notebook:', initError);
           alert('Failed to create notebook. Please try again.');
+          if (fileInputRef.current) fileInputRef.current.value = '';
           return;
         }
       }
 
+      console.log('[DEBUG] AICommandInput - Setting upload state to true');
       setIsUploading(true);
 
       try {
+        console.log('[DEBUG] AICommandInput - Initializing kernel...');
         await useCodeStore.getState().initializeKernel();
+        console.log('[DEBUG] AICommandInput - Kernel initialized successfully');
+
+        console.log('[DEBUG] AICommandInput - Starting file upload with:', {
+          notebookId: currentNotebookId,
+          fileName: csv.name,
+          fileSize: csv.size,
+          config: uploadConfig,
+        });
+
         const result = await notebookApiIntegration.uploadFiles(
           currentNotebookId!,
           [csv],
           uploadConfig
         );
+        console.log('[DEBUG] AICommandInput - Upload result:', result);
+
         if (result && (result as any).status === 'ok') {
+          console.log(
+            '[DEBUG] AICommandInput - File upload successful, setting notebookId:',
+            currentNotebookId
+          );
           if (currentNotebookId !== notebookId) {
             useStore.getState().setNotebookId(currentNotebookId!);
+            console.log('[DEBUG] AICommandInput - NotebookId updated in store:', currentNotebookId);
+          } else {
+            console.log('[DEBUG] AICommandInput - NotebookId already matches:', currentNotebookId);
           }
+
           const newFiles: UploadFile[] = [
             {
               id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
@@ -161,95 +241,91 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
               file: csv,
             },
           ];
+          console.log('[DEBUG] AICommandInput - Setting files state:', newFiles);
           setFiles(newFiles);
 
+          console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
           await usePreStageStore.getState().setCurrentFile(csv);
+          console.log('[DEBUG] AICommandInput - Setting CSV file path:', csv.name);
           await usePreStageStore.getState().setCsvFilePath(csv.name);
 
+          console.log('[DEBUG] AICommandInput - Enabling VDS mode');
           setIsVDSMode(true);
 
+          // 生成 VDS 预设问题（异步延时保持原逻辑）
+          console.log('[DEBUG] AICommandInput - Starting question generation timer');
           setTimeout(async () => {
             try {
+              console.log('[DEBUG] AICommandInput - Getting file columns and dataset info');
               const cols = usePreStageStore.getState().getFileColumns();
               const info = usePreStageStore.getState().getDatasetInfo();
+              console.log('[DEBUG] AICommandInput - File columns:', cols);
+              console.log('[DEBUG] AICommandInput - Dataset info:', info);
+
+              console.log(
+                '[DEBUG] AICommandInput - Calling generalResponse for question generation'
+              );
               const map = await generalResponse(
                 'generate_question_choice_map',
                 { column_info: cols, dataset_info: info },
                 i18n.language
               );
+              console.log('[DEBUG] AICommandInput - Question generation result:', map);
+
               if (map?.message) {
+                console.log('[DEBUG] AICommandInput - Updating choice map and preset questions');
                 usePreStageStore.getState().updateChoiceMap(map.message);
                 setPresetQuestions(map.message as VDSQuestion[]);
-                if (map.message.length && map.message[0].problem_description) {
-                  setInput(map.message[0].problem_description);
+                if (
+                  (map.message as VDSQuestion[]).length &&
+                  (map.message as VDSQuestion[])[0].problem_description
+                ) {
+                  console.log(
+                    '[DEBUG] AICommandInput - Setting input to first question:',
+                    (map.message as VDSQuestion[])[0].problem_description
+                  );
+                  setInput((map.message as VDSQuestion[])[0].problem_description);
                 }
+
+                // 生成预设问题后，自动跳转到 ProblemDefine 页面
+                console.log(
+                  '[DEBUG] AICommandInput - File uploaded and questions generated, navigating to ProblemDefine'
+                );
+                setTimeout(() => {
+                  setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+                }, 500); // 给用户一点时间看到问题生成，然后跳转
+              } else {
+                console.log('[DEBUG] AICommandInput - No questions generated from response');
               }
-            } catch (err) {
-              console.error('Error generating preset questions:', err);
+            } catch (genErr) {
+              console.error('[DEBUG] AICommandInput - Error generating preset questions:', genErr);
             }
           }, 1000);
         } else {
+          console.error('[DEBUG] AICommandInput - Upload failed with result:', result);
           alert('Upload failed: ' + ((result as any)?.message || 'Unknown error'));
         }
       } catch (err: any) {
-        console.error('Upload error:', err);
+        console.error('[DEBUG] AICommandInput - Upload error:', err);
+        console.error('[DEBUG] AICommandInput - Error stack:', err.stack);
         alert(t('emptyState.uploadError') || 'Upload failed: ' + err.message);
       } finally {
+        console.log('[DEBUG] AICommandInput - Setting upload state to false');
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        console.log('[DEBUG] AICommandInput - File input cleared');
       }
     },
-    [notebookId, i18n.language, t, setFiles]
+    [notebookId, i18n.language, t, setFiles, setPreStage]
   );
 
-  // 删除文件
-  const removeFile = useCallback(
-    (fileId: string) => {
-      setFiles((prev) => {
-        const next = prev.filter((file) => file.id !== fileId);
-        if (next.length === 0) setIsVDSMode(false);
-        return next;
-      });
-    },
-    [setFiles]
-  );
+  // Note: removeFile handler removed due to being unused.
 
-  // 点击上传按钮
   const onFileUpload = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
-  // VDS模式切换处理
-  const handleVDSToggle = useCallback(async () => {
-    const newVDSMode = !isVDSMode;
-    setIsVDSMode(newVDSMode);
-
-    if (!newVDSMode) {
-      setPresetQuestions(defaultPresetQuestions);
-    } else if (files.length > 0) {
-      const existingChoiceMap = usePreStageStore.getState().choiceMap as VDSQuestion[] | undefined;
-      if (!existingChoiceMap || existingChoiceMap.length === 0) {
-        try {
-          const cols = usePreStageStore.getState().getFileColumns();
-          const info = usePreStageStore.getState().getDatasetInfo();
-          const map = await generalResponse(
-            'generate_question_choice_map',
-            { column_info: cols, dataset_info: info },
-            i18n.language
-          );
-          if (map?.message) {
-            usePreStageStore.getState().updateChoiceMap(map.message);
-            setPresetQuestions(map.message as VDSQuestion[]);
-          }
-        } catch (err) {
-          console.error('Error generating preset questions:', err);
-          setPresetQuestions([]);
-        }
-      }
-    }
-  }, [isVDSMode, defaultPresetQuestions, files.length, i18n.language]);
-
-  // 提交
+  // ---------- 提交逻辑 ----------
   const handleSubmit = useCallback(
     (command: string) => {
       if (!command) return;
@@ -257,7 +333,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       const timestamp = new Date().toLocaleTimeString();
 
       try {
-        // 仅 VDS 模式时进入 problem define
+        // VDS：进入 problem define
         const hasCsv = files.length > 0 && /\.(csv|xlsx|xls)$/i.test(files[0].name);
         if (hasCsv && isVDSMode && command.trim()) {
           usePreStageStore.getState().setSelectedProblem('vds', command.trim(), 'VDS Analysis');
@@ -273,7 +349,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
           const aiPlanningStore = useAIPlanningContextStore.getState();
           Object.entries(variables).forEach(([key, value]) => {
-            aiPlanningStore.addVariable(key, value);
+            aiPlanningStore.addVariable(key, value as unknown as Record<string, unknown>);
           });
 
           setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
@@ -297,6 +373,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             attachedFiles: files,
           };
           addAction(actionData as any);
+
           sendOperation(useStore.getState().notebookId, {
             type: 'user_command',
             payload: {
@@ -363,6 +440,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       } catch (err) {
         console.error('Submit error:', err);
       } finally {
+        // 与原行为一致：稍后关闭 loading
         setTimeout(() => setIsLoading(false), 500);
       }
     },
@@ -387,167 +465,280 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     ]
   );
 
-  // 键盘事件处理
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (input.trim()) {
-          handleSubmit(input.trim());
-          setInput('');
-        }
-      }
-    },
-    [input, handleSubmit]
-  );
+  // const hasContent = useMemo(() => input.trim().length > 0 || files.length > 0, [input, files.length]);
 
   return (
     <div className="relative mb-6">
-      {/* 输入框容器 */}
-      <Acrylic
-        variant="default"
-        tintOpacity={0.9}
-        className={`
-          relative rounded-full transition-all duration-300 ease-in-out
-          border-0 margin-0 p-0 transform
-          ${isFocused ? 'scale-[1.02]' : ''}
-          ${input && input.startsWith('/') ? 'font-mono' : 'font-normal'}
-        `}
+      {/* 胶囊外框 */}
+      <div
+        className="ai-bar"
+        style={{
+          position: 'relative',
+          borderRadius: 28,
+          border: `1px solid ${isFocused ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)'}`,
+          boxShadow: isFocused ? '0 4px 18px rgba(0,0,0,0.08)' : '0 1px 6px rgba(0,0,0,0.04)',
+          transition: 'transform .18s, box-shadow .18s, border-color .18s',
+          transform: isFocused ? 'scale(1.01)' : 'none',
+          isolation: 'isolate',
+          overflow: 'hidden',
+        }}
       >
-        <button
-          type="button"
-          onClick={onFileUpload}
-          disabled={isUploading}
-          className={`
-            absolute left-3 top-7 -translate-y-1/2
-            flex items-center justify-center px-2 py-1.5 rounded-full
-            transition-all duration-300 ease-in-out transform
-            `}
-          aria-label="Upload file"
-        >
-          <PlusCircle
-            className={`w-6 h-6 transition-all duration-300 ${isUploading ? 'animate-spin' : ''}`}
-          />
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept=".csv,.xlsx,.xls"
-            multiple
-          />
-        </button>
-
-        {/* 文本输入区域 */}
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          placeholder={
-            isVDSMode
-              ? 'VDS模式 - 描述您想对数据进行的分析...'
-              : input && input.startsWith('/')
-                ? t('emptyState.commandPlaceholder')
-                : t('emptyState.questionPlaceholder')
-          }
-          className="w-full h-full pl-16 pr-36 py-3 pt-4 rounded-3xl text-base placeholder:text-gray-400 resize-none leading-6 focus:outline-none focus:ring-0 bg-transparent"
-          rows={1}
-          style={{ wordWrap: 'break-word', whiteSpace: 'pre-wrap' }}
+        {/* Backdrop blur layer */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backdropFilter: isFocused ? 'blur(30px) saturate(180%)' : 'blur(20px) saturate(160%)',
+            WebkitBackdropFilter: isFocused
+              ? 'blur(30px) saturate(180%)'
+              : 'blur(20px) saturate(160%)',
+            transition: 'backdrop-filter .18s',
+          }}
         />
 
-        {/* 提交按钮 */}
-        <button
-          type="button"
-          onClick={() => {
-            if (input.trim()) {
-              handleSubmit(input.trim());
-              setInput('');
-            }
+        {/* Tint overlay */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: isFocused ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.6)',
+            transition: 'background-color .18s',
           }}
-          disabled={!input.trim()}
-          className={`
-            absolute right-2 top-7 -translate-y-1/2
-            btn btn-sm
-            ${input.trim() ? 'btn-primary' : 'opacity-50 cursor-not-allowed'}
-          `}
-        >
-          <SendHorizontal className="icon-sm" />
-          {input && input.startsWith('/')
-            ? t('emptyState.executeBtnText')
-            : t('emptyState.askBtnText')}
-        </button>
+        />
 
-        {/* VDS模式切换开关 - 只有上传文件后才显示 */}
-        {files.length > 0 && (
-          <div className="absolute right-2 bottom-2 flex items-center gap-2 animate-fade-in">
-            <span
-              className={`text-xs transition-all duration-300 ${
-                isVDSMode ? 'text-theme-600 font-medium' : 'text-gray-500'
+        {/* Luminosity layer for depth */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%)',
+            mixBlendMode: 'overlay',
+          }}
+        />
+
+        {/* Noise texture */}
+        <div
+          style={{
+            pointerEvents: 'none',
+            position: 'absolute',
+            inset: 0,
+            opacity: 0.15,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='4.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+            backgroundSize: '200px 200px',
+            mixBlendMode: 'soft-light',
+          }}
+        />
+        {/* 顶部主行（单行：含左右按钮；多行：仅输入） */}
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 10,
+            padding: isMultiline ? '10px 10px 0px 10px' : '10px 70px 10px 32px',
+            border: 'none !important',
+            outline: 'none !important',
+          }}
+        >
+          {/* 单行：左侧 + */}
+          {!isMultiline && (
+            <div
+              style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}
+            >
+              <Tooltip title={isUploading ? t('emptyState.uploading') : t('emptyState.upload')}>
+                <Button
+                  type="text"
+                  shape="circle"
+                  icon={<PlusOutlined />}
+                  onClick={() => !isUploading && onFileUpload()}
+                  loading={isUploading}
+                  style={{
+                    color: resolvedTheme === 'dark' ? '#4a5568' : undefined,
+                  }}
+                />
+              </Tooltip>
+              {/* 文件 input —— 沿用原 handleFileChange */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept={ACCEPT}
+                multiple
+              />
+            </div>
+          )}
+
+          {/* TextArea —— 无边框、autosize、自适应行数 */}
+          <Input.TextArea
+            ref={(node) => {
+              taRef.current = extractHtmlTextArea(node);
+            }}
+            className="ai-bar-textarea ai-bar borderless-textarea"
+            variant="borderless"
+            bordered={false}
+            styles={{
+              textarea: {
+                border: 'none',
+                outline: 'none',
+                boxShadow: 'none',
+                background: 'transparent',
+                caretColor: resolvedTheme === 'dark' ? '#1e6048' : '#2d7a5c',
+                color: resolvedTheme === 'dark' ? '#4a5568' : 'inherit',
+              },
+            }}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (input.trim()) {
+                  handleSubmit(input.trim());
+                  setInput('');
+                }
+              }
+              // 延迟执行以获取最新 scrollHeight
+              setTimeout(calcIsMultiline, 0);
+            }}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onResize={handleTextAreaResize}
+            autoSize={{ minRows: 1, maxRows: 12 }}
+            placeholder={
+              isVDSMode
+                ? 'VDS模式 - 描述您想对数据进行的分析...'
+                : input && input.startsWith('/')
+                  ? t('emptyState.commandPlaceholder')
+                  : t('emptyState.questionPlaceholder')
+            }
+          />
+
+          {/* 单行：右侧 发送 */}
+          {!isMultiline && (
+            <div
+              style={{
+                position: 'absolute',
+                right: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              {/* <Button
+                disabled={!hasContent}
+                style={{
+                  width: 48,
+                  height: 24,
+                  borderRadius: 12,
+                  boxShadow: hasContent ? '0 6px 18px rgba(0,0,0,0.12)' : 'none',
+                  // color: hasContent ? '#fff' : 'rgba(0,0,0,0.45)',
+                }}
+                className={`${
+                  input.trim()
+                    ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'
+                }`}
+                onClick={() => {
+                  if (input.trim()) {
+                    handleSubmit(input.trim());
+                    setInput('');
+                  }
+                }}
+              >
+                {input && input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
+              </Button> */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (input.trim()) {
+                    handleSubmit(input.trim());
+                    setInput('');
+                  }
+                }}
+                disabled={!input.trim()}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition-all duration-300 ease-in-out text-sm font-medium transform ${
+                  input.trim()
+                    ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
+                    : resolvedTheme === 'dark'
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed scale-95'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'
+                }`}
+              >
+                <SendHorizontal className="w-4 h-4" />
+                {input && input.startsWith('/')
+                  ? t('emptyState.executeBtnText')
+                  : t('emptyState.askBtnText')}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 多行：底部操作栏（左：+；右：发送） */}
+        {isMultiline && (
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 10,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '6px 12px 10px',
+            }}
+          >
+            {/* 底栏左：+ */}
+            <Tooltip title={isUploading ? t('emptyState.uploading') : t('emptyState.upload')}>
+              <Button
+                type="text"
+                shape="circle"
+                icon={<PlusOutlined />}
+                onClick={() => !isUploading && onFileUpload()}
+                loading={isUploading}
+                style={{
+                  color: resolvedTheme === 'dark' ? '#4a5568' : undefined,
+                }}
+              />
+            </Tooltip>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept={ACCEPT}
+              multiple
+            />
+
+            <div style={{ flex: 1 }} />
+            <button
+              type="button"
+              onClick={() => {
+                if (input.trim()) {
+                  handleSubmit(input.trim());
+                  setInput('');
+                }
+              }}
+              disabled={!input.trim()}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition-all duration-300 ease-in-out text-sm font-medium transform ${
+                input.trim()
+                  ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
+                  : resolvedTheme === 'dark'
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed scale-95'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'
               }`}
             >
-              VDS Agents
-            </span>
-            <button
-              onClick={handleVDSToggle}
-              className={`
-                relative inline-flex h-4 w-7 items-center rounded-full 
-                transition-all duration-300 ease-in-out transform hover:scale-110 active:scale-95
-                ${isVDSMode ? 'bg-theme-600 shadow-sm' : 'bg-gray-300 hover:bg-gray-400'}
-              `}
-              aria-pressed={isVDSMode}
-              aria-label="Toggle VDS mode"
-            >
-              <span
-                className={`
-                  inline-block h-3 w-3 transform rounded-full bg-white 
-                  transition-all duration-300 ease-out shadow-sm
-                  ${isVDSMode ? 'translate-x-3.5 scale-110' : 'translate-x-0.5'}
-                `}
-              />
+              <SendHorizontal className="w-4 h-4" />
+              {input && input.startsWith('/')
+                ? t('emptyState.executeBtnText')
+                : t('emptyState.askBtnText')}
             </button>
           </div>
         )}
+      </div>
 
-        {/* Shift + Enter 提示 */}
-        {isFocused && (
-          <div className="absolute -top-5 right-2 text-xs text-gray-400 bg-white px-2">
-            {t('emptyState.pressShiftEnter')}
-          </div>
-        )}
-
-        {/* 已上传文件列表 */}
-        {files.length > 0 && (
-          <div className="pl-2 mb-2 flex flex-wrap gap-2 animate-fade-in">
-            {files.map((file: UploadFile, index) => (
-              <div
-                key={file.id}
-                className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 rounded-3xl px-3 py-1.5 text-sm
-                           transition-all duration-300 ease-in-out transform hover:scale-105 animate-slide-in"
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <FileText className="w-4 h-4 text-gray-500 transition-colors duration-200" />
-                <span className="truncate max-w-xs">{file.name}</span>
-                <button
-                  onClick={() => removeFile(file.id)}
-                  className="ml-1 text-gray-400 hover:text-red-500 transition-all duration-300 
-                           transform hover:scale-110 hover:rotate-90 active:scale-95"
-                  aria-label="Remove file"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Acrylic>
-
-      {/* 模式提示 */}
+      {/* 模式提示（保留） */}
       {input && (
-        <div className="mt-2 ml-10 animate-fade-in">
-          <div className="text-theme-600 font-medium transition-all duration-300 ease-in-out transform hover:scale-105">
+        <div className="mt-2 ml-10">
+          <div className="text-theme-600 font-medium transition-all duration-300 ease-in-out">
             {isVDSMode
               ? `🤖 VDS Agents Mode`
               : input && input.startsWith('/')
@@ -557,17 +748,18 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         </div>
       )}
 
+      {/* 预设问题（保留原样式） */}
       {presetQuestions.length > 0 && (
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
           {presetQuestions.map((q, idx) => (
             <button
-              key={idx}
+              key={`${q.problem_name}-${idx}`}
               onClick={() => setInput(q.problem_description)}
-              className="btn btn-secondary btn-sm justify-start text-left"
+              className="p-3 text-left bg-gray-50 hover:bg-gray-100 border rounded-xl transition-all group"
             >
-              <Sparkles className="icon-sm text-theme-500 flex-shrink-0" />
-              <span className="font-medium truncate">{q.problem_name}</span>
-              <ArrowRight className="icon-sm ml-auto group-hover:text-theme-500 transition-colors" />
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-800 text-sm truncate">{q.problem_name}</span>
+              </div>
             </button>
           ))}
         </div>

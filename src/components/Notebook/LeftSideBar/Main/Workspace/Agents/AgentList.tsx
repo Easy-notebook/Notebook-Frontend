@@ -5,7 +5,7 @@ import {
   StatusDot,
   SidebarButton,
   RunningIndicator,
-  TaskCounter
+  TaskCounter,
 } from '@Notebook/LeftSideBar/shared/components';
 
 interface AgentListProps {
@@ -22,9 +22,9 @@ const AGENT_GROUPS = [
       { type: 'general' as AgentType, icon: '🤖', title: 'General Agent' },
       { type: 'command' as AgentType, icon: '⚡', title: 'Command Agent' },
       { type: 'debug' as AgentType, icon: '🔧', title: 'Debug Agent' },
-      { type: 'output' as AgentType, icon: '📊', title: 'Output Agent' }
-    ]
-  }
+      { type: 'output' as AgentType, icon: '📊', title: 'Output Agent' },
+    ],
+  },
   // 未来将添加 DSLC 组
 ];
 
@@ -39,50 +39,44 @@ interface AgentItemProps {
   onClick: () => void;
 }
 
-const AgentItem = memo<AgentItemProps>(({ 
-  agent,
-  isActive,
-  hasMemory,
-  isRunning,
-  taskCount,
-  onClick
-}) => {
-  return (
-    <SidebarButton
-      isActive={isActive}
-      onClick={onClick}
-      className="text-sm tracking-wide"
-      size="sm"
-    >
-      <StatusDot
-        status={hasMemory ? 'in-progress' : 'pending'}
+const AgentItem = memo<AgentItemProps>(
+  ({ agent, isActive, hasMemory, isRunning, taskCount, onClick }) => {
+    return (
+      <SidebarButton
+        isActive={isActive}
+        onClick={onClick}
+        className="text-sm tracking-wide"
         size="sm"
-      />
+      >
+        <StatusDot status={hasMemory ? 'in-progress' : 'pending'} size="sm" />
 
-      <span className="font-normal flex-1 text-left">{agent.title}</span>
+        <span className="font-normal flex-1 text-left">{agent.title}</span>
 
-      {isRunning && <RunningIndicator />}
-      {!isRunning && hasMemory && taskCount > 0 && <TaskCounter count={taskCount} />}
-    </SidebarButton>
-  );
-});
+        {isRunning && <RunningIndicator />}
+        {!isRunning && hasMemory && taskCount > 0 && <TaskCounter count={taskCount} />}
+      </SidebarButton>
+    );
+  }
+);
 
-const AgentList: React.FC<AgentListProps> = ({ 
-  isCollapsed, 
-  onAgentSelect, 
+const AgentList: React.FC<AgentListProps> = ({
+  isCollapsed,
+  onAgentSelect,
   selectedAgentType,
-  runningAgents = new Set()
+  runningAgents = new Set(),
 }) => {
   const { notebookId } = useStore();
-  const [agentMemories, setAgentMemories] = useState<Record<AgentType, any>>({} as Record<AgentType, any>);
+  const [agentMemories, setAgentMemories] = useState<Record<AgentType, any>>(
+    {} as Record<AgentType, any>
+  );
 
   useEffect(() => {
     if (!notebookId) return;
 
     const loadAgentMemories = () => {
       const memories: Record<AgentType, any> = {} as Record<AgentType, any>;
-      
-      AGENT_GROUPS.forEach(group => {
+
+      AGENT_GROUPS.forEach((group) => {
         group.agents.forEach(({ type }) => {
           const memory = AgentMemoryService.getAgentMemory(notebookId, type);
           if (memory) {
@@ -90,19 +84,19 @@ const AgentList: React.FC<AgentListProps> = ({
           }
         });
       });
-      
+
       setAgentMemories(memories);
     };
 
     loadAgentMemories();
-    
+
     // 监听存储变化 - localStorage变化
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'agent_memories_v2') {
         loadAgentMemories();
       }
     };
-    
+
     // 监听自定义事件 - 内存变化
     const handleMemoryUpdate = (e: Event) => {
       const detail = (e as CustomEvent<any>).detail;
@@ -110,15 +104,15 @@ const AgentList: React.FC<AgentListProps> = ({
         loadAgentMemories();
       }
     };
-    
+
     // 设置定时器进行轮询更新
     const pollInterval = setInterval(() => {
       loadAgentMemories();
     }, 2000); // 每2秒检查一次
-    
+
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('agentMemoryUpdated', handleMemoryUpdate);
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('agentMemoryUpdated', handleMemoryUpdate);
@@ -126,24 +120,31 @@ const AgentList: React.FC<AgentListProps> = ({
     };
   }, [notebookId]);
 
-  const getAgentStats = useCallback((agentType: AgentType) => {
-    const memory = agentMemories[agentType];
-    if (!memory) return { interactions: 0, lastActive: null, taskCount: 0 };
+  const getAgentStats = useCallback(
+    (agentType: AgentType) => {
+      const memory = agentMemories[agentType];
+      if (!memory) return { interactions: 0, lastActive: null, taskCount: 0 };
 
-    const taskCount = (memory.situation_tracking?.task_completion?.completed_requirements?.length || 0) +
-                     (memory.situation_tracking?.task_completion?.pending_requirements?.length || 0) +
-                     (memory.situation_tracking?.task_completion?.blocked_requirements?.length || 0);
+      const taskCount =
+        (memory.situation_tracking?.task_completion?.completed_requirements?.length || 0) +
+        (memory.situation_tracking?.task_completion?.pending_requirements?.length || 0) +
+        (memory.situation_tracking?.task_completion?.blocked_requirements?.length || 0);
 
-    return {
-      interactions: memory.interactions?.length || 0,
-      lastActive: memory.last_updated ? new Date(memory.last_updated) : null,
-      taskCount
-    };
-  }, [agentMemories]);
+      return {
+        interactions: memory.interactions?.length || 0,
+        lastActive: memory.last_updated ? new Date(memory.last_updated) : null,
+        taskCount,
+      };
+    },
+    [agentMemories]
+  );
 
-  const handleAgentClick = useCallback((agentType: AgentType) => {
-    onAgentSelect(agentType);
-  }, [onAgentSelect]);
+  const handleAgentClick = useCallback(
+    (agentType: AgentType) => {
+      onAgentSelect(agentType);
+    },
+    [onAgentSelect]
+  );
 
   // 如果是折叠状态，不显示agents（因为没有足够空间）
   if (isCollapsed) {
@@ -156,7 +157,7 @@ const AgentList: React.FC<AgentListProps> = ({
         <div key={group.name} className="mb-3">
           {/* 组标题 */}
           <div className="px-2.5 mb-1">
-            <h2 className="pl-2 text-base font-semibold text-theme-800">
+            <h2 className="pl-2 text-base font-semibold text-theme-800 dark:!text-white">
               {group.name}
             </h2>
           </div>
@@ -168,7 +169,7 @@ const AgentList: React.FC<AgentListProps> = ({
               const isActive = selectedAgentType === agent.type;
               const hasMemory = !!agentMemories[agent.type];
               const isRunning = runningAgents.has(agent.type);
-              
+
               return (
                 <AgentItem
                   key={agent.type}

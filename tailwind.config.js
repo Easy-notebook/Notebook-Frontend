@@ -73,9 +73,15 @@ export default {
     },
   },
   plugins: [
-    function ({ addUtilities }) {
+    function ({ addUtilities, addVariant }) {
+      // 添加 light: 变体，用于明确指定只在 light mode 下生效的样式
+      // 说明：主题切换逻辑会在 <html> 元素上添加 `light` 或 `dark` 类名
+      // 使用 `html.light &` 可以确保仅当根元素为 light 时才生效，避免 `:not(.dark)`
+      // 在深色模式仍被匹配到（因为任意非 .dark 祖先都会命中）的问题。
+      addVariant('light', 'html.light &');
+
       addUtilities({
-        /* 
+        /*
           用法：<h1 class="theme-grad-text">Gradient Title</h1>
         */
         '.theme-grad-text': {

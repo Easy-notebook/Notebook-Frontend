@@ -63,7 +63,7 @@ const ItemButton: React.FC<
       'transition-all duration-200',
       'group',
       active
-        ? 'bg-gradient-to-br from-primary/20 to-primary/10 text-primary shadow-md shadow-primary/20 scale-105'
+        ? 'light:bg-white dark:bg-gradient-to-br dark:from-primary/20 dark:to-primary/10 text-primary shadow-md shadow-primary/20 scale-105'
         : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:scale-105',
       className,
     ].join(' ')}

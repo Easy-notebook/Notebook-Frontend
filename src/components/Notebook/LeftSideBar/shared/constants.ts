@@ -7,23 +7,27 @@
 export const SHARED_STYLES = {
   status: {
     colors: {
-      completed: 'text-emerald-600 backdrop-blur-md border',
-      'in-progress': 'text-theme-600 backdrop-blur-md border',
-      pending: 'text-slate-500 backdrop-blur-md border',
+      completed:
+        'text-emerald-600 dark:text-emerald-400 backdrop-blur-md border dark:border-emerald-700',
+      'in-progress':
+        'text-theme-600 dark:text-theme-400 backdrop-blur-md border dark:border-theme-700',
+      pending: 'text-slate-500 dark:text-slate-400 backdrop-blur-md border dark:border-slate-700',
     },
     steps: {
-      completed: 'bg-emerald-500 shadow-sm ring-1 ring-emerald-200',
-      'in-progress': 'bg-theme-500 shadow-sm ring-1 ring-theme-200 animate-pulse',
-      pending: 'bg-slate-300 shadow-sm ring-1 ring-slate-200',
+      completed:
+        'bg-emerald-500 dark:bg-emerald-600 shadow-sm ring-1 ring-emerald-200 dark:ring-emerald-700',
+      'in-progress':
+        'bg-theme-500 dark:bg-theme-600 shadow-sm ring-1 ring-theme-200 dark:ring-theme-700 animate-pulse',
+      pending: 'bg-slate-300 dark:bg-slate-600 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700',
     },
   },
 
   // Obsidian风格按钮样式
   button: {
     base: 'transition-all duration-200 ease-out font-medium text-sm',
-    hover: 'hover:text-slate-700',
-    active: 'text-slate-800 shadow-sm ring-1',
-    inactive: 'text-slate-600 hover:text-slate-700',
+    hover: 'hover:text-slate-700 dark:hover:text-slate-300',
+    active: 'text-slate-800 dark:text-slate-200 shadow-sm ring-1',
+    inactive: 'text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
   },
 
   // Obsidian风格容器样式
@@ -36,8 +40,8 @@ export const SHARED_STYLES = {
   // Obsidian风格Tab样式
   tab: {
     base: 'px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ease-out',
-    active: 'text-slate-800 shadow-sm ring-1',
-    inactive: 'text-slate-600 hover:text-slate-700',
+    active: 'text-slate-800 dark:text-slate-200 shadow-sm ring-1',
+    inactive: 'text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
   },
 };
 
@@ -100,6 +104,19 @@ export const SCROLLBAR_STYLES = `
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  }
+
+  /* Dark mode scrollbar styles */
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(203, 213, 225, 0.3);
+    border-color: rgba(203, 213, 225, 0.2);
+  }
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(203, 213, 225, 0.5);
+    border-color: rgba(203, 213, 225, 0.3);
+  }
+  .dark .scrollbar-thin {
+    scrollbar-color: rgba(203, 213, 225, 0.3) transparent;
   }
 `;
 

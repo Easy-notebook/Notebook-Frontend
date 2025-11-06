@@ -50,8 +50,10 @@ const pickTier = (w: number): WidthTier => (w < 220 ? 'narrow' : w < 300 ? 'regu
 
 /* ------------------------ UI Tokens（与 PhaseSection 对齐） ------------------------ */
 // 与 PhaseSection 完全一致的文本，支持换行
-const NB_TEXT_CLASS = 'text-[12px] leading-[20px] font-normal text-theme-800 break-words';
-const NB_TEXT_CLASS_FILE = 'text-[12px] leading-[20px] font-normal text-gray-700 break-words';
+const NB_TEXT_CLASS =
+  'text-[12px] leading-[20px] font-normal text-theme-800 dark:!text-gray-100 break-words';
+const NB_TEXT_CLASS_FILE =
+  'text-[12px] leading-[20px] font-normal text-gray-700 dark:!text-gray-200 break-words';
 
 // 行高 - 支持多行文本，使用 auto 高度
 const NB_ROW_H = 'min-h-[28px] py-1';
@@ -59,7 +61,7 @@ const NB_ROW_H = 'min-h-[28px] py-1';
 // 统一图标：容器 28×28（h-7 w-7），图标本体 18
 const NB_ICON_WRAPPER = 'inline-flex items-center justify-center h-7 w-7 flex-shrink-0';
 const NB_ICON_SIZE = 18;
-const NB_ICON_CLASS = 'text-theme-600';
+const NB_ICON_CLASS = 'text-theme-600 dark:text-theme-400';
 
 // 过渡/容器
 const NB_TRANSITION = 'transition-all duration-300';
@@ -265,14 +267,22 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
       uploadFiles: async (
         nid: string,
         files: File[],
-        config: { mode: 'restricted' | 'open'; allowedTypes: string[]; maxFiles?: number }
+        config: { mode: 'restricted' | 'open'; allowedTypes: string[]; maxFiles?: number },
+        onProgress?: (e: ProgressEvent) => void,
+        signal?: AbortSignal
       ) => {
-        return await notebookApiIntegration.uploadFiles(nid, files, {
-          mode: config.mode,
-          allowedTypes: config.allowedTypes,
-          maxFiles: config.maxFiles,
-          targetDir: uploadConfig.targetDir,
-        } as any);
+        return await notebookApiIntegration.uploadFiles(
+          nid,
+          files,
+          {
+            mode: config.mode,
+            allowedTypes: config.allowedTypes,
+            maxFiles: config.maxFiles,
+            targetDir: uploadConfig.targetDir,
+          } as any,
+          onProgress,
+          signal
+        );
       },
       getFilePreviewUrl: async (nid: string, filename: string) => {
         try {
@@ -298,8 +308,8 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         a.remove();
         URL.revokeObjectURL(url);
       },
-      deleteFile: async () => {
-        throw new Error('Delete API not implemented');
+      deleteFile: async (nid: string, filename: string) => {
+        return await notebookApiIntegration.deleteFile(nid, filename);
       },
     }),
     [uploadConfig.targetDir]
@@ -648,26 +658,34 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   // 如果没有有效的 notebookId，不应该显示任何文件内容
   if (!notebookId) {
-    return <div className="text-gray-500 text-sm p-4 text-center">No notebook selected</div>;
+    return (
+      <div className="text-gray-500 dark:text-gray-400 text-sm p-4 text-center">
+        No notebook selected
+      </div>
+    );
   }
 
   if (isLoading && !files) return <LoadingIndicator text="Loading files..." />;
 
   return (
-    <div ref={rootRef} className="" data-tier={widthTier}>
-      <div className="relative">
+    <div ref={rootRef} className="h-full flex flex-col" data-tier={widthTier}>
+      <div className="relative flex-1 flex flex-col overflow-hidden">
         {uploadState.uploading && (
-          <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col justify-center items-center rounded-lg border border-theme-200">
-            <div className="mb-3 text-theme-800 font-medium">Uploading files...</div>
+          <div className="absolute inset-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm z-10 flex flex-col justify-center items-center rounded-lg border border-theme-200 dark:border-theme-700">
+            <div className="mb-3 text-theme-800 dark:text-gray-200 font-medium">
+              Uploading files...
+            </div>
             <div className="w-64 h-3 bg-theme-100 rounded-full overflow-hidden shadow-inner">
               <div
                 className="h-full bg-gradient-to-r from-theme-500 to-theme-600 rounded-full transition-all duration-300"
                 style={{ width: `${uploadState.progress}%` }}
               />
             </div>
-            <div className="mt-2 text-theme-700 font-semibold">{uploadState.progress}%</div>
+            <div className="mt-2 text-theme-700 dark:text-theme-300 font-semibold">
+              {uploadState.progress}%
+            </div>
             <button
-              className="mt-4 px-4 py-2 bg-theme-100 text-theme-700 rounded-lg hover:bg-theme-200 transition-colors duration-200 font-medium"
+              className="mt-4 px-4 py-2 bg-theme-100 dark:bg-theme-800 text-theme-700 dark:text-theme-200 rounded-lg hover:bg-theme-200 dark:hover:bg-theme-700 transition-colors duration-200 font-medium"
               onClick={handleCancelUpload}
             >
               Cancel
@@ -676,8 +694,10 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         )}
 
         {previewLoading && (
-          <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-            <div className="animate-pulse text-theme-700 font-medium">Loading preview...</div>
+          <div className="absolute inset-0 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
+            <div className="animate-pulse text-theme-700 dark:text-theme-300 font-medium">
+              Loading preview...
+            </div>
           </div>
         )}
 
@@ -704,13 +724,13 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
           {projectName && (
             <div className="flex items-center justify-between px-3 mb-2 ml-3 mt-3">
               <h2
-                className="text-[13px] font-bold text-theme-800 p-1 flex-1 min-w-0 break-words"
+                className="text-[13px] font-bold text-theme-800 dark:!text-white p-1 flex-1 min-w-0 break-words"
                 title={projectName}
               >
                 {projectName}
               </h2>
               <button
-                className={`p-2 rounded-lg hover:bg-theme-100 text-theme-700 flex-shrink-0 ${NB_TRANSITION}`}
+                className={`p-2 rounded-lg hover:bg-theme-100 dark:hover:bg-gray-700 text-theme-700 dark:text-theme-400 flex-shrink-0 ${NB_TRANSITION}`}
                 onClick={fetchFileListWrapper}
                 title="Refresh file list"
                 aria-label="Refresh file list"
@@ -720,7 +740,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
             </div>
           )}
 
-          <div className="px-2 mx-2">
+          <div className="px-2 mx-2 flex-1 overflow-y-auto">
             <Tree
               showIcon={false}
               treeData={treeData}
@@ -776,11 +796,11 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
                         placement="bottomRight"
                       >
                         <button
-                          className={`opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-gray-100 ${NB_TRANSITION} flex-shrink-0`}
+                          className={`opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${NB_TRANSITION} flex-shrink-0`}
                           onClick={(e) => e.stopPropagation()}
                           aria-label="More actions"
                         >
-                          <MoreHorizontal size={14} className="text-gray-500" />
+                          <MoreHorizontal size={14} className="text-gray-500 dark:text-gray-400" />
                         </button>
                       </Dropdown>
                     )}
@@ -792,7 +812,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
           {notebookId && (projectName || (tasks && tasks.length > 0)) && (
             <div
-              className={`flex items-center py-2 my-0 mx-4 cursor-pointer text-gray-700 hover:bg-theme-50 transition-all duration-200 px-2 rounded-lg`}
+              className={`flex items-center py-2 my-0 mx-4 cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-theme-50 dark:hover:bg-gray-700 transition-all duration-200 px-2 rounded-lg`}
               onClick={switchToNotebookMode}
               title="Open Notebook"
             >

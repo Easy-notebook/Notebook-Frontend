@@ -21,10 +21,11 @@ interface Phase {
 /* -------------------------- Constants ------------------------------ */
 
 // 统一样式常量，支持文本换行而不是截断
-const NB_TEXT_CLASS = 'text-[14px] leading-[20px] font-normal text-theme-800 break-words';
+const NB_TEXT_CLASS =
+  'text-[14px] leading-[20px] font-normal text-theme-800 dark:text-gray-200 break-words';
 const NB_ICON_SIZE = 16;
 const NB_TRANSITION = 'transition-all duration-300';
-const NB_SHADOW = 'shadow-[0_2px_8px_rgba(0,0,0,0.1)]';
+const NB_SHADOW = 'shadow-[0_2px_8px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_8px_rgba(0,0,0,0.3)]';
 
 // 使用共享的样式常量
 const StatusStyles = SHARED_STYLES.status;
@@ -115,7 +116,7 @@ export const StepButton = memo(({ step, isActive, onClick }: StepButtonProps) =>
     className={`${NB_TEXT_CLASS} ${NB_TRANSITION}`}
   >
     <StatusDot status={isActive ? 'in-progress' : 'pending'} size="sm" />
-    <span className="font-normal">{step.title}</span>
+    <span className="font-normal text-theme-800 dark:!text-gray-100">{step.title}</span>
   </SidebarButton>
 ));
 
@@ -220,7 +221,7 @@ export const PhaseSection = memo(
     w-full flex items-center p-2.5 rounded-lg
     ${SHARED_STYLES.button.base} ${SHARED_STYLES.button.hover}
     ${isActive ? SHARED_STYLES.button.active : ''}
-    ${isCurrentStep ? `border-2 border-theme-500 ${NB_SHADOW}` : ''}
+    ${isCurrentStep ? `border-2 border-theme-500 dark:border-theme-400 ${NB_SHADOW}` : ''}
     ${NB_TRANSITION}
   `,
       [isActive, isCurrentStep]
@@ -266,7 +267,7 @@ export const PhaseSection = memo(
                 </div>
                 <div className="flex-1 min-w-0 flex items-start ml-2">
                   <h3
-                    className={`font-bold tracking-wide text-base text-black ${NB_TRANSITION} break-words`}
+                    className={`font-bold tracking-wide text-base text-black dark:!text-white ${NB_TRANSITION} break-words`}
                   >
                     {phase.title}
                   </h3>
@@ -276,7 +277,7 @@ export const PhaseSection = memo(
 
             {isTitle && (
               <h2
-                className={`pl-2 text-lg font-semibold text-theme-800 ${NB_TRANSITION} break-words`}
+                className={`pl-2 text-lg font-semibold text-theme-800 dark:!text-white ${NB_TRANSITION} break-words`}
               >
                 {phase.title}
               </h2>

@@ -1163,3 +1163,159 @@
 .dark .ant-popover-inner-content {
   color: #b8bcc8 !important;
 }
+
+/* ====================================================================
+   Borderless TextArea Styling
+   ==================================================================== */
+
+/* Remove all borders from borderless-textarea - all states */
+.borderless-textarea,
+.borderless-textarea.ant-input,
+.borderless-textarea.ant-input-affix-wrapper,
+.borderless-textarea.ant-input-affix-wrapper textarea,
+.borderless-textarea textarea,
+.borderless-textarea.ant-input-textarea,
+.borderless-textarea.ant-input-textarea textarea {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Focus state */
+.borderless-textarea:focus,
+.borderless-textarea.ant-input:focus,
+.borderless-textarea.ant-input-focused,
+.borderless-textarea.ant-input-affix-wrapper:focus,
+.borderless-textarea.ant-input-affix-wrapper-focused,
+.borderless-textarea textarea:focus,
+.borderless-textarea textarea:focus-visible,
+.borderless-textarea.ant-input-textarea:focus,
+.borderless-textarea.ant-input-textarea-focused {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Hover state */
+.borderless-textarea:hover,
+.borderless-textarea.ant-input:hover,
+.borderless-textarea.ant-input-affix-wrapper:hover,
+.borderless-textarea textarea:hover,
+.borderless-textarea.ant-input-textarea:hover {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Active state */
+.borderless-textarea:active,
+.borderless-textarea.ant-input:active,
+.borderless-textarea.ant-input-affix-wrapper:active,
+.borderless-textarea textarea:active,
+.borderless-textarea.ant-input-textarea:active {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Enhanced caret (cursor) styling - darker colors for better visibility */
+.ai-bar-textarea textarea,
+.ai-bar-textarea.ant-input-textarea textarea,
+.borderless-textarea textarea {
+  caret-color: #2d7a5c !important;
+  caret-shape: block !important;
+  /* Also try bar for a thicker line */
+  /* caret-shape: bar !important; */
+}
+
+/* Dark mode caret and text color - use more specific selectors */
+.dark .ai-bar-textarea textarea,
+.dark .ai-bar-textarea.ant-input-textarea textarea,
+.dark .borderless-textarea textarea,
+.dark .ant-input-textarea textarea.ai-bar-textarea,
+html.dark .ai-bar-textarea textarea,
+html.dark .borderless-textarea textarea,
+.dark .ant-input-affix-wrapper textarea,
+.dark .ant-input-textarea-show-count textarea {
+  caret-color: #1e6048 !important;
+  caret-shape: block !important;
+  color: #4a5568 !important;
+  -webkit-text-fill-color: #4a5568 !important;
+}
+
+/* Override Ant Design's dark mode input color specifically for our textarea */
+.dark .ai-bar textarea,
+.dark textarea.ai-bar-textarea {
+  color: #4a5568 !important;
+  -webkit-text-fill-color: #4a5568 !important;
+}
+
+/* Specific class for dark mode text color override */
+.dark-mode-text-override {
+  color: #4a5568 !important;
+}
+
+.dark .dark-mode-text-override {
+  color: #4a5568 !important;
+  -webkit-text-fill-color: #4a5568 !important;
+}
+
+/* More aggressive override targeting the textarea directly */
+.dark textarea[class*='ai-bar'] {
+  color: #4a5568 !important;
+  -webkit-text-fill-color: #4a5568 !important;
+}
+
+/* Ultra specific override - targeting by parent class */
+.dark .ai-bar textarea[class],
+html.dark .ai-bar textarea[class] {
+  color: #4a5568 !important;
+  -webkit-text-fill-color: #4a5568 !important;
+}
+
+/* Target the Input.TextArea wrapper in dark mode */
+.dark .ant-input-textarea,
+.dark .ant-input-affix-wrapper {
+  color: #4a5568 !important;
+}
+
+.dark .ant-input-textarea textarea,
+.dark .ant-input-affix-wrapper textarea {
+  color: #4a5568 !important;
+  -webkit-text-fill-color: #4a5568 !important;
+}
+
+/* Dark mode placeholder - more specific */
+.dark .ai-bar-textarea textarea::placeholder,
+.dark .borderless-textarea textarea::placeholder,
+html.dark .ai-bar-textarea textarea::placeholder {
+  color: #6b7280 !important;
+  opacity: 0.6 !important;
+  -webkit-text-fill-color: #6b7280 !important;
+}
+
+/* Dark mode - plus icon button color */
+.dark .ai-bar .ant-btn-text,
+.dark .ai-bar .ant-btn-text .anticon,
+.dark .ai-bar .ant-btn-icon-only,
+.dark .ai-bar .ant-btn-icon-only .anticon {
+  color: #4a5568 !important;
+}
+
+.dark .ai-bar .ant-btn-text:hover,
+.dark .ai-bar .ant-btn-text:hover .anticon {
+  color: #2d7a5c !important;
+}
+
+/* Send button in dark mode */
+.dark .ai-bar button[type='button'] {
+  color: #4a5568 !important;
+}
+
+.dark .ai-bar button[type='button']:hover {
+  color: #2d7a5c !important;
+}

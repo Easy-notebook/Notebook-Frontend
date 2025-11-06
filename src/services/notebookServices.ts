@@ -1,6 +1,7 @@
 // services/notebookApi.ts
 import { Backend_BASE_URL } from '@Config/base_url';
 import { apiLog } from '@Utils/logger';
+import axios from 'axios';
 const API_BASE_URL = Backend_BASE_URL;
 
 // Type definitions for API responses and data structures
@@ -247,7 +248,9 @@ export class NotebookApiService {
   static async uploadFile(
     notebookId: string,
     files: File[],
-    uploadConfig: UploadConfig & { targetDir?: string }
+    uploadConfig: UploadConfig & { targetDir?: string },
+    onProgress?: (e: ProgressEvent) => void,
+    signal?: AbortSignal
   ): Promise<ApiResponse> {
     try {
       apiLog.debug('NotebookApiService.uploadFile called');
@@ -285,17 +288,24 @@ export class NotebookApiService {
       const url = `${API_BASE_URL}/upload_file`;
       apiLog.debug('Making request', { url });
 
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
+      // Use axios to support upload progress and abort
+      const axiosResp = await axios.post<ApiResponse>(url, formData, {
+        signal,
+        onUploadProgress: (evt: ProgressEvent) => {
+          try {
+            if (onProgress) onProgress(evt);
+          } catch (cbErr) {
+            apiLog.warn('onUploadProgress callback error', { error: cbErr });
+          }
+        },
+        headers: {
+          // Let axios set proper multipart boundary automatically
+          Accept: 'application/json',
+        },
       });
 
-      apiLog.debug('Response status', { status: response.status });
-      apiLog.debug('Response headers', { headers: Object.fromEntries(response.headers.entries()) });
-
-      const result = await handleResponse<ApiResponse>(response);
-      apiLog.debug('Parsed response', { result });
-      return result;
+      apiLog.debug('Upload completed', { status: axiosResp.status });
+      return axiosResp.data;
     } catch (error) {
       apiLog.error('Failed to upload files', { error });
       apiLog.error('Error details', { name: error.name });
@@ -480,6 +490,26 @@ export class NotebookApiService {
       throw error;
     }
   }
+
+  // delete file
+  static async deleteFile(notebookId: string, filename: string): Promise<ApiResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/delete_file`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          notebook_id: notebookId,
+          filename,
+        }),
+      });
+      return await handleResponse<ApiResponse>(response);
+    } catch (error) {
+      apiLog.error('Failed to delete file', { error });
+      throw error;
+    }
+  }
 }
 
 // Notebook Store Integration
@@ -584,10 +614,11 @@ export const notebookApiIntegration = {
     notebookId: string,
     files: File[],
     config: UploadConfig & { targetDir?: string },
+    onProgress?: (e: ProgressEvent) => void,
     signal?: AbortSignal
   ): Promise<ApiResponse> => {
     try {
-      return await NotebookApiService.uploadFile(notebookId, files, config);
+      return await NotebookApiService.uploadFile(notebookId, files, config, onProgress, signal);
     } catch (error) {
       apiLog.error('File upload error', { error });
       throw error;
@@ -635,6 +666,19 @@ export const notebookApiIntegration = {
       return await NotebookApiService.getFileInfo(notebookId, filename);
     } catch (error) {
       apiLog.error('Get file info error', { error });
+      throw error;
+    }
+  },
+
+  // delete file
+  deleteFile: async (notebookId: string, filename: string): Promise<void> => {
+    try {
+      const res = await NotebookApiService.deleteFile(notebookId, filename);
+      if (res.status !== 'ok') {
+        throw new Error(res.message || 'Failed to delete file');
+      }
+    } catch (error) {
+      apiLog.error('Delete file error', { error });
       throw error;
     }
   },
