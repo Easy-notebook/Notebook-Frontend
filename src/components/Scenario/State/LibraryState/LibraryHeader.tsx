@@ -24,11 +24,11 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-              <TreePine className="w-6 h-6 text-blue-500" />
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <TreePine className="w-6 h-6 text-blue-500 dark:text-blue-400" />
               Notebook Library
             </h1>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
               {totalNotebooks} Notebooks · Total Size {formatSize(totalSize)}
             </p>
           </div>
@@ -61,7 +61,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
         style={{ maxWidth: 420 }}
-        prefix={<SearchIcon className="w-4 h-4 text-gray-400" />}
+        prefix={<SearchIcon className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
         allowClear
       />
     </div>

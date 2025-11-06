@@ -47,8 +47,10 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 align-middle justify-center my-auto">
-            <h1 className="text-lg font-semibold text-gray-900">Recent</h1>
-            <span className="text-xs text-gray-400">({recentNotebooks.length})</span>
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent</h1>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              ({recentNotebooks.length})
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -96,8 +98,10 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Star className="w-4 h-4 text-yellow-500 fill-current" />
-              <h3 className="text-sm font-medium text-gray-700">Starred</h3>
-              <span className="text-xs text-gray-400">({starredNotebooks.length})</span>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Starred</h3>
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                ({starredNotebooks.length})
+              </span>
             </div>
             <div className="space-y-2">
               {starredNotebooks.map((notebook) => (
@@ -136,7 +140,7 @@ const EmptySidebar: React.FC<EmptySidebarProps> = memo(() => {
               imageStyle={{ height: 80 }}
               description={
                 <div className="text-center space-y-3">
-                  <p className="text-gray-500 text-sm">No notebooks yet</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">No notebooks yet</p>
                   <button
                     className="btn btn-primary btn-md"
                     onClick={createNotebook}

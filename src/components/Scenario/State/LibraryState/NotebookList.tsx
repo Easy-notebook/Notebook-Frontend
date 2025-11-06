@@ -100,7 +100,7 @@ const NotebookList: React.FC<
         {/* Starred Section */}
         {starredNotebooks.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Star className="w-5 h-5 text-yellow-500" />
               Starred ({starredNotebooks.length})
             </h2>
@@ -123,8 +123,8 @@ const NotebookList: React.FC<
         {/* Recent Section */}
         {regularNotebooks.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-green-500" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-green-500 dark:text-green-400" />
               {starredNotebooks.length > 0 ? 'Recent' : 'All'} ({regularNotebooks.length})
             </h2>
             <div className={gridClassName}>

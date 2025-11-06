@@ -94,17 +94,37 @@
 
 /* Glass morphism effect - can be applied to any container */
 .glass-morphism {
+  position: relative;
+  overflow: hidden; /* ensure clipping of inner blur on Safari */
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.glass-morphism::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  pointer-events: none;
 }
 
 /* Subtle glass effect for sidebars */
 .glass-subtle {
+  position: relative;
+  overflow: hidden; /* ensure clipping of inner blur on Safari */
+}
+
+.glass-subtle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px) saturate(150%);
   -webkit-backdrop-filter: blur(10px) saturate(150%);
+  pointer-events: none;
 }
 
 /* Noise texture overlay - adds subtle grain for depth */
@@ -768,6 +788,8 @@
   margin: 1rem 0 2rem;
   border-radius: 12px;
   overflow: hidden;
+  background-clip: padding-box;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 0 1px rgba(65, 184, 131, 0.1);
@@ -1516,6 +1538,8 @@
   margin: 1rem 0 2rem !important;
   border-radius: 12px !important;
   overflow: hidden !important;
+  background-clip: padding-box !important;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 0 1px rgba(65, 184, 131, 0.1) !important;
@@ -1813,6 +1837,8 @@
   border-radius: 8px;
   margin: 1px;
   overflow: hidden;
+  background-clip: padding-box;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
   box-shadow:
     0 1px 4px rgba(0, 0, 0, 0.08),
     0 0 1px rgba(65, 184, 131, 0.15);
@@ -2003,6 +2029,8 @@ vds-table {
   border-spacing: 0;
   border-radius: 8px;
   overflow: hidden;
+  background-clip: padding-box;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
   box-shadow:
     0 1px 4px rgba(0, 0, 0, 0.08),
     0 0 1px rgba(65, 184, 131, 0.15);
@@ -2552,6 +2580,8 @@ vds-cleaning-report {
   margin: 1.5rem 0 !important;
   border-radius: 8px !important;
   overflow: hidden !important;
+  background-clip: padding-box !important;
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08) !important;
   transition: box-shadow 0.2s ease !important;
 }
@@ -2701,11 +2731,13 @@ vds-cleaning-report {
 
 /* Dark mode glass morphism effects */
 .dark .glass-morphism {
-  background: rgba(35, 35, 42, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
+.dark .glass-morphism::before {
+  background: rgba(35, 35, 42, 0.7);
+}
 
-.dark .glass-subtle {
+.dark .glass-subtle::before {
   background: rgba(35, 35, 42, 0.95);
 }
 
@@ -2737,17 +2769,35 @@ vds-cleaning-report {
 
 /* Aliases used by components (e.g., SelectContent) */
 .acrylic {
+  position: relative;
+  overflow: hidden; /* Safari clipping fix */
+  border: 1px solid var(--card-border);
+}
+.acrylic::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--acrylic-base, rgb(var(--acrylic-tint) / 0.7));
   backdrop-filter: saturate(180%) blur(var(--blur-sm));
   -webkit-backdrop-filter: saturate(180%) blur(var(--blur-sm));
-  background: var(--acrylic-base, rgb(var(--acrylic-tint) / 0.7));
-  border: 1px solid var(--card-border);
+  pointer-events: none;
 }
 
 .mica {
+  position: relative;
+  overflow: hidden; /* Safari clipping fix */
+  border: 1px solid var(--card-border);
+}
+.mica::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--mica-base, rgb(var(--mica-tint) / 0.9));
   backdrop-filter: blur(var(--blur-lg));
   -webkit-backdrop-filter: blur(var(--blur-lg));
-  background: var(--mica-base, rgb(var(--mica-tint) / 0.9));
-  border: 1px solid var(--card-border);
+  pointer-events: none;
 }
 
 /* Hover utility for Fluent cards */

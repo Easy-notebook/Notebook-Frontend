@@ -2,24 +2,26 @@
 // Header component for Empty state - includes import functionality
 
 import { useTranslation } from 'react-i18next';
-import { Upload } from 'lucide-react';
+import { Upload, BarChartHorizontalBig } from 'lucide-react';
 
 interface EmptyStateHeaderProps {
   onTriggerFileInput?: () => void;
   onHandleImport?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenSettings?: () => void;
   fileInputRef?: React.RefObject<HTMLInputElement>;
+  onToggleRightSidebar: () => void;
 }
 
 const EmptyStateHeader: React.FC<EmptyStateHeaderProps> = ({
   onTriggerFileInput,
   onHandleImport,
   fileInputRef,
+  onToggleRightSidebar,
 }) => {
   const { t } = useTranslation();
 
   return (
-    <div className="w-full h-18 tm-1 flex items-center justify-end px-4">
+    <div className="w-full h-18 mt-4 flex items-center justify-end px-4">
       {onTriggerFileInput && onHandleImport && fileInputRef && (
         <div className="flex items-center gap-2">
           <button
@@ -37,6 +39,12 @@ const EmptyStateHeader: React.FC<EmptyStateHeaderProps> = ({
             style={{ display: 'none' }}
             onChange={onHandleImport}
           />
+          <button
+            onClick={onToggleRightSidebar}
+            className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:scale-105 text-primary bg-primary/10 hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20"
+          >
+            <BarChartHorizontalBig size={18} />
+          </button>
         </div>
       )}
     </div>

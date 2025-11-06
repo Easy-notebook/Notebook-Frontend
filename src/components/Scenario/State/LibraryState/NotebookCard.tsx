@@ -204,8 +204,8 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
     // Notebook preview cover
     const notebookPreviewCover = useMemo(
       () => (
-        <div className="h-48 bg-gradient-to-b from-gray-50 to-gray-100 overflow-hidden relative rounded-t-3xl">
-          <div className="p-10 space-y-0  bg-theme-100">
+        <div className="h-48 bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 overflow-hidden relative rounded-t-3xl">
+          <div className="p-10 space-y-0 bg-theme-100 dark:bg-theme-900/50">
             {previewCells.length > 0 ? (
               previewCells.map((cell) => renderCellPreview(cell))
             ) : (
@@ -227,7 +227,7 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
           )}
 
           {/* Last accessed time */}
-          <div className="absolute top-3 left-3 rounded-lg px-2 py-1 text-xs text-gray-600">
+          <div className="absolute top-3 left-3 rounded-lg px-2 py-1 text-xs text-gray-600 dark:text-gray-300 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
             <div className="flex items-center gap-1">
               <Clock className="w-3 h-3" />
               {formatTime(notebook.lastAccessedAt)}
@@ -246,12 +246,14 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
 
           {/* Content */}
           <CardContent className="p-4">
-            <div className="truncate text-base font-semibold text-gray-900 mb-2">
+            <div className="truncate text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">
               {notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
             </div>
             <div className="space-y-2">
               {notebook.description && (
-                <p className="text-sm text-gray-600 line-clamp-2">{notebook.description}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                  {notebook.description}
+                </p>
               )}
               <NotebookStats
                 fileCount={notebook.fileCount}
@@ -263,7 +265,7 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
           </CardContent>
 
           {/* Actions */}
-          <div className="flex items-center justify-around border-t border-gray-100 bg-gray-50">
+          <div className="flex items-center justify-around border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 rounded-b-3xl">
             <Button
               type="text"
               icon={
@@ -296,14 +298,14 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-gray-900 truncate text-base">
+                  <h3 className="font-semibold text-gray-900 dark:text-gray-100 truncate text-base">
                     {notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
                   </h3>
                   {notebook.isStarred && (
                     <Star className="w-4 h-4 text-yellow-500 fill-current flex-shrink-0" />
                   )}
                 </div>
-                <div className="text-sm text-gray-600 mt-1">
+                <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                   {notebook.description || 'No description'}
                 </div>
                 <div className="mt-2">
@@ -312,14 +314,18 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
               </div>
             </div>
 
-            <div className="flex items-center gap-6 text-sm text-gray-500 ml-4">
+            <div className="flex items-center gap-6 text-sm text-gray-500 dark:text-gray-400 ml-4">
               <div className="text-right">
-                <div className="font-medium">{notebook.fileCount ?? 0} files</div>
-                <div className="text-xs">{formatSize(notebook.totalSize)}</div>
+                <div className="font-medium dark:text-gray-300">
+                  {notebook.fileCount ?? 0} files
+                </div>
+                <div className="text-xs dark:text-gray-500">{formatSize(notebook.totalSize)}</div>
               </div>
               <div className="text-right">
-                <div className="font-medium">{formatTime(notebook.lastAccessedAt)}</div>
-                <div className="text-xs">{notebook.accessCount ?? 0} visits</div>
+                <div className="font-medium dark:text-gray-300">
+                  {formatTime(notebook.lastAccessedAt)}
+                </div>
+                <div className="text-xs dark:text-gray-500">{notebook.accessCount ?? 0} visits</div>
               </div>
               <Dropdown menu={{ items: menuItems }} trigger={['click']}>
                 <Button

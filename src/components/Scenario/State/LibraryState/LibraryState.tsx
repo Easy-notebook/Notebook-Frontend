@@ -220,7 +220,7 @@ const LibraryState: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook })
           此操作会清空其本地缓存，且无法撤销。
         </p>
         {selectedNotebookData && (
-          <div className="mt-3 text-sm text-gray-600">
+          <div className="mt-3 text-sm text-gray-600 dark:text-gray-300">
             <p>包含 {selectedNotebookData.fileCount} 个文件</p>
             <p>总大小: {Math.round((selectedNotebookData.totalSize || 0) / 1024)} KB</p>
           </div>

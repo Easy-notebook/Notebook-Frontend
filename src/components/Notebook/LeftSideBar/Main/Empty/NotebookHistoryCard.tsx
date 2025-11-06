@@ -178,8 +178,8 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
     // Notebook preview cover for sidebar
     const notebookPreviewCover = useMemo(
       () => (
-        <div className="h-20 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative">
-          <div className="p-2 space-y-1">
+        <div className="h-20 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 overflow-hidden relative rounded-t-3xl">
+          <div className="p-2 space-y-1 rounded-t-3xl">
             {loading ? (
               <Skeleton active paragraph={{ rows: 2 }} />
             ) : previewCells.length > 0 ? (
@@ -193,7 +193,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
           </div>
 
           {/* Bottom fade gradient */}
-          <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-gray-100 to-transparent pointer-events-none" />
+          <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-gray-100 dark:from-gray-900 to-transparent pointer-events-none" />
 
           {/* Star indicator */}
           {notebook.isStarred && (
@@ -203,7 +203,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
           )}
 
           {/* Last accessed time */}
-          <div className="absolute top-1 left-1 bg-white bg-opacity-80 backdrop-blur-sm rounded px-1 py-0.5 text-xs text-gray-600">
+          <div className="absolute top-1 left-1 bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-sm rounded px-1 py-0.5 text-xs text-gray-600 dark:text-gray-300">
             <div className="flex items-center gap-0.5">
               <Clock className="w-2 h-2" />
               {formatTime(notebook.lastAccessedAt)}
@@ -216,7 +216,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
 
     return (
       <Card
-        className="group relative overflow-hidden hover:border-theme-300 transition-all duration-200 cursor-pointer"
+        className="group relative overflow-hidden hover:border-theme-300 dark:hover:border-theme-600 transition-all duration-200 cursor-pointer"
         onClick={handleCardClick}
       >
         {/* Preview Cover */}
@@ -226,7 +226,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
         <CardContent className="p-3">
           {/* Title and actions */}
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-medium text-sm text-gray-900 truncate group-hover:text-theme-700 transition-colors flex-1">
+            <h3 className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate group-hover:text-theme-700 dark:group-hover:text-theme-400 transition-colors flex-1">
               {notebook.title || notebook.name || 'Untitled'}
             </h3>
 

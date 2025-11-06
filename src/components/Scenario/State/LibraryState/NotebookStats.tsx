@@ -7,7 +7,7 @@ import type { NotebookStatsProps } from './types';
 
 const NotebookStats: React.FC<NotebookStatsProps> = memo(
   ({ fileCount = 0, accessCount = 0, totalSize }) => (
-    <div className="flex items-center justify-between text-xs text-gray-500">
+    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
       <span>{fileCount} files</span>
       {totalSize !== undefined && <span>{formatSize(totalSize)}</span>}
       <span>{accessCount} visits</span>

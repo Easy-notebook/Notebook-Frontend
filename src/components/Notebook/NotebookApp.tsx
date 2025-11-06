@@ -252,6 +252,7 @@ const NotebookApp = () => {
             onHandleImport={handleImport}
             onOpenSettings={settingstore.openSettings}
             fileInputRef={fileInputRef}
+            onToggleRightSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
           />
         );
       case 'library':

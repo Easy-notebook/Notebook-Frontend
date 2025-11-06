@@ -488,6 +488,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           style={{
             position: 'absolute',
             inset: 0,
+            borderRadius: 28,
             backdropFilter: isFocused ? 'blur(30px) saturate(180%)' : 'blur(20px) saturate(160%)',
             WebkitBackdropFilter: isFocused
               ? 'blur(30px) saturate(180%)'
@@ -501,6 +502,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           style={{
             position: 'absolute',
             inset: 0,
+            borderRadius: 28,
             backgroundColor: isFocused ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.6)',
             transition: 'background-color .18s',
           }}
@@ -511,6 +513,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           style={{
             position: 'absolute',
             inset: 0,
+            borderRadius: 28,
             background:
               'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%)',
             mixBlendMode: 'overlay',
@@ -523,6 +526,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             pointerEvents: 'none',
             position: 'absolute',
             inset: 0,
+            borderRadius: 28,
             opacity: 0.15,
             backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='4.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
             backgroundSize: '200px 200px',
