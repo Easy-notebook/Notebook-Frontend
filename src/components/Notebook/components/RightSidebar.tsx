@@ -1,7 +1,7 @@
 // src/components/Notebook/components/RightSidebar.tsx
 // Right sidebar content - simplified for use with ThreePanelLayout
 
-import AIAgentSidebarOrig from '../RightSideBar/AIAgentSidebar';
+import AIAgentSidebarOrig from '../RightSideBar';
 
 // Cast component to any to relax prop type constraints
 const AIAgentSidebar: any = AIAgentSidebarOrig;

@@ -13,24 +13,23 @@ const injectPanelStyles = () => {
   const style = document.createElement('style');
   style.id = styleId;
   style.textContent = `
+    /* Ensure the group takes full space */
     [data-panel-group] {
       box-sizing: border-box !important;
       overflow: hidden !important;
       width: 100% !important;
       max-width: 100% !important;
+      display: flex !important;
     }
+    /* Let the library manage panel sizing via inline styles (flex-basis). */
     [data-panel] {
       box-sizing: border-box !important;
       overflow: hidden !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      flex-shrink: 0 !important;
+      /* Do NOT force width here; it breaks sizing */
     }
     [data-panel] > * {
       box-sizing: border-box !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      flex-shrink: 0 !important;
+      /* Children can fill naturally; avoid width overrides */
     }
     [data-panel-resize-handle] {
       flex-shrink: 0 !important;
@@ -197,6 +196,7 @@ export const ThreePanelLayout = ({
       style={{ boxSizing: 'border-box', maxWidth: '100%', position: 'relative' }}
     >
       <PanelGroup
+        key={`${storageKey}-${showLeft ? 'L' : ''}${hasCenter ? 'C' : ''}${showRight ? 'R' : ''}`}
         direction="horizontal"
         id={storageKey}
         autoSaveId={storageKey}

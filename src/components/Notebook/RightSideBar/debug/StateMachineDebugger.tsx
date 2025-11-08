@@ -25,7 +25,7 @@ import {
   Eye,
   Repeat,
 } from 'lucide-react';
-import { extractSectionTitle, extractChapterTitle } from '../utils/String';
+import { extractSectionTitle, extractChapterTitle } from '../../utils/String';
 
 const StateMachineDebugger: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);

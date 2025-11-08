@@ -11,15 +11,15 @@ import {
 
 import useStore from '@Store/notebookStore';
 import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
-import StateMachineDebugger from './StateMachineDebugger';
-import AIPlanningContextDebugger from './AIPlanningContextDebugger';
-import WorkflowTODOPanel from './WorkflowTODOPanel';
-import ViewSwitcher from './ViewSwitcher';
-import ToolCallIndicator from './ToolCallIndicator';
-import AgentInfo from './AgentInfo';
-import ExpandableText from './ExpandableText';
-import EventIcon from './EventIcon';
-import { getEventLabel } from './eventUtils';
+import StateMachineDebugger from '../debug/StateMachineDebugger';
+import AIPlanningContextDebugger from '../debug/AIPlanningContextDebugger';
+import WorkflowTODOPanel from '../workflow/WorkflowTODOPanel';
+import ViewSwitcher from '../components/ViewSwitcher';
+import ToolCallIndicator from '../components/ToolCallIndicator';
+import AgentInfo from '../components/AgentInfo';
+import ExpandableText from '../components/ExpandableText';
+import EventIcon from '../components/EventIcon';
+import { getEventLabel } from '../utils/eventUtils';
 
 // ----------------------
 // Type Definitions

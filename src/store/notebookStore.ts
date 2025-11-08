@@ -341,13 +341,30 @@ const useStore = create(
       // ================= Actions =================
       setEditingCellId: (id: string | null) => set({ editingCellId: id }),
       setError: (error: string | null) => set({ error }),
-      setIsCollapsed: (isCollapsed: boolean) => set({ isCollapsed }),
+      setIsCollapsed: (isCollapsed: boolean) =>
+        set(
+          produce((state: NotebookStoreState) => {
+            state.isCollapsed = isCollapsed;
+            // In create mode, expanding left (isCollapsed=false) collapses right
+            if (state.viewMode === 'create' && isCollapsed === false) {
+              state.isRightSidebarCollapsed = true;
+            }
+          })
+        ),
       setLastAddedCellId: (id: string | null) => set({ lastAddedCellId: id }),
       setUploadMode: (uploadMode: UploadMode) => set({ uploadMode }),
       setAllowedTypes: (allowedTypes: string[]) => set({ allowedTypes }),
       setMaxFiles: (maxFiles: number | null) => set({ maxFiles }),
       setIsRightSidebarCollapsed: (isRightSidebarCollapsed: boolean) =>
-        set({ isRightSidebarCollapsed }),
+        set(
+          produce((state: NotebookStoreState) => {
+            state.isRightSidebarCollapsed = isRightSidebarCollapsed;
+            // In create mode, expanding right collapses left
+            if (state.viewMode === 'create' && isRightSidebarCollapsed === false) {
+              state.isCollapsed = true;
+            }
+          })
+        ),
       setNotebookId: (id: string | null) => set({ notebookId: id }),
 
       setNotebookTitle: (title: string) =>

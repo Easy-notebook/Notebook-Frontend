@@ -2,9 +2,9 @@ import { useTranslation } from 'react-i18next';
 import { useMemo, useState, useCallback } from 'react';
 import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import { useWorkflowStateMachine } from '@/components/Scenario/Workflow/store/workflowStateMachine';
-import { extractSectionTitle } from '../utils/String';
+import { extractSectionTitle } from '../../utils/String';
 import { CheckCircle, Circle, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
-import { filterSectionStageText } from '../utils/String';
+import { filterSectionStageText } from '../../utils/String';
 
 const WorkflowTODOPanel = () => {
   const { t } = useTranslation();

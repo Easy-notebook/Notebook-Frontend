@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { filterSectionStageText } from '../utils/String';
+import { filterSectionStageText } from '../../utils/String';
 
 export interface ExpandableTextProps {
   text: string;

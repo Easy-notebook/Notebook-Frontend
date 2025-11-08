@@ -233,8 +233,22 @@ const NotebookApp = () => {
   );
 
   const handleSidebarToggle = useCallback(() => {
-    setIsCollapsed(!isCollapsed);
-  }, [isCollapsed, setIsCollapsed]);
+    const next = !isCollapsed;
+    setIsCollapsed(next);
+    // In create mode: expanding left collapses right
+    if (viewMode === 'create' && next === false) {
+      setIsRightSidebarCollapsed(true);
+    }
+  }, [isCollapsed, setIsCollapsed, setIsRightSidebarCollapsed, viewMode]);
+
+  const handleRightSidebarToggle = useCallback(() => {
+    const next = !isRightSidebarCollapsed;
+    setIsRightSidebarCollapsed(next);
+    // In create mode: expanding right collapses left
+    if (viewMode === 'create' && next === false) {
+      setIsCollapsed(true);
+    }
+  }, [isRightSidebarCollapsed, setIsRightSidebarCollapsed, setIsCollapsed, viewMode]);
 
   // File input ref for import
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -252,7 +266,7 @@ const NotebookApp = () => {
             onHandleImport={handleImport}
             onOpenSettings={settingstore.openSettings}
             fileInputRef={fileInputRef}
-            onToggleRightSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+            onToggleRightSidebar={handleRightSidebarToggle}
           />
         );
       case 'library':
@@ -275,7 +289,7 @@ const NotebookApp = () => {
             onTriggerFileInput={triggerFileInput}
             onHandleImport={handleImport}
             onShowCommandInput={() => {}}
-            onToggleRightSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+            onToggleRightSidebar={handleRightSidebarToggle}
             onOpenSettings={settingstore.openSettings}
             fileInputRef={fileInputRef}
           />
@@ -336,7 +350,7 @@ const NotebookApp = () => {
                 onExportDocx={exportDocx}
                 onExportPdf={exportPdf}
                 onExportMarkdown={exportMarkdown}
-                onToggleRightSidebar={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+                onToggleRightSidebar={handleRightSidebarToggle}
                 onSetError={setError}
                 onPhaseSelect={handlePhaseSelect}
                 onAgentSelect={handleAgentSelect}
