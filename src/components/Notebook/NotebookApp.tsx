@@ -9,9 +9,8 @@ import useSettingsStore from '@Store/settingsStore';
 import { useRouteSync } from '@Hooks/useRouteSync';
 import { AgentType } from '@Services/agentMemoryService';
 import SettingsPage from '../Scenario/settingState';
-import { LeftSideBar } from './LeftSideBar';
-import WorkflowControl from './MainContainer/WorkflowControl';
-import StepNavigation from './MainContainer/StepNavigation';
+import { LeftSideBar } from '@LeftSidebar';
+import StepNavigation from './features/workflow/StepNavigation';
 
 // Custom hooks
 import {
@@ -28,7 +27,7 @@ import {
 
 // UI Components
 import { MainContentArea } from './components';
-import { WorkspaceHeader, EmptyStateHeader } from './Headers';
+import { WorkspaceHeader, EmptyStateHeader } from './ui/layout/headers';
 import { useRef } from 'react';
 
 // Main NotebookApp component
@@ -343,7 +342,6 @@ const NotebookApp = () => {
                 }
                 currentStepIndex={currentStepIndex}
                 activeSidebarItem={activeSidebarItem}
-                rightSidebarWidth={rightSidebarWidth}
                 onModeChange={handleModeChange}
                 onRunAll={handleRunAll}
                 onExportJson={handleExportJson}
@@ -354,13 +352,9 @@ const NotebookApp = () => {
                 onSetError={setError}
                 onPhaseSelect={handlePhaseSelect}
                 onAgentSelect={handleAgentSelect}
-                onRightResize={handleRightResize}
               >
                 {resolveMainContent().component}
               </MainContentArea>
-
-              {/* Workflow Control */}
-              <WorkflowControl fallbackViewMode={viewMode} />
             </div>
           </main>
         </div>

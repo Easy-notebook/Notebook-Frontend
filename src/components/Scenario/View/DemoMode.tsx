@@ -1,5 +1,5 @@
 import React from 'react';
-import StepNavigation from '@Notebook/MainContainer/StepNavigation';
+import StepNavigation from '@Notebook/features/workflow/StepNavigation';
 import { useSettings } from '@Store/settingsStore';
 
 interface DemoModeProps {

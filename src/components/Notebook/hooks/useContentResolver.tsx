@@ -3,7 +3,7 @@
 
 import { useCallback } from 'react';
 import { uiLog } from '@Utils/logger';
-import TabbedPreviewApp from '../Display/TabbedPreviewApp';
+import TabbedPreviewApp from '../features/viewers/TabbedPreviewApp';
 import { EmptyStatePage, LibraryStatePage, WorkspacePage, LoadingPage } from '../pages';
 
 interface ContentResolverProps {

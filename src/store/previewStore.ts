@@ -598,35 +598,63 @@ const usePreviewStore = create<PreviewStore>()(
         // If it was the active file, set a new active file or null
         if (activeFile && activeFile.id === fileId) {
           if (updatedFiles.length > 0) {
-            // Prefer the neighbor at the same index; fallback to last index available
-            const nextIndex = Math.min(closedIndex, updatedFiles.length - 1);
-            const nextId = updatedFiles[nextIndex].id;
-            get()
-              .loadFileById(nextId)
-              .then((newActiveFile) => {
-                set({
-                  currentPreviewFiles: updatedFiles,
-                  activeFile: newActiveFile,
-                  dirtyMap: nextDirtyMap,
-                });
+            // Prefer the neighbor at the same index for the same notebook; fallback appropriately
+            const candidates = currentNotebookId
+              ? updatedFiles.filter((f) => f.id.startsWith(`${currentNotebookId}::`))
+              : updatedFiles;
 
-                // Save updated state to storage
-                if (currentNotebookId) {
-                  get()
-                    .saveTabState(currentNotebookId)
-                    .catch((error) => {
-                      storeLog.error('Failed to save tab state after closing file', {
-                        error,
-                        fileId,
+            if (candidates.length > 0) {
+              const nextIndex = Math.min(Math.max(0, closedIndex), candidates.length - 1);
+              const nextId = candidates[nextIndex].id;
+              get()
+                .loadFileById(nextId)
+                .then((newActiveFile) => {
+                  set({
+                    currentPreviewFiles: updatedFiles,
+                    activeFile: newActiveFile,
+                    dirtyMap: nextDirtyMap,
+                    previewMode: 'file',
+                  });
+
+                  // Save updated state to storage
+                  if (currentNotebookId) {
+                    get()
+                      .saveTabState(currentNotebookId)
+                      .catch((error) => {
+                        storeLog.error('Failed to save tab state after closing file', {
+                          error,
+                          fileId,
+                        });
                       });
-                    });
-                }
+                  }
+                });
+            } else {
+              // No tabs left for current notebook, return to notebook mode
+              set({
+                currentPreviewFiles: updatedFiles,
+                activeFile: null,
+                activePreviewMode: null,
+                previewMode: 'notebook',
+                dirtyMap: nextDirtyMap,
               });
+
+              if (currentNotebookId) {
+                get()
+                  .saveTabState(currentNotebookId)
+                  .catch((error) => {
+                    storeLog.error('Failed to save tab state after closing last file of notebook', {
+                      error,
+                      fileId,
+                    });
+                  });
+              }
+            }
           } else {
             set({
               currentPreviewFiles: updatedFiles,
               activeFile: null,
               activePreviewMode: null,
+              previewMode: 'notebook',
               dirtyMap: nextDirtyMap,
             });
 
@@ -869,8 +897,13 @@ const usePreviewStore = create<PreviewStore>()(
               activeFile: null,
               activePreviewMode: null,
             });
+            // Establish the new notebook context for this load
+            set({ currentNotebookId: notebookId });
           } else if (currentNotebookId === notebookId) {
             storeLog.info('Already on notebook - refreshing tabs', { notebookId });
+          } else if (!currentNotebookId) {
+            // No notebook context yet; set it now to ensure proper scoping
+            set({ currentNotebookId: notebookId });
           }
 
           // 📂 Get files from storage (only for current notebook)
@@ -1255,11 +1288,19 @@ const usePreviewStore = create<PreviewStore>()(
         }
 
         try {
-          const activeTabId = state.activeFile?.id || null;
-          await TabCache.saveTabState(targetNotebookId, state.currentPreviewFiles, activeTabId);
+          // Only persist tabs that belong to this notebook
+          const scopedTabs = state.currentPreviewFiles.filter((t) =>
+            t.id?.startsWith(`${targetNotebookId}::`)
+          );
+          const activeTabId =
+            state.activeFile && state.activeFile.id.startsWith(`${targetNotebookId}::`)
+              ? state.activeFile.id
+              : null;
+
+          await TabCache.saveTabState(targetNotebookId, scopedTabs, activeTabId);
           storeLog.info('Saved tab state for notebook', {
             notebookId: targetNotebookId,
-            tabCount: state.currentPreviewFiles.length,
+            tabCount: scopedTabs.length,
             activeTabId,
           });
         } catch (error) {
@@ -1282,7 +1323,12 @@ const usePreviewStore = create<PreviewStore>()(
             const validTabs: PreviewFile[] = [];
             const invalidTabIds: string[] = [];
 
-            for (const tab of tabState.tabList) {
+            // Only consider tabs that belong to this notebook
+            const candidateTabs = tabState.tabList.filter((t) =>
+              t.id?.startsWith(`${notebookId}::`)
+            );
+
+            for (const tab of candidateTabs) {
               try {
                 // Test if the file can be loaded without actually setting it as active
                 const parsed = parseFileId(tab.id);
@@ -1369,7 +1415,11 @@ const usePreviewStore = create<PreviewStore>()(
 
             // Try to restore active tab if it's still valid
             let activeTabRestored = false;
-            if (tabState.activeTabId && !invalidTabIds.includes(tabState.activeTabId)) {
+            if (
+              tabState.activeTabId &&
+              tabState.activeTabId.startsWith(`${notebookId}::`) &&
+              !invalidTabIds.includes(tabState.activeTabId)
+            ) {
               try {
                 const activeFile = await get().loadFileById(tabState.activeTabId);
                 if (activeFile) {
