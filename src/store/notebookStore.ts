@@ -414,8 +414,28 @@ const useStore = create(
           });
 
           notebookLog.info('Store cleared after saving notebook');
+        } else if (id !== null && id !== state.notebookId) {
+          // 🔴 FIX: When setting a NEW notebook ID (switching notebooks), clear old cells
+          console.log('🔍 [notebookStore] Setting NEW notebookId - CLEARING old cells', {
+            oldId: state.notebookId,
+            newId: id,
+            oldCellsCount: state.cells.length,
+          });
+
+          set({
+            notebookId: id,
+            notebookTitle: '',
+            cells: [], // ✅ Clear old cells when switching to new notebook
+            tasks: [],
+            currentPhaseId: null,
+            currentStepIndex: 0,
+            currentCellId: null,
+            error: null,
+          });
+
+          console.log('✅ [notebookStore] Cleared cells for new notebook', { newId: id });
         } else {
-          // Normal case: just set the ID
+          // Same ID: just set the ID (no clearing needed)
           set({ notebookId: id });
         }
       },
@@ -1305,15 +1325,27 @@ const useStore = create(
 
       loadFromDatabase: async (notebookId: string): Promise<boolean> => {
         try {
+          console.log('🔍 [notebookStore] loadFromDatabase - START', {
+            notebookId,
+            currentCells: get().cells.length,
+            timestamp: new Date().toISOString(),
+          });
           notebookLog.lifecycleEvent('load', notebookId, { source: 'database' });
 
           const result = await NotebookAutoSave.loadNotebook(notebookId);
           if (!result) {
+            console.log('⚠️ [notebookStore] Notebook NOT found in database', { notebookId });
             notebookLog.warn('Notebook not found in database', { notebookId });
             return false;
           }
 
           const { notebookTitle, cells, tasks } = result;
+          console.log('🔍 [notebookStore] Loaded notebook data from database', {
+            title: notebookTitle,
+            cellsCount: cells.length,
+            tasksCount: tasks.length,
+            notebookId,
+          });
           notebookLog.info('Loaded notebook data', {
             title: notebookTitle,
             cellsCount: cells.length,
@@ -1339,9 +1371,15 @@ const useStore = create(
 
           // 直接设置 cells
           if (cells && cells.length > 0) {
+            console.log('🔍 [notebookStore] Setting cells from database', {
+              cellsCount: cells.length,
+              notebookId,
+              firstCellContent: cells[0]?.content?.substring(0, 50),
+            });
             set({ cells: [...cells] });
             notebookLog.cellOperation('update', 'batch', { count: cells.length });
           } else {
+            console.log('🔍 [notebookStore] No cells in database, creating default title cell');
             const defaultCell: Cell = {
               id: `title-${Date.now()}`,
               type: 'markdown',

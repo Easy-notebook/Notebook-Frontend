@@ -19,22 +19,35 @@ export const useRouteSync = () => {
     async (view: string, notebookId: string | null) => {
       if (view === 'workspace' && notebookId) {
         try {
+          console.log('🔍 [useRouteSync] handleWorkspaceRoute START', {
+            view,
+            notebookId,
+            timestamp: new Date().toISOString(),
+          });
           uiLog.navigation('workspace', { notebookId });
 
           // 设置当前 notebook ID
           setNotebookId(notebookId);
 
-          // 从数据库加载 notebook 数据
+          // 🔴 FIRST LOAD: 从数据库加载 notebook 数据
+          console.log('🔍 [useRouteSync] Calling loadFromDatabase (FIRST LOAD)', { notebookId });
           const loadSuccess = await loadFromDatabase(notebookId);
+          console.log('🔍 [useRouteSync] loadFromDatabase result', { notebookId, loadSuccess });
           if (!loadSuccess) {
             storeLog.warn('Could not load notebook from database', { notebookId });
           }
 
-          // 切换预览 store
+          // 🔴 SECOND LOAD: 切换预览 store (内部也会调用 loadFromDatabase!)
+          console.log('🔍 [useRouteSync] Calling switchToNotebook (WILL TRIGGER SECOND LOAD)', {
+            notebookId,
+          });
           await switchToNotebook(notebookId);
+          console.log('🔍 [useRouteSync] switchToNotebook completed', { notebookId });
 
           uiLog.info('Workspace loaded for notebook', { notebookId });
+          console.log('🔍 [useRouteSync] handleWorkspaceRoute END', { notebookId });
         } catch (error) {
+          console.error('❌ [useRouteSync] Failed to load workspace', { notebookId, error });
           uiLog.error('Failed to load workspace', { notebookId, error });
         }
       }

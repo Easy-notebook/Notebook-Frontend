@@ -71,13 +71,25 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
     if (isCreatingNotebook) return;
     setIsCreatingNotebook(true);
     try {
+      console.log('🔍 [EmptyState] Creating new notebook - START');
       const newNotebookId = await notebookApiIntegration.initializeNotebook();
+      console.log('🔍 [EmptyState] Received new notebookId from backend', { newNotebookId });
+
+      console.log('🔍 [EmptyState] Setting notebookId in store (NO LOAD)', { newNotebookId });
       useStore.getState().setNotebookId(newNotebookId);
+
       useCodeStore.getState().setKernelReady(true);
+
+      console.log('🔍 [EmptyState] Adding first cell');
       if (isTypedAddCell(onAddCell)) onAddCell('markdown');
+
+      console.log('🔍 [EmptyState] New notebook created successfully', {
+        notebookId: newNotebookId,
+        currentCells: useStore.getState().cells.length,
+      });
       uiLog.info('Created notebook successfully', { notebookId: newNotebookId });
     } catch (error) {
-      console.error('❌ Failed to create new notebook:', error);
+      console.error('❌ [EmptyState] Failed to create new notebook:', error);
       alert('Failed to create new notebook. Please try again.');
     } finally {
       setIsCreatingNotebook(false);

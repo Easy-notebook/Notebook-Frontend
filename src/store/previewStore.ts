@@ -69,6 +69,7 @@ export interface PreviewStoreState {
 
   // Current notebook tracking
   currentNotebookId: string | null; // Currently active notebook ID
+  skipAutoRestore: boolean; // Flag to prevent auto-restoring notebook after clearing
 
   // Split preview state - independent from tab system
   activeSplitFile: FileObject | null; // Currently active split preview file
@@ -165,6 +166,7 @@ const usePreviewStore = create<PreviewStore>()(
 
       // Current notebook tracking
       currentNotebookId: null, // Currently active notebook ID
+      skipAutoRestore: false, // Flag to prevent auto-restoring notebook after clearing
 
       // Split preview initial state
       activeSplitFile: null,
@@ -202,6 +204,22 @@ const usePreviewStore = create<PreviewStore>()(
             set({ currentPreviewFiles: [], activeFile: null, activePreviewMode: null });
           }
 
+          // Check if we should skip auto-restore (e.g., after clearing notebook state)
+          if (get().skipAutoRestore) {
+            storeLog.info('Skipping auto-restore: skipAutoRestore flag is set');
+            // Reset the flag for next time
+            set({ skipAutoRestore: false });
+            return;
+          }
+
+          // ========== 🔴 TEMPORARILY DISABLED: AUTO-RESTORE LOGIC ==========
+          // Commenting out to debug if this is causing old notebook data to reappear
+
+          storeLog.warn(
+            '⚠️ AUTO-RESTORE IS DISABLED - Notebooks will NOT be automatically restored'
+          );
+
+          /*
           // Restore notebooks from cache after page refresh
           const cachedNotebooks = await FileCache.getAllNotebooks();
           storeLog.info(`Restored notebooks from cache`, {
@@ -250,6 +268,8 @@ const usePreviewStore = create<PreviewStore>()(
               storeLog.warn('Failed to restore cached files', { error: fileError });
             }
           }
+          */
+          // ========== END OF DISABLED AUTO-RESTORE LOGIC ==========
         } catch (error) {
           storeLog.error('Failed to initialize storage', { error });
           set({ error: 'Failed to initialize file cache database' });
@@ -1494,7 +1514,9 @@ const usePreviewStore = create<PreviewStore>()(
           isSplitLoading: false,
           previewMode: 'notebook',
           error: null,
+          skipAutoRestore: true, // Prevent init() from auto-restoring old notebook
         });
+        storeLog.info('Set skipAutoRestore flag to prevent auto-restore on next init');
       },
     }),
     {
@@ -1505,6 +1527,7 @@ const usePreviewStore = create<PreviewStore>()(
         currentNotebookId: state.currentNotebookId,
         previewMode: state.previewMode,
         dirtyMap: state.dirtyMap,
+        skipAutoRestore: state.skipAutoRestore, // Persist flag to prevent auto-restore after page refresh
       }),
     }
   )
