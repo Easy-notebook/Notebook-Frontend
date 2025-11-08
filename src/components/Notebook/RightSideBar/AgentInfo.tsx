@@ -30,24 +30,20 @@ const AgentInfo: React.FC<AgentInfoProps> = ({ agent, model, type }) => {
       text2video: 'Video Generator',
       command: 'Code Assistant',
     };
-    return names[agentType || ''] || (agent || 'AI Assistant');
+    return names[agentType || ''] || agent || 'AI Assistant';
   };
 
   if (!agent && !type) return null;
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1 bg-theme-50 rounded-md">
+    <div className="flex items-center gap-2 px-2 py-1 rounded-md">
       {getAgentIcon(type || agent)}
-      <span className="text-xs text-theme-700 font-medium">
+      <span className="text-xs text-theme-700 dark:text-white font-medium">
         {getAgentName(type || agent)}
       </span>
-      {model && (
-        <span className="text-xs text-gray-500">({model})</span>
-      )}
+      {model && <span className="text-xs text-gray-500 dark:text-gray-400">({model})</span>}
     </div>
   );
 };
 
 export default AgentInfo;
-
-

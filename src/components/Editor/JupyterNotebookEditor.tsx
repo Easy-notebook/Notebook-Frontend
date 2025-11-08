@@ -25,6 +25,7 @@ import {
   focusCellEditor,
   debouncedFocus,
 } from './utils/cursorPositioning';
+import { EditorGlobalStyles } from './EditorGlobalStyles';
 
 /* --------------------------- Types --------------------------- */
 import { Cell, CellType, OutputItem } from '@Store/notebookStore';
@@ -678,6 +679,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
         </div>
 
         <ShortcutsHelp isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
+        <EditorGlobalStyles />
 
         <style>{`
           .jupyter-notebook-editor {

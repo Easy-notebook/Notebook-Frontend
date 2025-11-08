@@ -34,14 +34,14 @@ const ToolCallIndicator: React.FC<ToolCallProps> = ({ type, content, agent }) =>
   const getToolLabel = (toolType: string) => {
     const labels: Record<string, string> = {
       'draw-image': '🎨 Image Generation',
-      'trigger_image_generation': '🎨 Image Generation',
+      trigger_image_generation: '🎨 Image Generation',
       'create-video': '🎬 Video Creation',
       'add-code': '💻 Code Writing',
       'exec-code': '▶️ Code Execution',
-      'thinking': '🤔 Reasoning',
+      thinking: '🤔 Reasoning',
       'call-execute': '⚡ Execute',
-      'communicate': '💬 Agent Communication',
-      'remember': '💾 Memory Update',
+      communicate: '💬 Agent Communication',
+      remember: '💾 Memory Update',
       'update-title': '📝 Update Title',
       'new-chapter': '📚 New Chapter',
       'new-section': '📄 New Section',
@@ -50,17 +50,17 @@ const ToolCallIndicator: React.FC<ToolCallProps> = ({ type, content, agent }) =>
   };
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-theme-50 to-purple-50 rounded-lg border border-theme-100">
+    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-theme-100">
       <div className="flex items-center gap-1">
         {getToolIcon(type)}
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium text-gray-700 dark:text-white">
           {getToolLabel(type)}
         </span>
       </div>
       {agent && (
-        <div className="flex items-center gap-1 px-2 py-1 bg-white/70 rounded-md">
+        <div className="flex items-center gap-1 px-2 py-1 rounded-md">
           <Bot className="w-3 h-3 text-theme-500" />
-          <span className="text-xs text-theme-600 font-medium">{agent}</span>
+          <span className="text-xs text-theme-600 dark:text-white font-medium">{agent}</span>
         </div>
       )}
       {content && content.length > 50 && (
@@ -73,5 +73,3 @@ const ToolCallIndicator: React.FC<ToolCallProps> = ({ type, content, agent }) =>
 };
 
 export default ToolCallIndicator;
-
-

@@ -84,41 +84,35 @@ const StateMachineDebugger: React.FC = () => {
   const getEventStyle = (event: string) => {
     if (event === EVENTS.START_ACTION) {
       return {
-        backgroundColor: 'rgba(231, 76, 60, 0.1)',
         borderColor: 'rgba(231, 76, 60, 0.3)',
         color: '#E74C3C',
       };
     }
     if (event === EVENTS.COMPLETE_ACTION) {
       return {
-        backgroundColor: 'rgba(39, 174, 96, 0.1)',
         borderColor: 'rgba(39, 174, 96, 0.3)',
         color: '#27AE60',
       };
     }
     if (event === EVENTS.START_BEHAVIOR) {
       return {
-        backgroundColor: 'rgba(139, 92, 246, 0.1)',
         borderColor: 'rgba(139, 92, 246, 0.3)',
         color: '#8B5CF6',
       };
     }
     if (event === EVENTS.COMPLETE_BEHAVIOR) {
       return {
-        backgroundColor: 'rgba(139, 92, 246, 0.1)',
         borderColor: 'rgba(139, 92, 246, 0.3)',
         color: '#8B5CF6',
       };
     }
     if (event === EVENTS.RETRY_BEHAVIOR) {
       return {
-        backgroundColor: 'rgba(249, 115, 22, 0.1)',
         borderColor: 'rgba(249, 115, 22, 0.3)',
         color: '#F97316',
       };
     }
     return {
-      backgroundColor: 'rgba(107, 114, 128, 0.1)',
       borderColor: 'rgba(107, 114, 128, 0.3)',
       color: '#6B7280',
     };
@@ -157,7 +151,7 @@ const StateMachineDebugger: React.FC = () => {
 
   return (
     <div
-      className="bg-white border rounded-lg shadow-sm mt-4"
+      className="border rounded-lg shadow-sm mt-4"
       style={{
         fontFamily: 'ui-sans-serif, system-ui, sans-serif',
         fontSize: '11px',
@@ -170,7 +164,6 @@ const StateMachineDebugger: React.FC = () => {
         className="px-3 py-2 border-b cursor-pointer transition-all duration-200"
         style={{
           borderBottomColor: 'rgba(65, 184, 131, 0.2)',
-          background: 'linear-gradient(135deg, rgba(65, 184, 131, 0.02), rgba(52, 144, 220, 0.02))',
         }}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
@@ -190,7 +183,7 @@ const StateMachineDebugger: React.FC = () => {
             </h3>
           </div>
           <div className="flex items-center space-x-2">
-            <span className="text-xs" style={{ color: '#35495E' }}>
+            <span className="text-xs text-gray-700 dark:text-white">
               {stateMachine.executionHistory.length} events
             </span>
             <ChevronDown
@@ -208,8 +201,6 @@ const StateMachineDebugger: React.FC = () => {
           <div
             className="mb-3 p-3 rounded-md border"
             style={{
-              background:
-                'linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04))',
               borderColor: 'rgba(65, 184, 131, 0.15)',
             }}
           >
@@ -229,12 +220,12 @@ const StateMachineDebugger: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="flex items-center space-x-1 col-span-2">
-                <Shuffle size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E', fontWeight: 'bold' }}>State:</span>
+                <Shuffle size={8} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white font-bold">State:</span>
                 <span
-                  className="ml-1 font-medium font-mono px-1.5 py-0.5 rounded"
+                  className="ml-1 font-medium font-mono px-1.5 py-0.5 rounded border"
                   style={{
-                    backgroundColor: 'rgba(101, 116, 205, 0.1)',
+                    borderColor: 'rgba(101, 116, 205, 0.3)',
                     color: '#6574CD',
                   }}
                 >
@@ -242,41 +233,41 @@ const StateMachineDebugger: React.FC = () => {
                 </span>
               </div>
               <div className="flex items-center space-x-1">
-                <Square size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Stage:</span>
+                <Square size={8} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Stage:</span>
                 <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
                   {extractSectionTitle(stateMachine.context.currentStageId) || 'null'}
                 </span>
               </div>
               <div className="flex items-center space-x-1">
-                <Play size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Step:</span>
+                <Play size={8} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Step:</span>
                 <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
                   {extractSectionTitle(stateMachine.context.currentStepId) || 'null'}
                 </span>
               </div>
               <div className="flex items-center space-x-1">
-                <Repeat size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Behavior:</span>
+                <Repeat size={8} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Behavior:</span>
                 <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
                   {stateMachine.context.currentBehaviorId || 'null'}
                 </span>
               </div>
               <div className="flex items-center space-x-1">
-                <Timer size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Action #:</span>
+                <Timer size={8} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Action #:</span>
                 <span className="ml-1 font-mono font-medium" style={{ color: '#E74C3C' }}>
                   {stateMachine.context.currentActionIndex}
                 </span>
               </div>
               {stateMachine.context.currentActionName && (
                 <div className="flex items-center space-x-1 col-span-2">
-                  <Activity size={8} style={{ color: '#35495E' }} />
-                  <span style={{ color: '#35495E' }}>Action:</span>
+                  <Activity size={8} className="text-gray-700 dark:text-white" />
+                  <span className="text-gray-700 dark:text-white">Action:</span>
                   <span
-                    className="ml-1 font-mono font-medium px-1.5 py-0.5 rounded"
+                    className="ml-1 font-mono font-medium px-1.5 py-0.5 rounded border"
                     style={{
-                      backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                      borderColor: 'rgba(231, 76, 60, 0.3)',
                       color: '#E74C3C',
                     }}
                   >
@@ -284,9 +275,9 @@ const StateMachineDebugger: React.FC = () => {
                   </span>
                   {stateMachine.currentState.includes('EXECUTING') && (
                     <span
-                      className="ml-2 flex items-center space-x-1 px-1.5 py-0.5 rounded text-xs"
+                      className="ml-2 flex items-center space-x-1 px-1.5 py-0.5 rounded text-xs border"
                       style={{
-                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        borderColor: 'rgba(255, 193, 7, 0.3)',
                         color: '#FFC107',
                       }}
                     >
@@ -308,16 +299,13 @@ const StateMachineDebugger: React.FC = () => {
             style={{ borderBottomColor: 'rgba(65, 184, 131, 0.1)' }}
           >
             <div className="flex items-center space-x-2">
-              <Settings size={8} style={{ color: '#35495E' }} />
-              <label className="text-xs" style={{ color: '#35495E' }}>
-                Max entries:
-              </label>
+              <Settings size={8} className="text-gray-700 dark:text-white" />
+              <label className="text-xs text-gray-700 dark:text-white">Max entries:</label>
               <select
                 value={maxEntries}
                 onChange={(e) => setMaxEntries(Number(e.target.value))}
                 className="text-xs px-2 py-1 border-0 focus:outline-none"
                 style={{
-                  backgroundColor: 'rgba(65, 184, 131, 0.05)',
                   color: '#202124',
                   borderRadius: '4px',
                 }}
@@ -331,7 +319,7 @@ const StateMachineDebugger: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={exportStateMachine}
-                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded-full bg-theme-50"
+                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded-full"
                 title="Export state machine debug data"
               >
                 <Download size={8} />
@@ -339,8 +327,8 @@ const StateMachineDebugger: React.FC = () => {
               </button>
               <button
                 onClick={clearHistory}
-                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-colors duration-200 rounded"
-                style={{ color: '#35495E', backgroundColor: 'transparent', border: 'none' }}
+                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-colors duration-200 rounded text-gray-700 dark:text-white"
+                style={{ border: 'none' }}
                 title="This only clears the view, not the store's history."
               >
                 <Trash2 size={8} />
@@ -374,9 +362,8 @@ const StateMachineDebugger: React.FC = () => {
                             entry.event === EVENTS.COMPLETE_ACTION) &&
                             entry.payload?.actionName && (
                               <span
-                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono"
+                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono border border-gray-400"
                                 style={{
-                                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
                                   fontWeight: 'bold',
                                 }}
                               >
@@ -389,9 +376,8 @@ const StateMachineDebugger: React.FC = () => {
                             entry.event === EVENTS.RETRY_BEHAVIOR) &&
                             entry.payload?.behaviorName && (
                               <span
-                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono"
+                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono border border-gray-400"
                                 style={{
-                                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
                                   fontWeight: 'bold',
                                 }}
                               >
@@ -402,9 +388,9 @@ const StateMachineDebugger: React.FC = () => {
                           {entry.event === EVENTS.START_BEHAVIOR &&
                             entry.payload?.currentActionName && (
                               <span
-                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono"
+                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono border"
                                 style={{
-                                  backgroundColor: 'rgba(231, 76, 60, 0.2)',
+                                  borderColor: 'rgba(231, 76, 60, 0.3)',
                                   color: '#E74C3C',
                                   fontWeight: 'bold',
                                 }}
@@ -528,7 +514,7 @@ const StateMachineDebugger: React.FC = () => {
                           <summary className="cursor-pointer text-gray-500 hover:text-gray-800 text-xs">
                             Full Payload
                           </summary>
-                          <pre className="text-xs p-2 mt-1 overflow-auto max-h-32 font-mono bg-gray-50 border border-gray-200 rounded text-gray-700">
+                          <pre className="text-xs p-2 mt-1 overflow-auto max-h-32 font-mono border border-gray-200 rounded text-gray-700">
                             {JSON.stringify(entry.payload, null, 2)}
                           </pre>
                         </details>

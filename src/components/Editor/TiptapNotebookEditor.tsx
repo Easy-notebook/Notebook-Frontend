@@ -31,6 +31,7 @@ import SimpleDragManager from './TipTap/BlockManager/SimpleDragManager';
 import TipTapSlashCommands from './TipTap/TipTapSlashCommands';
 import { useTipTapSlashCommands } from './TipTap/useTipTapSlashCommands';
 import { EditorStyles } from './TipTap/components/EditorStyles';
+import { EditorGlobalStyles } from './EditorGlobalStyles';
 
 // Types
 interface TiptapNotebookEditorProps {
@@ -223,6 +224,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
         {/* Editor styles */}
         <EditorStyles />
+        <EditorGlobalStyles />
       </div>
     );
   }

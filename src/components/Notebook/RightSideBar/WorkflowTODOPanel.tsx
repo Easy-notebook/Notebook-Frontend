@@ -52,7 +52,7 @@ const WorkflowTODOPanel = () => {
             <Circle className="w-4 h-4 text-gray-400" />
           )}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1">
           <div
             className={`font-medium break-words ${
               isCurrent
@@ -80,14 +80,14 @@ const WorkflowTODOPanel = () => {
         <div
           className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-all duration-200 ${
             isCurrent
-              ? 'bg-theme-100 ring-1 ring-theme-200'
+              ? 'ring-2 ring-theme-300 dark:ring-theme-700'
               : isCompleted
-                ? 'bg-green-50 hover:bg-green-100'
-                : 'bg-gray-50 hover:bg-gray-100'
+                ? 'ring-1 ring-green-300 dark:ring-green-700'
+                : 'ring-1 ring-gray-300 dark:ring-gray-700 hover:ring-gray-400 dark:hover:ring-gray-600'
           }`}
           onClick={() => hasSteps && toggleStage(stage.id)}
         >
-          <div className="flex-1 min-w-0">
+          <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <div
                 className={`font-semibold text-sm break-words ${
@@ -97,12 +97,12 @@ const WorkflowTODOPanel = () => {
                 {extractSectionTitle(stage.title || stage.id)}
               </div>
               {isCurrent && (
-                <span className="text-xs px-2 py-0.5 bg-theme-200 text-theme-800 rounded-full font-medium">
+                <span className="text-xs px-2 py-0.5 ring-1 ring-theme-400 dark:ring-theme-600 text-theme-800 dark:text-theme-300 rounded-full font-medium">
                   {t('rightSideBar.currentStage')}
                 </span>
               )}
               {isCompleted && (
-                <span className="text-xs px-2 py-0.5 bg-green-200 text-green-800 rounded-full font-medium">
+                <span className="text-xs px-2 py-0.5 ring-1 ring-green-400 dark:ring-green-600 text-green-800 dark:text-green-300 rounded-full font-medium">
                   {t('rightSideBar.completed')}
                 </span>
               )}

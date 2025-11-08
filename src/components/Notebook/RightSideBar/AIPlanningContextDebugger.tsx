@@ -197,19 +197,19 @@ const AIPlanningContextDebugger: React.FC = () => {
 
   const getChangeColor = (changeType: string) => {
     const colors: Record<string, string> = {
-      variables: 'bg-slate-100 text-slate-700 border border-slate-300',
-      toDoList: 'bg-slate-100 text-slate-700 border border-slate-300',
-      thinking: 'bg-slate-100 text-slate-700 border border-slate-300',
-      effect: 'bg-slate-100 text-slate-700 border border-slate-300',
-      stageStatus: 'bg-slate-100 text-slate-700 border border-slate-300',
-      checklist: 'bg-slate-100 text-slate-700 border border-slate-300',
+      variables: 'text-slate-700 dark:text-white border border-slate-300',
+      toDoList: 'text-slate-700 dark:text-white border border-slate-300',
+      thinking: 'text-slate-700 dark:text-white border border-slate-300',
+      effect: 'text-slate-700 dark:text-white border border-slate-300',
+      stageStatus: 'text-slate-700 dark:text-white border border-slate-300',
+      checklist: 'text-slate-700 dark:text-white border border-slate-300',
     };
 
     for (const [key, color] of Object.entries(colors)) {
       if (changeType.includes(key)) return color;
     }
 
-    return 'bg-slate-100 text-slate-700 border border-slate-300';
+    return 'text-slate-700 dark:text-white border border-slate-300';
   };
 
   const getChangeIcon = (changeType: string) => {
@@ -242,7 +242,7 @@ const AIPlanningContextDebugger: React.FC = () => {
 
   return (
     <div
-      className="bg-white border rounded-lg shadow-sm mt-4"
+      className="border rounded-lg shadow-sm mt-4"
       style={{
         fontFamily: 'ui-sans-serif, system-ui, sans-serif',
         fontSize: '11px',
@@ -255,21 +255,12 @@ const AIPlanningContextDebugger: React.FC = () => {
         className="px-3 py-2 border-b cursor-pointer transition-all duration-200"
         style={{
           borderBottomColor: 'rgba(65, 184, 131, 0.2)',
-          background: 'linear-gradient(135deg, rgba(65, 184, 131, 0.02), rgba(52, 144, 220, 0.02))',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background =
-            'linear-gradient(135deg, rgba(65, 184, 131, 0.05), rgba(52, 144, 220, 0.05))';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background =
-            'linear-gradient(135deg, rgba(65, 184, 131, 0.02), rgba(52, 144, 220, 0.02))';
         }}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Brain size={8} style={{ color: '#41B883' }} />
+            <Brain size={16} style={{ color: '#41B883' }} />
             <h3
               className="text-sm font-semibold"
               style={{
@@ -279,15 +270,13 @@ const AIPlanningContextDebugger: React.FC = () => {
                 color: 'transparent',
               }}
             >
-              AI Planning Context History
+              AI Planning Context
             </h3>
           </div>
           <div className="flex items-center space-x-2">
-            <span className="text-xs" style={{ color: '#35495E' }}>
-              {snapshots.length} snapshots
-            </span>
+            <span className="text-xs text-gray-700 dark:text-white">{snapshots.length}</span>
             <ChevronDown
-              size={8}
+              size={16}
               className={`transform transition-transform ${isCollapsed ? '' : 'rotate-180'}`}
               style={{ color: '#41B883' }}
             />
@@ -301,8 +290,6 @@ const AIPlanningContextDebugger: React.FC = () => {
           <div
             className="mb-3 p-3 rounded-md border"
             style={{
-              background:
-                'linear-gradient(135deg, rgba(65, 184, 131, 0.04), rgba(52, 144, 220, 0.04))',
               borderColor: 'rgba(65, 184, 131, 0.15)',
             }}
           >
@@ -320,46 +307,64 @@ const AIPlanningContextDebugger: React.FC = () => {
                 Current Context
               </h4>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center space-x-1">
-                <Database size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Variables:</span>
-                <span className="ml-1 font-mono font-medium" style={{ color: '#3490DC' }}>
+            <div className="flex flex-col gap-2 text-xs">
+              <div className="flex items-center space-x-1 flex-wrap">
+                <Database size={12} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Variables:</span>
+                <span
+                  className="ml-1 font-mono font-medium break-words"
+                  style={{ color: '#3490DC' }}
+                >
                   {formatValue(variables)}
                 </span>
               </div>
-              <div className="flex items-center space-x-1">
-                <ListTodo size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>ToDo List:</span>
-                <span className="ml-1 font-mono font-medium" style={{ color: '#41B883' }}>
+              <div className="flex items-center space-x-1 flex-wrap">
+                <ListTodo size={12} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">ToDo List:</span>
+                <span
+                  className="ml-1 font-mono font-medium break-words"
+                  style={{ color: '#41B883' }}
+                >
                   {formatValue(toDoList)}
                 </span>
               </div>
-              <div className="flex items-center space-x-1">
-                <Lightbulb size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Thinking:</span>
-                <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
+              <div className="flex items-center space-x-1 flex-wrap">
+                <Lightbulb size={12} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Thinking:</span>
+                <span
+                  className="ml-1 font-mono font-medium break-words"
+                  style={{ color: '#6574CD' }}
+                >
                   {formatValue(thinking)}
                 </span>
               </div>
-              <div className="flex items-center space-x-1">
-                <Zap size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Effect:</span>
-                <span className="ml-1 font-mono font-medium" style={{ color: '#3490DC' }}>
+              <div className="flex items-center space-x-1 flex-wrap">
+                <Zap size={12} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Effect:</span>
+                <span
+                  className="ml-1 font-mono font-medium break-words"
+                  style={{ color: '#3490DC' }}
+                >
                   {formatValue(effect)}
                 </span>
               </div>
-              <div className="flex items-center space-x-1">
-                <Activity size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Stage Status:</span>
-                <span className="ml-1 font-mono font-medium" style={{ color: '#41B883' }}>
+              <div className="flex items-center space-x-1 flex-wrap">
+                <Activity size={12} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Stage Status:</span>
+                <span
+                  className="ml-1 font-mono font-medium break-words"
+                  style={{ color: '#41B883' }}
+                >
                   {formatValue(stageStatus)}
                 </span>
               </div>
-              <div className="flex items-center space-x-1">
-                <CheckSquare size={8} style={{ color: '#35495E' }} />
-                <span style={{ color: '#35495E' }}>Checklist:</span>
-                <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
+              <div className="flex items-center space-x-1 flex-wrap">
+                <CheckSquare size={12} className="text-gray-700 dark:text-white" />
+                <span className="text-gray-700 dark:text-white">Checklist:</span>
+                <span
+                  className="ml-1 font-mono font-medium break-words"
+                  style={{ color: '#6574CD' }}
+                >
                   {formatValue(checklist)}
                 </span>
               </div>
@@ -372,10 +377,8 @@ const AIPlanningContextDebugger: React.FC = () => {
             style={{ borderBottomColor: 'rgba(65, 184, 131, 0.1)' }}
           >
             <div className="flex items-center space-x-2">
-              <Settings size={8} style={{ color: '#35495E' }} />
-              <label className="text-xs" style={{ color: '#35495E' }}>
-                Max entries:
-              </label>
+              <Settings size={8} className="text-gray-700 dark:text-white" />
+              <label className="text-xs text-gray-700 dark:text-white">Max entries:</label>
               <select
                 value={maxEntries}
                 onChange={(e) => setMaxEntries(Number(e.target.value))}
@@ -390,7 +393,7 @@ const AIPlanningContextDebugger: React.FC = () => {
             <div className="flex items-center space-x-2">
               <button
                 onClick={exportHistory}
-                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded-full bg-theme-50"
+                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-all duration-200 rounded-full"
                 title="Export current context and state machine status"
               >
                 <Download size={8} />
@@ -398,17 +401,9 @@ const AIPlanningContextDebugger: React.FC = () => {
               </button>
               <button
                 onClick={clearHistory}
-                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-colors duration-200 rounded"
+                className="flex items-center space-x-1 text-xs px-2 py-1 font-medium transition-colors duration-200 rounded text-gray-700 dark:text-white"
                 style={{
-                  color: '#35495E',
-                  backgroundColor: 'transparent',
                   border: 'none',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
                 <Trash2 size={8} />
@@ -420,14 +415,14 @@ const AIPlanningContextDebugger: React.FC = () => {
           {/* Snapshots List */}
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {snapshots.length === 0 ? (
-              <div className="text-xs text-center py-4 text-slate-500">
+              <div className="text-xs text-center py-4 text-slate-500 dark:text-gray-400">
                 No context changes recorded yet
               </div>
             ) : (
               snapshots.map((snapshot, index) => (
                 <div
                   key={`${snapshot.timestamp}-${index}`}
-                  className="rounded-md p-3 mb-2 transition-all duration-200 hover:shadow-sm bg-white border border-slate-200 hover:border-slate-300"
+                  className="rounded-md p-3 mb-2 transition-all duration-200 hover:shadow-sm border border-slate-200 hover:border-slate-300"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
@@ -437,7 +432,7 @@ const AIPlanningContextDebugger: React.FC = () => {
                         {getChangeIcon(snapshot.changeType)}
                         <span>{snapshot.changeType}</span>
                       </div>
-                      <div className="flex items-center space-x-1 text-xs text-slate-500">
+                      <div className="flex items-center space-x-1 text-xs text-slate-500 dark:text-gray-400">
                         <Clock size={8} />
                         <span>{snapshot.currentTime}</span>
                       </div>
@@ -446,8 +441,8 @@ const AIPlanningContextDebugger: React.FC = () => {
 
                   <div className="text-xs">
                     <div className="mb-2">
-                      <span className="text-slate-600">Changed fields:</span>
-                      <span className="ml-1 font-medium text-slate-700">
+                      <span className="text-slate-600 dark:text-white">Changed fields:</span>
+                      <span className="ml-1 font-medium text-slate-700 dark:text-white">
                         {snapshot.changedFields.join(', ')}
                       </span>
                     </div>
@@ -456,10 +451,10 @@ const AIPlanningContextDebugger: React.FC = () => {
                     {snapshot.changedFields.includes('toDoList') && (
                       <div className="mb-1">
                         <div className="flex items-center space-x-1 mb-1">
-                          <ListTodo size={8} style={{ color: '#35495E' }} />
-                          <span style={{ color: '#35495E' }}>ToDo List:</span>
+                          <ListTodo size={8} className="text-gray-700 dark:text-white" />
+                          <span className="text-gray-700 dark:text-white">ToDo List:</span>
                         </div>
-                        <div className="ml-2 text-xs p-2 rounded bg-slate-50 border border-slate-200">
+                        <div className="ml-2 text-xs p-2 rounded border border-slate-200">
                           {snapshot.toDoList.length === 0 ? (
                             <div className="flex items-center space-x-1">
                               <CheckCircle size={8} style={{ color: '#41B883' }} />
@@ -472,9 +467,9 @@ const AIPlanningContextDebugger: React.FC = () => {
                               {snapshot.toDoList.slice(0, 3).map((item, i) => (
                                 <li
                                   key={i}
-                                  className="truncate text-slate-700 flex items-start space-x-1"
+                                  className="truncate text-slate-700 dark:text-white flex items-start space-x-1"
                                 >
-                                  <span className="text-slate-400">•</span>
+                                  <span className="text-slate-400 dark:text-gray-500">•</span>
                                   <span>
                                     {typeof item === 'string'
                                       ? item
@@ -483,7 +478,7 @@ const AIPlanningContextDebugger: React.FC = () => {
                                 </li>
                               ))}
                               {snapshot.toDoList.length > 3 && (
-                                <li className="text-slate-500">
+                                <li className="text-slate-500 dark:text-gray-400">
                                   ... and {snapshot.toDoList.length - 3} more
                                 </li>
                               )}
@@ -496,19 +491,24 @@ const AIPlanningContextDebugger: React.FC = () => {
                     {snapshot.changedFields.includes('variables') && (
                       <div className="mb-1">
                         <div className="flex items-center space-x-1 mb-1">
-                          <Database size={8} style={{ color: '#35495E' }} />
-                          <span style={{ color: '#35495E' }}>Variables:</span>
+                          <Database size={8} className="text-gray-700 dark:text-white" />
+                          <span className="text-gray-700 dark:text-white">Variables:</span>
                         </div>
-                        <div className="ml-2 text-xs p-2 rounded font-mono bg-slate-50 border border-slate-200">
+                        <div className="ml-2 text-xs p-2 rounded font-mono border border-slate-200">
                           {Object.keys(snapshot.variables).length === 0 ? (
-                            <span className="text-slate-500">Empty</span>
+                            <span className="text-slate-500 dark:text-gray-400">Empty</span>
                           ) : (
                             Object.entries(snapshot.variables)
                               .slice(0, 3)
                               .map(([key, value]) => (
                                 <div key={key} className="truncate">
-                                  <span className="text-slate-600 font-medium">{key}:</span>
-                                  <span className="text-slate-700"> {formatValue(value)}</span>
+                                  <span className="text-slate-600 dark:text-white font-medium">
+                                    {key}:
+                                  </span>
+                                  <span className="text-slate-700 dark:text-white">
+                                    {' '}
+                                    {formatValue(value)}
+                                  </span>
                                 </div>
                               ))
                           )}
@@ -518,10 +518,10 @@ const AIPlanningContextDebugger: React.FC = () => {
 
                     {/* Full snapshot details */}
                     <details className="mt-2">
-                      <summary className="cursor-pointer text-slate-600 hover:text-slate-800 transition-colors duration-200 text-xs">
+                      <summary className="cursor-pointer text-slate-600 dark:text-white hover:text-slate-800 dark:hover:text-gray-200 transition-colors duration-200 text-xs">
                         Full Snapshot
                       </summary>
-                      <pre className="text-xs p-3 rounded mt-1 overflow-auto max-h-40 font-mono bg-slate-50 border border-slate-200 text-slate-600">
+                      <pre className="text-xs p-3 rounded mt-1 overflow-auto max-h-40 font-mono border border-slate-200 text-slate-600 dark:text-white">
                         {JSON.stringify(
                           {
                             variables: snapshot.variables,

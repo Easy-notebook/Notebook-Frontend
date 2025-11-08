@@ -147,15 +147,15 @@ const AIAgentSidebar = () => {
         <div
           key={isOriginal ? `original-${action.id}-${index}` : action.id}
           className={`
-          p-3 relative transition-all duration-300 min-w-0 break-words overflow-wrap-anywhere
+          p-3 transition-all duration-300 rounded-lg
           ${
             index === 0 && !isOriginal
-              ? 'bg-white/10 rounded-lg ring-1 ring-theme-200'
-              : 'hover:bg-white/10 hover:rounded-lg hover:shadow-sm'
+              ? 'ring-1 ring-theme-300 dark:ring-theme-700'
+              : 'hover:ring-1 hover:ring-gray-300 dark:hover:ring-gray-700'
           }
         `}
         >
-          <div className="flex items-center gap-2 mb-2 flex-wrap min-w-0">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             {!isOriginal && (
               <span className="text-xs font-semibold text-gray-700">[{totalCount - index}]</span>
             )}
@@ -166,7 +166,7 @@ const AIAgentSidebar = () => {
             {!isOriginal && action.count > 1 && (
               <button
                 onClick={() => toggleGroup(action.id)}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-theme-100 text-theme-800 hover:bg-theme-200 transition-colors duration-300"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full ring-1 ring-theme-400 dark:ring-theme-600 text-theme-800 dark:text-theme-300 hover:ring-theme-500 dark:hover:ring-theme-500 transition-colors duration-300"
               >
                 <Layers size={12} />
                 <span className="text-xs font-medium">x{action.count}</span>
@@ -176,10 +176,12 @@ const AIAgentSidebar = () => {
             <span className="text-xs text-gray-500">{action.timestamp}</span>
           </div>
 
-          <ExpandableText text={action.content} maxLines={3} />
+          <div className="break-words">
+            <ExpandableText text={action.content} maxLines={3} />
+          </div>
 
           {action.result && (
-            <div className="mt-3 p-3 bg-white/10 rounded-lg text-sm text-gray-600 min-w-0 break-words overflow-wrap-anywhere">
+            <div className="mt-3 p-3 ring-1 ring-gray-300 dark:ring-gray-700 rounded-lg text-sm text-gray-600 dark:text-gray-400 break-words">
               <ExpandableText text={action.result} maxLines={3} />
             </div>
           )}
@@ -202,14 +204,13 @@ const AIAgentSidebar = () => {
   );
 
   return (
-    <>
-      <div className="h-full flex flex-col bg-white min-w-0 overflow-hidden">
-        <div className="h-16 w-full flex items-center justify-between px-3 sm:px-5 border-b border-white/10 bg-white/5 backdrop-blur-sm relative">
-          <ViewSwitcher />
-        </div>
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="h-16 flex-shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-gray-200 dark:border-white/10 backdrop-blur-sm">
+        <ViewSwitcher />
+      </div>
 
-        <div className="flex-1 px-2 sm:px-4 pb-5 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50 min-w-0">
-          <style>{`
+      <div className="flex-1 px-2 sm:px-4 pb-5 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50">
+        <style>{`
             .scrollbar-thin::-webkit-scrollbar { width: 4px; }
             .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
             .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 4px; }
@@ -217,208 +218,204 @@ const AIAgentSidebar = () => {
             .scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.3) transparent; }
           `}</style>
 
-          {activeView === 'script' && (
-            <div className="space-y-1 py-3">
-              {mergedActionsToShow.map((action, index) => (
-                <div key={action.id} className="space-y-1">
-                  {renderActionItem(action, false, index, mergedActionsToShow.length)}
+        {activeView === 'script' && (
+          <div className="space-y-1 py-3">
+            {mergedActionsToShow.map((action, index) => (
+              <div key={action.id} className="space-y-1">
+                {renderActionItem(action, false, index, mergedActionsToShow.length)}
 
-                  {expandedGroups[action.id] && action.count > 1 && (
-                    <div className="space-y-3 mt-2 pb-2">
-                      {action.originalActions.slice(1).map((origAction, origIndex) => (
-                        <div key={`${origAction.id}-${origIndex}`}>
-                          {renderActionItem(
-                            origAction,
-                            true,
-                            origIndex,
-                            action.originalActions.length - 1
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                {expandedGroups[action.id] && action.count > 1 && (
+                  <div className="space-y-3 mt-2 pb-2">
+                    {action.originalActions.slice(1).map((origAction, origIndex) => (
+                      <div key={`${origAction.id}-${origIndex}`}>
+                        {renderActionItem(
+                          origAction,
+                          true,
+                          origIndex,
+                          action.originalActions.length - 1
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
-          {activeView === 'qa' && (
-            <div className="space-y-4 py-4">
-              {qasToShow.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 flex flex-col items-center">
-                  <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p className="text-sm mx-auto text-gray-500">
-                    {t('rightSideBar.noChatMessages')}
-                  </p>
-                  <p className="text-xs mt-1 mx-auto text-gray-500">
-                    {t('rightSideBar.startConversation')}
-                  </p>
-                </div>
-              ) : (
-                qasToShow.map((qa, index) => (
-                  <div key={qa.id} id={qa.id} className="w-full mb-3">
-                    <div
-                      className={`
-                        relative p-4 rounded-lg shadow-sm w-full transition-all duration-300 min-w-0
+        {activeView === 'qa' && (
+          <div className="space-y-4 py-4">
+            {qasToShow.length === 0 ? (
+              <div className="text-center py-8 text-gray-500 flex flex-col items-center">
+                <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p className="text-sm mx-auto text-gray-500">{t('rightSideBar.noChatMessages')}</p>
+                <p className="text-xs mt-1 mx-auto text-gray-500">
+                  {t('rightSideBar.startConversation')}
+                </p>
+              </div>
+            ) : (
+              qasToShow.map((qa, index) => (
+                <div key={qa.id} id={qa.id} className="mb-3">
+                  <div
+                    className={`
+                        p-4 rounded-lg shadow-sm transition-all duration-300
                         ${
                           index === 0
-                            ? 'bg-white/20 ring-1 ring-theme-200'
+                            ? 'ring-2 ring-theme-400 dark:ring-theme-600'
                             : qa.type === 'user'
-                              ? 'bg-theme-50 text-left hover:bg-theme-100'
-                              : 'bg-gray-50 text-left hover:bg-gray-100'
+                              ? 'ring-1 ring-theme-300 dark:ring-theme-700 hover:ring-theme-400 dark:hover:ring-theme-600'
+                              : 'ring-1 ring-gray-300 dark:ring-gray-700 hover:ring-gray-400 dark:hover:ring-gray-600'
                         }
                       `}
+                  >
+                    <div
+                      className={`flex items-center gap-2 mb-2 ${
+                        qa.type === 'user' ? 'justify-start' : 'justify-start'
+                      }`}
                     >
-                      <div
-                        className={`flex items-center gap-2 mb-2 ${
-                          qa.type === 'user' ? 'justify-start' : 'justify-start'
+                      <span className="text-xs font-semibold text-gray-700">
+                        [{qasToShow.length - index}]
+                      </span>
+                      <EventIcon
+                        type={
+                          qa.type === 'assistant'
+                            ? EVENT_TYPES.AI_REPLYING_QUESTION
+                            : EVENT_TYPES.USER_ASK_QUESTION
+                        }
+                        onProcess={qa.onProcess}
+                      />
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          qa.type === 'user'
+                            ? 'ring-1 ring-theme-400 dark:ring-theme-600 text-theme-700 dark:text-theme-300'
+                            : 'ring-1 ring-green-400 dark:ring-green-600 text-green-700 dark:text-green-300'
                         }`}
                       >
-                        <span className="text-xs font-semibold text-gray-700">
-                          [{qasToShow.length - index}]
-                        </span>
-                        <EventIcon
-                          type={
-                            qa.type === 'assistant'
-                              ? EVENT_TYPES.AI_REPLYING_QUESTION
-                              : EVENT_TYPES.USER_ASK_QUESTION
-                          }
-                          onProcess={qa.onProcess}
-                        />
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            qa.type === 'user'
-                              ? 'bg-theme-100 text-theme-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}
-                        >
-                          {qa.type === 'user' ? t('rightSideBar.you') : t('rightSideBar.ai')}
-                        </span>
+                        {qa.type === 'user' ? t('rightSideBar.you') : t('rightSideBar.ai')}
+                      </span>
 
-                        {/* 显示Agent信息 */}
-                        {qa.type === 'assistant' && (
-                          <AgentInfo agent={qa.agent} model={qa.model} type={qa.agentType} />
-                        )}
-
-                        <span className="text-xs text-gray-500">{qa.timestamp}</span>
-                      </div>
-
-                      <div className="text-left break-words overflow-wrap-anywhere min-w-0">
-                        {(!qa.content || qa.content.trim() === '') && qa.type === 'assistant' ? (
-                          <div className="flex items-center gap-2 text-xs text-gray-600">
-                            <span>
-                              {qa.agentType || qa.agent || 'AI'}{' '}
-                              {t('rightSideBar.thinking') || 'is thinking...'}
-                            </span>
-                            {qa.thinkingStartAtMs && (
-                              <span className="text-gray-400">
-                                (
-                                {Math.max(
-                                  0,
-                                  Math.round(
-                                    ((qa.thinkingEndAtMs || Date.now()) - qa.thinkingStartAtMs) /
-                                      1000
-                                  )
-                                )}
-                                s )
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <ExpandableText text={qa.content} maxLines={5} />
-                        )}
-                      </div>
-
-                      {/* 显示工具调用信息 */}
-                      {qa.type === 'assistant' && qa.toolCalls && qa.toolCalls.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          <div className="text-xs text-gray-500 mb-2">🛠️ 工具调用:</div>
-                          {qa.toolCalls.map((tool: any, toolIndex: number) => (
-                            <ToolCallIndicator
-                              key={`${qa.id}-tool-${toolIndex}`}
-                              type={tool.type || tool.name}
-                              content={tool.content || tool.arguments}
-                              agent={tool.agent}
-                            />
-                          ))}
-                        </div>
+                      {/* 显示Agent信息 */}
+                      {qa.type === 'assistant' && (
+                        <AgentInfo agent={qa.agent} model={qa.model} type={qa.agentType} />
                       )}
 
-                      {/* 解析内容中的XML标签作为工具调用显示 */}
-                      {qa.type === 'assistant' &&
-                        qa.content &&
-                        (() => {
-                          // 简单的XML标签检测
-                          const xmlTagRegex = /<([a-z-]+)(?:\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
-                          const matches = [...qa.content.matchAll(xmlTagRegex)];
-
-                          if (matches.length > 0) {
-                            return (
-                              <div className="mt-3 space-y-2">
-                                <div className="text-xs text-gray-500 mb-2">⚡ 执行的操作:</div>
-                                {matches.slice(0, 3).map((match, matchIndex) => (
-                                  <ToolCallIndicator
-                                    key={`${qa.id}-xml-${matchIndex}`}
-                                    type={match[1]}
-                                    content={
-                                      match[0].length > 100
-                                        ? match[0].substring(0, 100) + '...'
-                                        : match[0]
-                                    }
-                                    agent={qa.agentType || qa.agent}
-                                  />
-                                ))}
-                                {matches.length > 3 && (
-                                  <div className="text-xs text-gray-400">
-                                    还有 {matches.length - 3} 个操作...
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-
-                      {/* 回答后操作摘要（若无显式 toolCalls，也尽量提示完成了动作） */}
-                      {qa.type === 'assistant' &&
-                        (!qa.toolCalls || qa.toolCalls.length === 0) &&
-                        qa.content &&
-                        /<([a-z-]+)[\s\S]*?<\/\1>/i.test(qa.content) && (
-                          <div className="mt-2 text-xs text-gray-500">
-                            ✅ {qa.agentType || qa.agent || 'AI'}{' '}
-                            {t('rightSideBar.completedActions') ||
-                              'completed some operations during answering.'}
-                          </div>
-                        )}
+                      <span className="text-xs text-gray-500">{qa.timestamp}</span>
                     </div>
+
+                    <div className="text-left break-words overflow-wrap-anywhere">
+                      {(!qa.content || qa.content.trim() === '') && qa.type === 'assistant' ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <span>
+                            {qa.agentType || qa.agent || 'AI'}{' '}
+                            {t('rightSideBar.thinking') || 'is thinking...'}
+                          </span>
+                          {qa.thinkingStartAtMs && (
+                            <span className="text-gray-400">
+                              (
+                              {Math.max(
+                                0,
+                                Math.round(
+                                  ((qa.thinkingEndAtMs || Date.now()) - qa.thinkingStartAtMs) / 1000
+                                )
+                              )}
+                              s )
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <ExpandableText text={qa.content} maxLines={5} />
+                      )}
+                    </div>
+
+                    {/* 显示工具调用信息 */}
+                    {qa.type === 'assistant' && qa.toolCalls && qa.toolCalls.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <div className="text-xs text-gray-500 mb-2">🛠️ 工具调用:</div>
+                        {qa.toolCalls.map((tool: any, toolIndex: number) => (
+                          <ToolCallIndicator
+                            key={`${qa.id}-tool-${toolIndex}`}
+                            type={tool.type || tool.name}
+                            content={tool.content || tool.arguments}
+                            agent={tool.agent}
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 解析内容中的XML标签作为工具调用显示 */}
+                    {qa.type === 'assistant' &&
+                      qa.content &&
+                      (() => {
+                        // 简单的XML标签检测
+                        const xmlTagRegex = /<([a-z-]+)(?:\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
+                        const matches = [...qa.content.matchAll(xmlTagRegex)];
+
+                        if (matches.length > 0) {
+                          return (
+                            <div className="mt-3 space-y-2">
+                              <div className="text-xs text-gray-500 mb-2">⚡ 执行的操作:</div>
+                              {matches.slice(0, 3).map((match, matchIndex) => (
+                                <ToolCallIndicator
+                                  key={`${qa.id}-xml-${matchIndex}`}
+                                  type={match[1]}
+                                  content={
+                                    match[0].length > 100
+                                      ? match[0].substring(0, 100) + '...'
+                                      : match[0]
+                                  }
+                                  agent={qa.agentType || qa.agent}
+                                />
+                              ))}
+                              {matches.length > 3 && (
+                                <div className="text-xs text-gray-400">
+                                  还有 {matches.length - 3} 个操作...
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                    {/* 回答后操作摘要（若无显式 toolCalls，也尽量提示完成了动作） */}
+                    {qa.type === 'assistant' &&
+                      (!qa.toolCalls || qa.toolCalls.length === 0) &&
+                      qa.content &&
+                      /<([a-z-]+)[\s\S]*?<\/\1>/i.test(qa.content) && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          ✅ {qa.agentType || qa.agent || 'AI'}{' '}
+                          {t('rightSideBar.completedActions') ||
+                            'completed some operations during answering.'}
+                        </div>
+                      )}
                   </div>
-                ))
-              )}
-            </div>
-          )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
-          {(activeView as any) === 'debug' && (
-            <div className="space-y-4">
-              <WorkflowTODOPanel />
-              <StateMachineDebugger />
-              <AIPlanningContextDebugger />
-            </div>
-          )}
+        {(activeView as any) === 'debug' && (
+          <div className="space-y-4">
+            <WorkflowTODOPanel />
+            <StateMachineDebugger />
+            <AIPlanningContextDebugger />
+          </div>
+        )}
 
-          {isLoading && (
-            <div
-              className="
-                flex items-center justify-center gap-3 text-theme-700 p-4 my-4 
-                bg-white/10 rounded-lg animate-pulse transition-all duration-300
+        {isLoading && (
+          <div
+            className="
+                flex items-center justify-center gap-3 text-theme-700 dark:text-theme-300 p-4 my-4
+                ring-1 ring-theme-300 dark:ring-theme-700 rounded-lg animate-pulse transition-all duration-300
               "
-            >
-              <Loader2 className="animate-spin" size={24} />
-              <span className="font-medium">{t('rightSideBar.processing')}</span>
-            </div>
-          )}
-        </div>
+          >
+            <Loader2 className="animate-spin" size={24} />
+            <span className="font-medium">{t('rightSideBar.processing')}</span>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 };
 

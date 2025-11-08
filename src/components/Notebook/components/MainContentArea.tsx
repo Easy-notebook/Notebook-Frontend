@@ -1,7 +1,7 @@
 // src/components/Notebook/components/MainContentArea.tsx
 // Main content area without header (header is now in NotebookApp)
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import GlobalTabList from '../Display/GlobalTabList';
 import ErrorAlert from '../../UI/ErrorAlert';
 import CommandInputOrig from '../FunctionBar/AITerminal';
@@ -9,7 +9,7 @@ import { useAIAgentStore } from '@Store/AIAgentStore';
 import OutlineSidebar from '../LeftSideBar/Main/Workspace/OutlineView/OutlineSidebar';
 import { EmptySidebar } from '../LeftSideBar/Main/Empty';
 import { AgentType } from '@Services/agentMemoryService';
-import { Card } from '@/components/UI/card';
+import { ThreePanelLayout } from './ThreePanelLayout';
 import { RightSidebar } from './RightSidebar';
 
 // Cast component to any to relax prop type constraints
@@ -29,7 +29,6 @@ interface MainContentAreaProps {
   currentStepId: string | null;
   currentStepIndex: number;
   activeSidebarItem: 'workspace' | 'knowledge-forest' | 'easynet' | 'new-notebook' | 'settings';
-  rightSidebarWidth: number;
   onModeChange: (mode: any) => void;
   onRunAll: () => Promise<void>;
   onExportJson: () => Promise<void>;
@@ -40,7 +39,6 @@ interface MainContentAreaProps {
   onSetError: (error: string | null) => void;
   onPhaseSelect: (phaseId: string, stepId: string) => void;
   onAgentSelect: (agentType: AgentType) => void;
-  onRightResize: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export const MainContentArea = ({
@@ -54,53 +52,11 @@ export const MainContentArea = ({
   currentStepId,
   currentStepIndex,
   activeSidebarItem,
-  rightSidebarWidth,
   onSetError,
   onPhaseSelect,
   onAgentSelect,
-  onRightResize,
 }: MainContentAreaProps) => {
   const { setShowCommandInput } = useAIAgentStore();
-
-  // Left sidebar width state management
-  const [leftSidebarWidth, setLeftSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('leftSidebarWidth');
-    return saved ? parseInt(saved) : 384; // w-96 = 384px
-  });
-
-  // Optimized resize handler
-  const handleLeftResize = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = leftSidebarWidth;
-      let animationId: number | null = null;
-
-      const handleMouseMove = (e: MouseEvent) => {
-        if (animationId) cancelAnimationFrame(animationId);
-        animationId = requestAnimationFrame(() => {
-          const newWidth = Math.max(200, Math.min(800, startWidth + e.clientX - startX));
-          setLeftSidebarWidth(newWidth);
-        });
-      };
-
-      const handleMouseUp = () => {
-        if (animationId) cancelAnimationFrame(animationId);
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-        document.body.style.userSelect = '';
-        // Save the current width state
-        requestAnimationFrame(() => {
-          localStorage.setItem('leftSidebarWidth', leftSidebarWidth.toString());
-        });
-      };
-
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    },
-    [leftSidebarWidth]
-  );
 
   // Helper function to check if sidebar has content
   const hasSidebarContent = useCallback(() => {
@@ -166,49 +122,53 @@ export const MainContentArea = ({
     viewMode,
   ]);
 
-  // Header is now rendered in NotebookApp
+  // Create panel content
+  const leftPanelContent = renderExpandedSidebar();
+
+  const centerPanelContent = (
+    <div className="h-full w-full flex flex-col">
+      <GlobalTabList />
+      <div className="flex-1 overflow-y-scroll scroll-smooth w-full min-h-0">
+        <div className="w-full relative z-0">{children}</div>
+      </div>
+      {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
+    </div>
+  );
+
+  const rightPanelContent = (
+    <RightSidebar
+      viewMode={viewMode}
+      currentPhaseId={currentPhaseId}
+      currentStepIndex={currentStepIndex}
+    />
+  );
+
+  // Determine panel visibility
+  const showLeft = !isCollapsed && hasSidebarContent();
+  const showRight = !isRightSidebarCollapsed;
 
   return (
     <>
       <CommandInput onClick={() => setShowCommandInput(true)} />
 
-      {/* Content area - no header here anymore */}
+      {/* Content area using ThreePanelLayout */}
       <div className="flex-1 flex gap-1.5 p-3 min-h-0">
-        {/* Expanded Sidebar (when not collapsed and has content) */}
-        {!isCollapsed && hasSidebarContent() && (
-          <div className="flex h-full" style={{ width: leftSidebarWidth }}>
-            <Card className="flex-1 h-full flex flex-col">{renderExpandedSidebar()}</Card>
-
-            {/* Resize handle */}
-            <div
-              className="w-1 cursor-col-resize transition-all duration-150 relative group shrink-0 ml-2"
-              onMouseDown={handleLeftResize}
-              style={{ touchAction: 'none' }}
-            >
-              <div className="absolute inset-y-0 w-1 rounded-full bg-transparent group-hover:bg-primary transition-all opacity-0 group-hover:opacity-100" />
-            </div>
-          </div>
-        )}
-
-        {/* Main Content */}
-        <Card className="flex-1 flex flex-col min-h-0" overflowHidden={false}>
-          <GlobalTabList />
-
-          <div className="flex-1 overflow-y-scroll scroll-smooth w-full min-h-0">
-            <div className="w-full relative z-0">{children}</div>
-          </div>
-
-          {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
-        </Card>
-
-        {/* Right Sidebar */}
-        <RightSidebar
-          isCollapsed={isRightSidebarCollapsed}
-          width={rightSidebarWidth}
-          viewMode={viewMode}
-          currentPhaseId={currentPhaseId}
-          currentStepIndex={currentStepIndex}
-          onResize={onRightResize}
+        <ThreePanelLayout
+          showLeft={showLeft}
+          showRight={showRight}
+          leftPanel={leftPanelContent}
+          centerPanel={centerPanelContent}
+          rightPanel={rightPanelContent}
+          leftMinSize={15}
+          leftMaxSize={50}
+          leftDefaultSize={25}
+          rightMinSize={20}
+          rightMaxSize={50}
+          rightDefaultSize={25}
+          centerMinSize={30}
+          storageKey="main-content-area-layout"
+          wrapPanelsInCard={true}
+          centerOverflowHidden={false}
         />
       </div>
     </>
