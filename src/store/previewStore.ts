@@ -121,6 +121,9 @@ export interface PreviewStoreActions {
   // Tab state persistence
   saveTabState: (notebookId?: string) => Promise<void>;
   loadTabState: (notebookId: string) => Promise<void>;
+
+  // Clear all notebook state
+  clearNotebookState: () => void;
 }
 
 /**
@@ -1475,6 +1478,23 @@ const usePreviewStore = create<PreviewStore>()(
 
         // Fallback to regular tab loading if no saved state or error
         await get().loadNotebookTabs(notebookId);
+      },
+
+      // Clear all notebook state - used when creating a new notebook
+      clearNotebookState: () => {
+        storeLog.info('Clearing all notebook state from previewStore');
+        set({
+          currentNotebookId: null,
+          currentPreviewFiles: [],
+          activeFile: null,
+          activePreviewMode: null,
+          dirtyMap: {},
+          activeSplitFile: null,
+          activeSplitMode: null,
+          isSplitLoading: false,
+          previewMode: 'notebook',
+          error: null,
+        });
       },
     }),
     {

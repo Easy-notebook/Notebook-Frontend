@@ -57,7 +57,7 @@ const OutlineSidebar = ({
     const initialState: Record<string, boolean> = {};
     tasks.forEach((task) => {
       task.phases.forEach((phase) => {
-        initialState[phase.id] = phase.id === currentPhaseId;
+        initialState[phase.id] = true;
       });
     });
     return initialState;

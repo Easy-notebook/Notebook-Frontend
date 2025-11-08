@@ -4,6 +4,8 @@ import { MiniSidebar } from './Mini';
 import { navigateToHome, navigateToLibrary, navigateToWorkspace } from '@Utils/navigation';
 import useSettingsStore from '@Store/settingsStore';
 import useStore from '@Store/notebookStore';
+import useCodeStore from '@Store/codeStore';
+import usePreviewStore from '@Store/previewStore';
 import useRouteStore from '@Store/routeStore';
 
 interface LeftSideBarProps {
@@ -65,8 +67,21 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
           navigateToLibrary();
           break;
         case 'new-notebook':
-          // Clear current notebook and navigate to empty state
+          // Clear current notebook and all related store state
+          console.log('🧹 Clearing all notebook state before creating new notebook...');
+
+          // 1. Clear notebook store (saves current notebook first)
           await useStore.getState().setNotebookId(null);
+
+          // 2. Clear preview store (tabs, files, etc.)
+          usePreviewStore.getState().clearNotebookState();
+
+          // 3. Clear code store (execution state, kernel state, etc.)
+          useCodeStore.getState().resetAll();
+
+          console.log('✅ All notebook state cleared successfully');
+
+          // Navigate to empty state to create new notebook
           navigateToHome();
           break;
         case 'settings':
