@@ -108,6 +108,34 @@ export const TabSwitcher = memo<{
 
 TabSwitcher.displayName = 'TabSwitcher';
 
+// Generic tab switcher with same style, for reuse outside LeftSideBar
+export const TabSwitcherGeneric = memo<{
+  items: Array<{ id: string; label: string }>;
+  activeId: string;
+  onChange: (id: string) => void;
+  className?: string;
+}>(({ items, activeId, onChange, className = '' }) => {
+  return (
+    <div className={`flex space-x-0.5 p-1 rounded-lg ${className}`}>
+      {items.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onChange(tab.id)}
+          className={`
+            ${SHARED_STYLES.tab.base}
+            ${activeId === tab.id ? SHARED_STYLES.tab.active : SHARED_STYLES.tab.inactive}
+            relative
+          `}
+        >
+          <span className="relative z-10 whitespace-nowrap">{tab.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+});
+
+TabSwitcherGeneric.displayName = 'TabSwitcherGeneric';
+
 // 侧边栏容器组件
 export const SidebarContainer = memo<{
   children: ReactNode;

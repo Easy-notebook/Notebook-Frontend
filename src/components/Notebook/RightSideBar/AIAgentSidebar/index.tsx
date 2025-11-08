@@ -205,7 +205,7 @@ const AIAgentSidebar = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="h-16 flex-shrink-0 flex items-center justify-between px-3 sm:px-5 border-b border-gray-200 dark:border-white/10 backdrop-blur-sm">
+      <div className="h-14 shrink-0 flex items-center justify-center px-4 border-b border-gray-200 dark:border-white/10">
         <ViewSwitcher />
       </div>
 

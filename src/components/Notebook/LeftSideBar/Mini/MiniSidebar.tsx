@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react';
-import { Trees, PackagePlus, Cog, Network, Folder } from 'lucide-react';
+import { Trees, PackagePlus, Cog, Folder } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface MiniSidebarItem {
