@@ -12,6 +12,7 @@ interface SpotlightCardProps extends React.PropsWithChildren<React.HTMLAttribute
   tintOpacity?: number;
   noise?: boolean;
   overflowHidden?: boolean;
+  minFullHeight?: boolean;
 }
 
 const SpotlightCard: React.FC<SpotlightCardProps> = ({
@@ -22,6 +23,7 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
   tintOpacity = 0.7,
   noise = true,
   overflowHidden = true,
+  minFullHeight = true,
   ...restProps
 }) => {
   const divRef = useRef<HTMLDivElement>(null);
@@ -146,7 +148,9 @@ const SpotlightCard: React.FC<SpotlightCardProps> = ({
       </div>
 
       {/* Content */}
-      <div className={`relative z-10 ${overflowHidden ? 'overflow-hidden' : 'overflow-scroll'}`}>
+      <div
+        className={`relative z-10 ${overflowHidden ? 'overflow-hidden' : 'overflow-scroll'} ${minFullHeight ? 'min-h-full' : ''}`}
+      >
         {children}
       </div>
     </div>

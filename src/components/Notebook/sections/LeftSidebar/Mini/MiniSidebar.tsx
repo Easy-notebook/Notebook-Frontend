@@ -1,6 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Trees, PackagePlus, Cog, Folder } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import useStore from '@Store/notebookStore';
 
 interface MiniSidebarItem {
   id: string;
@@ -89,6 +90,9 @@ const MiniSidebar = memo(function MiniSidebar({
 }: MiniSidebarProps) {
   // const hasPhases = useMemo(() => Array.isArray(phases) && phases.length > 0, [phases]);
 
+  // Get notebookId from store to determine if workspace icon should be shown
+  const notebookId = useStore((state) => state.notebookId);
+
   // Handle logo click - always toggles sidebar
   const handleExpandClick = useCallback(() => {
     if (onExpandClick) onExpandClick();
@@ -163,9 +167,9 @@ const MiniSidebar = memo(function MiniSidebar({
 
         {shouldShowFolderIcon &&
         ( */}
-        {/* Primary items - show all items including workspace */}
+        {/* Primary items - show workspace only if notebookId exists */}
         <ul className="space-y-3">
-          {PRIMARY_ITEMS.map((item) => {
+          {PRIMARY_ITEMS.filter((item) => item.id !== 'workspace' || notebookId).map((item) => {
             const Icon = item.icon;
             const isActive = activeItemId === item.id;
 

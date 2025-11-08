@@ -435,54 +435,26 @@ const CommandInput: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 flex items-start justify-center z-[100]"
+      className="absolute inset-0 flex items-start justify-center z-[100] pointer-events-none"
       style={{ paddingTop: topPosition }}
     >
       <div
-        className="w-4/5 max-w-5xl transform transition-all duration-200 bg-black/5 dark:bg-black/5 rounded-3xl p-4"
+        className="w-4/5 max-w-5xl transform transition-all duration-200 rounded-3xl p-4 bg-black/3 dark:bg-white/3 pointer-events-auto"
         ref={modalRef}
+        style={{
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+        }}
       >
-        {/* Glass morphism container */}
+        {/* Container with solid background */}
         <div
-          className="relative rounded-3xl overflow-hidden"
+          className="relative rounded-3xl overflow-hidden bg-white dark:bg-gray-800"
           style={{
-            border: `1px solid ${isFocused ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)'}`,
-            boxShadow: isFocused ? '0 4px 18px rgba(0,0,0,0.08)' : '0 1px 6px rgba(0,0,0,0.04)',
-            transition: 'transform .18s, box-shadow .18s, border-color .18s',
+            boxShadow: isFocused ? '0 4px 18px rgba(0,0,0,0.12)' : '0 1px 6px rgba(0,0,0,0.08)',
+            transition: 'transform .18s, box-shadow .18s',
             transform: isFocused ? 'scale(1.01)' : 'none',
-            isolation: 'isolate',
           }}
         >
-          {/* Backdrop blur layer */}
-          <div
-            className="absolute inset-0 rounded-3xl"
-            style={{
-              backdropFilter: isFocused ? 'blur(30px) saturate(180%)' : 'blur(20px) saturate(160%)',
-              WebkitBackdropFilter: isFocused
-                ? 'blur(30px) saturate(180%)'
-                : 'blur(20px) saturate(160%)',
-              transition: 'backdrop-filter .18s',
-            }}
-          />
-
-          {/* Tint overlay */}
-          <div
-            className="absolute inset-0 rounded-3xl dark:bg-gray-800/70 bg-white"
-            style={{
-              transition: 'background-color .18s',
-            }}
-          />
-
-          {/* Luminosity layer for depth */}
-          <div
-            className="absolute inset-0 rounded-3xl"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%)',
-              mixBlendMode: 'overlay',
-            }}
-          />
-
           {/* Content */}
           <div className="relative z-10 flex items-start gap-3 px-6 py-4">
             <Command

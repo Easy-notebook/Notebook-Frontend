@@ -137,7 +137,7 @@ export interface NotebookStoreActions {
   setAllowedTypes: (allowedTypes: string[]) => void;
   setMaxFiles: (maxFiles: number | null) => void;
   setIsRightSidebarCollapsed: (isRightSidebarCollapsed: boolean) => void;
-  setNotebookId: (id: string | null) => void;
+  setNotebookId: (id: string | null) => Promise<void>;
   setNotebookTitle: (title: string) => void;
   setCurrentPhase: (phaseId: string | null) => void;
   setCurrentStepIndex: (index: number) => void;
@@ -314,7 +314,7 @@ const useStore = create(
       uploadMode: 'unrestricted',
       allowedTypes: [],
       maxFiles: null,
-      isRightSidebarCollapsed: false,
+      isRightSidebarCollapsed: true,
       editingCellId: null,
 
       whatPurposeOfThisNotebook: null,
@@ -365,7 +365,60 @@ const useStore = create(
             }
           })
         ),
-      setNotebookId: (id: string | null) => set({ notebookId: id }),
+      setNotebookId: async (id: string | null) => {
+        const state = get();
+
+        // If setting to null, ensure current notebook is saved first, then clear the store
+        if (id === null && state.notebookId) {
+          try {
+            // Ensure current notebook is persisted before clearing
+            await notebookAutoSaveInstance.saveNow({
+              notebookId: state.notebookId,
+              notebookTitle: state.notebookTitle,
+              cells: state.cells,
+              tasks: state.tasks,
+              timestamp: Date.now(),
+            });
+
+            notebookLog.info('Notebook saved before clearing store', {
+              notebookId: state.notebookId,
+            });
+          } catch (error) {
+            notebookLog.error('Failed to save notebook before clearing', {
+              notebookId: state.notebookId,
+              error,
+            });
+            // Continue with clearing even if save fails to avoid blocking user
+          }
+
+          // Clear the store to initial state
+          set({
+            notebookId: null,
+            notebookTitle: '',
+            cells: [],
+            tasks: [],
+            currentPhaseId: null,
+            currentStepIndex: 0,
+            currentCellId: null,
+            currentRunningPhaseId: null,
+            lastAddedCellId: null,
+            error: null,
+            editingCellId: null,
+            whatPurposeOfThisNotebook: null,
+            whatHaveWeDone: null,
+            whatIsOurCurrentWork: null,
+            showButtons: {},
+            detachedCellId: null,
+            isDetachedCellFullscreen: false,
+            // Keep UI state (viewMode, isCollapsed, isRightSidebarCollapsed, etc.)
+          });
+
+          notebookLog.info('Store cleared after saving notebook');
+        } else {
+          // Normal case: just set the ID
+          set({ notebookId: id });
+        }
+      },
 
       setNotebookTitle: (title: string) =>
         set((state) => ({

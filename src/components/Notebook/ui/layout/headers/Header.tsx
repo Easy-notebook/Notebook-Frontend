@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Play, Upload, BarChartHorizontalBig, TerminalSquare } from 'lucide-react';
+import { Play, Upload, BarChartHorizontalBig } from 'lucide-react';
 import ModeToggle from './ModeToggle';
-import ExportToFile from '../../features/function-bar/ExportToFile';
+import ExportToFile from '../../../features/function-bar/ExportToFile';
 
 interface HeaderProps {
   viewMode: string;
@@ -35,7 +35,6 @@ const Header: React.FC<HeaderProps> = ({
   onExportMarkdown,
   onTriggerFileInput,
   onHandleImport,
-  onShowCommandInput,
   onToggleRightSidebar,
   fileInputRef,
 }) => {
@@ -86,16 +85,7 @@ const Header: React.FC<HeaderProps> = ({
           style={{ display: 'none' }}
           onChange={onHandleImport}
         />
-
         <div className="flex items-center gap-1">
-          {!(cells.length === 0 || viewMode === 'dslc') && (
-            <button
-              className="flex items-center gap-2 p-2 hover:bg-slate-100/80 rounded-md transition-all duration-200 text-emerald-600 hover:text-emerald-700"
-              onClick={onShowCommandInput}
-            >
-              <TerminalSquare size={18} />
-            </button>
-          )}
           <button
             onClick={onToggleRightSidebar}
             className="flex items-center gap-2 p-2 hover:bg-slate-100/80 rounded-md transition-all duration-200 text-emerald-600 hover:text-emerald-700 bg-emerald-50/60"

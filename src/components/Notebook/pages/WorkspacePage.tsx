@@ -29,21 +29,23 @@ export const WorkspacePage = (props: WorkspacePageProps) => {
   // Render based on viewMode (matching original MainContent logic)
   if (props.viewMode === 'demo') {
     return (
-      <DemoMode
-        tasks={props.tasks}
-        currentPhaseId={props.currentPhaseId || ''}
-        currentStepIndex={props.currentStepIndex}
-        cells={props.cells}
-        findCellsByStep={findCellsByStep}
-        renderCell={props.renderCell}
-        readOnly={false}
-        onPrevious={props.handlePreviousStep}
-        onNext={props.handleNextStep}
-        onPreviousPhase={props.handlePreviousPhase}
-        onNextPhase={props.handleNextPhase}
-        isFirstPhase={props.isFirstPhase}
-        isLastPhase={props.isLastPhase}
-      />
+      <div className="h-full w-full">
+        <DemoMode
+          tasks={props.tasks}
+          currentPhaseId={props.currentPhaseId || ''}
+          currentStepIndex={props.currentStepIndex}
+          cells={props.cells}
+          findCellsByStep={findCellsByStep}
+          renderCell={props.renderCell}
+          readOnly={false}
+          onPrevious={props.handlePreviousStep}
+          onNext={props.handleNextStep}
+          onPreviousPhase={props.handlePreviousPhase}
+          onNextPhase={props.handleNextPhase}
+          isFirstPhase={props.isFirstPhase}
+          isLastPhase={props.isLastPhase}
+        />
+      </div>
     );
   }
 

@@ -21,6 +21,7 @@ import AgentInfo from '@RightSidebar/components/AgentInfo';
 import ExpandableText from '@RightSidebar/components/ExpandableText';
 import EventIcon from '@RightSidebar/components/EventIcon';
 import { getEventLabel } from '@RightSidebar/utils/eventUtils';
+import SpotlightCard from '@/components/UI/card/SpotlightCard';
 
 // ----------------------
 // Type Definitions
@@ -257,24 +258,13 @@ const AIAgentSidebar = () => {
             ) : (
               qasToShow.map((qa, index) => (
                 <div key={qa.id} id={qa.id} className="mb-3">
-                  <div
-                    className={`
-                        p-4 rounded-lg shadow-sm transition-all duration-300
-                        ${
-                          index === 0
-                            ? 'ring-2 ring-theme-400 dark:ring-theme-600'
-                            : qa.type === 'user'
-                              ? 'ring-1 ring-theme-300 dark:ring-theme-700 hover:ring-theme-400 dark:hover:ring-theme-600'
-                              : 'ring-1 ring-gray-300 dark:ring-gray-700 hover:ring-gray-400 dark:hover:ring-gray-600'
-                        }
-                      `}
-                  >
+                  <SpotlightCard className="p-4">
                     <div
                       className={`flex items-center gap-2 mb-2 ${
                         qa.type === 'user' ? 'justify-start' : 'justify-start'
                       }`}
                     >
-                      <span className="text-xs font-semibold text-gray-700">
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                         [{qasToShow.length - index}]
                       </span>
                       <EventIcon
@@ -300,18 +290,20 @@ const AIAgentSidebar = () => {
                         <AgentInfo agent={qa.agent} model={qa.model} type={qa.agentType} />
                       )}
 
-                      <span className="text-xs text-gray-500">{qa.timestamp}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {qa.timestamp}
+                      </span>
                     </div>
 
                     <div className="text-left break-words overflow-wrap-anywhere">
                       {(!qa.content || qa.content.trim() === '') && qa.type === 'assistant' ? (
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                           <span>
                             {qa.agentType || qa.agent || 'AI'}{' '}
                             {t('rightSideBar.thinking') || 'is thinking...'}
                           </span>
                           {qa.thinkingStartAtMs && (
-                            <span className="text-gray-400">
+                            <span className="text-gray-400 dark:text-gray-500">
                               (
                               {Math.max(
                                 0,
@@ -331,7 +323,9 @@ const AIAgentSidebar = () => {
                     {/* 显示工具调用信息 */}
                     {qa.type === 'assistant' && qa.toolCalls && qa.toolCalls.length > 0 && (
                       <div className="mt-3 space-y-2">
-                        <div className="text-xs text-gray-500 mb-2">🛠️ 工具调用:</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                          🛠️ 工具调用:
+                        </div>
                         {qa.toolCalls.map((tool: any, toolIndex: number) => (
                           <ToolCallIndicator
                             key={`${qa.id}-tool-${toolIndex}`}
@@ -354,7 +348,9 @@ const AIAgentSidebar = () => {
                         if (matches.length > 0) {
                           return (
                             <div className="mt-3 space-y-2">
-                              <div className="text-xs text-gray-500 mb-2">⚡ 执行的操作:</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                ⚡ 执行的操作:
+                              </div>
                               {matches.slice(0, 3).map((match, matchIndex) => (
                                 <ToolCallIndicator
                                   key={`${qa.id}-xml-${matchIndex}`}
@@ -368,7 +364,7 @@ const AIAgentSidebar = () => {
                                 />
                               ))}
                               {matches.length > 3 && (
-                                <div className="text-xs text-gray-400">
+                                <div className="text-xs text-gray-400 dark:text-gray-500">
                                   还有 {matches.length - 3} 个操作...
                                 </div>
                               )}
@@ -383,13 +379,13 @@ const AIAgentSidebar = () => {
                       (!qa.toolCalls || qa.toolCalls.length === 0) &&
                       qa.content &&
                       /<([a-z-]+)[\s\S]*?<\/\1>/i.test(qa.content) && (
-                        <div className="mt-2 text-xs text-gray-500">
+                        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                           ✅ {qa.agentType || qa.agent || 'AI'}{' '}
                           {t('rightSideBar.completedActions') ||
                             'completed some operations during answering.'}
                         </div>
                       )}
-                  </div>
+                  </SpotlightCard>
                 </div>
               ))
             )}

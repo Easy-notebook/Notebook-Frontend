@@ -134,7 +134,7 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
   );
 };
 
-const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = () => {
+const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackViewMode }) => {
   const { workflowTemplate } = usePipelineStore();
   const { addThinkingLog } = useAIPlanningContextStore();
   const {
@@ -235,10 +235,13 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = () => {
   // Check if in IDLE state (not executing, not paused, not terminal, no current step)
   const isIdle = !isExecuting && !isPaused && !isTerminal && !currentStepInfo;
 
+  // Determine bottom position based on view mode (demo mode has navigation bar at bottom)
+  const bottomPosition = fallbackViewMode === 'demo' ? 'bottom-28' : 'bottom-6';
+
   // If IDLE, show compact command line trigger
   if (isIdle) {
     return (
-      <div className="absolute bottom-6 right-6 z-50">
+      <div className={`absolute ${bottomPosition} right-6 z-50`}>
         <button
           onClick={() => setShowCommandInput(true)}
           className="p-2 rounded-full bg-white dark:bg-gray-800 bg-opacity-25 dark:bg-opacity-30 backdrop-blur-md shadow-lg border border-white/30 dark:border-gray-600/30 hover:bg-opacity-35 dark:hover:bg-opacity-40 transition-all hover:scale-105"
@@ -253,7 +256,7 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = () => {
 
   // Otherwise show workflow controls
   return (
-    <div className="absolute bottom-6 right-6 z-50">
+    <div className={`absolute ${bottomPosition} right-6 z-50`}>
       <AutoWorkflowControls
         isExecuting={isExecuting}
         isPaused={isPaused}

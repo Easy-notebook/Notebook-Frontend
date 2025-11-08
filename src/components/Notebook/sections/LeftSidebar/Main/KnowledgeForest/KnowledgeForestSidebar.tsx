@@ -215,13 +215,13 @@ const KnowledgeForestSidebar = ({
         phases={allPhases}
         currentPhaseId={currentPhaseId}
         onPhaseClick={handlePhaseClick}
-        onItemClick={(itemId) => {
+        onItemClick={async (itemId) => {
           if (itemId === 'library') navigateToLibrary();
           else if (itemId === 'knowledge-forest') setActiveTab('records');
           else if (itemId === 'tools') setActiveTab('search');
           else if (itemId === 'settings') settingstore.openSettings();
           else if (itemId === 'new-notebook') {
-            useStore.getState().setNotebookId(null);
+            await useStore.getState().setNotebookId(null);
             setActiveTab('records');
             navigateToHome();
           }

@@ -53,7 +53,7 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
 
   // Handle sidebar item click with navigation
   const handleSidebarItemClick = useCallback(
-    (itemId: string) => {
+    async (itemId: string) => {
       onSidebarItemChange(itemId);
 
       // Handle navigation based on item
@@ -66,7 +66,7 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
           break;
         case 'new-notebook':
           // Clear current notebook and navigate to empty state
-          useStore.getState().setNotebookId(null);
+          await useStore.getState().setNotebookId(null);
           navigateToHome();
           break;
         case 'settings':

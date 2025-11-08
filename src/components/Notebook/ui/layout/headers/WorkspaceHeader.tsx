@@ -2,7 +2,7 @@
 // Header component for Workspace view - supports notebook editing and execution
 
 import { useTranslation } from 'react-i18next';
-import { Play, Upload, BarChartHorizontalBig, TerminalSquare } from 'lucide-react';
+import { Play, Upload, BarChartHorizontalBig } from 'lucide-react';
 import ModeToggle from './ModeToggle';
 import ExportToFile from '../../../features/function-bar/ExportToFile';
 
@@ -38,7 +38,6 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   onExportMarkdown,
   onTriggerFileInput,
   onHandleImport,
-  onShowCommandInput,
   onToggleRightSidebar,
   fileInputRef,
 }) => {
@@ -91,14 +90,6 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         />
 
         <div className="flex items-center gap-1">
-          {!(cells.length === 0 || viewMode === 'dslc') && (
-            <button
-              className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:scale-105 text-primary hover:bg-primary/10"
-              onClick={onShowCommandInput}
-            >
-              <TerminalSquare size={18} />
-            </button>
-          )}
           <button
             onClick={onToggleRightSidebar}
             className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:scale-105 text-primary bg-primary/10 hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20"

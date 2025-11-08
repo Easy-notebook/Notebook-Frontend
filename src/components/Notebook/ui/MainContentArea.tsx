@@ -124,7 +124,7 @@ export const MainContentArea = ({
     <div className="h-full w-full flex flex-col relative">
       <GlobalTabList />
       <div className="flex-1 overflow-y-scroll scroll-smooth w-full min-h-0">
-        <div className="w-full relative z-0">{children}</div>
+        <div className="w-full h-full relative z-0">{children}</div>
       </div>
       {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
 

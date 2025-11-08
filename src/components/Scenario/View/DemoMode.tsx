@@ -100,60 +100,62 @@ const DemoMode: React.FC<DemoModeProps> = ({
     : [];
 
   return (
-    <div className="w-full flex flex-col relative">
-      <div className="p-12">
-        <div className="relative space-y-6 max-w-screen-xl mx-auto">
-          {/* Step Content Display (using StepMode's cell filtering logic) */}
-          {stepCells.length > 0 && (
-            <div>
-              <div className="space-y-4">
-                {stepCells.map((cell) => (
-                  <div
-                    key={cell.id}
-                    id={`cell-${cell.id}`}
-                    className="relative w-full transition-all duration-300"
-                  >
-                    {renderCell ? (
-                      renderCell(cell)
-                    ) : (
-                      <div className="p-4 text-gray-500">Cell content not available</div>
-                    )}
-                  </div>
-                ))}
+    <div className="w-full h-full flex flex-col">
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="p-12 flex flex-col min-h-full">
+          <div className="relative space-y-6 max-w-screen-xl mx-auto">
+            {/* Step Content Display (using StepMode's cell filtering logic) */}
+            {stepCells.length > 0 && (
+              <div>
+                <div className="space-y-4">
+                  {stepCells.map((cell) => (
+                    <div
+                      key={cell.id}
+                      id={`cell-${cell.id}`}
+                      className="relative w-full transition-all duration-300"
+                    >
+                      {renderCell ? (
+                        renderCell(cell)
+                      ) : (
+                        <div className="p-4 text-gray-500">Cell content not available</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Empty state when no step cells */}
-          {stepCells.length === 0 && (
-            <div className="bg-gray-50 rounded-lg border border-gray-200 shadow-sm p-12 text-center min-h-[50vh] flex flex-col justify-center">
-              <div className="text-gray-400 mb-4">
-                <svg
-                  className="w-16 h-16 mx-auto"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.5"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
+            {/* Empty state when no step cells */}
+            {stepCells.length === 0 && (
+              <div className="bg-gray-50 rounded-lg border border-gray-200 shadow-sm p-12 text-center min-h-[50vh] flex flex-col justify-center">
+                <div className="text-gray-400 mb-4">
+                  <svg
+                    className="w-16 h-16 mx-auto"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <p className="text-gray-500 mb-2">No content available for this step</p>
+                <p className="text-gray-400 text-sm">
+                  Use the interactive editor above to create content
+                </p>
               </div>
-              <p className="text-gray-500 mb-2">No content available for this step</p>
-              <p className="text-gray-400 text-sm">
-                Use the interactive editor above to create content
-              </p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
       {/* Step Navigation - Fixed at bottom of container */}
       {currentPhaseId && onPrevious && onNext && phase && (
-        <div className="sticky bottom-0 left-0 right-0 z-10 mt-auto">
+        <div className="shrink-0">
           <StepNavigation
             currentPhase={{ id: phase.id, title: (phase as any).title ?? phase.id }}
             currentStepIndex={currentStepIndex}

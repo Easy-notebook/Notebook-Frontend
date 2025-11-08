@@ -40,8 +40,8 @@ const StepNavigation = memo<StepNavigationProps>(
 
     const baseBtn =
       'flex items-center gap-2 px-6 py-2.5 rounded-full font-medium transition-all duration-200 shadow-lg';
-    const enabledStyle = `bg-white/80 backdrop-blur-md hover:bg-white/90`;
-    const disabledStyle = `bg-white/60 text-gray-400`;
+    const enabledStyle = `bg-white/80 dark:bg-gray-800/80 backdrop-blur-md hover:bg-white/90 dark:hover:bg-gray-800/90`;
+    const disabledStyle = `bg-white/60 dark:bg-gray-800/60 text-gray-400 dark:text-gray-500`;
 
     const renderPreviousButton = () => {
       if (isFirstStep) {
@@ -98,13 +98,13 @@ const StepNavigation = memo<StepNavigationProps>(
 
     return (
       <div
-        className="h-20 flex items-center justify-between px-8 bg-white/80 backdrop-blur-md"
-        style={{ borderColor: `${VUE_SECONDARY}33` }}
+        className="h-20 flex items-center justify-between px-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-t border-gray-200/50 dark:border-gray-700/50"
+        style={{ borderBottomLeftRadius: '28px', borderBottomRightRadius: '28px' }}
       >
         <div className="flex items-center gap-2">{renderPreviousButton()}</div>
 
         <div className="flex flex-col items-center gap-2">
-          <span className="text-lg font-semibold" style={{ color: VUE_SECONDARY }}>
+          <span className="text-lg font-semibold text-gray-800 dark:text-gray-200">
             {currentPhase?.title}
           </span>
           <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ const StepNavigation = memo<StepNavigationProps>(
               Array.from({ length: totalSteps }).map((_, idx) => (
                 <div
                   key={idx}
-                  className={`h-2 w-2 rounded-full transition duration-200 ${idx === currentStepIndex ? '' : 'bg-gray-200/50'}`}
+                  className={`h-2 w-2 rounded-full transition duration-200 ${idx === currentStepIndex ? '' : 'bg-gray-200/50 dark:bg-gray-700/50'}`}
                   style={idx === currentStepIndex ? { backgroundColor: VUE_PRIMARY } : {}}
                 />
               ))}
