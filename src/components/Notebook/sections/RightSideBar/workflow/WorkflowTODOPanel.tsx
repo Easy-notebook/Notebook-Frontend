@@ -10,25 +10,28 @@ import { filterSectionStageText } from '../../../utils/String';
 const WorkflowTODOPanel = () => {
   const { t } = useTranslation();
   const { workflowTemplate } = usePipelineStore();
-  const { context: fsmContext } = useWorkflowStateMachine(); // 使用 FSM context 作为状态来源
+  const { stateJSON } = useWorkflowStateMachine(); // Use stateJSON from new state machine
 
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
 
+  // Get current location from stateJSON
+  const currentLocation = stateJSON.observation?.location?.current;
+  const currentStageId = currentLocation?.stage_id;
+  const currentStepId = currentLocation?.step_id;
+
   // 使用 useMemo 预计算当前阶段和步骤的索引，以优化和简化渲染逻辑
   const executionIndices = useMemo(() => {
-    if (!workflowTemplate || !fsmContext.currentStageId) {
+    if (!workflowTemplate || !currentStageId) {
       return { stageIndex: -1, stepIndex: -1 };
     }
-    const stageIndex = workflowTemplate.stages.findIndex((s) => s.id === fsmContext.currentStageId);
+    const stageIndex = workflowTemplate.stages.findIndex((s) => s.id === currentStageId);
     if (stageIndex === -1) {
       return { stageIndex: -1, stepIndex: -1 };
     }
     const stepIndex =
-      workflowTemplate.stages[stageIndex]?.steps.findIndex(
-        (st) => st.id === fsmContext.currentStepId
-      ) ?? -1;
+      workflowTemplate.stages[stageIndex]?.steps.findIndex((st) => st.id === currentStepId) ?? -1;
     return { stageIndex, stepIndex };
-  }, [workflowTemplate, fsmContext]);
+  }, [workflowTemplate, currentStageId, currentStepId]);
 
   const toggleStage = useCallback((stageId: string) => {
     setExpandedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }));

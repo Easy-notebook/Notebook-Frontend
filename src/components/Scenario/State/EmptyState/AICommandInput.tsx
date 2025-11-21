@@ -11,7 +11,7 @@ import {
   PIPELINE_STAGES,
 } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import usePreStageStore from '@/components/Scenario/Workflow/store/preStageStore';
-import { generalResponse } from '@/components/Scenario/Workflow/services/StageGeneralFunction';
+import { generalResponse } from '@/components/Scenario/Workflow/api';
 import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
@@ -246,8 +246,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
           console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
           await usePreStageStore.getState().setCurrentFile(csv);
-          console.log('[DEBUG] AICommandInput - Setting CSV file path:', csv.name);
-          await usePreStageStore.getState().setCsvFilePath(csv.name);
+          const csvFilePath = `.assets/${csv.name}`;
+          console.log('[DEBUG] AICommandInput - Setting CSV file path:', csvFilePath);
+          await usePreStageStore.getState().setCsvFilePath(csvFilePath);
 
           console.log('[DEBUG] AICommandInput - Enabling VDS mode');
           setIsVDSMode(true);
@@ -333,26 +334,74 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       const timestamp = new Date().toLocaleTimeString();
 
       try {
-        // VDS：进入 problem define
+        // VDS：直接启动工作流
         const hasCsv = files.length > 0 && /\.(csv|xlsx|xls)$/i.test(files[0].name);
         if (hasCsv && isVDSMode && command.trim()) {
+          console.log('[AICommandInput] VDS mode - Starting workflow directly');
+
           usePreStageStore.getState().setSelectedProblem('vds', command.trim(), 'VDS Analysis');
 
           const currentFile = files[0];
-          const variables = {
-            csv_file_path: currentFile?.name || '',
-            problem_description: command.trim(),
-            context_description: 'No additional context provided',
+          const preStageState = usePreStageStore.getState();
+
+          const planningRequest = {
             problem_name: 'VDS Analysis',
             user_goal: command.trim(),
+            problem_description: command.trim(),
+            context_description: preStageState.datasetInfo || 'No additional context provided',
+            csv_file_path: currentFile?.name ? `.assets/${currentFile.name}` : '',
           };
 
+          // Add variables to AI planning context
           const aiPlanningStore = useAIPlanningContextStore.getState();
-          Object.entries(variables).forEach(([key, value]) => {
+          Object.entries(planningRequest).forEach(([key, value]) => {
             aiPlanningStore.addVariable(key, value as unknown as Record<string, unknown>);
           });
 
-          setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+          // Start workflow immediately
+          (async () => {
+            try {
+              console.log('[AICommandInput] Initializing workflow...');
+              const { usePipelineStore } = await import(
+                '@/components/Scenario/Workflow/store/usePipelineStore'
+              );
+              const { useWorkflowStateMachine } = await import(
+                '@/components/Scenario/Workflow/store/workflowStateMachine'
+              );
+
+              // Initialize workflow template
+              await usePipelineStore.getState().initializeWorkflow(planningRequest);
+
+              // Start state machine - This will reset and then execute
+              // We need to pass user variables to startWorkflowExecution so they can be set AFTER reset
+              console.log('[AICommandInput] Starting workflow execution with user data...');
+
+              const userData = {
+                user_problem: command.trim(),
+                user_submit_files: currentFile?.name ? [`.assets/${currentFile.name}`] : [],
+                context_description: preStageState.datasetInfo || 'No additional context provided',
+              };
+
+              console.log('[AICommandInput] User data to inject:', userData);
+
+              await usePipelineStore.getState().startWorkflowExecution(userData);
+              console.log('[AICommandInput] Workflow started successfully');
+
+              // Navigate to workspace view
+              console.log('[AICommandInput] Navigating to workspace...');
+              const { default: useRouteStore } = await import('@Store/routeStore');
+              const currentNotebookId = useStore.getState().notebookId;
+              if (currentNotebookId) {
+                useRouteStore.getState().navigateToWorkspace(currentNotebookId);
+                console.log('[AICommandInput] Navigated to workspace:', currentNotebookId);
+              } else {
+                console.warn('[AICommandInput] No notebookId available for navigation');
+              }
+            } catch (error) {
+              console.error('[AICommandInput] Failed to start workflow:', error);
+            }
+          })();
+
           return;
         }
 
@@ -387,7 +436,8 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           });
         } else {
           // QA 模式
-          setIsRightSidebarCollapsed(true);
+          console.log('[DEBUG] AICommandInput - Entering QA mode for question:', command);
+          setIsRightSidebarCollapsed(false); // 打开右侧边栏以显示 QA
           setActiveView('qa');
           const qaId = `qa-${uuidv4()}`;
           const qaData = {
@@ -433,7 +483,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
               ...memoryContext,
             },
           };
+          console.log('[DEBUG] AICommandInput - Sending user_question operation:', finalPayload);
           sendOperation(useStore.getState().notebookId, finalPayload);
+          console.log('[DEBUG] AICommandInput - user_question operation sent successfully');
         }
 
         setFiles([]);
@@ -579,7 +631,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             }}
             className="ai-bar-textarea ai-bar borderless-textarea"
             variant="borderless"
-            bordered={false}
             styles={{
               textarea: {
                 border: 'none',

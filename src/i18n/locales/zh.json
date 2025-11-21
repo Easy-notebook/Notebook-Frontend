@@ -112,6 +112,8 @@
     "dragDropHint": "拖放开始分析...",
     "selectDataFile": "选择数据文件开始",
     "uploading": "上传中...",
+    "upload": "上传文件",
+    "uploadError": "上传失败",
     "orStartScratch": "或从头开始 [临时文件]",
     "addText": "添加文本",
     "addCode": "添加代码",
@@ -214,4 +216,4 @@
       "event": "事件"
     }
   }
-} 
+}

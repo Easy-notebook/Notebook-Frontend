@@ -1,38 +1,69 @@
+/**
+ * @file preStageStore.ts
+ * @description Pre-stage store for managing dataset upload and problem definition state.
+ *
+ * This store manages the UI state BEFORE the workflow is initialized.
+ * Once the workflow starts, the PipelineStore and WorkflowStateMachine take over.
+ *
+ * @author Hu Silan
+ * @project Easy-notebook
+ */
+
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { analyzeDatasetStructure } from '../utils/dataAnalysis'; // Assumes this utility exists and is typed
+import { analyzeDatasetStructure } from '../utils/dataAnalysis';
+
+// ==============================================
+// TYPES & INTERFACES
+// ==============================================
 
 /**
- * @description Defines the shape of the data returned by the analysis function.
- * This should ideally be defined in the dataAnalysis utility file and imported.
+ * Metadata structure from dataset analysis
+ */
+interface DatasetMetadata {
+  rowCount: number;
+  columnCount: number;
+  numericColumns: string[];
+  categoricalColumns: string[];
+  dateColumns: string[];
+  missingValueSummary: Record<string, number>;
+  uniqueValueCounts: Record<string, number>;
+  stats: Record<string, any>;
+}
+
+/**
+ * Analysis result from dataset structure analysis
  */
 interface AnalysisResult {
   columns: string[];
-  metadata: string;
+  metadata: DatasetMetadata;
 }
 
 /**
- * @description Interface for the store's state properties.
+ * Pre-stage state
  */
 interface PreStageState {
+  // File upload state
   currentFile: File | null;
   isUploading: boolean;
   csv_file_path: string;
+  file_columns: string[];
+
+  // Problem definition state
+  problem_name: string;
   problem_description: string;
   context_description: string;
-  choiceMap: any[]; // For better type safety, replace 'any' with a specific interface if possible
-  file_columns: string[];
+  dataBackground: string;
+  datasetInfo: string;
+
+  // Selection state
   selectedProblemType: string | null;
   selectedTarget: string | null;
-  datasetInfo: string;
-  dataBackground: string;
-  problem_name: string;
+  choiceMap: any[];
 }
 
 /**
- * @description Interface for the store's actions (functions).
- * Getters are often not needed in Zustand as state can be selected directly from the hook,
- * but they are included here to match the original JavaScript implementation.
+ * Pre-stage actions
  */
 interface PreStageActions {
   // Getters
@@ -44,7 +75,7 @@ interface PreStageActions {
   getCurrentChoiceMap: () => any[];
   getProblemName: () => string;
 
-  // Setters and other actions
+  // Setters and actions
   setCurrentFile: (file: File | null) => Promise<void>;
   setFileColumns: (columns: string[]) => void;
   setDataBackground: (background: string) => void;
@@ -61,13 +92,14 @@ interface PreStageActions {
 }
 
 /**
- * @description Combined store type including both state and actions.
+ * Combined store type
  */
 type PreStageStore = PreStageState & PreStageActions;
 
-/**
- * @description Initial state for the store, used for setup and reset.
- */
+// ==============================================
+// INITIAL STATE
+// ==============================================
+
 const initialState: PreStageState = {
   currentFile: null,
   isUploading: false,
@@ -83,11 +115,17 @@ const initialState: PreStageState = {
   datasetInfo: '',
 };
 
+// ==============================================
+// ZUSTAND STORE
+// ==============================================
+
 const usePreStageStore = create<PreStageStore>()(
   subscribeWithSelector((set, get) => ({
     ...initialState,
 
-    // --- Getters ---
+    // ==============================================
+    // Getters
+    // ==============================================
     getDataBackground: () => get().dataBackground,
     getCurrentFile: () => get().currentFile,
     getIsUploading: () => get().isUploading,
@@ -96,30 +134,47 @@ const usePreStageStore = create<PreStageStore>()(
     getCurrentChoiceMap: () => get().choiceMap,
     getProblemName: () => get().problem_name,
 
-    // --- Actions ---
+    // ==============================================
+    // Actions
+    // ==============================================
     setCurrentFile: async (file: File | null) => {
       if (get().isUploading) {
-        console.warn('Already uploading, cannot set new file');
+        console.warn('[PreStageStore] Already uploading, cannot set new file');
         return;
       }
+
       if (!file) {
         set({ currentFile: null });
         return;
       }
+
       set({ currentFile: file, isUploading: true });
 
-      // Assuming analyzeDatasetStructure is typed to return Promise<AnalysisResult>
       try {
-        const { columns, metadata }: AnalysisResult = await analyzeDatasetStructure(file);
+        const result = await analyzeDatasetStructure(file);
+        if (!result) {
+          throw new Error('Failed to analyze dataset structure');
+        }
+
+        const { columns, metadata } = result;
+
+        // Convert metadata object to descriptive string for API
+        const datasetInfoString =
+          `Dataset contains ${metadata.rowCount} rows and ${metadata.columnCount} columns. ` +
+          `Numeric columns (${metadata.numericColumns.length}): ${metadata.numericColumns.join(', ') || 'none'}. ` +
+          `Categorical columns (${metadata.categoricalColumns.length}): ${metadata.categoricalColumns.join(', ') || 'none'}. ` +
+          `Date columns (${metadata.dateColumns.length}): ${metadata.dateColumns.join(', ') || 'none'}.`;
+
         set({
           file_columns: columns,
-          datasetInfo: metadata,
-          // Note: You might want to set isUploading to false here after completion
-          // isUploading: false,
+          datasetInfo: datasetInfoString,
+          isUploading: false,
         });
+        console.log('[PreStageStore] Dataset analyzed successfully');
+        console.log('[PreStageStore] Dataset info:', datasetInfoString);
       } catch (error) {
-        console.error('Failed to analyze dataset:', error);
-        set({ isUploading: false }); // Reset uploading state on error
+        console.error('[PreStageStore] Failed to analyze dataset:', error);
+        set({ isUploading: false });
       }
     },
 
@@ -146,8 +201,15 @@ const usePreStageStore = create<PreStageStore>()(
       }
     },
 
-    resetStore: () => set(initialState),
+    resetStore: () => {
+      console.log('[PreStageStore] Resetting store');
+      set(initialState);
+    },
   }))
 );
+
+// ==============================================
+// EXPORTS
+// ==============================================
 
 export default usePreStageStore;

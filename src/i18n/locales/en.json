@@ -112,6 +112,8 @@
     "dragDropHint": "Drop to Start Analysis...",
     "selectDataFile": "Select data file to Begin",
     "uploading": "Uploading...",
+    "upload": "Upload file",
+    "uploadError": "Upload failed",
     "orStartScratch": "or start from scratch [tmp file]",
     "addText": "Add Text",
     "addCode": "Add Code",
@@ -214,4 +216,4 @@
       "event": "Event"
     }
   }
-} 
+}

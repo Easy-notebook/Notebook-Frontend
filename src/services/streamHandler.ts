@@ -190,9 +190,25 @@ export const handleStreamResponse = async (
   data: StreamData,
   showToast: ShowToastFunction
 ): Promise<void> => {
+  // Normalize payload: handle both direct payload and data.payload formats
+  const payload = data.payload || data.data?.payload;
+  const dataPayload = data.data || { payload };
+  console.log('[DEBUG] streamHandler - Received stream data:', {
+    type: data.type,
+    payload,
+    rawData: data,
+  });
+
+  // Create a normalized data object for processing
+  const normalizedData: StreamData = {
+    ...data,
+    payload: payload,
+    data: dataPayload,
+  };
+
   switch (data.type) {
     case 'update_view_mode': {
-      const mode = data.payload?.mode;
+      const mode = normalizedData.payload?.mode;
       if (mode) {
         await globalUpdateInterface.setViewMode(mode as any);
         await showToast({
@@ -204,7 +220,7 @@ export const handleStreamResponse = async (
     }
 
     case 'update_current_phase': {
-      const phaseId = data.payload?.phaseId;
+      const phaseId = normalizedData.payload?.phaseId;
       if (phaseId) {
         await globalUpdateInterface.setCurrentPhase(phaseId);
         await globalUpdateInterface.setCurrentStepIndex(0);
@@ -212,12 +228,14 @@ export const handleStreamResponse = async (
           message: '当前阶段已更新',
           type: 'success',
         });
+
+        // 注意: phase 切换是 notebook 的内部操作,不应该显示在 QA 回答中
       }
       break;
     }
 
     case 'update_current_step_index': {
-      const index = data.payload?.index;
+      const index = normalizedData.payload?.index;
       if (typeof index === 'number') {
         await globalUpdateInterface.setCurrentStepIndex(index);
         await showToast({
@@ -229,7 +247,7 @@ export const handleStreamResponse = async (
     }
 
     case 'update_allow_pagination': {
-      const allow = data.payload?.allow;
+      const allow = normalizedData.payload?.allow;
       if (typeof allow === 'boolean') {
         await globalUpdateInterface.setAllowPagination(allow);
         await showToast({
@@ -241,9 +259,9 @@ export const handleStreamResponse = async (
     }
 
     case 'update_cell': {
-      const cellId = data.payload?.cellId;
-      const content = data.payload?.content;
-      const outputs = data.payload?.outputs;
+      const cellId = normalizedData.payload?.cellId;
+      const content = normalizedData.payload?.content;
+      const outputs = normalizedData.payload?.outputs;
 
       if (cellId) {
         if (content) {
@@ -257,8 +275,8 @@ export const handleStreamResponse = async (
     }
 
     case 'add_cell': {
-      const cell = data.payload?.cell;
-      const index = data.payload?.index;
+      const cell = normalizedData.payload?.cell;
+      const index = normalizedData.payload?.index;
       if (cell) {
         await globalUpdateInterface.addCell(cell, index);
       }
@@ -266,7 +284,7 @@ export const handleStreamResponse = async (
     }
 
     case 'delete_cell': {
-      const cellId = data.payload?.cellId;
+      const cellId = normalizedData.payload?.cellId;
       if (cellId) {
         await globalUpdateInterface.deleteCell(cellId);
       }
@@ -274,7 +292,7 @@ export const handleStreamResponse = async (
     }
 
     case 'set_error': {
-      const error = data.payload?.error;
+      const error = normalizedData.payload?.error;
       if (error) {
         await globalUpdateInterface.setError(error);
 
@@ -310,10 +328,11 @@ export const handleStreamResponse = async (
 
     // 处理通用错误事件（后端有时发送 type: 'error'）
     case 'error': {
-      const errorMsg = (data.payload as any)?.error || (data as any)?.error || 'Unknown error';
-      const commandId = (data.payload as any)?.commandId || (data as any)?.commandId;
+      const errorMsg =
+        (normalizedData.payload as any)?.error || (data as any)?.error || 'Unknown error';
+      const commandId = (normalizedData.payload as any)?.commandId || (data as any)?.commandId;
       const uniqueIdentifier =
-        (data.payload as any)?.uniqueIdentifier || (data as any)?.uniqueIdentifier;
+        (normalizedData.payload as any)?.uniqueIdentifier || (data as any)?.uniqueIdentifier;
 
       agentLog.error('Received error event', { errorMsg, commandId, uniqueIdentifier });
 
@@ -344,7 +363,7 @@ export const handleStreamResponse = async (
     }
 
     case 'clear_outputs': {
-      const cellId = data.payload?.cellId;
+      const cellId = normalizedData.payload?.cellId;
       if (cellId) {
         await globalUpdateInterface.clearCellOutputs(cellId);
       } else {
@@ -354,7 +373,7 @@ export const handleStreamResponse = async (
     }
 
     case 'set_current_cell': {
-      const cellId = data.payload?.cellId;
+      const cellId = normalizedData.payload?.cellId;
       if (cellId) {
         await globalUpdateInterface.setCurrentCell(cellId);
       }
@@ -362,7 +381,7 @@ export const handleStreamResponse = async (
     }
 
     case 'set_running_phase': {
-      const phaseId = data.payload?.phaseId;
+      const phaseId = normalizedData.payload?.phaseId;
       if (phaseId) {
         await globalUpdateInterface.setCurrentRunningPhaseId(phaseId);
       }
@@ -374,8 +393,8 @@ export const handleStreamResponse = async (
 
       // 如果是网页生成成功，触发文件列表刷新
       if (
-        data.data?.message?.includes('webpage generated') ||
-        data.data?.path?.includes('.sandbox')
+        normalizedData.data?.message?.includes('webpage generated') ||
+        normalizedData.data?.path?.includes('.sandbox')
       ) {
         try {
           window.dispatchEvent(new CustomEvent('refreshFileList'));
@@ -388,14 +407,23 @@ export const handleStreamResponse = async (
     }
 
     case 'addCell2EndWithContent': {
-      const cellType = data.data?.payload?.type;
-      const description = data.data?.payload?.description;
-      const content = data.data?.payload?.content;
-      const metadata = data.data?.payload?.metadata || {};
-      const commandId = data.data?.payload?.commandId;
-      const prompt = data.data?.payload?.prompt;
+      const cellType = normalizedData.data?.payload?.type;
+      const description = normalizedData.data?.payload?.description;
+      const content = normalizedData.data?.payload?.content;
+      const metadata = normalizedData.data?.payload?.metadata || {};
+      const commandId = normalizedData.data?.payload?.commandId;
+      const prompt = normalizedData.data?.payload?.prompt;
       const serverUniqueIdentifier =
-        (data.data as any)?.payload?.uniqueIdentifier || metadata?.uniqueIdentifier;
+        (normalizedData.data as any)?.payload?.uniqueIdentifier || metadata?.uniqueIdentifier;
+
+      console.log('🆕 [addCell2EndWithContent] 收到创建cell请求:', {
+        cellType,
+        description: description?.substring(0, 50),
+        contentLength: content?.length,
+        commandId,
+        uniqueIdentifier: serverUniqueIdentifier,
+        metadata,
+      });
 
       let newCellId = null;
       if (cellType && description) {
@@ -431,9 +459,15 @@ export const handleStreamResponse = async (
             generationCellTracker.set(commandId, newCellId);
             // 还要存储uniqueIdentifier映射
             generationCellTracker.set(`unique-${uniqueIdentifier}`, newCellId);
-            console.log('存储生成cell映射:', {
+            console.log('✅ [addCell2EndWithContent] 存储生成cell映射 (image/video):', {
               commandId: commandId,
               uniqueIdentifier: uniqueIdentifier,
+              cellId: newCellId,
+              trackerSize: generationCellTracker.size,
+            });
+          } else {
+            console.warn('⚠️ [addCell2EndWithContent] 图片/视频cell但没有commandId!', {
+              uniqueIdentifier,
               cellId: newCellId,
             });
           }
@@ -450,6 +484,28 @@ export const handleStreamResponse = async (
           if (newCellId && commandId && metadata?.isGenerating) {
             generationCellTracker.set(commandId, newCellId);
             agentLog.debug('Storing cell mapping', { commandId, cellId: newCellId });
+            console.log('✅ [addCell2EndWithContent] 存储生成cell映射 (普通):', {
+              commandId,
+              cellId: newCellId,
+              cellType,
+              trackerSize: generationCellTracker.size,
+            });
+          } else if (newCellId && commandId) {
+            // 即使不是生成任务，也存储commandId映射，方便后续更新
+            generationCellTracker.set(commandId, newCellId);
+            console.log('✅ [addCell2EndWithContent] 存储普通cell映射:', {
+              commandId,
+              cellId: newCellId,
+              cellType,
+              trackerSize: generationCellTracker.size,
+            });
+          } else {
+            console.warn('⚠️ [addCell2EndWithContent] 无法存储cell映射:', {
+              newCellId,
+              commandId,
+              isGenerating: metadata?.isGenerating,
+              cellType,
+            });
           }
         }
       }
@@ -458,6 +514,16 @@ export const handleStreamResponse = async (
         const target = useStore.getState().cells.find((c) => c.id === newCellId);
         const appended = `${target?.content || ''}${content}`;
         useStore.getState().updateCell(newCellId, appended);
+        console.log('✅ [addCell2EndWithContent] 已设置初始内容:', {
+          cellId: newCellId,
+          contentLength: appended.length,
+        });
+      } else if (content) {
+        console.error('❌ [addCell2EndWithContent] 有内容但newCellId为null:', {
+          contentLength: content.length,
+          cellType,
+          description,
+        });
       }
 
       // Handle metadata for the newly created cell
@@ -469,14 +535,34 @@ export const handleStreamResponse = async (
         if (targetCell) {
           // 使用专门的updateCellMetadata方法
           useStore.getState().updateCellMetadata(newCellId, metadata);
+          console.log('✅ [addCell2EndWithContent] 已设置metadata:', {
+            cellId: newCellId,
+            metadata,
+          });
+        } else {
+          console.error('❌ [addCell2EndWithContent] 找不到刚创建的cell:', {
+            newCellId,
+            cellsCount: cells.length,
+          });
         }
       }
+
+      console.log('📊 [addCell2EndWithContent] Cell创建完成，当前tracker状态:', {
+        newCellId,
+        commandId,
+        uniqueIdentifier: serverUniqueIdentifier,
+        trackerSize: generationCellTracker.size,
+        trackerKeys: Array.from(generationCellTracker.keys()),
+      });
+
+      // 注意: 不要将 cell 操作添加到 QA 回答中
+      // cell 操作应该直接作用于 notebook,而不是显示在右侧边栏的 QA 中
       break;
     }
 
     case 'addNewContent2CurrentCell': {
       agentLog.debug('Adding new chunk to current cell');
-      const content = data.data?.payload?.content;
+      const content = normalizedData.data?.payload?.content;
       if (content) {
         // 首选当前编辑单元；如无，则回退到最近一次创建且仍在流式的单元
         const state = useStore.getState();
@@ -556,7 +642,7 @@ export const handleStreamResponse = async (
       try {
         const notebookState = (window as any).__notebookStore?.getState?.();
         const notebookId = notebookState?.notebookId;
-        const commandId = data.data?.payload?.commandId;
+        const commandId = normalizedData.data?.payload?.commandId;
 
         if (notebookId && commandId) {
           agentLog.info('Recording code generation completion', { commandId });
@@ -588,12 +674,26 @@ export const handleStreamResponse = async (
 
     case 'initStreamingAnswer': {
       agentLog.info('Initializing streaming response', { data });
-      const qid = data.data?.payload?.QId || data.payload?.QId;
+      const qid = normalizedData.data?.payload?.QId || normalizedData.payload?.QId;
       if (qid !== undefined && qid !== null) {
         const qidStr = Array.isArray(qid) ? qid[0] : qid.toString();
         await globalUpdateInterface.initStreamingAnswer(qidStr);
         // 记录当前正在流式的 QA，便于 finish 阶段后台未返回 QId 时兜底
         lastStreamingQaId = qidStr;
+
+        // 打开右侧边栏并切换到 QA 视图
+        try {
+          const notebookState = useStore.getState();
+          notebookState.setIsRightSidebarCollapsed(false);
+          console.log('✅ [initStreamingAnswer] 打开右侧边栏显示 QA');
+
+          // 切换到 QA 视图
+          const { useAIAgentStore } = await import('../store/AIAgentStore');
+          useAIAgentStore.getState().setActiveView('qa');
+          console.log('✅ [initStreamingAnswer] 切换到 QA 视图');
+        } catch (error) {
+          console.error('❌ [initStreamingAnswer] 打开侧边栏失败:', error);
+        }
 
         // 记录QA交互开始
         try {
@@ -621,11 +721,29 @@ export const handleStreamResponse = async (
 
     case 'addContentToAnswer': {
       console.log('添加内容到流式响应:', data);
-      const contentQid = data.data?.payload?.QId || data.payload?.QId;
-      const content = data.data?.payload?.content || data.payload?.content;
+      const contentQid = normalizedData.data?.payload?.QId || normalizedData.payload?.QId;
+      const content = normalizedData.data?.payload?.content || normalizedData.payload?.content;
       if (contentQid !== undefined && contentQid !== null && content) {
         const qidStr = Array.isArray(contentQid) ? contentQid[0] : contentQid.toString();
         await globalUpdateInterface.addContentToAnswer(qidStr, content.toString());
+
+        // 确保右侧边栏是打开的并且显示 QA 视图
+        try {
+          const notebookState = useStore.getState();
+          if (notebookState.isRightSidebarCollapsed) {
+            notebookState.setIsRightSidebarCollapsed(false);
+            console.log('✅ [addContentToAnswer] 打开右侧边栏显示 QA');
+          }
+
+          const { useAIAgentStore } = await import('../store/AIAgentStore');
+          const aiState = useAIAgentStore.getState();
+          if (aiState.activeView !== 'qa') {
+            aiState.setActiveView('qa');
+            console.log('✅ [addContentToAnswer] 切换到 QA 视图');
+          }
+        } catch (error) {
+          console.error('❌ [addContentToAnswer] 确保侧边栏显示失败:', error);
+        }
       } else {
         console.error('Missing QId or content in stream data:', data);
       }
@@ -634,9 +752,9 @@ export const handleStreamResponse = async (
 
     case 'finishStreamingAnswer': {
       console.log('结束流式响应:', data);
-      const finishQid = (data as any).data?.payload?.QId || (data as any).payload?.QId;
+      const finishQid = normalizedData.data?.payload?.QId || normalizedData.payload?.QId;
       const finalResponse =
-        (data as any).data?.payload?.response || (data as any).payload?.response || '';
+        normalizedData.data?.payload?.response || normalizedData.payload?.response || '';
       let qidStr: string | null = null;
       if (finishQid !== undefined && finishQid !== null) {
         qidStr = Array.isArray(finishQid) ? finishQid[0] : finishQid.toString();
@@ -708,7 +826,7 @@ export const handleStreamResponse = async (
 
     case 'addNewContent2CurrentCellDescription': {
       console.log('添加新的chunk到当前的cell的描述');
-      const content = data.data?.payload?.content;
+      const content = normalizedData.data?.payload?.content;
       if (content) {
         await globalUpdateInterface.addNewContent2CurrentCellDescription(content);
       }
@@ -723,9 +841,9 @@ export const handleStreamResponse = async (
 
     case 'convertCurrentHybridCellToLinkCell': {
       console.log('将当前混合cell转换为链接cell:', data);
-      const content = data.data?.payload?.content;
-      const commandId = data.data?.payload?.commandId;
-      const metadata = data.data?.payload?.metadata || {};
+      const content = normalizedData.data?.payload?.content;
+      const commandId = normalizedData.data?.payload?.commandId;
+      const metadata = normalizedData.data?.payload?.metadata || {};
 
       if (content) {
         // 获取当前 cell 并转换为 link 类型
@@ -751,22 +869,21 @@ export const handleStreamResponse = async (
     }
 
     case 'updateCurrentCellWithContent': {
-      console.log('更新当前cell的内容:', data);
-      const content = data.data?.payload?.content;
-      const cellId = data.data?.payload?.cellId;
-      const commandId = data.data?.payload?.commandId;
-      const uniqueIdentifier = data.data?.payload?.uniqueIdentifier;
+      console.log('🔄 [updateCurrentCellWithContent] 更新当前cell的内容:', data);
+      const content = normalizedData.data?.payload?.content;
+      const cellId = normalizedData.data?.payload?.cellId;
+      const commandId = normalizedData.data?.payload?.commandId;
+      const uniqueIdentifier = normalizedData.data?.payload?.uniqueIdentifier;
 
-      console.log(
-        'updateCurrentCellWithContent - cellId:',
+      console.log('🔍 [updateCurrentCellWithContent] 参数:', {
         cellId,
-        'commandId:',
         commandId,
-        'uniqueIdentifier:',
         uniqueIdentifier,
-        'content length:',
-        content?.length
-      );
+        contentLength: content?.length,
+        trackerSize: generationCellTracker.size,
+        trackerKeys: Array.from(generationCellTracker.keys()),
+        hasCommandIdInTracker: commandId ? generationCellTracker.has(commandId) : false,
+      });
 
       if (content) {
         let targetCellId = cellId; // 如果直接提供了cellId，优先使用
@@ -785,13 +902,21 @@ export const handleStreamResponse = async (
         if (!targetCellId && commandId && generationCellTracker.has(commandId)) {
           // 使用commandId从映射表获取cellId
           targetCellId = generationCellTracker.get(commandId);
-          console.log('从映射表获取cellId用于内容更新:', commandId, '->', targetCellId);
+          console.log('✅ [updateCurrentCellWithContent] 从映射表获取cellId:', {
+            commandId,
+            targetCellId,
+          });
+        } else if (!targetCellId && commandId) {
+          console.error('❌ [updateCurrentCellWithContent] commandId不在映射表中:', {
+            commandId,
+            trackerKeys: Array.from(generationCellTracker.keys()),
+          });
         }
 
         if (targetCellId) {
           // 直接更新指定的cell
           console.log(
-            '更新指定cell的内容:',
+            '✅ 更新指定cell的内容:',
             targetCellId,
             'content preview:',
             content.substring(0, 100)
@@ -801,34 +926,45 @@ export const handleStreamResponse = async (
         } else {
           // 回退到原有逻辑
           const lastAddedCellId = globalUpdateInterface.getAddedLastCellID();
-          console.log('回退逻辑 - lastAddedCellId:', lastAddedCellId);
+          console.log('⬇️ 回退逻辑 - lastAddedCellId:', lastAddedCellId);
 
           if (lastAddedCellId) {
             // Check if the last added cell has generation metadata (likely a generation cell)
             const cells = useStore.getState().cells;
             const targetCell = cells.find((cell) => cell.id === lastAddedCellId);
             console.log(
-              '找到的targetCell:',
+              '🔍 找到的targetCell:',
               targetCell?.id,
               'isGenerating:',
               targetCell?.metadata?.isGenerating
             );
 
             if (targetCell && targetCell.metadata?.isGenerating) {
-              console.log('更新最后添加的生成cell内容:', lastAddedCellId);
+              console.log('✅ 更新最后添加的生成cell内容:', lastAddedCellId);
               await globalUpdateInterface.updateCell(lastAddedCellId, content);
               console.log('✅ 生成cell内容更新完成');
             } else {
-              // Fall back to updating the current cell
-              console.log('回退到更新当前cell');
-              await globalUpdateInterface.updateCurrentCellWithContent(content);
-              console.log('✅ 当前cell内容更新完成');
+              // 使用最后一个 cell
+              console.log('⬇️ 使用最后一个cell作为默认');
+              if (cells.length > 0) {
+                const lastCell = cells[cells.length - 1];
+                console.log('✅ 使用最后一个cell:', lastCell.id);
+                await globalUpdateInterface.updateCell(lastCell.id, content);
+              } else {
+                console.error('❌ 没有任何cell可以更新内容');
+              }
             }
           } else {
-            // Fall back to updating the current cell (existing behavior)
-            console.log('使用原有逻辑更新当前cell');
-            await globalUpdateInterface.updateCurrentCellWithContent(content);
-            console.log('✅ 原有逻辑更新完成');
+            // 使用最后一个 cell
+            console.warn('⚠️ 无lastAddedCellId，使用最后一个cell作为默认');
+            const cells = useStore.getState().cells;
+            if (cells.length > 0) {
+              const lastCell = cells[cells.length - 1];
+              console.log('✅ 使用最后一个cell:', lastCell.id);
+              await globalUpdateInterface.updateCell(lastCell.id, content);
+            } else {
+              console.error('❌ 没有任何cell可以更新内容');
+            }
           }
         }
       } else {
@@ -839,10 +975,12 @@ export const handleStreamResponse = async (
 
     // TipTap 富文本主动更新（流式或替换）
     case 'tiptap_update': {
-      const cellId = data.data?.payload?.cellId || data.payload?.cellId;
-      const content = data.data?.payload?.content || data.payload?.content;
+      const cellId = normalizedData.data?.payload?.cellId || normalizedData.payload?.cellId;
+      const content = normalizedData.data?.payload?.content || normalizedData.payload?.content;
       const replace =
-        (data.data?.payload as any)?.replace ?? (data.payload as any)?.replace ?? false;
+        (normalizedData.data?.payload as any)?.replace ??
+        (normalizedData.payload as any)?.replace ??
+        false;
       if (!cellId || typeof content !== 'string') {
         console.warn('tiptap_update: invalid payload', data);
         break;
@@ -866,16 +1004,21 @@ export const handleStreamResponse = async (
     }
 
     case 'updateCurrentCellMetadata': {
-      console.log('更新当前cell metadata:', data);
-      const metadata = data.data?.payload?.metadata;
-      const commandId = data.data?.payload?.commandId;
-      const cellId = data.data?.payload?.cellId;
-      const uniqueIdentifier = data.data?.payload?.uniqueIdentifier;
+      console.log('🔄 [updateCurrentCellMetadata] 更新当前cell metadata:', data);
+      const metadata = normalizedData.data?.payload?.metadata;
+      const commandId = normalizedData.data?.payload?.commandId;
+      const cellId = normalizedData.data?.payload?.cellId;
+      const uniqueIdentifier = normalizedData.data?.payload?.uniqueIdentifier;
 
-      console.log('updateCurrentCellMetadata - metadata:', metadata);
-      console.log('updateCurrentCellMetadata - commandId:', commandId);
-      console.log('updateCurrentCellMetadata - cellId:', cellId);
-      console.log('updateCurrentCellMetadata - uniqueIdentifier:', uniqueIdentifier);
+      console.log('🔍 [updateCurrentCellMetadata] 参数:', {
+        metadata,
+        commandId,
+        cellId,
+        uniqueIdentifier,
+        trackerSize: generationCellTracker.size,
+        trackerKeys: Array.from(generationCellTracker.keys()),
+        hasCommandIdInTracker: commandId ? generationCellTracker.has(commandId) : false,
+      });
 
       if (metadata) {
         let targetCellId = cellId; // 如果直接提供了cellId，优先使用
@@ -901,17 +1044,30 @@ export const handleStreamResponse = async (
         // 首先尝试使用 commandId 从映射表中获取 cellId
         if (!targetCellId && commandId && generationCellTracker.has(commandId)) {
           targetCellId = generationCellTracker.get(commandId);
-          console.log('从映射表获取cellId:', commandId, '->', targetCellId);
+          console.log('✅ [updateCurrentCellMetadata] 从映射表获取cellId:', {
+            commandId,
+            targetCellId,
+          });
 
           // 如果生成完成，清理映射表
           if (metadata.isGenerating === false || metadata.generationCompleted) {
             generationCellTracker.delete(commandId);
-            console.log('清理完成的生成任务映射:', commandId);
+            console.log('🧹 [updateCurrentCellMetadata] 清理完成的生成任务映射:', commandId);
           }
-        } else if (!targetCellId) {
+        } else if (!targetCellId && commandId) {
+          console.error('❌ [updateCurrentCellMetadata] commandId不在映射表中:', {
+            commandId,
+            trackerKeys: Array.from(generationCellTracker.keys()),
+          });
+        }
+
+        if (!targetCellId) {
           // 回退方案：尝试使用 lastAddedCellId
           targetCellId = globalUpdateInterface.getAddedLastCellID();
-          console.log('使用lastAddedCellId作为fallback:', targetCellId);
+          console.log(
+            '⬇️ [updateCurrentCellMetadata] 使用lastAddedCellId作为fallback:',
+            targetCellId
+          );
         }
 
         if (targetCellId) {
@@ -929,14 +1085,15 @@ export const handleStreamResponse = async (
             metadata: updatedCell?.metadata,
           });
         } else {
-          console.error('❌ 无法确定目标cellId，尝试使用当前选中的cell');
-          // 最后的回退方案：使用当前选中的cell
-          const currentSelectedCellId = useStore.getState().currentCellId;
-          if (currentSelectedCellId) {
-            console.log('使用当前选中的cell作为最后fallback:', currentSelectedCellId);
-            useStore.getState().updateCellMetadata(currentSelectedCellId, metadata);
+          console.warn('⚠️ 无法确定目标cellId，使用最后一个cell作为默认');
+          // 获取最后一个 cell
+          const cells = useStore.getState().cells;
+          if (cells.length > 0) {
+            const lastCell = cells[cells.length - 1];
+            console.log('✅ 使用最后一个cell:', lastCell.id);
+            useStore.getState().updateCellMetadata(lastCell.id, metadata);
           } else {
-            console.error('❌ 完全无法确定目标cell，metadata更新失败');
+            console.error('❌ 没有任何cell可以更新metadata');
           }
         }
       } else {
@@ -947,8 +1104,8 @@ export const handleStreamResponse = async (
 
     case 'addNewPhase2Next': {
       console.log('添加新的phase到下一个:', data);
-      const description = data.data?.payload?.description;
-      const content = data.data?.payload?.content;
+      const description = normalizedData.data?.payload?.description;
+      const content = normalizedData.data?.payload?.content;
 
       if (description) {
         await globalUpdateInterface.addNewCell2Next('markdown', description);
@@ -960,7 +1117,7 @@ export const handleStreamResponse = async (
     }
 
     case 'update_notebook_title': {
-      const title = data.payload?.title;
+      const title = normalizedData.payload?.title;
       if (title) {
         // 更新notebook标题
         console.log('更新notebook标题:', title);
@@ -969,39 +1126,41 @@ export const handleStreamResponse = async (
           message: `标题已更新: ${title}`,
           type: 'success',
         });
+
+        // 注意: 标题更新是 notebook 的内部操作,不应该显示在 QA 回答中
       }
       break;
     }
 
     case 'get_variable': {
-      const variableName = data.payload?.variable_name;
-      const defaultValue = data.payload?.default_value;
+      const variableName = normalizedData.payload?.variable_name;
+      const defaultValue = normalizedData.payload?.default_value;
       console.log('获取变量:', variableName, '默认值:', defaultValue);
       // 这里可以添加获取变量的逻辑
       break;
     }
 
     case 'set_variable': {
-      const variableName = data.payload?.variable_name;
-      const variableValue = data.payload?.variable_value;
-      const variableType = data.payload?.variable_type;
+      const variableName = normalizedData.payload?.variable_name;
+      const variableValue = normalizedData.payload?.variable_value;
+      const variableType = normalizedData.payload?.variable_type;
       console.log('设置变量:', variableName, '=', variableValue, '类型:', variableType);
       // 这里可以添加设置变量的逻辑
       break;
     }
 
     case 'remember_information': {
-      const rememberType = data.payload?.type;
-      const content = data.payload?.content;
+      const rememberType = normalizedData.payload?.type;
+      const content = normalizedData.payload?.content;
       console.log('记忆信息:', rememberType, content);
       // 这里可以添加记忆信息的逻辑
       break;
     }
 
     case 'update_todo': {
-      const action = data.payload?.action;
-      const event = data.payload?.event;
-      const content = data.payload?.content;
+      const action = normalizedData.payload?.action;
+      const event = normalizedData.payload?.event;
+      const content = normalizedData.payload?.content;
       console.log('更新TODO:', action, event, content);
       // 这里可以添加TODO管理的逻辑
       // 同时也可将有代表性的操作记录到当前QA的工具调用中
@@ -1028,8 +1187,8 @@ export const handleStreamResponse = async (
     }
 
     case 'communicate_with_agent': {
-      const targetAgent = data.payload?.target_agent;
-      const message = data.payload?.message;
+      const targetAgent = normalizedData.payload?.target_agent;
+      const message = normalizedData.payload?.message;
       console.log('与Agent通信:', targetAgent, message);
       // 这里可以添加Agent间通信的逻辑
       break;
@@ -1037,9 +1196,10 @@ export const handleStreamResponse = async (
 
     case 'open_link_in_split': {
       console.log('🔗 Received open_link_in_split event:', data);
-      const href = data.payload?.href || data.data?.payload?.href;
-      const label = data.payload?.label || data.data?.payload?.label;
-      const notebookId = data.payload?.notebook_id || data.data?.payload?.notebook_id;
+      const href = normalizedData.payload?.href || normalizedData.data?.payload?.href;
+      const label = normalizedData.payload?.label || normalizedData.data?.payload?.label;
+      const notebookId =
+        normalizedData.payload?.notebook_id || normalizedData.data?.payload?.notebook_id;
       console.log('🔗 Extracted values:', { href, label, notebookId });
 
       if (href && notebookId) {
@@ -1138,16 +1298,16 @@ export const handleStreamResponse = async (
     }
 
     case 'ask_agent_for_help': {
-      const targetAgent = data.payload?.target_agent;
-      const helpRequest = data.payload?.help_request;
+      const targetAgent = normalizedData.payload?.target_agent;
+      const helpRequest = normalizedData.payload?.help_request;
       console.log('请求Agent帮助:', targetAgent, helpRequest);
       // 这里可以添加Agent帮助请求的逻辑
       break;
     }
 
     case 'trigger_image_generation': {
-      const prompt = data.payload?.prompt;
-      const commandId = data.payload?.commandId;
+      const prompt = normalizedData.payload?.prompt;
+      const commandId = normalizedData.payload?.commandId;
       if (prompt && commandId) {
         console.log('触发图片生成:', prompt);
 
@@ -1204,8 +1364,8 @@ export const handleStreamResponse = async (
     }
 
     case 'trigger_webpage_generation': {
-      const prompt = data.payload?.prompt;
-      const commandId = data.payload?.commandId;
+      const prompt = normalizedData.payload?.prompt;
+      const commandId = normalizedData.payload?.commandId;
       if (prompt && commandId) {
         console.log('触发网页生成:', prompt);
 
@@ -1262,8 +1422,8 @@ export const handleStreamResponse = async (
 
     // 统一的视频生成入口（与 text2video_agent 对应）
     case 'trigger_video_generation': {
-      const prompt = data.payload?.prompt;
-      const commandId = data.payload?.commandId;
+      const prompt = normalizedData.payload?.prompt;
+      const commandId = normalizedData.payload?.commandId;
       if (prompt && commandId) {
         console.log('触发视频生成:', prompt);
         const notebookState = useStore.getState();
@@ -1309,10 +1469,10 @@ export const handleStreamResponse = async (
 
     // 新增：视频生成任务启动事件
     case 'video_generation_task_started': {
-      const taskId = data.payload?.taskId;
-      const commandId = data.payload?.commandId;
-      const uniqueIdentifier = data.payload?.uniqueIdentifier;
-      const prompt = data.payload?.prompt;
+      const taskId = normalizedData.payload?.taskId;
+      const commandId = normalizedData.payload?.commandId;
+      const uniqueIdentifier = normalizedData.payload?.uniqueIdentifier;
+      const prompt = normalizedData.payload?.prompt;
 
       if (taskId && uniqueIdentifier) {
         console.log('视频生成任务已启动，开始轮询状态:', { taskId, uniqueIdentifier });
@@ -1330,13 +1490,13 @@ export const handleStreamResponse = async (
 
     // 新增：视频生成状态更新事件
     case 'video_generation_status_update': {
-      const taskId = data.payload?.taskId;
-      const status = data.payload?.status;
-      const videoUrl = data.payload?.videoUrl;
-      const uniqueIdentifier = data.payload?.uniqueIdentifier;
-      const commandId = data.payload?.commandId;
-      const prompt = data.payload?.prompt;
-      const error = data.payload?.error;
+      const taskId = normalizedData.payload?.taskId;
+      const status = normalizedData.payload?.status;
+      const videoUrl = normalizedData.payload?.videoUrl;
+      const uniqueIdentifier = normalizedData.payload?.uniqueIdentifier;
+      const commandId = normalizedData.payload?.commandId;
+      const prompt = normalizedData.payload?.prompt;
+      const error = normalizedData.payload?.error;
 
       console.log('收到视频生成状态更新:', { taskId, status, uniqueIdentifier });
 

@@ -7,7 +7,15 @@ import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 
 export default [
-  { ignores: ['dist', 'ref', '**/KnowledgeForest/index.tsx'] },
+  {
+    ignores: [
+      'dist',
+      'ref',
+      '**/KnowledgeForest/index.tsx',
+      '**/__tests__/**/*.test.ts',
+      '**/__tests__/**/*.test.tsx',
+    ],
+  },
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {

@@ -162,15 +162,8 @@ const AIPlanningContextDebugger: React.FC = () => {
       // Current State Machine Status
       stateMachine: {
         currentState: stateMachine.currentState || null,
-        currentStageId: stateMachine.currentStageId || null,
-        currentStepId: stateMachine.currentStepId || null,
-        workflow: safeJSONStringify(stateMachine.workflow),
-        autoAdvance: stateMachine.autoAdvance || false,
-        executionHistory: safeJSONStringify(stateMachine.executionHistory) || [],
-        metadata: safeJSONStringify(stateMachine.metadata),
-        isTransitioning: stateMachine.isTransitioning || false,
-        lastEvent: stateMachine.lastEvent || null,
-        lastTransition: stateMachine.lastTransition || null,
+        stateJSON: safeJSONStringify(stateMachine.stateJSON),
+        transitionHistory: safeJSONStringify(stateMachine.transitionHistory) || [],
       },
 
       // Historical Snapshots

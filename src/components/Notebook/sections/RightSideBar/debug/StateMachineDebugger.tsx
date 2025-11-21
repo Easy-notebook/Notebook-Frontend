@@ -1,9 +1,18 @@
-// moved to sections/RightSideBar/debug
+/**
+ * State Machine Debugger
+ * ======================
+ *
+ * Updated to use new state machine architecture
+ * - Uses WorkflowState and WorkflowEvent enums
+ * - Uses stateJSON for all state access
+ * - Uses transitionHistory instead of executionHistory
+ * - Removed ACTION-related events (not in new architecture)
+ */
+
 import React, { useState, useMemo } from 'react';
 import {
   useWorkflowStateMachine,
-  WORKFLOW_STATES,
-  EVENTS,
+  WorkflowEvent,
 } from '@/components/Scenario/Workflow/store/workflowStateMachine';
 import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import {
@@ -14,19 +23,16 @@ import {
   ArrowRight,
   Activity,
   Cpu,
-  RotateCcw,
   Play,
   Square,
   CheckCircle,
   XCircle,
   GitBranch,
-  Timer,
   Download,
   Shuffle,
-  Eye,
   Repeat,
 } from 'lucide-react';
-import { extractSectionTitle, extractChapterTitle } from '../../../utils/String';
+import { extractSectionTitle } from '../../../utils/String';
 
 const StateMachineDebugger: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -36,10 +42,16 @@ const StateMachineDebugger: React.FC = () => {
   const stateMachine = useWorkflowStateMachine();
   const { workflowTemplate } = usePipelineStore();
 
-  // Directly use and reverse the execution history for display. This is simpler and more robust.
+  // Use transitionHistory from new state machine
   const displayedHistory = useMemo(() => {
-    return [...stateMachine.executionHistory].reverse().slice(0, maxEntries);
-  }, [stateMachine.executionHistory, maxEntries]);
+    return [...stateMachine.transitionHistory].reverse().slice(0, maxEntries);
+  }, [stateMachine.transitionHistory, maxEntries]);
+
+  // Get current location from stateJSON
+  const currentLocation = stateMachine.stateJSON.observation?.location?.current;
+  const currentStageId = currentLocation?.stage_id;
+  const currentStepId = currentLocation?.step_id;
+  const currentBehaviorId = currentLocation?.behavior_id;
 
   const clearHistory = () => {
     alert(
@@ -48,66 +60,40 @@ const StateMachineDebugger: React.FC = () => {
   };
 
   const getStateColor = (state: string) => {
-    if (state.includes('COMPLETED')) return 'text-green-600';
-    if (state.includes('RUNNING') || state.includes('EXECUTING')) return 'text-theme-600';
-    if (state.includes('PENDING')) return 'text-orange-500';
-    if (state.includes('ERROR') || state.includes('FAIL')) return 'text-red-600';
-    if (state.includes('IDLE') || state.includes('CANCELLED')) return 'text-gray-500';
+    if (state.includes('completed')) return 'text-green-600';
+    if (state.includes('running')) return 'text-theme-600';
+    if (state.includes('failed')) return 'text-red-600';
+    if (state.includes('idle') || state.includes('canceled')) return 'text-gray-500';
     return 'text-gray-800';
   };
 
-  // Updated to match the correct behavior flow: START_BEHAVIOR -> COMPLETE_BEHAVIOR -> (COMPLETE_STEP or START_BEHAVIOR)
-  const getEventIcon = (event: string) => {
+  const getEventIcon = (event: WorkflowEvent) => {
     const icons: Record<string, React.ReactNode> = {
-      [EVENTS.START_WORKFLOW]: <Play size={8} />,
-      [EVENTS.START_STAGE]: <Play size={8} />,
-      [EVENTS.START_STEP]: <Play size={8} />,
-      [EVENTS.START_BEHAVIOR]: <Shuffle size={8} style={{ color: '#8B5CF6' }} />,
-      [EVENTS.START_ACTION]: <Activity size={8} style={{ color: '#E74C3C' }} />,
-      [EVENTS.COMPLETE_ACTION]: <CheckCircle size={8} style={{ color: '#27AE60' }} />,
-      [EVENTS.COMPLETE_BEHAVIOR]: <CheckCircle size={8} style={{ color: '#8B5CF6' }} />,
-      [EVENTS.COMPLETE_STEP]: <CheckCircle size={8} />,
-      [EVENTS.COMPLETE_STAGE]: <CheckCircle size={8} />,
-      [EVENTS.COMPLETE_WORKFLOW]: <CheckCircle size={8} />,
-      [EVENTS.RETRY_BEHAVIOR]: <Repeat size={8} style={{ color: '#F97316' }} />,
-      [EVENTS.NEXT_BEHAVIOR]: <ArrowRight size={8} />,
-      [EVENTS.NEXT_STAGE]: <ArrowRight size={8} />,
-      [EVENTS.UPDATE_WORKFLOW]: <Timer size={8} />,
-      [EVENTS.UPDATE_STEP]: <Timer size={8} />,
-      [EVENTS.FAIL]: <XCircle size={8} />,
-      [EVENTS.CANCEL]: <Square size={8} />,
-      [EVENTS.RESET]: <RotateCcw size={8} />,
+      [WorkflowEvent.START_WORKFLOW]: <Play size={8} />,
+      [WorkflowEvent.START_STAGE]: <Play size={8} />,
+      [WorkflowEvent.START_STEP]: <Play size={8} />,
+      [WorkflowEvent.START_BEHAVIOR]: <Shuffle size={8} style={{ color: '#8B5CF6' }} />,
+      [WorkflowEvent.COMPLETE_BEHAVIOR]: <CheckCircle size={8} style={{ color: '#8B5CF6' }} />,
+      [WorkflowEvent.COMPLETE_STEP]: <CheckCircle size={8} />,
+      [WorkflowEvent.COMPLETE_STAGE]: <CheckCircle size={8} />,
+      [WorkflowEvent.COMPLETE_WORKFLOW]: <CheckCircle size={8} />,
+      [WorkflowEvent.NEXT_BEHAVIOR]: <ArrowRight size={8} />,
+      [WorkflowEvent.NEXT_STEP]: <ArrowRight size={8} />,
+      [WorkflowEvent.NEXT_STAGE]: <ArrowRight size={8} />,
+      [WorkflowEvent.FAIL]: <XCircle size={8} />,
+      [WorkflowEvent.CANCEL]: <Square size={8} />,
     };
     return icons[event] || <GitBranch size={8} />;
   };
 
-  // Get event style for action and behavior related events (removed EVALUATE_BEHAVIOR)
-  const getEventStyle = (event: string) => {
-    if (event === EVENTS.START_ACTION) {
-      return {
-        borderColor: 'rgba(231, 76, 60, 0.3)',
-        color: '#E74C3C',
-      };
-    }
-    if (event === EVENTS.COMPLETE_ACTION) {
-      return {
-        borderColor: 'rgba(39, 174, 96, 0.3)',
-        color: '#27AE60',
-      };
-    }
-    if (event === EVENTS.START_BEHAVIOR) {
+  const getEventStyle = (event: WorkflowEvent) => {
+    if (event === WorkflowEvent.START_BEHAVIOR || event === WorkflowEvent.COMPLETE_BEHAVIOR) {
       return {
         borderColor: 'rgba(139, 92, 246, 0.3)',
         color: '#8B5CF6',
       };
     }
-    if (event === EVENTS.COMPLETE_BEHAVIOR) {
-      return {
-        borderColor: 'rgba(139, 92, 246, 0.3)',
-        color: '#8B5CF6',
-      };
-    }
-    if (event === EVENTS.RETRY_BEHAVIOR) {
+    if (event === WorkflowEvent.NEXT_BEHAVIOR) {
       return {
         borderColor: 'rgba(249, 115, 22, 0.3)',
         color: '#F97316',
@@ -119,22 +105,15 @@ const StateMachineDebugger: React.FC = () => {
     };
   };
 
-  // Rewritten to export data from the new FSM and pipeline stores
   const exportStateMachine = () => {
     const exportData = {
       exportTimestamp: new Date().toISOString(),
-
-      // Current State Machine Status
       currentStatus: {
         currentState: stateMachine.currentState,
-        context: stateMachine.context,
+        stateJSON: stateMachine.stateJSON,
       },
-
-      // Workflow Template from Pipeline Store
       workflowTemplate: workflowTemplate,
-
-      // Full Execution History from FSM Store
-      executionHistory: stateMachine.executionHistory,
+      transitionHistory: stateMachine.transitionHistory,
     };
 
     const dataStr = JSON.stringify(exportData, null, 2);
@@ -160,7 +139,7 @@ const StateMachineDebugger: React.FC = () => {
         borderColor: 'rgba(65, 184, 131, 0.2)',
       }}
     >
-      {/* Header (UI Unchanged) */}
+      {/* Header */}
       <div
         className="px-3 py-2 border-b cursor-pointer transition-all duration-200"
         style={{
@@ -185,7 +164,7 @@ const StateMachineDebugger: React.FC = () => {
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs text-gray-700 dark:text-white">
-              {stateMachine.executionHistory.length} events
+              {stateMachine.transitionHistory.length} transitions
             </span>
             <ChevronDown
               size={8}
@@ -198,7 +177,7 @@ const StateMachineDebugger: React.FC = () => {
 
       {!isCollapsed && (
         <div className="p-3">
-          {/* Current Status (Rewritten for new FSM structure) */}
+          {/* Current Status */}
           <div
             className="mb-3 p-3 rounded-md border"
             style={{
@@ -237,64 +216,27 @@ const StateMachineDebugger: React.FC = () => {
                 <Square size={8} className="text-gray-700 dark:text-white" />
                 <span className="text-gray-700 dark:text-white">Stage:</span>
                 <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
-                  {extractSectionTitle(stateMachine.context.currentStageId) || 'null'}
+                  {extractSectionTitle(currentStageId || '') || 'null'}
                 </span>
               </div>
               <div className="flex items-center space-x-1">
                 <Play size={8} className="text-gray-700 dark:text-white" />
                 <span className="text-gray-700 dark:text-white">Step:</span>
                 <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
-                  {extractSectionTitle(stateMachine.context.currentStepId) || 'null'}
+                  {extractSectionTitle(currentStepId || '') || 'null'}
                 </span>
               </div>
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center space-x-1 col-span-2">
                 <Repeat size={8} className="text-gray-700 dark:text-white" />
                 <span className="text-gray-700 dark:text-white">Behavior:</span>
                 <span className="ml-1 font-mono font-medium" style={{ color: '#6574CD' }}>
-                  {stateMachine.context.currentBehaviorId || 'null'}
+                  {currentBehaviorId || 'null'}
                 </span>
               </div>
-              <div className="flex items-center space-x-1">
-                <Timer size={8} className="text-gray-700 dark:text-white" />
-                <span className="text-gray-700 dark:text-white">Action #:</span>
-                <span className="ml-1 font-mono font-medium" style={{ color: '#E74C3C' }}>
-                  {stateMachine.context.currentActionIndex}
-                </span>
-              </div>
-              {stateMachine.context.currentActionName && (
-                <div className="flex items-center space-x-1 col-span-2">
-                  <Activity size={8} className="text-gray-700 dark:text-white" />
-                  <span className="text-gray-700 dark:text-white">Action:</span>
-                  <span
-                    className="ml-1 font-mono font-medium px-1.5 py-0.5 rounded border"
-                    style={{
-                      borderColor: 'rgba(231, 76, 60, 0.3)',
-                      color: '#E74C3C',
-                    }}
-                  >
-                    {stateMachine.context.currentActionName}
-                  </span>
-                  {stateMachine.currentState.includes('EXECUTING') && (
-                    <span
-                      className="ml-2 flex items-center space-x-1 px-1.5 py-0.5 rounded text-xs border"
-                      style={{
-                        borderColor: 'rgba(255, 193, 7, 0.3)',
-                        color: '#FFC107',
-                      }}
-                    >
-                      <div
-                        className="w-2 h-2 rounded-full animate-pulse"
-                        style={{ backgroundColor: '#FFC107' }}
-                      ></div>
-                      <span>Executing</span>
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Controls (UI Unchanged) */}
+          {/* Controls */}
           <div
             className="mb-3 flex items-center justify-between py-2 border-b"
             style={{ borderBottomColor: 'rgba(65, 184, 131, 0.1)' }}
@@ -338,191 +280,47 @@ const StateMachineDebugger: React.FC = () => {
             </div>
           </div>
 
-          {/* Transitions List (Rewritten logic, UI Unchanged) */}
+          {/* Transitions List */}
           <div className="space-y-0 max-h-96 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
-            {displayedHistory.length === 0
-              ? null
-              : displayedHistory.map((entry, index) => (
-                  <div
-                    key={`${entry.timestamp}-${index}`}
-                    className="py-2 px-0 border-b transition-colors duration-200"
-                    style={{
-                      borderBottomColor: 'rgba(65, 184, 131, 0.06)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center space-x-2">
-                        <div
-                          className={`flex items-center space-x-1 px-2 py-0.5 text-xs font-medium border rounded-full`}
-                          style={getEventStyle(entry.event)}
-                        >
-                          {getEventIcon(entry.event)}
-                          <span>{entry.event}</span>
-                          {/* Display action name for all action-related events */}
-                          {(entry.event === EVENTS.START_ACTION ||
-                            entry.event === EVENTS.COMPLETE_ACTION) &&
-                            entry.payload?.actionName && (
-                              <span
-                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono border border-gray-400"
-                                style={{
-                                  fontWeight: 'bold',
-                                }}
-                              >
-                                {entry.payload.actionName}
-                              </span>
-                            )}
-                          {/* Display behavior name for behavior-related events */}
-                          {(entry.event === EVENTS.START_BEHAVIOR ||
-                            entry.event === EVENTS.COMPLETE_BEHAVIOR ||
-                            entry.event === EVENTS.RETRY_BEHAVIOR) &&
-                            entry.payload?.behaviorName && (
-                              <span
-                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono border border-gray-400"
-                                style={{
-                                  fontWeight: 'bold',
-                                }}
-                              >
-                                {entry.payload.behaviorName}
-                              </span>
-                            )}
-                          {/* Display current action being executed in behavior events */}
-                          {entry.event === EVENTS.START_BEHAVIOR &&
-                            entry.payload?.currentActionName && (
-                              <span
-                                className="ml-1 px-1 py-0.5 rounded text-xs font-mono border"
-                                style={{
-                                  borderColor: 'rgba(231, 76, 60, 0.3)',
-                                  color: '#E74C3C',
-                                  fontWeight: 'bold',
-                                }}
-                              >
-                                action: {entry.payload.currentActionName}
-                              </span>
-                            )}
-                        </div>
-                        <div className="flex items-center space-x-1 text-xs text-gray-500">
-                          <Clock size={8} />
-                          <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
-                        </div>
+            {displayedHistory.length === 0 ? (
+              <div className="text-center text-gray-500 py-4">No transitions yet</div>
+            ) : (
+              displayedHistory.map((entry, index) => (
+                <div
+                  key={`${entry.timestamp}-${index}`}
+                  className="py-2 px-0 border-b transition-colors duration-200"
+                  style={{
+                    borderBottomColor: 'rgba(65, 184, 131, 0.06)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center space-x-2">
+                      <div
+                        className={`flex items-center space-x-1 px-2 py-0.5 text-xs font-medium border rounded-full`}
+                        style={getEventStyle(entry.event)}
+                      >
+                        {getEventIcon(entry.event)}
+                        <span>{entry.event}</span>
                       </div>
-                    </div>
-
-                    <div className="text-xs space-y-1 pl-1">
-                      <div className="flex items-center space-x-2">
-                        <span className={`font-mono ${getStateColor(entry.from)}`}>
-                          {entry.from}
-                        </span>
-                        <ArrowRight size={8} className="text-gray-400" />
-                        <span className={`font-medium font-mono ${getStateColor(entry.to)}`}>
-                          {entry.to}
-                        </span>
+                      <div className="flex items-center space-x-1 text-xs text-gray-500">
+                        <Clock size={8} />
+                        <span>{new Date(entry.timestamp).toLocaleTimeString()}</span>
                       </div>
-
-                      {/* Action execution details */}
-                      {(entry.event === EVENTS.START_ACTION ||
-                        entry.event === EVENTS.COMPLETE_ACTION) &&
-                        entry.payload && (
-                          <div className="mt-1 text-xs" style={{ color: '#6B7280' }}>
-                            {entry.payload.actionName && (
-                              <div className="flex items-center space-x-1">
-                                <span>Function:</span>
-                                <span
-                                  className="font-mono font-medium"
-                                  style={{ color: '#374151' }}
-                                >
-                                  {entry.payload.actionName}
-                                </span>
-                              </div>
-                            )}
-                            {entry.payload.duration && (
-                              <div className="flex items-center space-x-1 mt-0.5">
-                                <Timer size={8} />
-                                <span>Duration:</span>
-                                <span
-                                  className="font-mono font-medium"
-                                  style={{ color: '#059669' }}
-                                >
-                                  {entry.payload.duration}ms
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                      {/* Behavior execution details - corrected flow without EVALUATE_BEHAVIOR */}
-                      {(entry.event === EVENTS.START_BEHAVIOR ||
-                        entry.event === EVENTS.COMPLETE_BEHAVIOR ||
-                        entry.event === EVENTS.RETRY_BEHAVIOR) &&
-                        entry.payload && (
-                          <div className="mt-1 text-xs" style={{ color: '#6B7280' }}>
-                            {entry.payload.behaviorName && (
-                              <div className="flex items-center space-x-1">
-                                <span>Behavior:</span>
-                                <span
-                                  className="font-mono font-medium"
-                                  style={{ color: '#8B5CF6' }}
-                                >
-                                  {entry.payload.behaviorName}
-                                </span>
-                              </div>
-                            )}
-                            {entry.payload.currentActionName && (
-                              <div className="flex items-center space-x-1 mt-0.5">
-                                <Activity size={8} />
-                                <span>Current Action:</span>
-                                <span
-                                  className="font-mono font-medium"
-                                  style={{ color: '#E74C3C' }}
-                                >
-                                  {entry.payload.currentActionName}
-                                </span>
-                              </div>
-                            )}
-                            {entry.payload.actionIndex !== undefined && (
-                              <div className="flex items-center space-x-1 mt-0.5">
-                                <span>Action Index:</span>
-                                <span
-                                  className="font-mono font-medium"
-                                  style={{ color: '#059669' }}
-                                >
-                                  {entry.payload.actionIndex}
-                                </span>
-                              </div>
-                            )}
-                            {entry.event === EVENTS.COMPLETE_BEHAVIOR &&
-                              entry.payload.feedbackResult && (
-                                <div className="flex items-center space-x-1 mt-0.5">
-                                  <Eye size={8} />
-                                  <span>Feedback:</span>
-                                  <span
-                                    className="font-mono font-medium"
-                                    style={{
-                                      color:
-                                        entry.payload.feedbackResult === 'success'
-                                          ? '#059669'
-                                          : '#E74C3C',
-                                    }}
-                                  >
-                                    {entry.payload.feedbackResult}
-                                  </span>
-                                </div>
-                              )}
-                          </div>
-                        )}
-
-                      {entry.payload && Object.keys(entry.payload).length > 0 && (
-                        <details className="mt-1">
-                          <summary className="cursor-pointer text-gray-500 hover:text-gray-800 text-xs">
-                            Full Payload
-                          </summary>
-                          <pre className="text-xs p-2 mt-1 overflow-auto max-h-32 font-mono border border-gray-200 rounded text-gray-700">
-                            {JSON.stringify(entry.payload, null, 2)}
-                          </pre>
-                        </details>
-                      )}
                     </div>
                   </div>
-                ))}
+
+                  <div className="text-xs space-y-1 pl-1">
+                    <div className="flex items-center space-x-2">
+                      <span className={`font-mono ${getStateColor(entry.from)}`}>{entry.from}</span>
+                      <ArrowRight size={8} className="text-gray-400" />
+                      <span className={`font-medium font-mono ${getStateColor(entry.to)}`}>
+                        {entry.to}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

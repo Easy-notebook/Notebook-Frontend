@@ -9,8 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowRight, Sparkles, PlusCircle } from 'lucide-react';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 import usePreStageStore from '@/components/Scenario/Workflow/store/preStageStore';
-// @ts-expect-error - generalResponse may have type issues
-import { generalResponse } from '@/components/Scenario/Workflow/services/StageGeneralFunction';
+import { generalResponse } from '@/components/Scenario/Workflow/api';
 
 // ─────────── 类型定义 (Type Definitions) ───────────
 

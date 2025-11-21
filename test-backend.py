@@ -40,7 +40,7 @@ STEP_CONTENTS = [
     [
         {
             "action": "add",
-            "shotType": "dialogue",
+            "shotType": "markdown",
             "content": "## Data cleaning and pre-processing",
             "metadata": {
                 "icon": "FileText",
@@ -50,7 +50,7 @@ STEP_CONTENTS = [
         },
         {
             "action": "add",
-            "shotType": "dialogue",
+            "shotType": "markdown",
             "content": (
                 "This stage is dedicated to cleaning and pre-processing the data. "
                 "We will follow a systematic approach to ensure the data is accurate "
@@ -61,7 +61,7 @@ STEP_CONTENTS = [
         },
         {
             "action": "add",
-            "shotType": "dialogue", 
+            "shotType": "markdown", 
             "content": "我们将按照以下步骤进行数据清洗和预处理:\n\n1. 回顾背景信息\n2. 加载数据\n3. 检查数据\n4. 清洗和预处理",
             "metadata": { "hideRemoveButton": True },
             "delay": 800
@@ -80,7 +80,7 @@ STEP_CONTENTS = [
     [
         {
             "action": "add",
-            "shotType": "dialogue",
+            "shotType": "markdown",
             "content": "### Step 1: Review background information",
             "metadata": {
                 "icon": "FileText",
@@ -91,7 +91,7 @@ STEP_CONTENTS = [
         # ... 此处省略部分内容
         {
             "action": "add",
-            "shotType": "dialogue",
+            "shotType": "markdown",
             "content": (
                 "- **What does each variable measure?** The data dictionary provides descriptions "
                 "for each feature.\n"

@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import AppRouter from './router/AppRouter';
 import { getAntdTheme } from './theme/antdTheme';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { initializeWorkflowSystem } from './components/Scenario/Workflow/utils/workflowInitializer';
 
 // 配置全局 message 样式和位置
 message.config({
@@ -181,6 +182,15 @@ function AppContent(): JSX.Element {
   const antdTheme = getAntdTheme(resolvedTheme === 'dark');
 
   useEffect(() => {
+    // Initialize workflow system on app startup
+    console.log('[App] Initializing workflow system...');
+    try {
+      initializeWorkflowSystem();
+      console.log('[App] Workflow system initialized successfully');
+    } catch (error) {
+      console.error('[App] Failed to initialize workflow system:', error);
+    }
+
     // 添加自定义 message 样式
     const style = document.createElement('style');
     style.textContent = `

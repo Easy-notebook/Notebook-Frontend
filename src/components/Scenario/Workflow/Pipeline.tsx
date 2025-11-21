@@ -14,12 +14,14 @@ import { Loader2 } from 'lucide-react';
  */
 const WorkflowInProgressView = () => {
   const { workflowTemplate } = usePipelineStore();
-  const { currentState, context: fsmContext } = useWorkflowStateMachine();
+  const { currentState, stateJSON } = useWorkflowStateMachine();
+
+  // Get current location from stateJSON
+  const currentLocation = stateJSON.observation?.location?.current;
+  const currentStageId = currentLocation?.stage_id;
 
   // Find the configuration for the current stage
-  const currentStageConfig = workflowTemplate?.stages.find(
-    (stage) => stage.id === fsmContext.currentStageId
-  );
+  const currentStageConfig = workflowTemplate?.stages.find((stage) => stage.id === currentStageId);
 
   if (!currentStageConfig) {
     return (
@@ -86,9 +88,35 @@ const DSLCPipeline: React.FC<DSLCPipelineProps> = ({ onAddCell }) => {
         user_goal: preStageState.problem_description || 'Analyze data to derive insights',
         problem_description: preStageState.problem_description,
         context_description: preStageState.datasetInfo,
+        csv_file_path: preStageState.csv_file_path || '',
       };
 
+      // Initialize workflow template locally
       await initializeWorkflow(planningRequest);
+
+      // Send workflow initialization request to backend
+      console.log('[Pipeline] Sending workflow initialization to backend...');
+      const { default: useOperatorStore } = await import('@Store/operatorStore');
+      const { default: useStore } = await import('@Store/notebookStore');
+
+      const notebookId = useStore.getState().notebookId;
+      if (!notebookId) {
+        throw new Error('No notebook ID available');
+      }
+
+      // Send the planning request to backend to start workflow
+      await useOperatorStore.getState().sendOperation(notebookId, {
+        type: 'start_workflow',
+        payload: planningRequest,
+      });
+
+      console.log('[Pipeline] Workflow initialization sent to backend successfully');
+
+      // Start the workflow state machine
+      console.log('[Pipeline] Starting workflow execution...');
+      const pipelineStore = usePipelineStore.getState();
+      pipelineStore.startWorkflowExecution();
+      console.log('[Pipeline] Workflow state machine started');
     } catch (error) {
       console.error('[Pipeline] Failed to confirm problem and initialize workflow:', error);
       alert('Failed to initialize workflow. Please check the console and try again.');

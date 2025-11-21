@@ -138,12 +138,28 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
     const operationId = get().addOperation(operation);
 
     try {
+      console.log('[DEBUG] operatorStore - Sending operation:', {
+        operationId,
+        operationType: operation.type,
+        notebookId,
+      });
       // 使用统一接口发送操作，传入自定义的流处理函数
       await notebookApiIntegration.sendOperation(
         notebookId,
         operation,
         async (data: OperationResponseData) => {
           try {
+            console.log('[DEBUG] operatorStore - Received stream update:', {
+              operationId,
+              dataType: data.type,
+              hasPayload: !!data.payload,
+              hasDataPayload: !!(data as any).data?.payload,
+              payloadKeys: data.payload ? Object.keys(data.payload) : [],
+              dataPayloadKeys: (data as any).data?.payload
+                ? Object.keys((data as any).data.payload)
+                : [],
+              rawData: data,
+            });
             // 处理流式响应
             await handleStreamResponse(data, showToast);
 
@@ -160,9 +176,11 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
               operationId,
               operationType: operation.type,
             });
+            console.error('[DEBUG] operatorStore - Error processing stream update:', error);
           }
         }
       );
+      console.log('[DEBUG] operatorStore - Operation completed:', { operationId });
     } catch (error: any) {
       storeLog.error('Failed to send operation', {
         error: error.message,

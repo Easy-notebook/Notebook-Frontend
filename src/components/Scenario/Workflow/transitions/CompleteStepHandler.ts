@@ -1,0 +1,32 @@
+/** COMPLETE_STEP Handler - BEHAVIOR_COMPLETED → STEP_COMPLETED */
+import { BaseTransitionHandler } from './BaseTransitionHandler';
+
+export class CompleteStepHandler extends BaseTransitionHandler {
+  constructor() {
+    super('BEHAVIOR_COMPLETED', 'STEP_COMPLETED', 'COMPLETE_STEP');
+  }
+
+  canHandle(r: any): boolean {
+    if (typeof r !== 'object' || r._auto_trigger) return false;
+    const acts = r.actions || [];
+    return acts.some((a: any) => a?.type === 'mark_step_complete');
+  }
+
+  apply(state: Record<string, any>, _r: any): Record<string, any> {
+    const ns = this.deepCopyState(state);
+    const p = this.getProgress(ns);
+
+    if (p.behaviors?.current) {
+      if (!p.behaviors.completed) p.behaviors.completed = [];
+      p.behaviors.completed.push({ ...p.behaviors.current, completion_status: 'success' });
+      p.behaviors.current = null;
+    }
+
+    if (p.steps?.current) {
+      p.steps.current.completion_status = 'all_acceptance_criteria_passed';
+    }
+
+    this.updateFSMState(ns, 'STEP_COMPLETED', 'COMPLETE_STEP');
+    return ns;
+  }
+}

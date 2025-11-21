@@ -1,3 +1,14 @@
+/**
+ * Workflow Control Component
+ * ==========================
+ *
+ * Updated to use new state machine architecture
+ * - Uses WorkflowState enum
+ * - Uses WorkflowEvent enum
+ * - Uses stateJSON for all state access
+ * - No more context property
+ */
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { FaRedo, FaPlay, FaPause } from 'react-icons/fa';
 import { Terminal } from 'lucide-react';
@@ -5,27 +16,24 @@ import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipeli
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 import {
   useWorkflowStateMachine,
-  WORKFLOW_STATES,
-  EVENTS,
   WorkflowState,
+  WorkflowEvent,
 } from '@/components/Scenario/Workflow/store/workflowStateMachine';
-import usePreStageStore from '@/components/Scenario/Workflow/store/preStageStore';
 import { useAIAgentStore } from '@Store/AIAgentStore';
 import useRouteStore from '@Store/routeStore';
 import './WorkflowErrorCollector';
 import { extractSectionTitle } from '@Notebook/utils/String';
 
 const RUNNING_STATES: WorkflowState[] = [
-  WORKFLOW_STATES.STAGE_RUNNING,
-  WORKFLOW_STATES.STEP_RUNNING,
-  WORKFLOW_STATES.BEHAVIOR_RUNNING,
-  WORKFLOW_STATES.ACTION_RUNNING,
+  WorkflowState.STAGE_RUNNING,
+  WorkflowState.STEP_RUNNING,
+  WorkflowState.BEHAVIOR_RUNNING,
 ];
 
 const TERMINAL_STATES: WorkflowState[] = [
-  WORKFLOW_STATES.WORKFLOW_COMPLETED,
-  WORKFLOW_STATES.ERROR,
-  WORKFLOW_STATES.CANCELLED,
+  WorkflowState.COMPLETE,
+  WorkflowState.FAILED,
+  WorkflowState.CANCELED,
 ];
 
 interface DerivedState {
@@ -137,21 +145,19 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
 const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackViewMode }) => {
   const { workflowTemplate } = usePipelineStore();
   const { addThinkingLog } = useAIPlanningContextStore();
-  const {
-    currentState,
-    context: fsmContext,
-    transition,
-    startWorkflow,
-    reset,
-    cancel,
-  } = useWorkflowStateMachine();
-  const { problem_description, currentFile } = usePreStageStore();
+  const { currentState, stateJSON, transition, startWorkflow, reset, cancel } =
+    useWorkflowStateMachine();
   const { setShowCommandInput } = useAIAgentStore();
   const { currentView } = useRouteStore();
 
+  // Get current location from stateJSON
+  const currentLocation = stateJSON.observation?.location?.current;
+  const currentStageId = currentLocation?.stage_id;
+  const currentStepId = currentLocation?.step_id;
+
   const prerequisitesMet = useMemo(() => {
-    return !!(problem_description && currentFile && workflowTemplate);
-  }, [problem_description, currentFile, workflowTemplate]);
+    return !!workflowTemplate;
+  }, [workflowTemplate]);
 
   const derivedState = useMemo<DerivedState>(() => {
     if (!prerequisitesMet) {
@@ -174,17 +180,16 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
         shouldRender: false,
       };
     }
-    const stage = workflowTemplate.stages.find((s) => s.id === fsmContext.currentStageId);
-    const step = stage?.steps?.find((st) => st.id === fsmContext.currentStepId);
-    const completedStepsCount =
-      stage?.steps?.findIndex((st) => st.id === fsmContext.currentStepId) ?? 0;
+    const stage = workflowTemplate.stages.find((s: any) => s.id === currentStageId);
+    const step = stage?.steps?.find((st: any) => st.id === currentStepId);
+    const completedStepsCount = stage?.steps?.findIndex((st: any) => st.id === currentStepId) ?? 0;
     const totalSteps = stage?.steps?.length ?? 0;
 
     return {
       isExecuting: RUNNING_STATES.includes(currentState),
-      isPaused: false, // No PAUSED state in state machine - CANCELLED is terminal, not paused
+      isPaused: false, // No PAUSED state in new state machine
       isTerminal: TERMINAL_STATES.includes(currentState),
-      canRetry: currentState === WORKFLOW_STATES.BEHAVIOR_COMPLETED,
+      canRetry: currentState === WorkflowState.BEHAVIOR_COMPLETED,
       currentStepInfo: step
         ? {
             name: step.title || `步骤: ${step.id}`,
@@ -195,7 +200,7 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
           : { name: '准备中...' },
       shouldRender: true,
     };
-  }, [prerequisitesMet, workflowTemplate, fsmContext, currentState]);
+  }, [prerequisitesMet, workflowTemplate, currentStageId, currentStepId, currentState]);
 
   const isExecuting = derivedState.isExecuting;
   const isPaused = derivedState.isPaused;
@@ -207,23 +212,17 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   const onPause = () => cancel();
   const onResume = () => {
     // Resume from current context
-    if (fsmContext.currentStageId) {
-      startWorkflow({
-        stageId: fsmContext.currentStageId,
-        stepId: fsmContext.currentStepId || '',
-      });
+    if (currentStageId) {
+      startWorkflow(currentStageId);
     }
   };
-  const onRetry = () => transition(EVENTS.START_BEHAVIOR);
+  const onRetry = () => transition(WorkflowEvent.NEXT_BEHAVIOR);
   const onStart = () => {
     addThinkingLog('User started the PCS agent');
     reset();
     // Start from the first stage
     if (workflowTemplate?.stages?.[0]?.id) {
-      startWorkflow({
-        stageId: workflowTemplate.stages[0].id,
-        stepId: '',
-      });
+      startWorkflow(workflowTemplate.stages[0].id);
     }
   };
 
