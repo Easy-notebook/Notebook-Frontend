@@ -13,9 +13,7 @@ export class CommentResultAction extends ActionBase {
       return null;
     }
 
-    const metadata = { ...step.metadata, isComment: true };
-    const cellId = this.scriptStore.addCell('text', step.content, metadata);
-    console.log(`[CommentResultAction] Added comment: ${cellId}`);
+    const cellId = this.scriptStore.addNewContent2EndCellMarkdown(step.content);
     return cellId;
   }
 }

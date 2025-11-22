@@ -30,8 +30,10 @@ import {
 import SimpleDragManager from './TipTap/BlockManager/SimpleDragManager';
 import TipTapSlashCommands from './TipTap/TipTapSlashCommands';
 import { useTipTapSlashCommands } from './TipTap/useTipTapSlashCommands';
-import { EditorStyles } from './TipTap/components/EditorStyles';
+import { EditorBubbleMenu } from './TipTap/components/BubbleMenu';
+import { EditorCover } from './TipTap/components/EditorCover';
 import { EditorGlobalStyles } from './EditorGlobalStyles';
+import './editor.css';
 
 // Types
 interface TiptapNotebookEditorProps {
@@ -75,8 +77,8 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   ) => {
     // Store state
     const storeData = useStore();
-    const cells = storeData?.cells ?? [];
-    const setCells = storeData?.setCells ?? (() => {});
+    const cells = useMemo(() => storeData?.cells ?? [], [storeData?.cells]);
+    const setCells = useMemo(() => storeData?.setCells ?? (() => {}), [storeData?.setCells]);
 
     // Editor state
     const editorRef = useRef<Editor | null>(null);
@@ -90,6 +92,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     // Calculate initial content once on mount
     const initialContent = useMemo(() => {
       return convertCellsToHtml(cells);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty deps - only calculate once
 
     // Get extensions configuration
@@ -151,9 +154,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
     // Cleanup
     useEffect(() => {
+      const currentSyncTimeout = syncTimeoutRef.current;
       return () => {
-        if (syncTimeoutRef.current) {
-          clearTimeout(syncTimeoutRef.current);
+        if (currentSyncTimeout) {
+          clearTimeout(currentSyncTimeout);
         }
         if (editorRef.current) {
           editorRef.current.destroy();
@@ -198,34 +202,39 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     }
 
     return (
-      <div
-        className="tiptap-notebook-editor-container w-full h-full bg-transparent flex flex-col"
-        style={{ minHeight: '500px' }}
-      >
-        {/* Main editor content with drag manager */}
-        <SimpleDragManager editor={currentEditor}>
-          <div onClick={handleEditorClick} className="w-full h-full">
-            <EditorContent editor={editor} className="w-full h-full focus-within:outline-none" />
+      <SimpleDragManager editor={currentEditor}>
+        <div
+          className="tiptap-notebook-editor-container w-full h-full bg-transparent flex flex-col"
+          style={{ minHeight: '500px' }}
+        >
+          {/* Main editor content with drag manager */}
+          <EditorCover editor={currentEditor} />
+
+          <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
+            <div onClick={handleEditorClick} className="w-full h-full">
+              <EditorBubbleMenu editor={currentEditor} />
+              <EditorContent editor={editor} className="w-full h-full focus-within:outline-none" />
+            </div>
+            <div className="h-20 w-full flex-shrink-0"></div>
           </div>
-        </SimpleDragManager>
 
-        {/* TipTap slash commands menu */}
-        <TipTapSlashCommands
-          editor={currentEditor}
-          isOpen={slashCommands.isMenuOpen}
-          onClose={() => {
-            slashCommands.removeSlashText();
-            slashCommands.closeMenu();
-          }}
-          position={slashCommands.menuPosition}
-          searchQuery={slashCommands.searchQuery}
-          onQueryUpdate={slashCommands.updateSlashQuery}
-        />
+          {/* TipTap slash commands menu */}
+          <TipTapSlashCommands
+            editor={currentEditor}
+            isOpen={slashCommands.isMenuOpen}
+            onClose={() => {
+              slashCommands.removeSlashText();
+              slashCommands.closeMenu();
+            }}
+            position={slashCommands.menuPosition}
+            searchQuery={slashCommands.searchQuery}
+            onQueryUpdate={slashCommands.updateSlashQuery}
+          />
 
-        {/* Editor styles */}
-        <EditorStyles />
-        <EditorGlobalStyles />
-      </div>
+          {/* Editor styles */}
+          <EditorGlobalStyles />
+        </div>
+      </SimpleDragManager>
     );
   }
 );

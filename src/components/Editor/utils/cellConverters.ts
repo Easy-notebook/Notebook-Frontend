@@ -1,6 +1,7 @@
 /**
  * Cell conversion utilities for TiptapNotebookEditor
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Cell, CellType } from '@Store/notebookStore';
 import {
@@ -45,6 +46,18 @@ export function convertCellsToHtml(cells: Cell[]) {
       return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}" data-is-generating="${(cell as any).metadata?.isGenerating === true}"></div>`;
     } else if (cell.type === 'markdown') {
       // markdown cell转换为HTML
+      // For the first cell, check if it has cover/icon metadata and should be rendered as title
+      if (index === 0 && cell.content.trim().startsWith('#')) {
+        const metadata = cell.metadata || {};
+        const cover = metadata.cover || null;
+        const icon = metadata.icon || null;
+
+        // Extract title text (remove # prefix)
+        const titleText = cell.content.trim().replace(/^#+\s*/, '');
+
+        // Create title node with cover and icon attributes
+        return `<div data-type="title" data-cover="${cover || ''}" data-icon="${icon || ''}">${titleText}</div>`;
+      }
       return convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter);
     } else if (cell.type === 'image') {
       // image cell转换为HTML - 包含cellId和metadata信息
@@ -350,6 +363,33 @@ export function convertEditorStateToCells(editor: any): Cell[] {
           outputs: [],
           enableEdit: true,
         } as any);
+      } else if (node.type === 'title') {
+        // Treat title as H1 and save cover/icon to metadata
+        flushMarkdownContent();
+        const headingText = extractTextFromNode(node).trim();
+        if (headingText) {
+          const markdownHeading = `# ${headingText}`;
+          const metadata: any = {};
+
+          // Save cover and icon from title node attributes
+          if (node.attrs) {
+            if (node.attrs.cover) {
+              metadata.cover = node.attrs.cover;
+            }
+            if (node.attrs.icon) {
+              metadata.icon = node.attrs.icon;
+            }
+          }
+
+          newCells.push({
+            id: generateCellId(),
+            type: 'markdown',
+            content: markdownHeading,
+            outputs: [],
+            enableEdit: true,
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          });
+        }
       } else if (node.type === 'heading') {
         // Treat headings as independent markdown cells (#, ## ...)
         flushMarkdownContent();

@@ -1,4 +1,5 @@
 // AICommandInput.ant.responsive.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useMemo, useRef, useState, useCallback, useLayoutEffect, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,6 +23,7 @@ import { notebookApiIntegration } from '@Services/notebookServices';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 
 import type { UploadFile, AICommandInputProps, VDSQuestion } from './types';
+import { FilePreviewList } from './FilePreviewList';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPT = '.csv,.xlsx,.xls';
@@ -320,7 +322,18 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     [notebookId, i18n.language, t, setFiles, setPreStage]
   );
 
-  // Note: removeFile handler removed due to being unused.
+  const handleRemoveFile = useCallback(
+    (fileId: string) => {
+      setFiles((prev) => {
+        const newFiles = prev.filter((f) => f.id !== fileId);
+        if (newFiles.length === 0) {
+          setIsVDSMode(false);
+        }
+        return newFiles;
+      });
+    },
+    [setFiles]
+  );
 
   const onFileUpload = useCallback(() => {
     fileInputRef.current?.click();
@@ -364,9 +377,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
               console.log('[AICommandInput] Initializing workflow...');
               const { usePipelineStore } = await import(
                 '@/components/Scenario/Workflow/store/usePipelineStore'
-              );
-              const { useWorkflowStateMachine } = await import(
-                '@/components/Scenario/Workflow/store/workflowStateMachine'
               );
 
               // Initialize workflow template
@@ -499,7 +509,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     [
       files,
       isVDSMode,
-      setPreStage,
       setIsLoading,
       setActiveView,
       addAction,
@@ -521,6 +530,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
   return (
     <div className="relative mb-6">
+      <FilePreviewList files={files} onRemove={handleRemoveFile} />
       {/* 胶囊外框 */}
       <div
         className="ai-bar"

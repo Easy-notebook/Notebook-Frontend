@@ -1,8 +1,28 @@
 // eslint-disable
 import { Node, mergeAttributes } from '@tiptap/core';
-import { ReactNodeViewRenderer } from '@tiptap/react';
+import { ReactNodeViewRenderer, NodeViewProps } from '@tiptap/react';
 import { v4 as uuidv4 } from 'uuid';
 import { TextSelection } from 'prosemirror-state';
+import type { ChainedCommands } from '@tiptap/core';
+import type { EditorState } from 'prosemirror-state';
+
+interface CodeBlockAttributes {
+  language?: string;
+  code?: string;
+  cellId?: string;
+  outputs?: unknown[];
+  enableEdit?: boolean;
+}
+
+interface CommandContext {
+  commands: ChainedCommands;
+}
+
+interface InputRuleMatch {
+  state: EditorState;
+  range: { from: number; to: number };
+  match: RegExpMatchArray;
+}
 
 // CodeBlock节点定义
 export const CodeBlockExtension = Node.create({
@@ -101,10 +121,11 @@ export const CodeBlockExtension = Node.create({
   },
 
   addCommands() {
+    // @ts-expect-error - Tiptap command type definitions are complex
     return {
       setExecutableCodeBlock:
-        (attributes) =>
-        ({ commands }) => {
+        (attributes: CodeBlockAttributes) =>
+        ({ commands }: CommandContext) => {
           // 确保有cellId
           if (!attributes.cellId) {
             attributes.cellId = uuidv4();
@@ -112,8 +133,8 @@ export const CodeBlockExtension = Node.create({
           return commands.setNode(this.name, attributes);
         },
       insertExecutableCodeBlock:
-        (attributes) =>
-        ({ commands }) => {
+        (attributes: CodeBlockAttributes) =>
+        ({ commands }: CommandContext) => {
           // 确保有cellId
           if (!attributes.cellId) {
             attributes.cellId = uuidv4();
@@ -123,14 +144,14 @@ export const CodeBlockExtension = Node.create({
             attrs: attributes,
           });
         },
-    };
+    } as any;
   },
 
   addKeyboardShortcuts() {
     return {
       // 防止在代码块边缘使用 Backspace 删除整个代码块
       Backspace: ({ editor }) => {
-        const { state, view } = editor;
+        const { state } = editor;
         const { selection } = state;
         const { $from } = selection;
 
@@ -138,9 +159,10 @@ export const CodeBlockExtension = Node.create({
         for (let depth = $from.depth; depth >= 0; depth--) {
           const node = $from.node(depth);
           if (node.type.name === this.name) {
-            // 如果在代码块中且光标在开始位置，不要删除整个代码块
+            // 如果在代码块中，阻止默认删除行为
             // 让 CodeMirror 处理删除逻辑
-            return true; // 阻止默认删除行为
+            // 实际的转换逻辑在 CodeCell 的 useCellNavigation hook 中处理
+            return true;
           }
         }
         return false; // 允许默认删除行为
@@ -148,7 +170,7 @@ export const CodeBlockExtension = Node.create({
 
       // 防止在代码块边缘使用 Delete 删除整个代码块
       Delete: ({ editor }) => {
-        const { state, view } = editor;
+        const { state } = editor;
         const { selection } = state;
         const { $from } = selection;
 
@@ -172,7 +194,7 @@ export const CodeBlockExtension = Node.create({
       {
         // 匹配三个反引号后跟语言标识符，然后是回车
         find: /```(python|javascript|js|typescript|ts|bash|shell)\s*$/,
-        handler: ({ state, range, match }) => {
+        handler: ({ state, range, match }: InputRuleMatch) => {
           const language = match[1] || 'python';
           const cellId = uuidv4();
           const { tr } = state;
@@ -211,10 +233,10 @@ export const CodeBlockExtension = Node.create({
       {
         // 宽松匹配：仅输入 ``` 或 ``` 后跟部分字母也触发
         find: /```([a-zA-Z]*)\s*$/,
-        handler: ({ state, range, match }) => {
+        handler: ({ state, range, match }: InputRuleMatch) => {
           const raw = (match[1] || '').toLowerCase();
           // 语言猜测映射
-          const guess = (lang) => {
+          const guess = (lang: string) => {
             if (!lang) return 'python';
             if ('python'.startsWith(lang) || ['py', 'pyth', 'pytho'].includes(lang))
               return 'python';
@@ -254,21 +276,21 @@ export const CodeBlockExtension = Node.create({
           return tr;
         },
       },
-    ];
+    ] as any;
   },
 });
 
 // CodeBlock视图组件 - 根据类型动态选择CodeCell或HybridCell
-import React, { useCallback, useMemo, useEffect, useState, useRef } from 'react';
+import { useCallback, useMemo, useEffect, useState } from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
 import CodeCell from '../Cells/CodeCell';
 import HybridCell from '../Cells/HybridCell';
 import useStore from '@Store/notebookStore';
 
-const CodeBlockView = ({ node, updateAttributes, deleteNode, editor, getPos }) => {
+const CodeBlockView = ({ node, deleteNode, editor, getPos }: NodeViewProps) => {
   const { language, code, cellId, outputs, enableEdit } = node.attrs;
-  const { cells, updateCell, deleteCell, addCell, setCurrentCell, setEditingCellId } = useStore();
-  const [isInitialized, setIsInitialized] = useState(false);
+  const { cells } = useStore();
+  const [, setIsInitialized] = useState(false);
 
   // 创建虚拟cell对象，优先从store中获取最新内容
   const virtualCell = useMemo(() => {
@@ -291,7 +313,7 @@ const CodeBlockView = ({ node, updateAttributes, deleteNode, editor, getPos }) =
       enableEdit: enableEdit !== false,
       language: language || 'python',
     };
-  }, [cellId, cells]); // 只依赖cellId和cells，不依赖node attributes
+  }, [cellId, cells, code, enableEdit, language, outputs]); // 只依赖cellId和cells，不依赖node attributes
 
   // 添加删除保护状态
   const [isDeleting, setIsDeleting] = useState(false);
@@ -375,9 +397,6 @@ const CodeBlockView = ({ node, updateAttributes, deleteNode, editor, getPos }) =
     }
   }, [deleteNode, editor, getPos, cellId, node, isDeleting]);
 
-  // 防止重复插入的引用
-  const hasTriedToAdd = useRef(false);
-
   // 检查cell是否在store中存在，如果不存在说明这是一个新创建的代码块
   useEffect(() => {
     const existingCell = cells.find((cell) => cell.id === cellId);
@@ -392,7 +411,7 @@ const CodeBlockView = ({ node, updateAttributes, deleteNode, editor, getPos }) =
     // 此时不需要手动添加到store，因为TiptapNotebookEditor的onUpdate会处理
     console.log(`Cell ${cellId} 不在store中，等待TiptapNotebookEditor同步处理`);
     setIsInitialized(true);
-  }, [cellId, cells]);
+  }, [cellId, cells, setIsInitialized]);
 
   // 注意：不再监听cell内容变化同步到node attributes
   // 这样避免了代码编辑时触发tiptap的onUpdate事件

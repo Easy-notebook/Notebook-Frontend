@@ -156,6 +156,8 @@ export interface NotebookStoreActions {
   updateTitle: (title: string) => void;
   updateCurrentCellDescription: (description: string) => void;
   addNewContent2CurrentCellDescription: (content: string) => void;
+  addNewContent2EndCellMarkdown: (content: string) => void;
+  addNewContent2EndCellCode: (content: string) => void;
   deleteCell: (cellId: string) => void;
   updateCell: (cellId: string, newContent: string) => void;
   updateCellOutputs: (cellId: string, outputs: OutputItem[]) => void;
@@ -717,7 +719,7 @@ const useStore = create(
 
         const updatedDescription = `${currentCell.description || ''}${content}`;
         get().updateCurrentCellDescription(updatedDescription);
-        showToast({ message: `内容已添加到单元格 ${currentCellId} 的描述`, type: 'success' });
+        showToast({ description: `内容已添加到单元格 ${currentCellId} 的描述` });
       },
 
       deleteCell: (cellId: string) =>
@@ -869,12 +871,15 @@ const useStore = create(
       runSingleCell: async (cellId: string): Promise<RunResult> => {
         const { notebookId } = get();
         if (!notebookId) {
-          showToast({ message: '未找到笔记本 ID', type: 'error' });
+          showToast({ description: '未找到笔记本 ID', variant: 'destructive' });
           return { success: false, error: 'Notebook ID not found' };
         }
         const result = await useCodeStore.getState().executeCell(cellId);
         if (!result.success) {
-          showToast({ message: `单元格 ${cellId} 执行失败: ${result.error}`, type: 'error' });
+          showToast({
+            description: `单元格 ${cellId} 执行失败: ${result.error}`,
+            variant: 'destructive',
+          });
         }
         return result;
       },
@@ -884,7 +889,7 @@ const useStore = create(
         const { notebookId } = state;
 
         if (!notebookId) {
-          showToast({ message: '未找到笔记本 ID', type: 'error' });
+          showToast({ description: '未找到笔记本 ID', variant: 'destructive' });
           return;
         }
 
@@ -919,16 +924,16 @@ const useStore = create(
         const state = get();
         const currentCellId = state.currentCellId;
         if (!currentCellId) {
-          showToast({ message: '当前没有选中的单元格', type: 'error' });
+          showToast({ description: '当前没有选中的单元格', variant: 'destructive' });
           return;
         }
         const currentCell = state.cells.find((c) => c.id === currentCellId);
         if (!currentCell) {
-          showToast({ message: '找不到当前选中的单元格', type: 'error' });
+          showToast({ description: '找不到当前选中的单元格', variant: 'destructive' });
           return;
         }
         if (currentCell.type !== 'code') {
-          showToast({ message: '当前选中的单元格不是代码单元格', type: 'error' });
+          showToast({ description: '当前选中的单元格不是代码单元格', variant: 'destructive' });
           return;
         }
         await get().runSingleCell(currentCellId);
@@ -956,7 +961,7 @@ const useStore = create(
           if (firstPhase) set({ currentPhaseId: firstPhase.id, currentStepIndex: 0 });
         }
 
-        showToast({ message: `新建 ${type} 单元格已添加`, type: 'success' });
+        showToast({ description: `新建 ${type} 单元格已添加` });
         return id;
       },
 
@@ -1011,7 +1016,7 @@ const useStore = create(
           if (firstPhase) set({ currentPhaseId: firstPhase.id, currentStepIndex: 0 });
         }
 
-        showToast({ message: `新建 ${type} 单元格已添加`, type: 'success' });
+        showToast({ description: `新建 ${type} 单元格已添加` });
         return id;
       },
 
@@ -1060,23 +1065,74 @@ const useStore = create(
           if (firstPhase) set({ currentPhaseId: firstPhase.id, currentStepIndex: 0 });
         }
 
-        showToast({ message: `新建 ${type} 单元格已添加`, type: 'success' });
+        showToast({ description: `新建 ${type} 单元格已添加` });
       },
 
       addNewContent2CurrentCell: (content: string) => {
         const currentCellId = get().currentCellId;
         if (!currentCellId) {
-          showToast({ message: '当前没有选中的单元格', type: 'error' });
+          showToast({ description: '当前没有选中的单元格', variant: 'destructive' });
           return;
         }
         const currentCell = get().cells.find((c) => c.id === currentCellId);
         if (!currentCell) {
-          showToast({ message: '找不到当前选中的单元格', type: 'error' });
+          showToast({ description: '找不到当前选中的单元格', variant: 'destructive' });
           return;
         }
         const updatedContent = `${currentCell.content}${content}`;
         get().updateCell(currentCellId, updatedContent);
-        showToast({ message: `内容已添加到单元格 ${currentCellId}`, type: 'success' });
+        showToast({ description: `内容已添加到单元格 ${currentCellId}` });
+      },
+
+      addNewContent2EndCellMarkdown: (content: string) => {
+        const state = get();
+        const lastCell = state.cells[state.cells.length - 1];
+
+        // Check if we need a new cell:
+        // 1. No cells exist
+        // 2. Last cell is NOT markdown
+        // 3. Last cell IS markdown but content starts with # (title)
+        const shouldCreateNew =
+          !lastCell ||
+          lastCell.type !== 'markdown' ||
+          (lastCell.type === 'markdown' && lastCell.content.trim().startsWith('#'));
+
+        if (shouldCreateNew) {
+          get().addNewCell2End('markdown', '', true);
+          // After creating new cell, append content to it (it becomes the last/current cell)
+          // addNewCell2End sets currentCellId to the new cell
+          const newCurrentId = get().currentCellId;
+          if (newCurrentId) {
+            get().updateCell(newCurrentId, content);
+          }
+        } else {
+          // Append to last markdown cell
+          const updatedContent = `${lastCell.content}${content}`;
+          get().updateCell(lastCell.id, updatedContent);
+        }
+      },
+
+      addNewContent2EndCellCode: (content: string) => {
+        const state = get();
+        const lastCell = state.cells[state.cells.length - 1];
+
+        // Check if we need a new cell:
+        // 1. No cells exist
+        // 2. Last cell is NOT code
+        const shouldCreateNew = !lastCell || lastCell.type !== 'code';
+
+        if (shouldCreateNew) {
+          get().addNewCell2End('code', '', true);
+          // After creating new cell, append content to it
+          const newCurrentId = get().currentCellId;
+          if (newCurrentId) {
+            get().updateCell(newCurrentId, content);
+          }
+        } else {
+          // Append to last code cell
+          const updatedContent = `${lastCell.content}${content}`;
+          get().updateCell(lastCell.id, updatedContent);
+        }
       },
 
       getCurrentCellType: (): CellType => {
@@ -1413,11 +1469,11 @@ const useStore = create(
             cellCount: finalCells.length,
           });
 
-          showToast({ message: `已加载笔记本: ${notebookTitle}`, type: 'success' });
+          showToast({ description: `已加载笔记本: ${notebookTitle}` });
           return true;
         } catch (error) {
           notebookLog.error('Failed to load notebook', { notebookId, error });
-          showToast({ message: `加载笔记本失败: ${String(error)}`, type: 'error' });
+          showToast({ description: `加载笔记本失败: ${String(error)}`, variant: 'destructive' });
           return false;
         }
       },
@@ -1435,10 +1491,10 @@ const useStore = create(
             timestamp: Date.now(),
           });
 
-          showToast({ message: '笔记本已保存', type: 'success' });
+          showToast({ description: '笔记本已保存' });
         } catch (error) {
           notebookLog.error('Failed to save notebook', { error });
-          showToast({ message: `保存失败: ${String(error)}`, type: 'error' });
+          showToast({ description: `保存失败: ${String(error)}`, variant: 'destructive' });
         }
       },
     };

@@ -1,11 +1,13 @@
 // components/Notebook/useImportNotebook.js
 /* eslint-disable no-undef */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import useStore from '@Store/notebookStore';
 import { useToast } from '@/components/UI/Toast';
 import { notebookApiIntegration } from '@Services/notebookServices';
+import { parseMarkdownContent } from '@/components/Editor/utils/markdownParser';
 
 /**
  * 自定义 Hook 处理 Notebook 导入逻辑，包括自定义格式和 Jupyter Notebook 格式。
@@ -50,65 +52,6 @@ const ImportNotebook4JsonOrJupyter = () => {
       });
     }
   }, [setNotebookId, setError, toast]);
-
-  /**
-   * 解析 Markdown 内容，分离标题和正文，并根据标题层级管理堆栈结构
-   * @param {string} content - Markdown 内容
-   * @param {Array} stack - 当前的标题堆栈
-   * @returns {Array} - 分离后的单元格数组
-   */
-  const parseMarkdownContent = (content, stack) => {
-    const lines = content.split('\n');
-    const cells = [];
-    let currentContent = [];
-
-    lines.forEach((line) => {
-      const titleMatch = line.match(/^(#{1,6})\s+(.*)/);
-      if (titleMatch) {
-        // 如果当前有正文内容，先将其作为一个单元格添加
-        if (currentContent.length > 0) {
-          cells.push({
-            type: 'markdown',
-            content: currentContent.join('\n'),
-            id: `content-${uuidv4()}`,
-          });
-          currentContent = [];
-        }
-
-        const hashes: string = titleMatch[1];
-        const titleText: string = titleMatch[2].trim();
-        let level: number = hashes.length;
-
-        // 根据堆栈管理标题层级
-        while (stack.length > 0 && stack[stack.length - 1] >= level) {
-          stack.pop();
-        }
-        const currentLevel: number = stack.length + 1;
-        stack.push(level);
-
-        // 创建标题单元格
-        cells.push({
-          type: 'markdown',
-          content: `${'#'.repeat(currentLevel)} ${titleText}`,
-          id: `title-${uuidv4()}`,
-          level: currentLevel, // 记录标题级别
-        });
-      } else {
-        currentContent.push(line);
-      }
-    });
-
-    // 添加剩余的正文内容
-    if (currentContent.length > 0) {
-      cells.push({
-        type: 'markdown',
-        content: currentContent.join('\n'),
-        id: `content-${uuidv4()}`,
-      });
-    }
-
-    return cells;
-  };
 
   // Import Custom Notebook format
   const importCustomNotebook = useCallback(
@@ -178,6 +121,7 @@ const ImportNotebook4JsonOrJupyter = () => {
       setCurrentStepIndex,
       setViewMode,
       setCurrentRunningPhaseId,
+      set,
     ]
   );
 
@@ -278,6 +222,7 @@ const ImportNotebook4JsonOrJupyter = () => {
       setCurrentStepIndex,
       setViewMode,
       setCurrentRunningPhaseId,
+      set,
     ]
   );
 

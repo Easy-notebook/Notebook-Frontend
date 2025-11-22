@@ -23,13 +23,7 @@ const CreateMode: React.FC<CreateModeProps> = ({ className = '', readOnly = fals
     // Render Tiptap-based notebook editor
     return (
       <div className={`w-full flex flex-col ${className}`}>
-        <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col">
-          <div className="h-10 w-full flex-shrink-0"></div>
-          <div className="relative flex flex-col" style={{ minHeight: '500px' }}>
-            <TiptapNotebookEditor className="w-full" placeholder="Untitled" readOnly={readOnly} />
-          </div>
-          <div className="h-20 w-full flex-shrink-0"></div>
-        </div>
+        <TiptapNotebookEditor className="w-full" placeholder="Untitled" readOnly={readOnly} />
       </div>
     );
   } else {

@@ -62,6 +62,19 @@ export const useCellNavigation = (
       const navCells = state.getCurrentViewCells ? state.getCurrentViewCells() : state.cells;
       const currentIndex = navCells.findIndex((c) => c.id === cell.id);
 
+      // Backspace at start of empty code cell: Convert to markdown
+      if (event.key === 'Backspace' && isCursorAtDocStart() && !cell.content.trim()) {
+        event.preventDefault();
+        // Convert code cell to markdown cell
+        const { updateCellType } = useStore.getState();
+        updateCellType(cell.id, 'markdown');
+        // Focus the markdown cell for editing
+        setTimeout(() => {
+          setEditingCellId(cell.id);
+        }, 50);
+        return 'convert';
+      }
+
       // Ctrl+Enter: Execute cell
       if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault();
@@ -180,6 +193,7 @@ export const useCellNavigation = (
     },
     [
       cell.id,
+      cell.content,
       cells,
       setCurrentCell,
       setEditingCellId,

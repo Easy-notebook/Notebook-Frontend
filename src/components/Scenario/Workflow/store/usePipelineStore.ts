@@ -171,7 +171,11 @@ interface PipelineStoreActions {
    * This marks the workflow as active and triggers the state machine
    * to begin execution.
    */
-  startWorkflowExecution: () => void;
+  startWorkflowExecution: (userData?: {
+    user_problem?: string;
+    user_submit_files?: string[];
+    context_description?: string;
+  }) => void;
 
   // ==============================================
   // Reset

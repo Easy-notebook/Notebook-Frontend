@@ -16,7 +16,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
   const [isDragging] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const hideTimeoutRef = useRef<number | null>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -161,10 +161,35 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
       if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
       e.preventDefault();
 
-      const files = Array.from(e.dataTransfer.files as any as File[]);
+      const files = Array.from(e.dataTransfer.files);
+
+      // Separate Markdown files from others
+      const markdownFiles = files.filter((f) => f.name.toLowerCase().endsWith('.md'));
+      const otherFiles = files.filter((f) => !f.name.toLowerCase().endsWith('.md'));
+
+      // Handle Markdown files (Import content)
+      if (markdownFiles.length > 0) {
+        const { parseMarkdownContent } = await import('@/components/Editor/utils/markdownParser');
+        const { convertCellsToHtml } = await import('../../utils/cellConverters');
+
+        for (const file of markdownFiles) {
+          const text = await file.text();
+          const parsedCells = parseMarkdownContent(text);
+          const html = convertCellsToHtml(parsedCells);
+
+          if (editor) {
+            editor.chain().focus().insertContent(html).run();
+          }
+        }
+      }
+
+      // Handle other files (Upload as assets)
+      if (otherFiles.length === 0) return;
+
+      const filesToUpload = otherFiles;
 
       const uploadConfig = {
-        mode: 'restricted',
+        mode: 'restricted' as const,
         maxFileSize: 50 * 1024 * 1024,
         maxFiles: files.length,
         allowedTypes: [
@@ -216,7 +241,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
       try {
         await handleFileUpload({
           notebookId,
-          files,
+          files: filesToUpload,
           notebookApiIntegration,
           uploadConfig,
           setUploading: () => {},
@@ -232,7 +257,6 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
               const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].some((ext) =>
                 lower.endsWith(ext)
               );
-              const relPath = `.assets/${name}`;
               const url = `${Backend_BASE_URL}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
               if (isImage) {
                 try {
@@ -266,7 +290,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
             });
           },
           cellId: '',
-          abortControllerRef: abortControllerRef as any,
+          abortControllerRef,
           fetchFileList: async () => {
             try {
               await notebookApiIntegration.listFiles(notebookId);
@@ -282,20 +306,20 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
 
     container.addEventListener('mousemove', handleMouseMove);
     container.addEventListener('mouseleave', handleMouseLeave);
-    container.addEventListener('dragover', handleDragOver as any);
-    container.addEventListener('drop', handleDrop as any);
+    container.addEventListener('dragover', handleDragOver);
+    container.addEventListener('drop', handleDrop);
 
     return () => {
       container.removeEventListener('mousemove', handleMouseMove);
       container.removeEventListener('mouseleave', handleMouseLeave);
-      container.removeEventListener('dragover', handleDragOver as any);
-      container.removeEventListener('drop', handleDrop as any);
+      container.removeEventListener('dragover', handleDragOver);
+      container.removeEventListener('drop', handleDrop);
       clearHideTimeout();
     };
   }, [editor, showToolbarForElement, scheduleHide, clearHideTimeout, isDragging, notebookId]);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative h-full w-full">
       {children}
 
       {/* 简化的工具栏 - 已注释 */}
