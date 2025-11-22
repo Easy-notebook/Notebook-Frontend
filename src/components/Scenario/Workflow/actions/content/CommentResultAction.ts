@@ -12,7 +12,8 @@ export class CommentResultAction extends ActionBase {
       console.warn('[CommentResultAction] No content provided');
       return null;
     }
-
+    // remove ‘\n' for ' '
+    step.content = step.content.replace(/\n/g, ' ');
     const cellId = this.scriptStore.addNewContent2EndCellMarkdown(step.content);
     return cellId;
   }

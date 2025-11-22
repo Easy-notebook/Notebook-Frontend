@@ -69,6 +69,13 @@ export class WorkflowAPIClient {
       step_id: stateJSON.observation?.location?.current?.step_id,
       behavior_id: stateJSON.observation?.location?.current?.behavior_id,
     });
+    const nb = (stateJSON as any).state?.notebook;
+    console.log(`[WorkflowAPIClient] Notebook summary:`, {
+      notebook_id: nb?.notebook_id ?? null,
+      cell_count: nb?.cell_count ?? 0,
+      cells_len: Array.isArray(nb?.cells) ? nb.cells.length : 0,
+      last_cell_type: nb?.last_cell_type ?? null,
+    });
     console.log(`[WorkflowAPIClient] Variables:`, stateJSON.state?.variables);
     console.log(`[WorkflowAPIClient] FULL PAYLOAD:`);
     console.log(payload);
@@ -136,6 +143,13 @@ export class WorkflowAPIClient {
       stage_id: stateJSON.observation?.location?.current?.stage_id,
       step_id: stateJSON.observation?.location?.current?.step_id,
       behavior_id: stateJSON.observation?.location?.current?.behavior_id,
+    });
+    const nb = (stateJSON as any).state?.notebook;
+    console.log(`[WorkflowAPIClient] Notebook summary:`, {
+      notebook_id: nb?.notebook_id ?? null,
+      cell_count: nb?.cell_count ?? 0,
+      cells_len: Array.isArray(nb?.cells) ? nb.cells.length : 0,
+      last_cell_type: nb?.last_cell_type ?? null,
     });
     console.log(`[WorkflowAPIClient] FULL PAYLOAD:`);
     console.log(payload);
@@ -250,6 +264,13 @@ export class WorkflowAPIClient {
       stage_id: stateJSON.observation?.location?.current?.stage_id,
       step_id: stateJSON.observation?.location?.current?.step_id,
       behavior_id: stateJSON.observation?.location?.current?.behavior_id,
+    });
+    const nb = (stateJSON as any).state?.notebook;
+    console.log(`[WorkflowAPIClient] Notebook summary:`, {
+      notebook_id: nb?.notebook_id ?? null,
+      cell_count: nb?.cell_count ?? 0,
+      cells_len: Array.isArray(nb?.cells) ? nb.cells.length : 0,
+      last_cell_type: nb?.last_cell_type ?? null,
     });
     console.log(`[WorkflowAPIClient] Variables:`, stateJSON.state?.variables);
     console.log(`[WorkflowAPIClient] FULL PAYLOAD:`);

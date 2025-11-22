@@ -20,6 +20,7 @@ import {
   getTransitionCoordinator,
   initializeTransitionCoordinator,
 } from '../transitions/TransitionCoordinator';
+import type { NotebookState } from '../types/StateJSON';
 
 // ==============================================
 // TYPES & INTERFACES
@@ -126,6 +127,9 @@ interface WorkflowStateMachineActions {
   setState: (newState: StateJSON) => void;
   getCurrentLocation: () => StateJSON['observation']['location']['current'];
 
+  // Notebook state sync
+  syncNotebookState: (notebookState: Partial<NotebookState>) => void;
+
   // API integration
   handleAPIResponse: (apiResponse: any, apiType?: string) => void;
 }
@@ -205,6 +209,8 @@ const createInitialStateJSON = (): StateJSON => ({
       cell_count: 0,
       last_cell_type: null,
       last_output: null,
+      cells: [],
+      execution_count: 0,
     },
     FSM: {
       state: WorkflowState.IDLE,
@@ -344,6 +350,26 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
   getCurrentLocation: () => {
     return get().stateJSON.observation.location.current;
+  },
+
+  // ==============================================
+  // Notebook State Sync
+  // ==============================================
+  syncNotebookState: (notebookState: Partial<NotebookState>) => {
+    const currentStateJSON = get().stateJSON;
+    const updatedStateJSON = {
+      ...currentStateJSON,
+      state: {
+        ...currentStateJSON.state,
+        notebook: {
+          ...currentStateJSON.state.notebook,
+          ...notebookState,
+        },
+      },
+    };
+
+    set({ stateJSON: updatedStateJSON });
+    console.log('[FSM] Notebook state synced:', notebookState);
   },
 
   // ==============================================

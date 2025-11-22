@@ -21,10 +21,11 @@ export const TitleExtension = Node.create({
       icon: {
         default: null,
       },
-      id: {
+      cellId: {
         default: null,
-        parseHTML: (element) => element.getAttribute('id'),
-        renderHTML: (attributes) => (attributes.id ? { id: attributes.id } : {}),
+        parseHTML: (element) => element.getAttribute('data-cell-id') || element.getAttribute('id'),
+        renderHTML: (attributes) =>
+          attributes.cellId ? { 'data-cell-id': attributes.cellId } : {},
       },
     };
   },
@@ -32,9 +33,19 @@ export const TitleExtension = Node.create({
   parseHTML() {
     return [
       {
+        tag: 'div[data-type="title"]',
+        getAttrs: (node) => ({
+          cellId: (node as HTMLElement).getAttribute('data-cell-id'),
+          cover: (node as HTMLElement).getAttribute('data-cover'),
+          icon: (node as HTMLElement).getAttribute('data-icon'),
+        }),
+      },
+      {
         tag: 'h1',
         getAttrs: (node) => ({
-          id: (node as HTMLElement).getAttribute('id'),
+          cellId:
+            (node as HTMLElement).getAttribute('data-cell-id') ||
+            (node as HTMLElement).getAttribute('id'),
           cover: (node as HTMLElement).getAttribute('data-cover'),
           icon: (node as HTMLElement).getAttribute('data-icon'),
         }),

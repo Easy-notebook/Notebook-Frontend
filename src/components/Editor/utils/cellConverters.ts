@@ -55,8 +55,8 @@ export function convertCellsToHtml(cells: Cell[]) {
         // Extract title text (remove # prefix)
         const titleText = cell.content.trim().replace(/^#+\s*/, '');
 
-        // Create title node with cover and icon attributes
-        return `<div data-type="title" data-cover="${cover || ''}" data-icon="${icon || ''}">${titleText}</div>`;
+        // Create title node with cover, icon, and cellId attributes
+        return `<div data-type="title" data-cover="${cover || ''}" data-icon="${icon || ''}" data-cell-id="${cell.id}">${titleText}</div>`;
       }
       return convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter);
     } else if (cell.type === 'image') {
@@ -381,8 +381,11 @@ export function convertEditorStateToCells(editor: any): Cell[] {
             }
           }
 
+          // Use cellId from node attrs if available, otherwise generate new one
+          const cellId = node.attrs?.cellId || generateCellId();
+
           newCells.push({
-            id: generateCellId(),
+            id: cellId,
             type: 'markdown',
             content: markdownHeading,
             outputs: [],

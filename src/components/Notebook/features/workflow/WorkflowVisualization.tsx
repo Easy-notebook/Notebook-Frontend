@@ -1,5 +1,4 @@
 import React from 'react';
-import { extractSectionTitle } from '@Notebook/utils/String';
 
 const WorkflowVisualization: React.FC<{ className?: string }> = ({ className = '' }) => {
   // Placeholder visualization (migrated from MainContainer)

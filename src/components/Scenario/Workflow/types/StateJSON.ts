@@ -116,6 +116,23 @@ export interface Observation {
 }
 
 /**
+ * Notebook Cell (simplified from notebookStore Cell type)
+ */
+export interface NotebookCell {
+  id: string;
+  type: 'code' | 'markdown';
+  content: string;
+  outputs?: any[];
+  enable_edit?: boolean;
+  description?: string;
+  metadata?: any;
+  language?: string;
+  could_visible_in_writing_mode?: boolean;
+  execution_count?: number | null;
+  isUpdate?: boolean;
+}
+
+/**
  * Notebook state
  */
 export interface NotebookState {
@@ -124,6 +141,8 @@ export interface NotebookState {
   cell_count: number;
   last_cell_type: string | null;
   last_output: any;
+  cells?: NotebookCell[];
+  execution_count?: number;
 }
 
 /**
@@ -245,6 +264,8 @@ export function createInitialStateJSON(
         cell_count: 0,
         last_cell_type: null,
         last_output: null,
+        cells: [],
+        execution_count: 0,
       },
       FSM: {
         state: 'IDLE',

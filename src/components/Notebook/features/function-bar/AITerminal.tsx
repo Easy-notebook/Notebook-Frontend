@@ -5,8 +5,36 @@ import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
 import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
-import { Command } from 'lucide-react';
+import { Command, Paperclip, X, FileText } from 'lucide-react';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
+import useCodeStore from '@Store/codeStore';
+import { notebookApiIntegration } from '@Services/notebookServices';
+
+// File upload types
+interface UploadFile {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  file: File;
+}
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_EXTENSIONS = [
+  '.csv',
+  '.xlsx',
+  '.xls',
+  '.jpg',
+  '.png',
+  '.jpeg',
+  '.gif',
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.txt',
+  '.md',
+];
 
 const CommandInput: React.FC = () => {
   const {
@@ -35,8 +63,12 @@ const CommandInput: React.FC = () => {
   const modalRef = useRef(null);
   const textareaRef = useRef(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [topPosition, setTopPosition] = useState('75%');
+  const [files, setFiles] = useState<UploadFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // 动态调整文本框高度
   const adjustTextareaHeight = useCallback(() => {
@@ -126,6 +158,7 @@ const CommandInput: React.FC = () => {
       if (e.key === 'Escape') {
         setShowCommandInput(false);
         setInput('');
+        setFiles([]);
       }
     };
 
@@ -133,6 +166,7 @@ const CommandInput: React.FC = () => {
       if (modalRef.current && !modalRef.current.contains(e.target)) {
         setShowCommandInput(false);
         setInput('');
+        setFiles([]);
       }
     };
 
@@ -236,6 +270,113 @@ const CommandInput: React.FC = () => {
     [_inferGoalsFromCommand]
   );
 
+  // File upload handlers
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFiles = Array.from(e.target.files ?? []);
+      if (!selectedFiles.length) return;
+
+      setIsUploading(true);
+      try {
+        const validFiles: UploadFile[] = [];
+
+        for (const file of selectedFiles) {
+          // Validate file extension
+          const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+          if (!ALLOWED_EXTENSIONS.includes(ext)) {
+            alert(`File type not allowed: ${file.name}`);
+            continue;
+          }
+
+          // Validate file size
+          if (file.size > MAX_FILE_SIZE) {
+            alert(`File too large (max 10MB): ${file.name}`);
+            continue;
+          }
+
+          // Ensure notebookId exists
+          let currentNotebookId = notebookId;
+          if (!currentNotebookId) {
+            currentNotebookId = await notebookApiIntegration.initializeNotebook();
+            useStore.getState().setNotebookId(currentNotebookId);
+            useCodeStore.getState().setKernelReady(true);
+          }
+
+          // Initialize kernel
+          await useCodeStore.getState().initializeKernel();
+
+          // Upload file
+          const uploadConfig = {
+            mode: 'unrestricted',
+            allowedTypes: ALLOWED_EXTENSIONS,
+            maxFileSize: MAX_FILE_SIZE,
+            targetDir: '.assets',
+          };
+
+          const result = await notebookApiIntegration.uploadFiles(
+            currentNotebookId!,
+            [file],
+            uploadConfig
+          );
+
+          if (result && (result as any).status === 'ok') {
+            validFiles.push({
+              id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              url: URL.createObjectURL(file),
+              file,
+            });
+          }
+        }
+
+        setFiles((prev) => [...prev, ...validFiles]);
+      } catch (err: any) {
+        console.error('File upload error:', err);
+        alert('Upload failed: ' + err.message);
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    },
+    [notebookId]
+  );
+
+  const handleRemoveFile = useCallback((fileId: string) => {
+    setFiles((prev) => prev.filter((f) => f.id !== fileId));
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      if (!droppedFiles.length) return;
+
+      // Simulate file input change
+      const fakeEvent = {
+        target: { files: droppedFiles },
+      } as any;
+      await handleFileChange(fakeEvent);
+    },
+    [handleFileChange]
+  );
+
   const handleSubmit = useCallback(
     async (command) => {
       try {
@@ -256,6 +397,7 @@ const CommandInput: React.FC = () => {
             cellId: currentCellId,
             viewMode,
             onProcess: false,
+            attachedFiles: files,
           };
           addAction(actionData);
 
@@ -308,6 +450,7 @@ const CommandInput: React.FC = () => {
               current_step_index: currentStepIndex,
               content: command,
               commandId: commandId,
+              files,
               // 添加记忆上下文
               ...commandMemoryContext,
             },
@@ -326,6 +469,7 @@ const CommandInput: React.FC = () => {
             cellId: currentCellId,
             viewMode,
             onProcess: true,
+            attachedFiles: files,
           };
           addQA(qaData);
           const action = createUserAskQuestionAction(command, qaId, currentCellId);
@@ -385,6 +529,7 @@ const CommandInput: React.FC = () => {
               related_qas: qasToShow,
               related_actions: actionsToShow,
               related_cells: getCurrentViewCells(),
+              files,
               // 添加记忆上下文
               ...memoryContext,
             },
@@ -392,6 +537,9 @@ const CommandInput: React.FC = () => {
           console.log('AITerminal: 发送最终payload', finalPayload);
           useOperatorStore.getState().sendOperation(notebookId, finalPayload);
         }
+
+        // Clear files after successful submit
+        setFiles([]);
       } catch (error) {
         console.error('Error in handleSubmit:', error);
       } finally {
@@ -415,6 +563,7 @@ const CommandInput: React.FC = () => {
       setIsRightSidebarCollapsed,
       _inferGoalsFromCommand,
       _inferGoalsFromQuestion,
+      files,
     ]
   );
   const handleKeyDown = useCallback(
@@ -445,6 +594,9 @@ const CommandInput: React.FC = () => {
           backdropFilter: 'blur(4px)',
           WebkitBackdropFilter: 'blur(4px)',
         }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {/* Container with solid background */}
         <div
@@ -453,8 +605,71 @@ const CommandInput: React.FC = () => {
             boxShadow: isFocused ? '0 4px 18px rgba(0,0,0,0.12)' : '0 1px 6px rgba(0,0,0,0.08)',
             transition: 'transform .18s, box-shadow .18s',
             transform: isFocused ? 'scale(1.01)' : 'none',
+            border: isDragging ? '2px dashed #2d7a5c' : 'none',
           }}
         >
+          {/* Drag overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 z-50 bg-theme-50/90 dark:bg-theme-900/90 flex items-center justify-center">
+              <div className="text-theme-600 dark:text-theme-400 text-lg font-medium">
+                Drop files here...
+              </div>
+            </div>
+          )}
+
+          {/* File preview list */}
+          {files.length > 0 && (
+            <div className="relative z-10 px-6 pt-4 pb-2">
+              <div className="flex flex-wrap gap-2">
+                {files.map((file) => {
+                  const isImage = file.type.startsWith('image/');
+                  return (
+                    <div
+                      key={file.id}
+                      className="group relative flex items-center gap-2 p-2 pr-8 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      style={{ maxWidth: '200px' }}
+                    >
+                      {/* File icon/preview */}
+                      <div className="flex-shrink-0 w-8 h-8 rounded overflow-hidden bg-gray-200 dark:bg-gray-600 flex items-center justify-center">
+                        {isImage ? (
+                          <img
+                            src={file.url}
+                            alt={file.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                        )}
+                      </div>
+
+                      {/* File info */}
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate"
+                          title={file.name}
+                        >
+                          {file.name}
+                        </p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+
+                      {/* Remove button */}
+                      <button
+                        onClick={() => handleRemoveFile(file.id)}
+                        className="absolute right-1 top-1 p-0.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full opacity-0 group-hover:opacity-100 transition-all"
+                        title="Remove file"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Content */}
           <div className="relative z-10 flex items-start gap-3 px-6 py-4">
             <Command
@@ -482,6 +697,16 @@ const CommandInput: React.FC = () => {
                 caretColor: isFocused ? '#2d7a5c' : undefined,
               }}
             />
+
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept={ALLOWED_EXTENSIONS.join(',')}
+              multiple
+            />
           </div>
 
           {/* Mode indicator */}
@@ -493,9 +718,19 @@ const CommandInput: React.FC = () => {
             </div>
           )}
 
-          {/* Hint */}
-          <div className="absolute right-6 top-4 text-xs text-gray-400 dark:text-gray-500 z-10">
-            Shift + Enter for new line
+          {/* Hints */}
+          <div className="absolute right-6 top-4 flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 z-10">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="flex items-center gap-1 hover:text-theme-600 dark:hover:text-theme-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Upload files"
+            >
+              <Paperclip className="w-3 h-3" />
+              {isUploading ? 'Uploading...' : 'Attach'}
+            </button>
+            <span>|</span>
+            <span>Shift + Enter for new line</span>
           </div>
         </div>
       </div>

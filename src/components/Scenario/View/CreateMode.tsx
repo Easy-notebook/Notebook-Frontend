@@ -33,7 +33,7 @@ const CreateMode: React.FC<CreateModeProps> = ({ className = '', readOnly = fals
         <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col">
           <div className="h-10 w-full flex-shrink-0"></div>
           <div className="relative flex flex-col" style={{ minHeight: '500px' }}>
-            <JupyterNotebookEditor className="w-full" placeholder="Untitled" readOnly={readOnly} />
+            <JupyterNotebookEditor className="w-full" readOnly={readOnly} />
           </div>
           <div className="h-20 w-full flex-shrink-0"></div>
         </div>

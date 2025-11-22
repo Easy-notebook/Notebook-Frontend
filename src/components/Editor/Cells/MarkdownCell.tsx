@@ -71,14 +71,14 @@ interface MarkdownImageProps {
 }
 
 const MarkdownImage: React.FC<MarkdownImageProps> = ({ alt, src, title }) => (
-  <div style={{ textAlign: 'center' }}>
+  <span style={{ display: 'block', textAlign: 'center' }}>
     <img
       src={src}
       alt={alt}
       title={title}
       style={{ maxWidth: '100%', height: 'auto', display: 'inline-block' }}
     />
-  </div>
+  </span>
 );
 
 interface MarkdownTableProps {
@@ -86,7 +86,10 @@ interface MarkdownTableProps {
   [key: string]: unknown;
 }
 const MarkdownTable: React.FC<MarkdownTableProps> = ({ children, ...props }) => (
-  <div className="table-container" style={{ overflowX: 'auto', margin: '1rem 0' }}>
+  <span
+    className="table-container"
+    style={{ display: 'block', overflowX: 'auto', margin: '1rem 0' }}
+  >
     <table
       {...props}
       style={{
@@ -97,7 +100,7 @@ const MarkdownTable: React.FC<MarkdownTableProps> = ({ children, ...props }) => 
     >
       {children}
     </table>
-  </div>
+  </span>
 );
 
 interface MarkdownTableRowProps {

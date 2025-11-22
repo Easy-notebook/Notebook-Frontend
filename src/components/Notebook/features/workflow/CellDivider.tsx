@@ -1,9 +1,6 @@
 import { useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PlusCircle, Sparkles } from 'lucide-react';
-import { Acrylic } from '@/components/UI/card';
-
-const VUE_SECONDARY = '#35495E';
 
 interface CellDividerProps {
   index: number;

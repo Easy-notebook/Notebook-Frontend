@@ -18,12 +18,12 @@ import {
   useNotebookNavigation,
   useNotebookExport,
   useNotebookKeyboardShortcuts,
-  useRightSidebarResize,
   useCellRenderer,
   useContentResolver,
   useNotebookEffects,
   useLibraryHandlers,
 } from './hooks';
+import { useNotebookStateSync } from '../Scenario/Workflow/hooks/useNotebookStateSync';
 
 // UI Components
 import { MainContentArea } from './components';
@@ -76,6 +76,9 @@ const NotebookApp = () => {
   const isShowingFileExplorer = usePreviewStore((state) => state.previewMode === 'file');
   const { activeFile } = usePreviewStore();
 
+  // Sync notebook state to workflow state machine
+  useNotebookStateSync();
+
   // Custom hooks for business logic
   const {
     handleAddCell,
@@ -97,8 +100,6 @@ const NotebookApp = () => {
   } = useNotebookNavigation();
 
   const { handleExportJson, exportDocx, exportPdf, exportMarkdown } = useNotebookExport();
-
-  const { rightSidebarWidth, handleRightResize } = useRightSidebarResize();
 
   const { renderCell } = useCellRenderer({
     viewMode,
@@ -259,6 +260,16 @@ const NotebookApp = () => {
   const renderHeader = () => {
     switch (routeView) {
       case 'empty':
+        return (
+          <EmptyStateHeader
+            onTriggerFileInput={triggerFileInput}
+            onHandleImport={handleImport}
+            onOpenSettings={settingstore.openSettings}
+            fileInputRef={fileInputRef}
+            onToggleRightSidebar={handleRightSidebarToggle}
+          />
+        );
+      case 'pipeline':
         return (
           <EmptyStateHeader
             onTriggerFileInput={triggerFileInput}

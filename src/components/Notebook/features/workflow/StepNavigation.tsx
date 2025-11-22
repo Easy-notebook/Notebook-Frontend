@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 const VUE_PRIMARY = '#41B883';
-const VUE_SECONDARY = '#35495E';
 
 interface Phase {
   id: string;

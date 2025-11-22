@@ -750,83 +750,61 @@ export const notebookApiIntegration = {
 
       // Helper function to parse concatenated JSON objects
       const processBuffer = () => {
-        // Try parsing by newline first (standard SSE format)
-        let boundary = buffer.indexOf('\n');
-        if (boundary !== -1) {
-          console.log('[DEBUG] notebookServices - Using newline-based parsing');
-          while (boundary !== -1) {
-            const line = buffer.substring(0, boundary).trim();
-            buffer = buffer.substring(boundary + 1);
-            if (line) {
+        // Use JSON object-based parsing to handle newlines in content
+        // This prevents markdown content with \n from breaking the parsing
+        console.log('[DEBUG] notebookServices - Using JSON object-based parsing');
+        let depth = 0;
+        let start = 0;
+        let inString = false;
+        let escape = false;
+
+        for (let i = 0; i < buffer.length; i++) {
+          const char = buffer[i];
+
+          if (escape) {
+            escape = false;
+            continue;
+          }
+
+          if (char === '\\') {
+            escape = true;
+            continue;
+          }
+
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+
+          if (inString) continue;
+
+          if (char === '{') {
+            depth++;
+          } else if (char === '}') {
+            depth--;
+            if (depth === 0) {
+              // Found a complete JSON object
+              const jsonStr = buffer.substring(start, i + 1);
               try {
-                const data = JSON.parse(line);
-                console.log('[DEBUG] notebookServices - Parsed data type:', data.type);
+                const data = JSON.parse(jsonStr);
+                console.log(
+                  '[DEBUG] notebookServices - Parsed concatenated JSON, type:',
+                  data.type
+                );
                 handleStreamUpdate(data);
               } catch (e) {
-                apiLog.error('Failed to parse stream data', {
+                apiLog.error('Failed to parse concatenated JSON', {
                   error: e,
-                  line: line.substring(0, 100),
+                  json: jsonStr.substring(0, 100),
                 });
               }
-            }
-            boundary = buffer.indexOf('\n');
-          }
-        } else {
-          // Handle concatenated JSON objects without newlines
-          console.log('[DEBUG] notebookServices - Using JSON object-based parsing');
-          let depth = 0;
-          let start = 0;
-          let inString = false;
-          let escape = false;
-
-          for (let i = 0; i < buffer.length; i++) {
-            const char = buffer[i];
-
-            if (escape) {
-              escape = false;
-              continue;
-            }
-
-            if (char === '\\') {
-              escape = true;
-              continue;
-            }
-
-            if (char === '"') {
-              inString = !inString;
-              continue;
-            }
-
-            if (inString) continue;
-
-            if (char === '{') {
-              depth++;
-            } else if (char === '}') {
-              depth--;
-              if (depth === 0) {
-                // Found a complete JSON object
-                const jsonStr = buffer.substring(start, i + 1);
-                try {
-                  const data = JSON.parse(jsonStr);
-                  console.log(
-                    '[DEBUG] notebookServices - Parsed concatenated JSON, type:',
-                    data.type
-                  );
-                  handleStreamUpdate(data);
-                } catch (e) {
-                  apiLog.error('Failed to parse concatenated JSON', {
-                    error: e,
-                    json: jsonStr.substring(0, 100),
-                  });
-                }
-                start = i + 1;
-              }
+              start = i + 1;
             }
           }
-
-          // Keep unparsed data in buffer
-          buffer = buffer.substring(start).trim();
         }
+
+        // Keep unparsed data in buffer
+        buffer = buffer.substring(start).trim();
       };
 
       readStream();

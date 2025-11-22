@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { uiLog } from '@Utils/logger';
 import TabbedPreviewApp from '../features/viewers/TabbedPreviewApp';
 import { EmptyStatePage, LibraryStatePage, WorkspacePage, LoadingPage } from '../pages';
+import DSLCPipeline from '@/components/Scenario/Workflow/Pipeline';
 
 interface ContentResolverProps {
   isShowingFileExplorer: boolean;
@@ -81,6 +82,16 @@ export const useContentResolver = ({
           ),
         };
 
+      case 'pipeline':
+        uiLog.debug('Content resolution result', {
+          chosen: 'pipeline',
+          reason: 'route-based',
+        });
+        return {
+          type: 'pipeline',
+          component: <DSLCPipeline onAddCell={handleAddCell} />,
+        };
+
       case 'workspace': {
         const result = findPhaseIndex();
         return {
@@ -126,6 +137,11 @@ export const useContentResolver = ({
                 onBack={handleLibraryBack}
               />
             ),
+          };
+        } else if (currentPath === '/pipeline') {
+          return {
+            type: 'pipeline',
+            component: <DSLCPipeline onAddCell={handleAddCell} />,
           };
         } else if (currentPath.startsWith('/workspace/')) {
           const result = findPhaseIndex();

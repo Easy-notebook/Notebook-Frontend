@@ -1426,15 +1426,28 @@ const useStore = create(
             viewMode: 'create',
           });
 
-          // 直接设置 cells
+          // 直接设置 cells - 确保保留所有字段（outputs, metadata等）
           if (cells && cells.length > 0) {
             console.log('🔍 [notebookStore] Setting cells from database', {
               cellsCount: cells.length,
               notebookId,
               firstCellContent: cells[0]?.content?.substring(0, 50),
+              firstCellMetadata: cells[0]?.metadata,
+              firstCellOutputs: cells[0]?.outputs?.length || 0,
             });
-            set({ cells: [...cells] });
-            notebookLog.cellOperation('update', 'batch', { count: cells.length });
+            // 确保每个cell都保留完整的字段
+            const restoredCells: Cell[] = cells.map((cell) => ({
+              id: cell.id,
+              type: cell.type as CellType,
+              content: cell.content || '',
+              outputs: cell.outputs || [],
+              enableEdit: cell.enableEdit !== false,
+              phaseId: cell.phaseId || null,
+              description: cell.description || null,
+              metadata: cell.metadata || null,
+            }));
+            set({ cells: restoredCells });
+            notebookLog.cellOperation('update', 'batch', { count: restoredCells.length });
           } else {
             console.log('🔍 [notebookStore] No cells in database, creating default title cell');
             const defaultCell: Cell = {

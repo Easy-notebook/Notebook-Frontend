@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Editor } from '@tiptap/react';
 import { Shuffle, X } from 'lucide-react';
+import useStore from '@Store/notebookStore';
 
 interface EditorCoverProps {
   editor: Editor | null;
@@ -13,50 +14,38 @@ const RANDOM_COVERS = [
 ];
 
 export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
-  const [cover, setCover] = useState<string | null>(null);
-  const [icon, setIcon] = useState<string | null>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [showIconMenu, setShowIconMenu] = useState(false);
 
-  // Sync cover and icon state from editor
-  useEffect(() => {
-    if (!editor) return;
+  // Read cover and icon from notebookStore (first cell metadata)
+  const cells = useStore((state) => state.cells);
+  const updateCellMetadata = useStore((state) => state.updateCellMetadata);
 
-    const updateState = () => {
-      const firstNode = editor.state.doc.firstChild;
-      if (firstNode && firstNode.type.name === 'title') {
-        setCover(firstNode.attrs.cover);
-        setIcon(firstNode.attrs.icon);
-      } else {
-        setCover(null);
-        setIcon(null);
-      }
-    };
+  const firstCell = cells.length > 0 ? cells[0] : null;
+  const cover = firstCell?.metadata?.cover || null;
+  const icon = firstCell?.metadata?.icon || null;
 
-    // Initial check
-    updateState();
+  const changeCover = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!editor || !firstCell) return;
 
-    // Subscribe to updates
-    editor.on('update', updateState);
-    editor.on('transaction', updateState);
-
-    return () => {
-      editor.off('update', updateState);
-      editor.off('transaction', updateState);
-    };
-  }, [editor]);
-
-  const changeCover = () => {
-    if (!editor) return;
     let newCover = cover;
     while (newCover === cover) {
       newCover = RANDOM_COVERS[Math.floor(Math.random() * RANDOM_COVERS.length)];
     }
 
-    // Update the title node attributes
+    // Update both notebookStore metadata and editor node
+    updateCellMetadata(firstCell.id, {
+      ...firstCell.metadata,
+      cover: newCover,
+    });
+
+    // Also update the title node in editor
     editor
       .chain()
-      .focus()
       .command(({ tr }) => {
         const firstNode = tr.doc.firstChild;
         if (firstNode && firstNode.type.name === 'title') {
@@ -68,13 +57,22 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
       .run();
   };
 
-  const removeCover = () => {
-    if (!editor) return;
+  const removeCover = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!editor || !firstCell) return;
 
-    // Update the title node attributes
+    // Update both notebookStore metadata and editor node
+    updateCellMetadata(firstCell.id, {
+      ...firstCell.metadata,
+      cover: null,
+    });
+
+    // Also update the title node in editor
     editor
       .chain()
-      .focus()
       .command(({ tr }) => {
         const firstNode = tr.doc.firstChild;
         if (firstNode && firstNode.type.name === 'title') {
@@ -86,14 +84,25 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
       .run();
   };
 
-  const changeIcon = () => {
-    if (!editor) return;
+  const changeIcon = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!editor || !firstCell) return;
+
     const emojis = ['😀', '🚀', '📝', '💡', '✨', '🎨', '📚', '💻'];
     const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
 
+    // Update both notebookStore metadata and editor node
+    updateCellMetadata(firstCell.id, {
+      ...firstCell.metadata,
+      icon: randomEmoji,
+    });
+
+    // Also update the title node in editor
     editor
       .chain()
-      .focus()
       .command(({ tr }) => {
         const firstNode = tr.doc.firstChild;
         if (firstNode && firstNode.type.name === 'title') {
@@ -105,12 +114,22 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
       .run();
   };
 
-  const removeIcon = () => {
-    if (!editor) return;
+  const removeIcon = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!editor || !firstCell) return;
 
+    // Update both notebookStore metadata and editor node
+    updateCellMetadata(firstCell.id, {
+      ...firstCell.metadata,
+      icon: null,
+    });
+
+    // Also update the title node in editor
     editor
       .chain()
-      .focus()
       .command(({ tr }) => {
         const firstNode = tr.doc.firstChild;
         if (firstNode && firstNode.type.name === 'title') {
@@ -140,14 +159,18 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
           >
             <button
               onClick={changeCover}
+              onMouseDown={(e) => e.preventDefault()}
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-white/90 hover:bg-white text-gray-700 rounded shadow-sm backdrop-blur-sm transition-colors"
+              type="button"
             >
               <Shuffle size={12} />
               Change Cover
             </button>
             <button
               onClick={removeCover}
+              onMouseDown={(e) => e.preventDefault()}
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-white/90 hover:bg-white text-red-600 rounded shadow-sm backdrop-blur-sm transition-colors"
+              type="button"
             >
               <X size={12} />
               Remove
@@ -177,21 +200,27 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
                   >
                     <button
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         changeIcon();
                         setShowIconMenu(false);
                       }}
+                      onMouseDown={(e) => e.preventDefault()}
                       className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-gray-50 rounded text-left whitespace-nowrap"
+                      type="button"
                     >
                       <Shuffle size={12} /> Change
                     </button>
                     <button
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
                         removeIcon();
                         setShowIconMenu(false);
                       }}
+                      onMouseDown={(e) => e.preventDefault()}
                       className="flex items-center gap-2 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded text-left whitespace-nowrap"
+                      type="button"
                     >
                       <X size={12} /> Remove
                     </button>

@@ -301,8 +301,11 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
                 console.log(
                   '[DEBUG] AICommandInput - File uploaded and questions generated, navigating to ProblemDefine'
                 );
-                setTimeout(() => {
+                setTimeout(async () => {
                   setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+                  // Navigate to pipeline route
+                  const { default: useRouteStore } = await import('@Store/routeStore');
+                  useRouteStore.getState().navigateToPipeline();
                 }, 500); // 给用户一点时间看到问题生成，然后跳转
               } else {
                 console.log('[DEBUG] AICommandInput - No questions generated from response');
