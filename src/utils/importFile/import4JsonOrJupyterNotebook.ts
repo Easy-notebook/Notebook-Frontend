@@ -1,13 +1,47 @@
 // components/Notebook/useImportNotebook.js
-/* eslint-disable no-undef */
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import useStore from '@Store/notebookStore';
+import useStore, { Cell, CellType, OutputItem } from '@Store/notebookStore';
 import { useToast } from '@/components/UI/Toast';
 import { notebookApiIntegration } from '@Services/notebookServices';
-import { parseMarkdownContent } from '@/components/Editor/utils/markdownParser';
+import { parseMarkdownContent } from '@Editor/utils/markdownParser';
+
+// Type definitions for imported notebook formats
+interface CustomNotebookData {
+  cells: Cell[];
+  metadata?: Record<string, unknown>;
+}
+
+interface JupyterCell {
+  cell_type: string;
+  source: string | string[];
+  outputs?: Array<{
+    output_type: string;
+    data?: Record<string, unknown>;
+    execution_count?: number | null;
+  }>;
+  metadata?: Record<string, unknown>;
+}
+
+interface JupyterNotebookData {
+  cells: JupyterCell[];
+  metadata?: {
+    name?: string;
+    [key: string]: unknown;
+  };
+  nbformat?: number;
+  nbformat_minor?: number;
+}
+
+// Type for parsed markdown cells
+interface ParsedCell {
+  type: string;
+  content: string;
+  id: string;
+  level?: number;
+  outputs?: OutputItem[];
+  phaseId?: string | null;
+}
 
 /**
  * 自定义 Hook 处理 Notebook 导入逻辑，包括自定义格式和 Jupyter Notebook 格式。
@@ -89,6 +123,7 @@ const ImportNotebook4JsonOrJupyter = () => {
           parsedCells.forEach((parsedCell: ParsedCell) => {
             const cellWithNewId: Cell = {
               ...parsedCell,
+              type: parsedCell.type as CellType,
               id: `imported-${uuidv4()}`,
               outputs: parsedCell.outputs || [],
               phaseId: parsedCell.phaseId || null,
@@ -167,6 +202,7 @@ const ImportNotebook4JsonOrJupyter = () => {
           parsedCells.forEach((parsedCell: ParsedCell) => {
             const newCell: Cell = {
               ...parsedCell,
+              type: parsedCell.type as CellType,
               id: `imported-${uuidv4()}`,
               phaseId: null, // 如果需要，可以设置 phaseId
               outputs: [],
@@ -180,9 +216,8 @@ const ImportNotebook4JsonOrJupyter = () => {
             content: Array.isArray(cell.source) ? cell.source.join('') : cell.source,
             outputs: Array.isArray(cell.outputs)
               ? cell.outputs.map((output: any) => ({
-                  output_type: output.output_type,
-                  data: output.data || {},
-                  execution_count: output.execution_count || null,
+                  type: output.output_type || 'text',
+                  content: JSON.stringify(output.data || output.text || ''),
                 }))
               : [],
             phaseId: null, // 设置 phaseId 如果需要
@@ -192,13 +227,12 @@ const ImportNotebook4JsonOrJupyter = () => {
           // 处理其他类型的单元格
           const newCell: Cell = {
             id: `imported-${uuidv4()}`,
-            type: cell.cell_type,
+            type: cell.cell_type as CellType,
             content: Array.isArray(cell.source) ? cell.source.join('') : cell.source,
             outputs: Array.isArray(cell.outputs)
               ? cell.outputs.map((output: any) => ({
-                  output_type: output.output_type,
-                  data: output.data || {},
-                  execution_count: output.execution_count || null,
+                  type: output.output_type || 'text',
+                  content: JSON.stringify(output.data || output.text || ''),
                 }))
               : [],
             phaseId: null,

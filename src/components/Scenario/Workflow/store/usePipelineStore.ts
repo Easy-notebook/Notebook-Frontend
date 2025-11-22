@@ -3,7 +3,9 @@
  * @description Pipeline Store for managing workflow template structure and execution state.
  *
  * Ported from: ref/Notebook-BCC/stores/pipeline_store.py
- *
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
  * Responsibilities:
  * - Manages workflow template (WorkflowTemplate with stages and steps)
  * - Handles workflow activation state

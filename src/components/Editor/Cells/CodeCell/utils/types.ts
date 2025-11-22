@@ -1,17 +1,9 @@
 // Types for CodeCell and related components
+import type { Cell as StoreCell, OutputItem } from '@Store/notebookStore';
 
-export interface Cell {
-  id: string;
-  content: string;
-  outputs?: Output[];
-  description?: string;
-}
-
-export interface Output {
-  type: 'image' | 'text' | 'error' | 'html';
-  content: string;
-  key?: string;
-}
+// Re-export store types for compatibility
+export type Cell = StoreCell;
+export type Output = OutputItem;
 
 export interface CodeCellProps {
   cell: Cell;

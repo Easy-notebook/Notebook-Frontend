@@ -121,7 +121,6 @@ export const CodeBlockExtension = Node.create({
   },
 
   addCommands() {
-    // @ts-expect-error - Tiptap command type definitions are complex
     return {
       setExecutableCodeBlock:
         (attributes: CodeBlockAttributes) =>
@@ -288,7 +287,7 @@ import HybridCell from '../Cells/HybridCell';
 import useStore from '@Store/notebookStore';
 
 const CodeBlockView = ({ node, deleteNode, editor, getPos }: NodeViewProps) => {
-  const { language, code, cellId, outputs, enableEdit } = node.attrs;
+  const { code, cellId, outputs, enableEdit } = node.attrs;
   const { cells } = useStore();
   const [, setIsInitialized] = useState(false);
 
@@ -299,7 +298,7 @@ const CodeBlockView = ({ node, deleteNode, editor, getPos }: NodeViewProps) => {
       // 完全使用store中的数据，确保数据是最新的
       console.log(`CodeBlockView ${cellId}: 使用store中的最新数据`, {
         content: existingCell.content.substring(0, 50) + '...',
-        outputs: existingCell.outputs.length,
+        outputs: existingCell?.outputs?.length,
       });
       return existingCell;
     }
@@ -307,13 +306,12 @@ const CodeBlockView = ({ node, deleteNode, editor, getPos }: NodeViewProps) => {
     console.log(`CodeBlockView ${cellId}: 使用node attributes初始值`);
     return {
       id: cellId,
-      type: 'code',
+      type: 'code' as const,
       content: code || '',
       outputs: outputs || [],
       enableEdit: enableEdit !== false,
-      language: language || 'python',
     };
-  }, [cellId, cells, code, enableEdit, language, outputs]); // 只依赖cellId和cells，不依赖node attributes
+  }, [cellId, cells, code, enableEdit, outputs]); // 只依赖cellId和cells，不依赖node attributes
 
   // 添加删除保护状态
   const [isDeleting, setIsDeleting] = useState(false);
@@ -425,9 +423,8 @@ const CodeBlockView = ({ node, deleteNode, editor, getPos }: NodeViewProps) => {
       {/* 根据cell类型动态选择组件 */}
       <CellComponent
         cell={virtualCell}
-        onDelete={handleDelete}
+        onDelete={() => handleDelete()}
         // CodeCell 需要的props
-        isStepMode={false}
         dslcMode={false}
         finished_thinking={false}
         thinkingText="finished thinking"
