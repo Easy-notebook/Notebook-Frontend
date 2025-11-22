@@ -85,6 +85,13 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const calcIsMultiline = useCallback(() => {
     const el = taRef.current;
     if (!el) return;
+
+    // 如果有文件，强制多行模式
+    if (files.length > 0) {
+      setIsMultiline(true);
+      return;
+    }
+
     const style = window.getComputedStyle(el);
     const lineHeight = parseFloat(style.lineHeight || '22');
     const paddingTop = parseFloat(style.paddingTop || '0');
@@ -92,11 +99,11 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     const contentHeight = el.scrollHeight - paddingTop - paddingBottom;
     const rows = Math.round(contentHeight / lineHeight);
     setIsMultiline(rows > 1 || input.includes('\n'));
-  }, [input]);
+  }, [input, files.length]);
 
   useLayoutEffect(() => {
     calcIsMultiline();
-  }, [input, calcIsMultiline]);
+  }, [input, files.length, calcIsMultiline]);
 
   // Keep the resize handler typed to satisfy AntD's onResize signature
   const handleTextAreaResize = useCallback(
@@ -530,7 +537,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
   return (
     <div className="relative mb-6">
-      <FilePreviewList files={files} onRemove={handleRemoveFile} />
       {/* 胶囊外框 */}
       <div
         className="ai-bar"
@@ -595,6 +601,20 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             mixBlendMode: 'soft-light',
           }}
         />
+
+        {/* 文件预览列表 - 显示在输入框内部顶部 */}
+        {files.length > 0 && (
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 10,
+              padding: '12px 12px 0 12px',
+            }}
+          >
+            <FilePreviewList files={files} onRemove={handleRemoveFile} />
+          </div>
+        )}
+
         {/* 顶部主行（单行：含左右按钮；多行：仅输入） */}
         <div
           style={{
