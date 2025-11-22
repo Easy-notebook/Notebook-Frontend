@@ -53,7 +53,7 @@ export const getEventLabel = (type: EventType, t: any) => {
     },
     [EVENT_TYPES.SYSTEM_EVENT]: {
       text: t('rightSideBar.eventTypes.system'),
-      color: 'text-gray-800 dark:text-white',
+      color: 'text-blue-800 dark:text-blue-300',
     },
     [EVENT_TYPES.AI_GENERATING_CODE]: {
       text: t('rightSideBar.eventTypes.editing'),

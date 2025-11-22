@@ -310,7 +310,7 @@ const CommandInput: React.FC = () => {
             mode: 'unrestricted',
             allowedTypes: ALLOWED_EXTENSIONS,
             maxFileSize: MAX_FILE_SIZE,
-            targetDir: '.assets',
+            targetDir: 'assets',
           };
 
           const result = await notebookApiIntegration.uploadFiles(

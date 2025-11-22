@@ -156,7 +156,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
     };
 
     const handleDrop = async (e: DragEvent) => {
-      // 文件拖入上传到 .assets
+      // 文件拖入上传到 assets
       if (!notebookId) return;
       if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
       e.preventDefault();
@@ -223,7 +223,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
           '.avi',
           '.mkv',
         ],
-        targetDir: '.assets',
+        targetDir: 'assets',
       };
 
       const toast = ({

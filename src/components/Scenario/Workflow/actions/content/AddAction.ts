@@ -21,6 +21,8 @@ export class AddAction extends ActionBase {
     const content = step.content || '';
 
     console.log(`[AddAction] shotType: ${step.shotType}, cellType: ${cellType}`);
+    // remove the \n of the content
+    content.replace(/\n/g, ' ');
 
     // Special logic for text cells (matches backend logic)
     // Backend checks: cell_type == 'text' and (shot_type == 'markdown' or shot_type is None)

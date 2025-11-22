@@ -12,8 +12,8 @@ export function isValidFilePath(filePath: string): boolean {
   // Check for problematic extensions
   const problematicExtensions = ['.tmp', '.lock', '.swp', '~', '.bak'];
   const lowerPath = filePath.toLowerCase();
-  
-  if (problematicExtensions.some(ext => lowerPath.endsWith(ext))) {
+
+  if (problematicExtensions.some((ext) => lowerPath.endsWith(ext))) {
     return false;
   }
 
@@ -24,7 +24,7 @@ export function isValidFilePath(filePath: string): boolean {
 
   // Check for invalid characters that might cause issues
   const invalidChars = ['<', '>', '|', '\0', '\x01', '\x02', '\x03', '\x04', '\x05'];
-  if (invalidChars.some(char => filePath.includes(char))) {
+  if (invalidChars.some((char) => filePath.includes(char))) {
     return false;
   }
 
@@ -35,18 +35,22 @@ export function isValidFilePath(filePath: string): boolean {
  * Check if a file is a notebook file that should be handled specially
  */
 export function isNotebookFile(filePath: string, fileName: string): boolean {
-  return fileName?.endsWith('.easynb') || 
-         (filePath?.includes('notebook_') && fileName?.includes('.notebook.json'));
+  return (
+    fileName?.endsWith('.easynb') ||
+    (filePath?.includes('notebook_') && fileName?.includes('.notebook.json'))
+  );
 }
 
 /**
  * Check if a file should be filtered out from tabs
  */
 export function shouldFilterFromTabs(filePath: string, fileName: string): boolean {
-  return fileName?.startsWith('.') || // Hidden files
-         fileName?.includes('__pycache__') ||
-         fileName?.includes('.git') ||
-         filePath?.startsWith('cells/'); // Old cell files from previous implementation
+  return (
+    fileName?.startsWith('.') || // Hidden files
+    fileName?.includes('__pycache__') ||
+    fileName?.includes('.git') ||
+    filePath?.startsWith('cells/')
+  ); // Old cell files from previous implementation
 }
 
 /**
@@ -54,9 +58,9 @@ export function shouldFilterFromTabs(filePath: string, fileName: string): boolea
  */
 export function getSafeFileName(filePath: string): string {
   if (!filePath) return 'Unknown File';
-  
+
   const fileName = filePath.split('/').pop() || filePath;
-  
+
   // Decode URL encoding if present
   try {
     return decodeURIComponent(fileName);
@@ -70,14 +74,16 @@ export function getSafeFileName(filePath: string): string {
  */
 export function isPotentialMissingImage(filePath: string): boolean {
   if (!filePath) return false;
-  
+
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp'];
   const lowerPath = filePath.toLowerCase();
-  
-  return imageExtensions.some(ext => lowerPath.includes(ext)) ||
-         filePath.includes('Screenshot') ||
-         filePath.includes('Image') ||
-         filePath.includes('photo');
+
+  return (
+    imageExtensions.some((ext) => lowerPath.includes(ext)) ||
+    filePath.includes('Screenshot') ||
+    filePath.includes('Image') ||
+    filePath.includes('photo')
+  );
 }
 
 /**
@@ -85,16 +91,16 @@ export function isPotentialMissingImage(filePath: string): boolean {
  */
 export function sanitizeFilePath(filePath: string): string {
   if (!filePath) return '';
-  
+
   // Remove leading/trailing whitespace
   let sanitized = filePath.trim();
-  
+
   // Replace multiple consecutive slashes with single slash
   sanitized = sanitized.replace(/\/+/g, '/');
-  
+
   // Remove leading slash if present (relative paths are safer)
   sanitized = sanitized.replace(/^\//, '');
-  
+
   return sanitized;
 }
 
@@ -103,27 +109,27 @@ export function sanitizeFilePath(filePath: string): string {
  */
 export function isSystemOrTempFile(filePath: string): boolean {
   if (!filePath) return false;
-  
-  // Whitelist .assets directory - it's for user uploaded files, not system files
-  if (filePath.startsWith('.assets/') || filePath === '.assets') {
+
+  // Whitelist assets directory - it's for user uploaded files, not system files
+  if (filePath.startsWith('assets/') || filePath === 'assets') {
     return false;
   }
-  
+
   const systemPatterns = [
-    /^\./,           // Hidden files (but not .assets/ which is whitelisted above)
-    /~$/,            // Backup files
-    /\.tmp$/i,       // Temporary files
-    /\.lock$/i,      // Lock files
-    /\.swp$/i,       // Vim swap files
-    /\.bak$/i,       // Backup files
-    /__pycache__/,   // Python cache
-    /\.git/,         // Git files
-    /node_modules/,  // Node modules
-    /\.DS_Store/,    // macOS system files
-    /Thumbs\.db/i,   // Windows system files
+    /^\./, // Hidden files (but not assets/ which is whitelisted above)
+    /~$/, // Backup files
+    /\.tmp$/i, // Temporary files
+    /\.lock$/i, // Lock files
+    /\.swp$/i, // Vim swap files
+    /\.bak$/i, // Backup files
+    /__pycache__/, // Python cache
+    /\.git/, // Git files
+    /node_modules/, // Node modules
+    /\.DS_Store/, // macOS system files
+    /Thumbs\.db/i, // Windows system files
   ];
 
-  return systemPatterns.some(pattern => pattern.test(filePath));
+  return systemPatterns.some((pattern) => pattern.test(filePath));
 }
 
 /**
@@ -147,7 +153,7 @@ export function extractMeaningfulName(content: string, filePath: string): string
   }
 
   // Use first non-empty line as fallback
-  const firstLine = content.split('\n').find(line => line.trim().length > 0);
+  const firstLine = content.split('\n').find((line) => line.trim().length > 0);
   if (firstLine) {
     return firstLine.trim().substring(0, 50);
   }
@@ -167,12 +173,16 @@ export interface FileValidationResult {
 /**
  * Comprehensive file validation
  */
-export function validateFileForTab(filePath: string, fileName: string, content?: string): FileValidationResult {
+export function validateFileForTab(
+  filePath: string,
+  fileName: string,
+  content?: string
+): FileValidationResult {
   if (!isValidFilePath(filePath)) {
     return {
       isValid: false,
       reason: 'Invalid file path',
-      suggestion: 'Check file path format'
+      suggestion: 'Check file path format',
     };
   }
 
@@ -180,7 +190,7 @@ export function validateFileForTab(filePath: string, fileName: string, content?:
     return {
       isValid: false,
       reason: 'System file or cell fragment',
-      suggestion: 'These files should not appear as tabs'
+      suggestion: 'These files should not appear as tabs',
     };
   }
 
@@ -188,7 +198,7 @@ export function validateFileForTab(filePath: string, fileName: string, content?:
     return {
       isValid: false,
       reason: 'System or temporary file',
-      suggestion: 'These files should not be opened as tabs'
+      suggestion: 'These files should not be opened as tabs',
     };
   }
 
@@ -196,7 +206,7 @@ export function validateFileForTab(filePath: string, fileName: string, content?:
     return {
       isValid: false,
       reason: 'Potentially missing image file',
-      suggestion: 'File may not exist on server'
+      suggestion: 'File may not exist on server',
     };
   }
 

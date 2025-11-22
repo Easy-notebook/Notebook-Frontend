@@ -40,6 +40,7 @@ export enum WorkflowState {
   COMPLETE = 'COMPLETE',
   FAILED = 'FAILED',
   CANCELED = 'CANCELED',
+  PAUSED = 'PAUSED',
 }
 
 /**
@@ -59,6 +60,8 @@ export enum WorkflowEvent {
   COMPLETE_WORKFLOW = 'COMPLETE_WORKFLOW',
   FAIL = 'FAIL',
   CANCEL = 'CANCEL',
+  PAUSE = 'PAUSE',
+  RESUME = 'RESUME',
 }
 
 /**
@@ -121,6 +124,8 @@ interface WorkflowStateMachineActions {
   fail: (error: Error | string) => void;
   cancel: () => void;
   reset: () => void;
+  pause: () => void;
+  resume: () => void;
 
   // State access
   getState: () => StateJSON;
@@ -247,7 +252,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
       const coordinator = getTransitionCoordinator();
 
       // Apply transition
-      const { state: updatedStateJSON, transitionName } = coordinator.applyTransition(
+      const { state: updatedStateJSON } = coordinator.applyTransition(
         currentStateJSON,
         apiResponse || {},
         undefined,
@@ -331,6 +336,48 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
       stateJSON: createInitialStateJSON(),
       transitionHistory: [],
     });
+  },
+
+  pause: () => {
+    const currentState = get().currentState;
+    console.log('[FSM] Pausing workflow from state:', currentState);
+
+    const stateJSON = get().stateJSON;
+    // Store the previous state so we can resume to it
+    stateJSON.state.FSM.previous_state = currentState;
+    stateJSON.state.FSM.state = WorkflowState.PAUSED;
+
+    set({
+      currentState: WorkflowState.PAUSED,
+      stateJSON,
+    });
+  },
+
+  resume: () => {
+    const stateJSON = get().stateJSON;
+    const previousState = stateJSON.state.FSM.previous_state;
+
+    console.log('[FSM] Resuming workflow to state:', previousState);
+
+    // Only resume if currently paused
+    if (get().currentState !== WorkflowState.PAUSED) {
+      console.warn('[FSM] Cannot resume - workflow is not paused');
+      return;
+    }
+
+    // Resume to previous state or default to IDLE
+    const resumeState = (previousState as WorkflowState) || WorkflowState.IDLE;
+    stateJSON.state.FSM.state = resumeState;
+    stateJSON.state.FSM.previous_state = undefined;
+
+    set({
+      currentState: resumeState,
+      stateJSON,
+    });
+
+    // If resuming to a running state, we might need to trigger the next action
+    // This depends on your workflow execution logic
+    console.log('[FSM] Resumed to state:', resumeState);
   },
 
   // ==============================================

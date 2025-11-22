@@ -27,7 +27,7 @@ export function useLinkHandler(editor: Editor | null) {
           import('@Store/previewStore'),
           import('@Services/notebookServices'),
           import('@Config/base_url'),
-        ]).then(async ([nbMod, pvMod, _svcMod, cfgMod]) => {
+        ]).then(async ([nbMod, pvMod, , cfgMod]) => {
           const useNotebookStore = (nbMod as any).default;
           const usePreviewStore = (pvMod as any).default;
           const Backend_BASE_URL = cfgMod?.Backend_BASE_URL;
@@ -46,9 +46,7 @@ export function useLinkHandler(editor: Editor | null) {
             // Ignore regex parsing errors
           }
           if (!filePath) {
-            const relPattern = new RegExp(
-              '^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)'
-            );
+            const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\assets\\/|\\assets\\/)');
             if (relPattern.test(href)) {
               filePath = href.replace(new RegExp('^\\./'), '');
             } else if (!new RegExp('^[a-z]+://', 'i').test(href) && href.indexOf('/') === -1) {
@@ -80,7 +78,7 @@ export function useLinkHandler(editor: Editor | null) {
             console.log('🔀 Split preview opened for file:', filePath);
           } catch (err: any) {
             if (DEBUG) console.error('TipTap link split preview failed:', err);
-            // Fallback: try root directory file if .assets doesn't exist
+            // Fallback: try root directory file if assets doesn't exist
             try {
               const baseName = (filePath || href).split('/').pop() || '';
               if (baseName && baseName !== filePath) {

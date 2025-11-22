@@ -1,14 +1,7 @@
 // moved to sections/RightSideBar
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Loader2,
-  MessageSquare,
-  Layers,
-  ChevronDown,
-  ChevronUp,
-  MessageCircle,
-} from 'lucide-react';
+import { Loader2, Layers, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react';
 
 import useStore from '@Store/notebookStore';
 import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
@@ -17,11 +10,11 @@ import AIPlanningContextDebugger from '@RightSidebar/debug/AIPlanningContextDebu
 import WorkflowTODOPanel from '@RightSidebar/workflow/WorkflowTODOPanel';
 import ViewSwitcher from '@RightSidebar/components/ViewSwitcher';
 import ToolCallIndicator from '@RightSidebar/components/ToolCallIndicator';
-import AgentInfo from '@RightSidebar/components/AgentInfo';
 import ExpandableText from '@RightSidebar/components/ExpandableText';
 import EventIcon from '@RightSidebar/components/EventIcon';
 import { getEventLabel } from '@RightSidebar/utils/eventUtils';
 import SpotlightCard from '@/components/UI/card/SpotlightCard';
+import WorkflowVisualization from '@Notebook/features/workflow/WorkflowVisualization';
 
 // ----------------------
 // Type Definitions
@@ -193,6 +186,11 @@ const AIAgentSidebar = () => {
               {isUserQuestion ? (
                 // 用户问题：不折叠，完整显示
                 <div>{action.content}</div>
+              ) : action.type === 'system_event' ? (
+                // 系统事件（action执行）：使用代码样式显示
+                <pre className="text-xs bg-gray-50 dark:bg-gray-800/50 p-2 rounded-md overflow-x-auto whitespace-pre-wrap font-mono">
+                  {action.content}
+                </pre>
               ) : (
                 // 其他类型：使用 ExpandableText
                 <ExpandableText text={action.content} maxLines={3} />
@@ -201,7 +199,11 @@ const AIAgentSidebar = () => {
 
             {action.result && (
               <div className="mt-3 p-3 ring-1 ring-gray-300 dark:ring-gray-700 rounded-lg text-sm text-gray-600 dark:text-gray-400 break-words">
-                <ExpandableText text={action.result} maxLines={3} />
+                {action.type === 'system_event' ? (
+                  <pre className="text-xs whitespace-pre-wrap font-mono">{action.result}</pre>
+                ) : (
+                  <ExpandableText text={action.result} maxLines={3} />
+                )}
               </div>
             )}
 
@@ -419,6 +421,12 @@ const AIAgentSidebar = () => {
             <WorkflowTODOPanel />
             <StateMachineDebugger />
             <AIPlanningContextDebugger />
+          </div>
+        )}
+
+        {activeView === 'workflow' && (
+          <div className="py-4">
+            <WorkflowVisualization />
           </div>
         )}
 

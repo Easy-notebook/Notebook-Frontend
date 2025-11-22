@@ -508,7 +508,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
             maxFileSize: 50 * 1024 * 1024,
             allowedTypes: [] as string[],
             maxFiles: files.length,
-            targetDir: '.assets',
+            targetDir: 'assets',
           };
 
           // Adapter to satisfy fileUtils NotebookApiIntegration typing
@@ -555,7 +555,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
                 const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].some((ext) =>
                   lower.endsWith(ext)
                 );
-                const relPath = `.assets/${name}`;
+                const relPath = `assets/${name}`;
                 const url = `${Backend_BASE_URL}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
 
                 if (isImage) {

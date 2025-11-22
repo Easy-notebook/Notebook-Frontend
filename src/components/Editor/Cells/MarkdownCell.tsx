@@ -253,7 +253,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                 }
                 if (!filePath) {
                   const relPattern = new RegExp(
-                    '^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)'
+                    '^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\assets\\/|\\assets\\/)'
                   );
                   if (relPattern.test(href)) {
                     filePath = href.replace(new RegExp('^\\./'), '');

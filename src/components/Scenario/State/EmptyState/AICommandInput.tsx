@@ -182,7 +182,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           '.md',
         ],
         maxFileSize: MAX_SIZE,
-        targetDir: '.assets',
+        targetDir: 'assets',
       };
       console.log('[DEBUG] AICommandInput - Upload config created:', uploadConfig);
 
@@ -255,7 +255,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
           console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
           await usePreStageStore.getState().setCurrentFile(csv);
-          const csvFilePath = `.assets/${csv.name}`;
+          const csvFilePath = `assets/${csv.name}`;
           console.log('[DEBUG] AICommandInput - Setting CSV file path:', csvFilePath);
           await usePreStageStore.getState().setCsvFilePath(csvFilePath);
 
@@ -372,7 +372,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             user_goal: command.trim(),
             problem_description: command.trim(),
             context_description: preStageState.datasetInfo || 'No additional context provided',
-            csv_file_path: currentFile?.name ? `.assets/${currentFile.name}` : '',
+            csv_file_path: currentFile?.name ? `assets/${currentFile.name}` : '',
           };
 
           // Add variables to AI planning context
@@ -398,7 +398,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
               const userData = {
                 user_problem: command.trim(),
-                user_submit_files: currentFile?.name ? [`.assets/${currentFile.name}`] : [],
+                user_submit_files: currentFile?.name ? [`assets/${currentFile.name}`] : [],
                 context_description: preStageState.datasetInfo || 'No additional context provided',
               };
 

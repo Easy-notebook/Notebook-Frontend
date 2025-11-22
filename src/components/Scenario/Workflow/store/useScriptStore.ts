@@ -22,7 +22,6 @@ import { v4 as uuidv4 } from 'uuid';
 import useNotebookStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
 import { sendCurrentCellExecuteCodeError_should_debug } from '@Store/autoActions';
-import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 import { useAIPlanningContextStore } from './aiPlanningContext';
 
 // ==============================================
@@ -116,6 +115,84 @@ const ACTION_TYPES = {
 };
 
 // ==============================================
+// Helper Functions
+// ==============================================
+
+/**
+ * Format action content for display in the right sidebar
+ */
+function formatActionContent(actionType: string, step: ExecutionStep): string {
+  const params: string[] = [];
+
+  // Add common parameters
+  if (step.content) {
+    const preview =
+      step.content.length > 100 ? step.content.substring(0, 100) + '...' : step.content;
+    params.push(`content: "${preview}"`);
+  }
+
+  // Add action-specific parameters
+  switch (actionType) {
+    case ACTION_TYPES.ADD:
+      if (step.shotType) params.push(`shotType: ${step.shotType}`);
+      if (step.metadata) params.push(`metadata: ${JSON.stringify(step.metadata)}`);
+      break;
+
+    case ACTION_TYPES.EXEC_CODE:
+      if (step.codecell_id) params.push(`codecell_id: ${step.codecell_id}`);
+      if (step.need_output !== undefined) params.push(`need_output: ${step.need_output}`);
+      if (step.auto_debug !== undefined) params.push(`auto_debug: ${step.auto_debug}`);
+      break;
+
+    case ACTION_TYPES.UPDATE_TITLE:
+      if (step.title) params.push(`title: "${step.title}"`);
+      break;
+
+    case ACTION_TYPES.NEW_CHAPTER:
+    case ACTION_TYPES.NEW_SECTION:
+    case ACTION_TYPES.NEW_STEP:
+      if (step.text) params.push(`text: "${step.text}"`);
+      break;
+
+    case ACTION_TYPES.IS_THINKING:
+      if (step.agentName) params.push(`agentName: ${step.agentName}`);
+      if (step.thinkingText) params.push(`thinkingText: "${step.thinkingText}"`);
+      break;
+
+    case ACTION_TYPES.UPDATE_LAST_TEXT:
+      if (step.text) params.push(`text: "${step.text}"`);
+      break;
+  }
+
+  const paramsStr = params.length > 0 ? `\n  ${params.join('\n  ')}` : '';
+  return `Action: ${actionType}${paramsStr}`;
+}
+
+/**
+ * Format action result for display
+ */
+function formatActionResult(result: any): string {
+  if (result === null || result === undefined) {
+    return 'Action completed successfully';
+  }
+
+  if (typeof result === 'string') {
+    return result.length > 200 ? result.substring(0, 200) + '...' : result;
+  }
+
+  if (typeof result === 'object') {
+    try {
+      const resultStr = JSON.stringify(result, null, 2);
+      return resultStr.length > 200 ? resultStr.substring(0, 200) + '...' : resultStr;
+    } catch {
+      return String(result);
+    }
+  }
+
+  return String(result);
+}
+
+// ==============================================
 // Zustand Store
 // ==============================================
 
@@ -138,6 +215,34 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const actionType = step.action;
     console.log(`[ScriptStore] Executing action: ${actionType}`);
 
+    // Record action execution to AIAgentStore
+    let actionId: string | null = null;
+    try {
+      const { useAIAgentStore } = await import('@Store/AIAgentStore');
+      const viewMode = useNotebookStore.getState().viewMode;
+      const currentCellId = useNotebookStore.getState().getCurrentCellId();
+
+      // Format action content with parameters
+      const actionContent = formatActionContent(actionType, step);
+
+      // Add action to right sidebar
+      useAIAgentStore.getState().addAction({
+        type: 'system_event' as any,
+        content: actionContent,
+        result: '',
+        relatedQAIds: [],
+        cellId: currentCellId,
+        viewMode: viewMode,
+        onProcess: true,
+      });
+
+      // Get the action ID (the most recent action)
+      const actions = useAIAgentStore.getState().actions;
+      actionId = actions.length > 0 ? actions[0].id : null;
+    } catch (error) {
+      console.error('[ScriptStore] Failed to record action to sidebar:', error);
+    }
+
     try {
       // Import action registry dynamically to avoid circular dependencies
       const { getActionClass } = await import('../actions');
@@ -147,18 +252,47 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
 
       if (!ActionClass) {
         console.warn(`[ScriptStore] Unknown action type: ${actionType}`);
+
+        // Mark action as failed
+        if (actionId) {
+          const { useAIAgentStore } = await import('@Store/AIAgentStore');
+          useAIAgentStore.getState().updateAction(actionId, {
+            onProcess: false,
+            result: `Unknown action type: ${actionType}`,
+          });
+        }
         return;
       }
 
       // Create action instance with scriptStore reference
+      // @ts-expect-error ActionClass is a concrete class, not abstract
       const action = new ActionClass(get());
 
       // Execute action
       const result = await action.execute(step);
 
+      // Update action with result
+      if (actionId) {
+        const { useAIAgentStore } = await import('@Store/AIAgentStore');
+        useAIAgentStore.getState().updateAction(actionId, {
+          onProcess: false,
+          result: formatActionResult(result),
+        });
+      }
+
       return result;
     } catch (error) {
       console.error(`[ScriptStore] Error executing action ${actionType}:`, error);
+
+      // Mark action as failed
+      if (actionId) {
+        const { useAIAgentStore } = await import('@Store/AIAgentStore');
+        useAIAgentStore.getState().updateAction(actionId, {
+          onProcess: false,
+          result: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+
       throw error;
     }
   },

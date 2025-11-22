@@ -332,7 +332,7 @@ const usePreviewStore = create<PreviewStore>()(
             let response: FileApiResponse | null = null;
             const pathsToTry = [
               filePath,
-              `.assets/${filePath}`,
+              `assets/${filePath}`,
               filePath.split('/').pop() || filePath, // Just filename
             ];
 
@@ -346,7 +346,7 @@ const usePreviewStore = create<PreviewStore>()(
                   });
                   break;
                 }
-              } catch (tryError) {
+              } catch {
                 continue; // Try next path
               }
             }
@@ -616,7 +616,8 @@ const usePreviewStore = create<PreviewStore>()(
         const updatedFiles = currentPreviewFiles.filter((f) => f.id !== fileId);
 
         // Clean dirty flag for closed tab
-        const { [fileId]: _, ...nextDirtyMap } = dirtyMap;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { [fileId]: _removed, ...nextDirtyMap } = dirtyMap;
 
         // If it was the active file, set a new active file or null
         if (activeFile && activeFile.id === fileId) {
@@ -1379,7 +1380,7 @@ const usePreviewStore = create<PreviewStore>()(
                   let validationSuccess = false;
                   const pathsToTry = [
                     filePath,
-                    `.assets/${filePath}`, // Try with .assets prefix
+                    `assets/${filePath}`, // Try with assets prefix
                     filePath.split('/').pop(), // Try just the filename
                   ].filter(Boolean);
 
@@ -1404,7 +1405,7 @@ const usePreviewStore = create<PreviewStore>()(
                         validationSuccess = true;
                         break;
                       }
-                    } catch (fetchError) {
+                    } catch {
                       // Continue to next path
                       continue;
                     }
@@ -1550,7 +1551,7 @@ try {
           (file.path.includes('sa_balance_exp.xlsx') ||
             file.path.includes('balance_exp') ||
             // Add other problematic patterns as needed
-            (!file.path.includes('.assets/') && file.path.match(/\.(xlsx?|csv|pdf)$/i)))
+            (!file.path.includes('assets/') && file.path.match(/\.(xlsx?|csv|pdf)$/i)))
       );
 
       if (suspiciousFiles.length > 0) {

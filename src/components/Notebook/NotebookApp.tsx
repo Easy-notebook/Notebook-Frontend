@@ -45,8 +45,8 @@ const NotebookApp = () => {
   const [activeSidebarItem, setActiveSidebarItem] = useState<
     'workspace' | 'knowledge-forest' | 'easynet' | 'new-notebook' | 'settings'
   >('workspace');
-  const [currentView, setCurrentView] = useState<'notebook' | 'agent'>('notebook');
-  const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
+  const [, setCurrentView] = useState<'notebook' | 'agent'>('notebook');
+  const [, setSelectedAgentType] = useState<AgentType | null>(null);
 
   // Notebook store state
   const {
@@ -260,16 +260,6 @@ const NotebookApp = () => {
   const renderHeader = () => {
     switch (routeView) {
       case 'empty':
-        return (
-          <EmptyStateHeader
-            onTriggerFileInput={triggerFileInput}
-            onHandleImport={handleImport}
-            onOpenSettings={settingstore.openSettings}
-            fileInputRef={fileInputRef}
-            onToggleRightSidebar={handleRightSidebarToggle}
-          />
-        );
-      case 'pipeline':
         return (
           <EmptyStateHeader
             onTriggerFileInput={triggerFileInput}

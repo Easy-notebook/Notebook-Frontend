@@ -1064,7 +1064,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         if (m && m[1]) filePath = decodeURIComponent(m[1]);
       } catch {}
       if (!filePath) {
-        const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\.assets\\/|\\.assets\\/)');
+        const relPattern = new RegExp('^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\assets\\/|\\assets\\/)');
         if (relPattern.test(href)) {
           filePath = href.replace(new RegExp('^\\./'), '');
         } else if (!new RegExp('^[a-z]+://', 'i').test(href) && href.indexOf('/') === -1) {
@@ -1092,7 +1092,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
         console.log('🔀 Split preview opened for file:', filePath);
       } catch (err: any) {
         if (DEBUG) console.error('TipTap link split preview failed:', err);
-        // 兜底：如果 .assets 下不存在，则尝试 notebook 根目录同名文件
+        // 兜底：如果 assets 下不存在，则尝试 notebook 根目录同名文件
         try {
           const baseName = (filePath || href).split('/').pop() || '';
           if (baseName && baseName !== filePath) {

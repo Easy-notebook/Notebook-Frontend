@@ -12,9 +12,9 @@ import {
   AlertTriangle,
   MessageCircle,
   Wrench,
-  Server,
   Edit,
   ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { EVENT_TYPES, EventType } from '@Store/AIAgentStore';
 
@@ -38,7 +38,7 @@ const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) =>
     [EVENT_TYPES.AI_CRITICAL_THINKING]: { Icon: AlertTriangle, color: 'text-orange-600' },
     [EVENT_TYPES.AI_REPLYING_QUESTION]: { Icon: MessageCircle, color: 'text-theme-800' },
     [EVENT_TYPES.AI_FIXING_CODE]: { Icon: Wrench, color: 'text-gray-800' },
-    [EVENT_TYPES.SYSTEM_EVENT]: { Icon: Server, color: 'text-gray-600' },
+    [EVENT_TYPES.SYSTEM_EVENT]: { Icon: Zap, color: 'text-blue-600' },
     [EVENT_TYPES.AI_GENERATING_CODE]: { Icon: Edit, color: 'text-green-800' },
     [EVENT_TYPES.AI_GENERATING_TEXT]: { Icon: Edit, color: 'text-indigo-800' },
   } as Record<string, { Icon: any; color: string }>;

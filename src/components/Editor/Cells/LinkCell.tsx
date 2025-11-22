@@ -110,12 +110,12 @@ const LinkCell: React.FC<LinkCellProps> = ({
         return filePath;
       }
 
-      // Check for assets pattern - should return .assets/filename
+      // Check for assets pattern - should return assets/filename
       const assetsPattern = new RegExp(`^${base}/assets/${notebookId}/(.+)$`);
       const assetsMatch = url.match(assetsPattern);
       if (assetsMatch && assetsMatch[1]) {
         const filename = decodeURIComponent(assetsMatch[1]);
-        const filePath = `.assets/${filename}`;
+        const filePath = `assets/${filename}`;
         uiLog.debug('normalizeFilePath: Matched assets pattern', { filename, filePath });
         return filePath;
       }

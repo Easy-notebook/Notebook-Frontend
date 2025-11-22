@@ -29,6 +29,12 @@ export function useNotebookStateSync() {
   }, [cells]);
 
   useEffect(() => {
+    console.log('🔄 [useNotebookStateSync] Syncing notebook state:', {
+      notebookId,
+      cellsCount: cells?.length || 0,
+      hasCells: cells && cells.length > 0,
+    });
+
     // Last cell info
     const lastCell = cells.length > 0 ? cells[cells.length - 1] : null;
     const lastCellType = lastCell?.type || null;
@@ -65,7 +71,7 @@ export function useNotebookStateSync() {
     );
 
     // Sync to workflow state machine
-    syncNotebookState({
+    const syncData = {
       notebook_id: notebookId,
       title: derivedTitle,
       cell_count: cells.length,
@@ -73,6 +79,15 @@ export function useNotebookStateSync() {
       last_output: lastOutput,
       cells: notebookCells,
       execution_count: executionCount,
+    };
+
+    console.log('🔄 [useNotebookStateSync] Calling syncNotebookState with:', {
+      notebook_id: syncData.notebook_id,
+      title: syncData.title,
+      cell_count: syncData.cell_count,
+      cells_length: syncData.cells?.length || 0,
     });
+
+    syncNotebookState(syncData);
   }, [notebookId, cells, syncNotebookState, derivedTitle]);
 }

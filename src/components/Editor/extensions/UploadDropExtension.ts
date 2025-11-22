@@ -68,13 +68,13 @@ export const UploadDropExtension = Extension.create({
                   '.avi',
                   '.mkv',
                 ],
-                targetDir: '.assets',
+                targetDir: 'assets',
               };
 
               // minimal no-op UI hooks
-              const setUploading = (_: boolean) => {};
-              const setUploadProgress = (_: number) => {};
-              const setError = (_: string | null) => {};
+              const setUploading = () => {};
+              const setUploadProgress = () => {};
+              const setError = () => {};
               const fileInputRef = { current: null as any };
               const abortControllerRef = { current: null as any };
               const toast = ({ title, description, variant }: any) => {
@@ -203,12 +203,12 @@ export const UploadDropExtension = Extension.create({
                   '.csv',
                   '.pdf',
                 ],
-                targetDir: '.assets',
+                targetDir: 'assets',
               };
 
-              const setUploading = (_: boolean) => {};
-              const setUploadProgress = (_: number) => {};
-              const setError = (_: string | null) => {};
+              const setUploading = () => {};
+              const setUploadProgress = () => {};
+              const setError = () => {};
               const fileInputRef = { current: null as any };
               const abortControllerRef = { current: null as any };
               const toast = ({ title, description, variant }: any) => {

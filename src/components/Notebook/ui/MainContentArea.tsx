@@ -11,6 +11,9 @@ import { AgentType } from '@Services/agentMemoryService';
 import { ThreePanelLayout } from './ThreePanelLayout';
 import { RightSidebar } from './RightSidebar';
 import WorkflowControl from '../features/workflow/WorkflowControl';
+import WorkflowPanel from '../features/workflow/WorkflowPanel';
+import DetachedCellView from '../features/workflow/DetachedCellView';
+import useStore from '@Store/notebookStore';
 
 interface MainContentAreaProps {
   routeView?: string; // Current route view: 'workspace', 'empty', 'library'
@@ -53,6 +56,8 @@ export const MainContentArea = ({
   onPhaseSelect,
   onAgentSelect,
 }: MainContentAreaProps) => {
+  // Check if there's a detached cell to display
+  const { detachedCellId, setDetachedCellId } = useStore();
   // Helper function to check if sidebar has content
   const hasSidebarContent = useCallback(() => {
     const activeItem = activeSidebarItem;
@@ -123,6 +128,10 @@ export const MainContentArea = ({
   const centerPanelContent = (
     <div className="h-full w-full flex flex-col relative">
       <GlobalTabList />
+
+      {/* Workflow Panel - shows current workflow progress */}
+      <WorkflowPanel />
+
       <div className="flex-1 overflow-y-scroll scroll-smooth w-full min-h-0">
         <div className="w-full h-full relative z-0">{children}</div>
       </div>
@@ -150,6 +159,29 @@ export const MainContentArea = ({
 
   return (
     <>
+      {/* Detached Cell Fullscreen View - shown on top of everything */}
+      {detachedCellId && (
+        <div className="fixed inset-0 z-[9999] bg-white dark:bg-gray-900 flex flex-col">
+          {/* Close button */}
+          <div className="h-14 flex items-center justify-between px-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+              Cell Fullscreen View
+            </h2>
+            <button
+              onClick={() => setDetachedCellId(null)}
+              className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+
+          {/* Detached cell content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <DetachedCellView />
+          </div>
+        </div>
+      )}
+
       {/* Content area using ThreePanelLayout */}
       <div className="flex-1 flex gap-1.5 p-3 min-h-0">
         <ThreePanelLayout

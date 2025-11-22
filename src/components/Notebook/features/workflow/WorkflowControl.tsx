@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { FaRedo, FaPlay, FaPause } from 'react-icons/fa';
+import { FaRedo, FaPlay, FaStop, FaPause } from 'react-icons/fa';
 import { Terminal } from 'lucide-react';
 import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
@@ -51,10 +51,11 @@ interface AutoWorkflowControlsProps {
   isTerminal: boolean;
   canRetry: boolean;
   currentStepInfo: { name: string; progress?: string } | null;
-  onPause: () => void;
-  onResume: () => void;
+  onStop: () => void;
   onRetry: () => void;
   onStart: () => void;
+  onPause: () => void;
+  onResume: () => void;
 }
 
 const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
@@ -63,10 +64,11 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
   isTerminal,
   canRetry,
   currentStepInfo,
-  onPause,
-  onResume,
+  onStop,
   onRetry,
   onStart,
+  onPause,
+  onResume,
 }) => {
   const [ellipsis, setEllipsis] = useState('...');
 
@@ -85,11 +87,11 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
       {currentStepInfo && (
         <div className="flex items-center gap-2 px-3">
           <div
-            className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-yellow-400' : isExecuting ? 'bg-theme-500 animate-pulse' : 'bg-green-500'}`}
+            className={`w-2.5 h-2.5 rounded-full ${isPaused ? 'bg-yellow-500' : isExecuting ? 'bg-blue-500 animate-pulse' : isTerminal ? 'bg-gray-400' : 'bg-green-500'}`}
           />
           <span className="text-sm font-medium text-gray-800">
             {extractSectionTitle(currentStepInfo.name)}
-            {isPaused ? ' (Paused)' : isExecuting ? ellipsis : ' ✓'}
+            {isPaused ? ' (已暂停)' : isExecuting ? ellipsis : isTerminal ? ' (Stopped)' : ' ✓'}
             {currentStepInfo.progress && (
               <span className="ml-2 text-xs text-gray-600">({currentStepInfo.progress})</span>
             )}
@@ -98,16 +100,6 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
       )}
 
       <div className="flex items-center gap-2">
-        {isExecuting && !isPaused && (
-          <button
-            onClick={onPause}
-            title="Stop Workflow"
-            className="p-2 rounded-full hover:bg-black/10 transition-colors"
-          >
-            <FaPause size={16} className="text-yellow-600" />
-          </button>
-        )}
-
         {isPaused && (
           <button
             onClick={onResume}
@@ -118,10 +110,30 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
           </button>
         )}
 
+        {isExecuting && !isPaused && (
+          <button
+            onClick={onPause}
+            title="Pause Workflow"
+            className="p-2 rounded-full hover:bg-black/10 transition-colors"
+          >
+            <FaPause size={16} className="text-yellow-600" />
+          </button>
+        )}
+
+        {(isExecuting || isPaused) && (
+          <button
+            onClick={onStop}
+            title="Stop Workflow"
+            className="p-2 rounded-full hover:bg-black/10 transition-colors"
+          >
+            <FaStop size={16} className="text-red-600" />
+          </button>
+        )}
+
         {canRetry && (
           <button
             onClick={onRetry}
-            title="Retry Current Behavior"
+            title="Continue to Next Behavior"
             className="p-2 rounded-full hover:bg-black/10 transition-colors"
           >
             <FaRedo size={16} className="text-orange-600" />
@@ -134,7 +146,7 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
             title="Start/Restart Workflow"
             className="p-2 rounded-full hover:bg-black/10 transition-colors"
           >
-            <FaPlay size={16} className="text-theme-600" />
+            <FaPlay size={16} className="text-green-600" />
           </button>
         )}
       </div>
@@ -145,7 +157,7 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
 const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackViewMode }) => {
   const { workflowTemplate } = usePipelineStore();
   const { addThinkingLog } = useAIPlanningContextStore();
-  const { currentState, stateJSON, transition, startWorkflow, reset, cancel } =
+  const { currentState, stateJSON, transition, startWorkflow, reset, cancel, pause, resume } =
     useWorkflowStateMachine();
   const { setShowCommandInput } = useAIAgentStore();
   const { currentView } = useRouteStore();
@@ -160,13 +172,17 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   }, [workflowTemplate]);
 
   const derivedState = useMemo<DerivedState>(() => {
+    const isRunning = RUNNING_STATES.includes(currentState);
+    const isTerminalState = TERMINAL_STATES.includes(currentState);
+
+    // Even if prerequisites are not met, we should show execution state if workflow is running
     if (!prerequisitesMet) {
       return {
-        isExecuting: false,
+        isExecuting: isRunning,
         isPaused: false,
-        isTerminal: false,
+        isTerminal: isTerminalState,
         canRetry: false,
-        currentStepInfo: null,
+        currentStepInfo: isRunning || isTerminalState ? { name: '加载中...' } : null,
         shouldRender: true,
       };
     }
@@ -185,19 +201,29 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
     const completedStepsCount = stage?.steps?.findIndex((st: any) => st.id === currentStepId) ?? 0;
     const totalSteps = stage?.steps?.length ?? 0;
 
+    // If workflow is running, paused, or terminal, we should show step info even if we don't have it yet
+    const shouldShowStepInfo =
+      isRunning ||
+      isTerminalState ||
+      currentState === WorkflowState.PAUSED ||
+      currentStageId ||
+      currentStepId;
+
     return {
-      isExecuting: RUNNING_STATES.includes(currentState),
-      isPaused: false, // No PAUSED state in new state machine
-      isTerminal: TERMINAL_STATES.includes(currentState),
+      isExecuting: isRunning,
+      isPaused: currentState === WorkflowState.PAUSED,
+      isTerminal: isTerminalState,
       canRetry: currentState === WorkflowState.BEHAVIOR_COMPLETED,
-      currentStepInfo: step
-        ? {
-            name: step.title || `步骤: ${step.id}`,
-            progress: `${completedStepsCount + 1}/${totalSteps}`,
-          }
-        : stage
-          ? { name: stage.title || `阶段: ${stage.id}` }
-          : { name: '准备中...' },
+      currentStepInfo: shouldShowStepInfo
+        ? step
+          ? {
+              name: step.title || `步骤: ${step.id}`,
+              progress: `${completedStepsCount + 1}/${totalSteps}`,
+            }
+          : stage
+            ? { name: stage.title || `阶段: ${stage.id}` }
+            : { name: '准备中...' }
+        : null,
       shouldRender: true,
     };
   }, [prerequisitesMet, workflowTemplate, currentStageId, currentStepId, currentState]);
@@ -209,14 +235,22 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   const currentStepInfo = derivedState.currentStepInfo;
   const shouldRender = derivedState.shouldRender;
 
-  const onPause = () => cancel();
-  const onResume = () => {
-    // Resume from current context
-    if (currentStageId) {
-      startWorkflow(currentStageId);
-    }
+  const onStop = () => {
+    console.log('[WorkflowControl] Stopping workflow...');
+    cancel();
   };
-  const onRetry = () => transition(WorkflowEvent.NEXT_BEHAVIOR);
+  const onPause = () => {
+    console.log('[WorkflowControl] Pausing workflow...');
+    pause();
+  };
+  const onResume = () => {
+    console.log('[WorkflowControl] Resuming workflow...');
+    resume();
+  };
+  const onRetry = () => {
+    console.log('[WorkflowControl] Continuing to next behavior...');
+    transition(WorkflowEvent.NEXT_BEHAVIOR);
+  };
   const onStart = () => {
     addThinkingLog('User started the PCS agent');
     reset();
@@ -262,6 +296,7 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
         isTerminal={isTerminal}
         canRetry={canRetry}
         currentStepInfo={currentStepInfo}
+        onStop={onStop}
         onPause={onPause}
         onResume={onResume}
         onRetry={onRetry}

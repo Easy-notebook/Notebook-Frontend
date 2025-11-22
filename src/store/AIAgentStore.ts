@@ -70,7 +70,7 @@ export interface ActionItem {
 }
 
 // 视图类型
-export type ViewType = 'script' | 'qa' | 'todo' | 'debug';
+export type ViewType = 'script' | 'qa' | 'todo' | 'debug' | 'workflow';
 
 // Store 状态接口
 export interface AIAgentState {

@@ -2,9 +2,9 @@
 // Route state management for NotebookApp
 
 import { create } from 'zustand';
-import { storeLog, uiLog } from '@Utils/logger';
+import { storeLog } from '@Utils/logger';
 
-export type AppView = 'empty' | 'library' | 'workspace' | 'agent' | 'file-preview' | 'pipeline';
+export type AppView = 'empty' | 'library' | 'workspace' | 'agent' | 'file-preview';
 
 export interface RouteState {
   currentView: AppView;
@@ -20,7 +20,6 @@ export interface RouteState {
   navigateToEmpty: () => void;
   navigateToLibrary: () => void;
   navigateToWorkspace: (notebookId: string) => void;
-  navigateToPipeline: () => void;
 }
 
 // 获取初始路由状态，避免总是从 empty 开始
@@ -41,13 +40,6 @@ const getInitialRouteState = () => {
       currentView: 'library' as AppView,
       currentNotebookId: null,
       currentRoute: '/FoKn/Library',
-    };
-  } else if (currentPath === '/pipeline') {
-    storeLog.debug('RouteStore: Setting initial state to PIPELINE');
-    return {
-      currentView: 'pipeline' as AppView,
-      currentNotebookId: null,
-      currentRoute: '/pipeline',
     };
   } else if (currentPath.startsWith('/workspace/')) {
     const notebookId = currentPath.split('/workspace/')[1];
@@ -79,7 +71,6 @@ const useRouteStore = create<RouteState>((set, get) => ({
   setView: (view: AppView) => set({ currentView: view }),
   setNotebookId: (id: string | null) => set({ currentNotebookId: id }),
   setRoute: (route: string) => {
-    const state = get();
     set({ currentRoute: route });
 
     // Auto-detect view based on route
@@ -87,8 +78,6 @@ const useRouteStore = create<RouteState>((set, get) => ({
       set({ currentView: 'empty' });
     } else if (route === '/FoKn/Library') {
       set({ currentView: 'library' });
-    } else if (route === '/pipeline') {
-      set({ currentView: 'pipeline' });
     } else if (route.startsWith('/workspace/')) {
       const notebookId = route.split('/workspace/')[1];
       set({
@@ -112,11 +101,6 @@ const useRouteStore = create<RouteState>((set, get) => ({
     const route = `/workspace/${notebookId}`;
     window.history.pushState(null, '', route);
     get().setRoute(route);
-  },
-
-  navigateToPipeline: () => {
-    window.history.pushState(null, '', '/pipeline');
-    get().setRoute('/pipeline');
   },
 }));
 

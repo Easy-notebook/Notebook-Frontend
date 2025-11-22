@@ -1446,7 +1446,13 @@ const useStore = create(
               description: cell.description || null,
               metadata: cell.metadata || null,
             }));
-            set({ cells: restoredCells });
+
+            // Parse tasks and update cells with phaseId
+            const parsedTasks = parseMarkdownCells(restoredCells as any);
+            updateCellsPhaseId(restoredCells as any, parsedTasks);
+
+            // Set cells and mark as initialized
+            set({ cells: restoredCells, tasks: parsedTasks, isInitialized: true });
             notebookLog.cellOperation('update', 'batch', { count: restoredCells.length });
           } else {
             console.log('🔍 [notebookStore] No cells in database, creating default title cell');
@@ -1460,15 +1466,20 @@ const useStore = create(
               description: null,
               metadata: { isDefaultTitle: true },
             };
-            set({ cells: [defaultCell] });
+
+            // Parse tasks for default cell
+            const parsedTasks = parseMarkdownCells([defaultCell] as any);
+            updateCellsPhaseId([defaultCell] as any, parsedTasks);
+
+            set({ cells: [defaultCell], tasks: parsedTasks, isInitialized: true });
             notebookLog.cellOperation('create', 'title', { reason: 'default creation' });
           }
 
           // tasks 与 phase 初始化
-          if (tasks && tasks.length > 0) {
+          const currentTasks = get().tasks;
+          if (currentTasks && currentTasks.length > 0) {
             set({
-              tasks,
-              currentPhaseId: tasks[0]?.phases?.[0]?.id || null,
+              currentPhaseId: currentTasks[0]?.phases?.[0]?.id || null,
             });
           }
 

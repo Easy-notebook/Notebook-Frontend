@@ -224,7 +224,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         '.xlsx',
         '.xls',
       ],
-      targetDir: '.assets',
+      targetDir: 'assets',
     }),
     []
   );
@@ -463,7 +463,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
           variant: 'info',
         });
     },
-    [handlePreviewFile, toast, notebookId]
+    [handlePreviewFile, toast, switchToNotebookMode]
   );
 
   /** 选择：目录→切展开；文件→预览 */

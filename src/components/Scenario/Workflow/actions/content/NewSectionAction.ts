@@ -8,7 +8,7 @@ import { ExecutionStep } from '../../store/useScriptStore';
 
 export class NewSectionAction extends ActionBase {
   execute(step: ExecutionStep): string | null {
-    const content = `### ${step.content || ''}`;
+    const content = `## ${step.content || ''}`;
     const metadata = { ...step.metadata, isSection: true };
 
     const cellId = this.scriptStore.addCell('text', content, metadata);
