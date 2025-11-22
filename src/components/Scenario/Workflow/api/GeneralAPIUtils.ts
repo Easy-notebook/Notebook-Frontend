@@ -15,8 +15,6 @@ import { DSLC_BASE_URL } from '../../../../config/base_url';
  * API endpoints
  */
 export const API_ENDPOINTS = {
-  FEEDBACK: `${DSLC_BASE_URL}/reflection`,
-  BEHAVIOR: `${DSLC_BASE_URL}/actions`,
   GENERATE: `${DSLC_BASE_URL}/generate`,
 };
 

@@ -1,58 +1,80 @@
-/** Planning API Handler - Calls VDSAgents /planning endpoint */
+/** Planning API Handler - Calls VDSAgents /planning endpoint (Streaming) */
 import { BaseAPIHandler } from './BaseAPIHandler';
-import { StateJSON } from '../types/StateJSON';
-import { parseStagesXML, parseStepsXML, parseBehaviorXML } from '../utils/XMLParser';
+import { StateJSON } from '@Store/models';
+import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
+import { getActionClass } from '../actions';
 
 export class PlanningAPIHandler extends BaseAPIHandler {
-  async call(
+  /**
+   * Call Planning API with streaming action support
+   *
+   * Returns async generator that yields actions as they arrive
+   */
+  async *call(
     stateData: Record<string, any>,
     stageId?: string,
     stepId?: string,
     kwargs?: Record<string, any>
-  ): Promise<any> {
+  ): AsyncGenerator<any> {
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(stateData);
     }
 
+    // Get latest notebook state directly from notebookStore
+    const latestNotebook = globalUpdateInterface.getNotebookState();
+
+    // Update stateData with latest notebook data
+    stateData.state.notebook = {
+      ...stateData.state.notebook,
+      ...latestNotebook,
+    };
+
+    console.log('[PlanningAPI] Injected latest notebook data:', {
+      notebook_id: latestNotebook.notebook_id,
+      cell_count: latestNotebook.cell_count,
+      title: latestNotebook.title,
+    });
+
     console.log(`[PlanningAPI] Calling (stage=${stageId}, step=${stepId})`);
 
-    let xmlResponse = '';
     try {
-      // Call WorkflowAPIClient's callPlanningAPI method
-      xmlResponse = await this.apiClient.callPlanningAPI(stateData as StateJSON);
+      // Call WorkflowAPIClient's streaming callPlanningAPI method
+      const actionStream = this.apiClient.callPlanningAPI(stateData as StateJSON);
 
-      console.log(`[PlanningAPI] XML response received (${xmlResponse.length} chars)`);
-      console.log(`[PlanningAPI] XML preview:`, xmlResponse.substring(0, 300));
+      // Process each action as it arrives
+      for await (const actionData of actionStream) {
+        console.log('[PlanningAPI] Received action:', actionData);
 
-      // Parse XML based on current FSM state
-      const fsmState = stateData.state?.FSM?.state || 'UNKNOWN';
-      let parsedResponse;
+        // Extract action object (format: {"action": {...}})
+        const action = actionData.action;
+        if (!action || !action.type) {
+          console.warn('[PlanningAPI] Invalid action format:', actionData);
+          continue;
+        }
 
-      if (fsmState === 'IDLE') {
-        // IDLE state → stages list
-        parsedResponse = parseStagesXML(xmlResponse);
-      } else if (fsmState.includes('STAGE') && fsmState.includes('RUNNING')) {
-        // STAGE_RUNNING → steps list
-        parsedResponse = parseStepsXML(xmlResponse);
-      } else if (fsmState.includes('STEP') && fsmState.includes('RUNNING')) {
-        // STEP_RUNNING → behavior context
-        parsedResponse = parseBehaviorXML(xmlResponse);
-      } else {
-        console.warn(
-          `[PlanningAPI] Unknown state for parsing: ${fsmState}, attempting auto-detect`
-        );
-        // Auto-detect XML type
-        const { parseWorkflowXML } = await import('../utils/XMLParser');
-        parsedResponse = parseWorkflowXML(xmlResponse);
+        // Get action handler class
+        const ActionClass = getActionClass(action.type);
+        if (!ActionClass) {
+          console.warn(`[PlanningAPI] Unknown action type: ${action.type}`);
+          continue;
+        }
+
+        // Execute action
+        try {
+          const actionInstance = new ActionClass(this.scriptStore);
+          await actionInstance.execute(action);
+          console.log(`[PlanningAPI] ✅ Executed action: ${action.type}`);
+        } catch (error) {
+          console.error(`[PlanningAPI] Failed to execute action ${action.type}:`, error);
+        }
+
+        // Yield action for external processing if needed
+        yield action;
       }
 
-      console.log(`[PlanningAPI] Parsed response:`, Object.keys(parsedResponse));
-      return parsedResponse;
+      console.log('[PlanningAPI] ✅ Planning stream completed');
     } catch (error) {
       console.error(`[PlanningAPI] Failed:`, error);
-      if (xmlResponse) {
-        console.error(`[PlanningAPI] Full XML that caused error:\n`, xmlResponse);
-      }
       throw error;
     }
   }

@@ -3,53 +3,17 @@ import { create } from 'zustand';
 import useStore from '@Store/notebookStore';
 import { NotebookApiService } from '@Services/notebookServices';
 import { storeLog } from '@Utils/logger';
+import {
+  DISPLAY_MODES,
+  type DisplayMode,
+  type CellExecutionState,
+  type ExecutionResult,
+  type KernelInitResult,
+  type ExecutionStatus,
+} from '@Store/models';
 
-// 显示模式常量
-export const DISPLAY_MODES = {
-  COMPLETE: 'complete',
-  CODE_ONLY: 'code_only',
-  OUTPUT_ONLY: 'output_only',
-} as const;
-
-// 显示模式类型
-export type DisplayMode = (typeof DISPLAY_MODES)[keyof typeof DISPLAY_MODES];
-
-/**
- * 单个 Cell 的执行状态接口
- */
-export interface CellExecutionState {
-  isExecuting: boolean;
-  isCancelling: boolean;
-  elapsedTime: number;
-  statusCheckInterval: number | null;
-}
-
-/**
- * 执行结果接口
- */
-export interface ExecutionResult {
-  success: boolean;
-  error?: string;
-  outputs?: any[];
-}
-
-/**
- * 内核初始化结果接口
- */
-export interface KernelInitResult {
-  status: string;
-  notebook_id?: string;
-  message?: string;
-}
-
-/**
- * 执行状态响应接口
- */
-export interface ExecutionStatus {
-  status: 'running' | 'idle' | 'error';
-  elapsed_time?: number;
-  outputs?: any[];
-}
+// Re-export display modes for backward compatibility with UI imports
+export { DISPLAY_MODES } from '@Store/models';
 
 /**
  * Code Store 状态接口
@@ -331,7 +295,15 @@ const useCodeStore = create<CodeStore>((set, get) => ({
       }
 
       const result = await NotebookApiService.executeCode(codeCell.content, notebookId!);
+
       // 更新 outputs
+      if (import.meta.env.DEV) {
+        console.log('🔍 [codeStore] Updating cell outputs after execution:', {
+          cellId: cellId.slice(0, 8),
+          outputsCount: result.outputs?.length || 0,
+        });
+      }
+
       notebookState.updateCellOutputs(cellId, result.outputs || []);
 
       let hasError = false;

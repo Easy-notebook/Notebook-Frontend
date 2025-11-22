@@ -1,10 +1,7 @@
 // src/interfaces/globalUpdateInterface.ts
 import useStore from '../store/notebookStore';
-import type {
-  Cell as StoreCell,
-  CellType as StoreCellType,
-  ViewMode as StoreViewMode,
-} from '../store/notebookStore';
+import type { Cell as StoreCell, CellType as StoreCellType } from '@Store/models';
+import type { ViewMode as StoreViewMode } from '../store/notebookStore';
 import { useAIAgentStore } from '../store/AIAgentStore';
 import useCodeStore from '../store/codeStore';
 import {
@@ -80,6 +77,17 @@ interface GlobalUpdateInterface {
   getHistoryCode: () => string;
   getPhaseHistoryCode: (phaseId: string) => string;
   convertCurrentCodeCellToHybridCell: () => void;
+
+  // Get current notebook state (for workflow API calls)
+  getNotebookState: () => {
+    notebook_id: string | null;
+    title: string | null;
+    cells: any[];
+    cell_count: number;
+    last_cell_type: string | null;
+    last_output: any;
+    execution_count: number;
+  };
 
   // AI Agent Store Methods
   initStreamingAnswer: (QId: string) => void;
@@ -637,6 +645,72 @@ const globalUpdateInterface: GlobalUpdateInterface = {
       // Trigger re-render
       useStore.getState().updateCell(cellId, targetCell.content);
     }
+  },
+
+  // Get current notebook state implementation
+  getNotebookState: () => {
+    const state = useStore.getState();
+    const cells = state.cells;
+    const notebookId = state.notebookId;
+
+    // Derive title from first markdown H1 if present
+    let title = null;
+    if (cells.length > 0 && cells[0].type === 'markdown') {
+      const content = cells[0].content;
+      if (typeof content === 'string') {
+        const match = content.match(/^#\s*(.+)$/m);
+        if (match && match[1]) {
+          title = match[1].trim();
+        }
+      }
+    }
+
+    // Last cell info
+    const lastCell = cells.length > 0 ? cells[cells.length - 1] : null;
+    const lastCellType = lastCell?.type || null;
+    const lastOutput = lastCell?.outputs?.[lastCell.outputs.length - 1] || null;
+
+    // Map frontend Cell -> backend NotebookCell format
+    const notebookCells = cells.map((cell) => {
+      const isCode = cell.type === 'code';
+      const nbCell: any = {
+        id: cell.id,
+        type: isCode ? 'code' : 'markdown',
+        content: cell.content || '',
+        outputs: cell.outputs || [],
+        enable_edit: cell.enableEdit !== false,
+        description: cell.description || '',
+        metadata: cell.metadata || {},
+        could_visible_in_writing_mode: true,
+        isUpdate: true,
+      };
+
+      // Optional fields
+      if (isCode && (cell as any).language) {
+        nbCell.language = (cell as any).language;
+      }
+      if (typeof (cell as any).execution_count === 'number') {
+        nbCell.execution_count = (cell as any).execution_count;
+      }
+
+      return nbCell;
+    });
+
+    // Best-effort execution count
+    const executionCount = Math.max(
+      0,
+      ...cells.map((c: any) => (typeof c.execution_count === 'number' ? c.execution_count : 0))
+    );
+
+    return {
+      notebook_id: notebookId,
+      title,
+      cells: notebookCells,
+      cell_count: cells.length,
+      last_cell_type: lastCellType,
+      last_output: lastOutput,
+      execution_count: executionCount,
+    };
   },
 };
 

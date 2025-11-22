@@ -62,7 +62,7 @@ export interface FileInfoResponse extends ApiResponse {
   info?: FileInfo;
 }
 
-export interface KernelStatus extends ApiResponse {
+export interface KernelStatus {
   kernel_id?: string;
   status?: 'starting' | 'idle' | 'busy' | 'dead';
   execution_count?: number;
@@ -249,7 +249,7 @@ export class NotebookApiService {
     notebookId: string,
     files: File[],
     uploadConfig: UploadConfig & { targetDir?: string },
-    onProgress?: (e: ProgressEvent) => void,
+    onProgress?: (e: any) => void,
     signal?: AbortSignal
   ): Promise<ApiResponse> {
     try {
@@ -291,9 +291,9 @@ export class NotebookApiService {
       // Use axios to support upload progress and abort
       const axiosResp = await axios.post<ApiResponse>(url, formData, {
         signal,
-        onUploadProgress: (evt: ProgressEvent) => {
+        onUploadProgress: (evt) => {
           try {
-            if (onProgress) onProgress(evt);
+            if (onProgress) onProgress(evt as any);
           } catch (cbErr) {
             apiLog.warn('onUploadProgress callback error', { error: cbErr });
           }

@@ -20,7 +20,9 @@ import {
   getTransitionCoordinator,
   initializeTransitionCoordinator,
 } from '../transitions/TransitionCoordinator';
-import type { NotebookState } from '../types/StateJSON';
+import type { NotebookState, StateJSON } from '@Store/models';
+import { createInitialStateJSON } from '@Store/models';
+import { WorkflowEvent, WorkflowState } from '@Store/models';
 
 // ==============================================
 // TYPES & INTERFACES
@@ -29,72 +31,7 @@ import type { NotebookState } from '../types/StateJSON';
 /**
  * Workflow state enum (matches VDSAgents backend states - UPPERCASE)
  */
-export enum WorkflowState {
-  IDLE = 'IDLE',
-  STAGE_RUNNING = 'STAGE_RUNNING',
-  STEP_RUNNING = 'STEP_RUNNING',
-  BEHAVIOR_RUNNING = 'BEHAVIOR_RUNNING',
-  BEHAVIOR_COMPLETED = 'BEHAVIOR_COMPLETED',
-  STEP_COMPLETED = 'STEP_COMPLETED',
-  STAGE_COMPLETED = 'STAGE_COMPLETED',
-  COMPLETE = 'COMPLETE',
-  FAILED = 'FAILED',
-  CANCELED = 'CANCELED',
-  PAUSED = 'PAUSED',
-}
-
-/**
- * Workflow event enum (triggers transitions)
- */
-export enum WorkflowEvent {
-  START_WORKFLOW = 'START_WORKFLOW',
-  START_STAGE = 'START_STAGE',
-  START_STEP = 'START_STEP',
-  START_BEHAVIOR = 'START_BEHAVIOR',
-  COMPLETE_BEHAVIOR = 'COMPLETE_BEHAVIOR',
-  NEXT_BEHAVIOR = 'NEXT_BEHAVIOR',
-  COMPLETE_STEP = 'COMPLETE_STEP',
-  NEXT_STEP = 'NEXT_STEP',
-  COMPLETE_STAGE = 'COMPLETE_STAGE',
-  NEXT_STAGE = 'NEXT_STAGE',
-  COMPLETE_WORKFLOW = 'COMPLETE_WORKFLOW',
-  FAIL = 'FAIL',
-  CANCEL = 'CANCEL',
-  PAUSE = 'PAUSE',
-  RESUME = 'RESUME',
-}
-
-/**
- * Complete state JSON structure (matches backend format)
- */
-export interface StateJSON {
-  observation: {
-    location: {
-      current: {
-        stage_id: string | null;
-        step_id: string | null;
-        behavior_id: string | null;
-        behavior_iteration: number;
-      };
-      progress: {
-        stages?: any;
-        steps?: any;
-        behaviors?: any;
-      };
-      goals?: string;
-    };
-  };
-  state: {
-    FSM: {
-      state: string;
-      previous_state?: string;
-      last_transition?: string;
-    };
-    notebook?: any;
-    [key: string]: any;
-  };
-  [key: string]: any;
-}
+// Enums and StateJSON are now provided by @Store/models and ../types/StateJSON
 
 /**
  * State machine store interface
@@ -151,80 +88,7 @@ export type WorkflowStateMachine = WorkflowStateMachineState & WorkflowStateMach
  * This creates a complete state structure as expected by the backend.
  * Reference: VDSAgents/docs/examples/housing/payloads/00_STATE_IDLE.json
  */
-const createInitialStateJSON = (): StateJSON => ({
-  observation: {
-    location: {
-      current: {
-        stage_id: null,
-        step_id: null,
-        behavior_id: null,
-        behavior_iteration: 0,
-      },
-      progress: {
-        stages: {
-          completed: [],
-          current: null,
-          remaining: [],
-          focus: '',
-          current_outputs: {
-            expected: [],
-            produced: [],
-            in_progress: [],
-          },
-        },
-        steps: {
-          completed: [],
-          current: null,
-          remaining: [],
-          focus: '',
-          current_outputs: {
-            expected: [],
-            produced: [],
-            in_progress: [],
-          },
-        },
-        behaviors: {
-          completed: [],
-          current: null,
-          iteration: null,
-          focus: '',
-          current_outputs: {
-            expected: [],
-            produced: [],
-            in_progress: [],
-          },
-        },
-      },
-      goals:
-        '用户提出了问题%user_problem%，上传了文件%user_submit_files%,需要对于用户的问题进行大目标拆分，以目标产物为导向，进行阶段拆分，每个阶段需要有明确的目标，并且需要有明确的目标产物',
-    },
-  },
-  state: {
-    variables: {
-      user_problem: '',
-      user_submit_files: [],
-    },
-    effects: {
-      current: [],
-      history: [],
-    },
-    notebook: {
-      notebook_id: null,
-      title: null,
-      cell_count: 0,
-      last_cell_type: null,
-      last_output: null,
-      cells: [],
-      execution_count: 0,
-    },
-    FSM: {
-      state: WorkflowState.IDLE,
-      last_transition: null,
-      timestamp: new Date().toISOString(),
-    },
-  },
-  metadata: {},
-});
+// Initial state JSON is provided by createInitialStateJSON from types/StateJSON
 
 // ==============================================
 // ZUSTAND STORE
@@ -473,5 +337,6 @@ export function initializeStateMachine(context: {
 // EXPORTS
 // ==============================================
 
+export { WorkflowEvent, WorkflowState };
 export { WorkflowEvent as EVENTS, WorkflowState as WORKFLOW_STATES };
 export default useWorkflowStateMachine;

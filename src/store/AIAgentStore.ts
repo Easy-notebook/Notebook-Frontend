@@ -1,6 +1,7 @@
 // src/store/AIAgentStore.ts
 import { create } from 'zustand';
 import { agentLog } from '@Utils/logger';
+import type { ActionItem, QAItem } from '@Store/models/agent';
 
 // 定义事件类型
 export const EVENT_TYPES = {
@@ -28,46 +29,7 @@ export const EVENT_TYPES = {
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];
 
 // QA 项接口
-export interface QAItem {
-  id: string;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-  resolved: boolean;
-  onProcess: boolean;
-  relatedActionIds?: string[];
-  // Optional fields used by UI components
-  viewMode?: string;
-  cellId?: string;
-  // Assistant metadata
-  agent?: string;
-  model?: string;
-  agentType?: string;
-  // Tool calls metadata (loosely typed to support various providers)
-  toolCalls?: Array<{
-    type?: string;
-    name?: string;
-    content?: string;
-    arguments?: string;
-    agent?: string;
-  }>;
-  // Thinking timing
-  thinkingStartAtMs?: number;
-  thinkingEndAtMs?: number;
-}
-
-// Action 项接口
-export interface ActionItem {
-  id: string;
-  type: EventType;
-  timestamp: string;
-  content: string;
-  result: string;
-  relatedQAIds: string[];
-  cellId: string | null;
-  viewMode: string;
-  onProcess: boolean;
-}
+// Types moved to @Store/models/agent
 
 // 视图类型
 export type ViewType = 'script' | 'qa' | 'todo' | 'debug' | 'workflow';

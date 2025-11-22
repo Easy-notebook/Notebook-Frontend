@@ -1,5 +1,6 @@
 // src/store/actionCreators.ts
-import { EVENT_TYPES, EventType, ActionItem } from './AIAgentStore';
+import { EVENT_TYPES, EventType } from './AIAgentStore';
+import type { ActionItem } from '@Store/models/agent';
 import { v4 as uuidv4 } from 'uuid';
 import useStore from './notebookStore';
 

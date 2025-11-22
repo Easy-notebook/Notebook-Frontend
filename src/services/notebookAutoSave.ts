@@ -5,7 +5,7 @@
 
 import { debounce } from 'lodash-es';
 import { NotebookORM, FileORM, StorageManager } from '@Storage/index';
-import type { Cell, Task } from '@Store/notebookStore';
+import type { Cell, Task } from '@Store/models';
 import { notebookLog, storageLog } from '@Utils/logger';
 
 interface NotebookSnapshot {
@@ -29,7 +29,7 @@ interface SaveResult {
   size: number;
 }
 
-type CellType = 'code' | 'markdown' | 'hybrid' | 'raw' | 'image' | 'thinking' | 'link';
+// Types for cells/tasks are provided by @Store/models
 
 /**
  * Auto-save service for notebook content with singleton pattern
@@ -203,6 +203,17 @@ export class NotebookAutoSave {
       });
 
       // 2. Save notebook content as a single main file
+      if (import.meta.env.DEV) {
+        const codeCellsWithOutputs = (cells || []).filter(
+          (c) => c.type === 'code' && c.outputs && c.outputs.length > 0
+        );
+        console.log('🔍 [notebookAutoSave] Saving notebook:', {
+          notebookId: notebookId.slice(0, 8),
+          totalCells: cells?.length || 0,
+          codeCellsWithOutputs: codeCellsWithOutputs.length,
+        });
+      }
+
       const notebookContent = JSON.stringify(
         {
           notebook_id: notebookId,
@@ -304,9 +315,22 @@ export class NotebookAutoSave {
             throw new Error('Invalid notebook data structure');
           }
 
+          const loadedCells = Array.isArray(data.cells) ? data.cells : [];
+
+          if (import.meta.env.DEV) {
+            const codeCellsWithOutputs = loadedCells.filter(
+              (c) => c.type === 'code' && c.outputs && c.outputs.length > 0
+            );
+            console.log('🔍 [notebookAutoSave] Loading notebook from database:', {
+              notebookId: notebookId.slice(0, 8),
+              totalCells: loadedCells.length,
+              codeCellsWithOutputs: codeCellsWithOutputs.length,
+            });
+          }
+
           return {
             notebookTitle: data.title || data.notebookTitle || 'Untitled',
-            cells: Array.isArray(data.cells) ? data.cells : [],
+            cells: loadedCells,
             tasks: Array.isArray(data.tasks) ? data.tasks : [],
           };
         } catch (parseError) {

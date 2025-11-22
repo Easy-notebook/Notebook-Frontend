@@ -28,43 +28,7 @@ import { useAIPlanningContextStore } from './aiPlanningContext';
 // Types
 // ==============================================
 
-export interface ActionMetadata {
-  [key: string]: any;
-  isStep?: boolean;
-  isChapter?: boolean;
-  isSection?: boolean;
-  isComment?: boolean;
-  finished_thinking?: boolean;
-  thinkingText?: string;
-}
-
-export interface ExecutionStep {
-  action: string;
-  storeId?: string;
-  content?: string;
-  metadata?: ActionMetadata;
-
-  // For specific action types
-  agentName?: string;
-  customText?: string | null;
-  textArray?: string[];
-  thinkingText?: string;
-  text?: string;
-  codecell_id?: string;
-  need_output?: boolean;
-  auto_debug?: boolean;
-  title?: string;
-  shotType?: string;
-  level?: 'stages' | 'steps' | 'behaviors';
-  focus?: string;
-  outputs?: any;
-  state?: any;
-  language?: string;
-
-  // Legacy support
-  stepId?: string;
-  phaseId?: string;
-}
+import type { ActionMetadata, ExecutionStep } from '@Store/models';
 
 interface ScriptStoreState {
   debugButtonVisible: boolean;

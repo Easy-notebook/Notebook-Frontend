@@ -3,10 +3,7 @@ import TiptapNotebookEditor from '@Editor/TiptapNotebookEditor.js';
 import JupyterNotebookEditor from '@Editor/JupyterNotebookEditor.js';
 import { useSettings } from '@Store/settingsStore.js';
 
-interface CreateModeProps {
-  className?: string;
-  readOnly?: boolean;
-}
+import type { CreateModeProps } from '@Store/models';
 
 /**
  * CreateMode component renders the notebook editor in "create" mode.

@@ -4,7 +4,7 @@
  */
 
 import { useCallback } from 'react';
-import { Cell } from '@Store/notebookStore';
+import type { Cell } from '@Store/models';
 import { generateCellId } from '@Editor/utils/cellConverters';
 
 interface UseCellManagementProps {

@@ -18,7 +18,7 @@
  * - AsyncStateMachineAdapter: Coordinate above components
  */
 
-import { StateJSON } from '../store/workflowStateMachine';
+import { StateJSON } from '@Store/models';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
 import { PlanningAPIHandler, GeneratingAPIHandler, ReflectingAPIHandler } from '../api';
 import streamingLogger from '../__tests__/streaming-debug-logger';
@@ -125,8 +125,8 @@ export class AsyncStateMachineAdapter {
       // Get TransitionCoordinator
       const coordinator = getTransitionCoordinator();
 
-      // For generating/reflecting APIs, execute actions as they arrive (streaming)
-      if (apiType === 'generating' || apiType === 'reflecting') {
+      // For planning/generating/reflecting APIs, execute actions as they arrive (streaming)
+      if (apiType === 'planning' || apiType === 'generating' || apiType === 'reflecting') {
         // If response is an async iterator, execute actions immediately as they arrive
         if (!apiResponse.actions && typeof apiResponse[Symbol.asyncIterator] === 'function') {
           const actions = [];
@@ -306,8 +306,9 @@ export class AsyncStateMachineAdapter {
     const stepId = location.step_id || 'none';
 
     // Call appropriate API handler
+    // All APIs now return AsyncGenerator for streaming
     if (apiType === 'planning') {
-      return await this.planningHandler.call(stateJSON, stageId, stepId, {
+      return this.planningHandler.call(stateJSON, stageId, stepId, {
         transition_name: transitionName,
       });
     } else if (apiType === 'generating') {

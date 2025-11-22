@@ -1,7 +1,8 @@
 // components/Notebook/useImportNotebook.js
 import { useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import useStore, { Cell, CellType, OutputItem } from '@Store/notebookStore';
+import useStore from '@Store/notebookStore';
+import type { Cell, CellType, OutputItem } from '@Store/models';
 import { useToast } from '@/components/UI/Toast';
 import { notebookApiIntegration } from '@Services/notebookServices';
 import { parseMarkdownContent } from '@Editor/utils/markdownParser';

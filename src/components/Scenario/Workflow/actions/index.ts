@@ -21,9 +21,17 @@
  *     ├── thinking/            # Thinking process visualization actions
  *     │   ├── IsThinkingAction.ts
  *     │   └── FinishThinkingAction.ts
- *     └── workflow/            # Workflow metadata actions
- *         ├── UpdateTitleAction.ts
- *         └── UpdateLastTextAction.ts
+ *     ├── workflow/            # Workflow metadata actions
+ *     │   ├── UpdateTitleAction.ts
+ *     │   └── UpdateLastTextAction.ts
+ *     └── planning/            # Planning protocol actions (streaming)
+ *         ├── PlanStageAction.ts
+ *         ├── CompleteWorkflowPlanningAction.ts
+ *         ├── PlanStepAction.ts
+ *         ├── UpdateStageContextAction.ts
+ *         ├── CompleteStagePlanningAction.ts
+ *         ├── DelegateTaskAction.ts
+ *         └── CompleteStepPlanningAction.ts
  *
  * Usage:
  * -----
@@ -66,6 +74,15 @@
  * Workflow Actions:
  *     - update_title: Updates notebook title
  *     - update_last_text: Updates last text cell content
+ *
+ * Planning Actions (Streaming Protocol):
+ *     - plan_stage: Create/update a workflow stage (IDLE state)
+ *     - complete_workflow_planning: Complete workflow planning (IDLE → STAGE_RUNNING)
+ *     - plan_step: Create/update a stage step (STAGE_RUNNING state)
+ *     - update_stage_context: Add context to stage (optional)
+ *     - complete_stage_planning: Complete stage planning (STAGE_RUNNING → STEP_RUNNING)
+ *     - delegate_task: Delegate step to agent (STEP_RUNNING state)
+ *     - complete_step_planning: Complete step planning (STEP_RUNNING → BEHAVIOR_RUNNING)
  */
 
 import { getAllActionTypes as _getAllActionTypes } from './base';
@@ -86,9 +103,10 @@ import * as content from './content';
 import * as code from './code';
 import * as thinking from './thinking';
 import * as workflow from './workflow';
+import * as planning from './planning';
 
 // Export all action classes for direct access if needed
-export { content, code, thinking, workflow };
+export { content, code, thinking, workflow, planning };
 
 // Log all registered actions (use imported reference)
 console.log('[Actions] All actions registered:', _getAllActionTypes());

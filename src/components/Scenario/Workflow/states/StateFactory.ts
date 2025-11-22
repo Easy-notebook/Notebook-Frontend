@@ -17,7 +17,7 @@ import { StepRunningState } from './StepRunningState';
 import { StepCompletedState } from './StepCompletedState';
 import { BehaviorRunningState } from './BehaviorRunningState';
 import { BehaviorCompletedState } from './BehaviorCompletedState';
-import { WorkflowState } from '../store/workflowStateMachine';
+import { WorkflowState } from '@Store/models';
 
 type StateClass = new () => BaseState;
 

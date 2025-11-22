@@ -12,25 +12,7 @@
 import { create, StateCreator } from 'zustand';
 
 // ## Type Definitions
-
-// Defines the structure for a snapshot of the core AI context, used for backups.
-interface AIContext {
-  checklist: { current: string[]; completed: string[] };
-  thinking: string[];
-  variables: Record<string, unknown>;
-  toDoList: string[];
-  stageStatus: Record<string, boolean>;
-  effect: { current: string[]; history: string[] };
-}
-
-// Defines the structure for tracking request contexts to prevent duplicate executions.
-interface RequestContext {
-  stepId: string;
-  stageId: string;
-  toDoList: string[];
-  variables: Record<string, unknown>;
-  thinkingLength: number;
-}
+import type { AIContext, RequestContext } from '@Store/models';
 
 // Defines the state structure of the store.
 interface AIPlanningState extends AIContext {

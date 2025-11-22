@@ -2,16 +2,14 @@
 import useOperatorStore from '@Store/operatorStore';
 import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
+import type { Operation } from '@Store/models/operation';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import { storeLog } from '@Utils/logger';
 
 /**
  * 操作类型定义
  */
-export interface Operation {
-  type: string;
-  payload: Record<string, any>;
-}
+// Operation interface moved to @Store/models/operation
 
 /**
  * 代码输出操作载荷接口

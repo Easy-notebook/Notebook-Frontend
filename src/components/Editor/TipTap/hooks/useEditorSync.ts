@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useMemo } from 'react';
 import { Editor } from '@tiptap/react';
-import { Cell } from '@Store/notebookStore';
+import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from '@Editor/utils/cellConverters';
 
 const DEBUG = false;

@@ -26,7 +26,8 @@
  * ```
  */
 
-import { useScriptStore, ExecutionStep } from '../store/useScriptStore';
+import { useScriptStore } from '../store/useScriptStore';
+import type { ExecutionStep } from '@Store/models';
 
 /**
  * Test single action execution

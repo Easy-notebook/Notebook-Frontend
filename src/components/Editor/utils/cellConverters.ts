@@ -3,7 +3,7 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Cell, CellType } from '@Store/notebookStore';
+import type { Cell, CellType } from '@Store/models';
 import {
   convertMarkdownToHtml,
   convertHtmlToMarkdown,

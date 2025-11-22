@@ -13,7 +13,7 @@
  * 4. Reference to appropriate API type
  */
 
-import { WorkflowEvent } from '../store/workflowStateMachine';
+import { WorkflowEvent } from '@Store/models';
 import { PlanningAPIHandler, GeneratingAPIHandler, ReflectingAPIHandler } from '../api';
 
 export enum APIResponseType {

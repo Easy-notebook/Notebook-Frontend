@@ -5,7 +5,7 @@
 
 import { useRef } from 'react';
 import { Editor, EditorEvents } from '@tiptap/react';
-import { Cell } from '@Store/notebookStore';
+import type { Cell } from '@Store/models';
 import { convertEditorStateToCells } from '@Editor/utils/cellConverters';
 import useStore from '@Store/notebookStore';
 

@@ -2,23 +2,7 @@ import React from 'react';
 import StepNavigation from '@Notebook/features/workflow/StepNavigation';
 import { useSettings } from '@Store/settingsStore';
 
-interface DemoModeProps {
-  className?: string;
-  readOnly?: boolean;
-  tasks?: any[];
-  currentPhaseId?: string;
-  currentStepIndex?: number;
-  cells?: any[];
-  findCellsByStep?: (tasks: any[], phaseId: string, stepId: string, cells: any[]) => any[];
-  renderCell?: (cell: any) => React.ReactNode;
-  // Navigation handlers for StepNavigation
-  onPrevious?: () => void;
-  onNext?: () => void;
-  onPreviousPhase?: () => void;
-  onNextPhase?: () => void;
-  isFirstPhase?: boolean;
-  isLastPhase?: boolean;
-}
+import type { DemoModeProps, StepRef, PhaseRef, TaskRef } from '@Store/models';
 
 /**
  * DemoMode component combines StepMode's cell filtering and layout logic
@@ -63,9 +47,6 @@ const DemoMode: React.FC<DemoModeProps> = ({
   }
 
   // Find the current phase and step (similar to StepMode logic)
-  type StepRef = { id: string };
-  type PhaseRef = { id: string; steps: StepRef[] };
-  type TaskRef = { phases: PhaseRef[] };
   const typedTasks: TaskRef[] = Array.isArray(tasks) ? (tasks as unknown as TaskRef[]) : [];
   const phase = typedTasks
     .find(

@@ -6,7 +6,7 @@
  */
 
 export { BaseTransitionHandler } from './BaseTransitionHandler';
-export type { TransitionHandlerContext } from './BaseTransitionHandler';
+export type { TransitionHandlerContext } from '@Store/models';
 export { StartWorkflowHandler } from './StartWorkflowHandler';
 export { StartStepHandler } from './StartStepHandler';
 export { StartBehaviorHandler } from './StartBehaviorHandler';

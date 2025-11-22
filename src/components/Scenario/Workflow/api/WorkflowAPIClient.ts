@@ -12,15 +12,13 @@
  * All APIs expect complete StateJSON as request body.
  */
 
-import { StateJSON } from '../types/StateJSON';
+import { StateJSON } from '@Store/models';
+import type { WorkflowAPIClientConfig } from '@Store/models';
 
 /**
  * Workflow API Client Configuration
  */
-export interface WorkflowAPIClientConfig {
-  baseURL: string;
-  timeout?: number;
-}
+// Config type moved to @Store/models
 
 /**
  * Default configuration
@@ -45,15 +43,15 @@ export class WorkflowAPIClient {
   }
 
   /**
-   * Call Planning API
+   * Call Planning API (Streaming)
    *
    * Sends complete StateJSON to /planning endpoint.
-   * Returns XML response containing stages/steps/behavior context.
+   * Returns async generator yielding action objects (same format as generating/reflecting).
    *
    * @param stateJSON - Complete state JSON
-   * @returns XML string
+   * @returns Async generator of action objects
    */
-  async callPlanningAPI(stateJSON: StateJSON): Promise<string> {
+  async *callPlanningAPI(stateJSON: StateJSON): AsyncGenerator<any> {
     const fsmState = stateJSON.state.FSM.state;
     console.log(`[WorkflowAPIClient] ========================================`);
     console.log(`[WorkflowAPIClient] CALLING PLANNING API`);
@@ -105,15 +103,68 @@ export class WorkflowAPIClient {
         throw new Error(`Planning API failed: ${response.status} - ${errorText}`);
       }
 
-      // Response is XML
-      const xmlText = await response.text();
-      console.log(`[WorkflowAPIClient] ========== PLANNING API XML RESPONSE ==========`);
-      console.log(`[WorkflowAPIClient] XML Length: ${xmlText.length} characters`);
-      console.log(`[WorkflowAPIClient] RAW XML:`);
-      console.log(xmlText);
-      console.log(`[WorkflowAPIClient] ========================================`);
+      console.log(`[WorkflowAPIClient] ========== PLANNING API STREAMING RESPONSE ==========`);
 
-      return xmlText;
+      // Response is SSE (Server-Sent Events) stream, same format as generating/reflecting
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            console.log('[WorkflowAPIClient] Planning API stream completed');
+            console.log(`[WorkflowAPIClient] ========================================`);
+            break;
+          }
+
+          // Decode chunk
+          const chunk = decoder.decode(value, { stream: true });
+          console.log(`[WorkflowAPIClient] RAW STREAM CHUNK (${chunk.length} bytes):`, chunk);
+          buffer += chunk;
+
+          // Process complete lines
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith(':')) {
+              // Skip empty lines and comments
+              continue;
+            }
+
+            // Try to parse as JSON directly first (backend may send raw JSON without "data:" prefix)
+            let jsonStr = trimmed;
+
+            // If it's SSE format "data: {...json...}", extract the JSON part
+            if (trimmed.startsWith('data:')) {
+              jsonStr = trimmed.substring(5).trim();
+            }
+
+            // Try to parse JSON
+            try {
+              const actionData = JSON.parse(jsonStr);
+              console.log(
+                `[WorkflowAPIClient] PARSED PLANNING ACTION:`,
+                JSON.stringify(actionData, null, 2)
+              );
+              yield actionData;
+            } catch (parseError) {
+              console.error('[WorkflowAPIClient] Failed to parse planning action JSON:', jsonStr);
+              console.error('[WorkflowAPIClient] Parse error:', parseError);
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
     } catch (error) {
       console.error('[WorkflowAPIClient] Planning API error:', error);
       throw error;

@@ -4,7 +4,7 @@
  *
  * Ported from: ref/Notebook-BCC/stores/pipeline_store.py
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
 /**
  * Responsibilities:
  * - Manages workflow template (WorkflowTemplate with stages and steps)
@@ -41,45 +41,7 @@ export type PreStage = (typeof PIPELINE_STAGES)[keyof typeof PIPELINE_STAGES];
 /**
  * Workflow step definition
  */
-export interface WorkflowStep {
-  id: string;
-  step_id: string;
-  title: string;
-  description: string;
-  metadata?: Record<string, any>;
-}
-
-/**
- * Workflow stage definition
- */
-export interface WorkflowStage {
-  id: string;
-  title: string;
-  description: string;
-  steps: WorkflowStep[];
-  metadata?: Record<string, any>;
-}
-
-/**
- * Complete workflow template structure
- */
-export interface WorkflowTemplate {
-  id: string;
-  name: string;
-  description: string;
-  stages: WorkflowStage[];
-  metadata?: Record<string, any>;
-}
-
-/**
- * Planning request structure
- */
-export interface PlanningRequest {
-  problem?: string;
-  description?: string;
-  requirements?: string;
-  [key: string]: any;
-}
+import type { WorkflowStep, WorkflowStage, WorkflowTemplate, PlanningRequest } from '@Store/models';
 
 // ==============================================
 // STORE STATE & ACTIONS

@@ -28,7 +28,7 @@ import {
 import { EditorGlobalStyles } from './EditorGlobalStyles';
 
 /* --------------------------- Types --------------------------- */
-import { Cell, CellType, OutputItem } from '@Store/notebookStore';
+import type { Cell, CellType, OutputItem } from '@Store/models';
 
 interface ThinkingCellExtra {
   agentName?: string;

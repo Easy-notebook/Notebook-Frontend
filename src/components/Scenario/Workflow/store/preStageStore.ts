@@ -12,89 +12,9 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { analyzeDatasetStructure } from '../utils/dataAnalysis';
+import type { PreStageState, PreStageStore } from '@Store/models';
 
-// ==============================================
-// TYPES & INTERFACES
-// ==============================================
-
-/**
- * Metadata structure from dataset analysis
- */
-interface DatasetMetadata {
-  rowCount: number;
-  columnCount: number;
-  numericColumns: string[];
-  categoricalColumns: string[];
-  dateColumns: string[];
-  missingValueSummary: Record<string, number>;
-  uniqueValueCounts: Record<string, number>;
-  stats: Record<string, any>;
-}
-
-/**
- * Analysis result from dataset structure analysis
- */
-interface AnalysisResult {
-  columns: string[];
-  metadata: DatasetMetadata;
-}
-
-/**
- * Pre-stage state
- */
-interface PreStageState {
-  // File upload state
-  currentFile: File | null;
-  isUploading: boolean;
-  csv_file_path: string;
-  file_columns: string[];
-
-  // Problem definition state
-  problem_name: string;
-  problem_description: string;
-  context_description: string;
-  dataBackground: string;
-  datasetInfo: string;
-
-  // Selection state
-  selectedProblemType: string | null;
-  selectedTarget: string | null;
-  choiceMap: any[];
-}
-
-/**
- * Pre-stage actions
- */
-interface PreStageActions {
-  // Getters
-  getDataBackground: () => string;
-  getCurrentFile: () => File | null;
-  getIsUploading: () => boolean;
-  getFileColumns: () => string[];
-  getDatasetInfo: () => string;
-  getCurrentChoiceMap: () => any[];
-  getProblemName: () => string;
-
-  // Setters and actions
-  setCurrentFile: (file: File | null) => Promise<void>;
-  setFileColumns: (columns: string[]) => void;
-  setDataBackground: (background: string) => void;
-  setDatasetInfo: (info: string) => void;
-  setIsUploading: (value: boolean) => void;
-  changeIsUploading: () => void;
-  setCsvFilePath: (path: string) => void;
-  setProblemName: (name: string) => void;
-  setProblemDescription: (desc: string) => void;
-  setContextDescription: (desc: string) => void;
-  setSelectedProblem: (target: string, description: string, problemName: string) => void;
-  updateChoiceMap: (choiceMap: any[]) => void;
-  resetStore: () => void;
-}
-
-/**
- * Combined store type
- */
-type PreStageStore = PreStageState & PreStageActions;
+// Types moved to @Store/models
 
 // ==============================================
 // INITIAL STATE

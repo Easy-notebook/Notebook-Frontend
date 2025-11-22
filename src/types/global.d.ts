@@ -1,15 +1,21 @@
-// Existing module declaration for importing .jsx as components
-declare module "*.jsx" {
-  import React from 'react';
-  const component: React.ComponentType<any>;
-  export default component;
+// Global ambient declarations to smooth TS in mixed DOM/Node contexts
+
+// Align Timeout/Interval types with browser timers
+type Timeout = ReturnType<typeof setTimeout>;
+type Interval = ReturnType<typeof setInterval>;
+
+// Vite import.meta env typing
+interface ImportMetaEnv {
+  readonly DEV?: boolean;
+  readonly PROD?: boolean;
+  readonly BASE_URL?: string;
+  // Add other envs as needed
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
 }
 
-// Global ambient declarations for browser globals
-export {};
-
-declare global {
-  interface Window {
-    Backend_BASE_URL?: string;
-  }
-}
+// Stub modules without type definitions
+declare module 'lodash-es';
+declare module 'pdfmake/build/pdfmake';
+declare module 'codesandbox/lib/api/define';

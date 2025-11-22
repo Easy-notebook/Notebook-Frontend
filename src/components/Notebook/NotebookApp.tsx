@@ -23,7 +23,6 @@ import {
   useNotebookEffects,
   useLibraryHandlers,
 } from './hooks';
-import { useNotebookStateSync } from '../Scenario/Workflow/hooks/useNotebookStateSync';
 
 // UI Components
 import { MainContentArea } from './components';
@@ -75,9 +74,6 @@ const NotebookApp = () => {
   // Preview store
   const isShowingFileExplorer = usePreviewStore((state) => state.previewMode === 'file');
   const { activeFile } = usePreviewStore();
-
-  // Sync notebook state to workflow state machine
-  useNotebookStateSync();
 
   // Custom hooks for business logic
   const {

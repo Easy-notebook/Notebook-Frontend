@@ -4,7 +4,7 @@
  */
 
 import { ActionBase, registerAction } from '../base';
-import { ExecutionStep } from '../../store/useScriptStore';
+import type { ExecutionStep } from '@Store/models';
 import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 
 export class ExecCodeAction extends ActionBase {

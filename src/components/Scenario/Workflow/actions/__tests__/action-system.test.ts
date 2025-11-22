@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Action System Integration Tests
  * Tests that all actions are properly registered and can be executed

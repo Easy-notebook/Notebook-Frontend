@@ -4,6 +4,20 @@ import { persist } from 'zustand/middleware';
 import { encrypt, decrypt } from '@Utils/encryption';
 import { useMemo } from 'react';
 import { storeLog } from '@Utils/logger';
+import type {
+  ThemeType,
+  PlatformType,
+  MarkdownPreferences,
+  EditorSettings,
+  Shortcuts,
+  Settings,
+  SettingsWithTimestamp,
+  StorageItem,
+  StorageEstimate,
+  PlatformKeyMapping,
+  PlatformKeyMappingConfig,
+  PersistedState,
+} from '@Store/models';
 
 // Constants
 const STORE_NAME = 'easy-notebook-settings';
@@ -22,108 +36,62 @@ const DEFAULT_API_URL = 'https://api.example.com';
 /**
  * 主题类型
  */
-export type ThemeType = 'system' | 'light' | 'dark';
+// Types moved to @Store/models
 
 /**
  * 平台类型
  */
-export type PlatformType = 'macos' | 'windows' | 'linux' | 'default';
+// Types moved to @Store/models
 
 /**
  * Markdown 偏好设置接口
  */
-export interface MarkdownPreferences {
-  autoFormat: boolean;
-  syntaxHighlighting: boolean;
-  lineNumbers: boolean;
-}
+// Types moved to @Store/models
 
 /**
  * 编辑器设置接口
  */
-export interface EditorSettings {
-  editorType: 'tiptap' | 'jupyter';
-  defaultLanguage: string;
-  kernel: 'local' | 'remote' | 'docker' | 'cloud';
-  autoSave: boolean;
-  autoComplete: boolean;
-  autoFormat: boolean;
-  showLineNumbers: boolean;
-}
+// Types moved to @Store/models
 
 /**
  * 快捷键设置接口
  */
-export interface Shortcuts {
-  newCell: string;
-  runCell: string;
-  deleteCell: string;
-  formatCode: string;
-  saveFile: string;
-}
+// Types moved to @Store/models
 
 /**
  * 设置接口
  */
-export interface Settings {
-  apiKey: string;
-  baseUrl: string;
-  apiTimeout: number;
-  markdownPreferences: MarkdownPreferences;
-  editorSettings: EditorSettings;
-  shortcuts: Shortcuts;
-  theme: ThemeType;
-  language: string;
-  syncEnabled: boolean;
-  lastSyncTime: string | null;
-}
+// Types moved to @Store/models
 
 /**
  * 带时间戳的设置接口
  */
-export interface SettingsWithTimestamp extends Settings {
-  timestamp?: number;
-}
+// Types moved to @Store/models
 
 /**
  * 存储项接口
  */
-export interface StorageItem {
-  key: string;
-  size: number;
-  timestamp: number;
-  importance: number;
-}
+// Types moved to @Store/models
 
 /**
  * 存储估算接口
  */
-export interface StorageEstimate {
-  quota?: number;
-  usage?: number;
-}
+// Types moved to @Store/models
 
 /**
  * 平台键映射接口
  */
-export interface PlatformKeyMapping {
-  [key: string]: string;
-}
+// Types moved to @Store/models
 
 /**
  * 平台键映射配置
  */
-export interface PlatformKeyMappingConfig {
-  [platform: string]: PlatformKeyMapping;
-}
+// Types moved to @Store/models
 
 /**
  * 持久化状态接口
  */
-export interface PersistedState {
-  settings?: Settings;
-  timestamp?: number;
-}
+// Types moved to @Store/models
 
 /**
  * Settings Store 状态接口
@@ -179,6 +147,17 @@ export interface SettingsStoreActions {
  * 完整的 Settings Store 类型
  */
 export type SettingsStore = SettingsStoreState & SettingsStoreActions;
+
+// Optional: re-export key types for backward compatibility
+export type {
+  Settings,
+  EditorSettings,
+  MarkdownPreferences,
+  Shortcuts,
+  ThemeType,
+  PlatformType,
+  PersistedState,
+} from '@Store/models';
 
 // Platform-specific key mapping
 const PLATFORM_KEY_MAPPING: PlatformKeyMappingConfig = {

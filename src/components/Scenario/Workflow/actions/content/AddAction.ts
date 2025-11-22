@@ -4,7 +4,7 @@
  */
 
 import { ActionBase, registerAction } from '../base';
-import { ExecutionStep } from '../../store/useScriptStore';
+import type { ExecutionStep } from '@Store/models';
 import useNotebookStore from '@Store/notebookStore';
 
 export class AddAction extends ActionBase {

@@ -5,7 +5,7 @@
  * Provides decorator-based registration and standard execution interface.
  */
 
-import { ExecutionStep } from '../store/useScriptStore';
+import type { ExecutionStep } from '@Store/models';
 
 /**
  * Base class for all action handlers.

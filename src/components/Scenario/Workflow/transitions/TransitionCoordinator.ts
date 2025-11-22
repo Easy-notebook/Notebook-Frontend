@@ -6,7 +6,8 @@
  * Ported from: ref/Notebook-BCC/core/transition_handlers/transition_coordinator.py
  */
 
-import { BaseTransitionHandler, TransitionHandlerContext } from './BaseTransitionHandler';
+import { BaseTransitionHandler } from './BaseTransitionHandler';
+import type { TransitionHandlerContext } from '@Store/models';
 import { StartWorkflowHandler } from './StartWorkflowHandler';
 import { StartStepHandler } from './StartStepHandler';
 import { StartBehaviorHandler } from './StartBehaviorHandler';

@@ -3,8 +3,7 @@
 
 import { create } from 'zustand';
 import { storeLog } from '@Utils/logger';
-
-export type AppView = 'empty' | 'library' | 'workspace' | 'agent' | 'file-preview';
+import type { AppView } from '@Store/models';
 
 export interface RouteState {
   currentView: AppView;
@@ -20,6 +19,7 @@ export interface RouteState {
   navigateToEmpty: () => void;
   navigateToLibrary: () => void;
   navigateToWorkspace: (notebookId: string) => void;
+  navigateToPipeline: () => void;
 }
 
 // 获取初始路由状态，避免总是从 empty 开始
@@ -99,6 +99,12 @@ const useRouteStore = create<RouteState>((set, get) => ({
 
   navigateToWorkspace: (notebookId: string) => {
     const route = `/workspace/${notebookId}`;
+    window.history.pushState(null, '', route);
+    get().setRoute(route);
+  },
+
+  navigateToPipeline: () => {
+    const route = '/pipeline';
     window.history.pushState(null, '', route);
     get().setRoute(route);
   },

@@ -6,54 +6,33 @@ import { fileLog, storeLog } from '@Utils/logger';
 import {
   FileCache,
   initializeStorage,
-  type FileObject as StorageFileObject,
-  type FileType,
-  type ActivePreviewMode,
   getFileType,
   getActivePreviewMode,
   getMimeType,
   SplitPreviewCache,
   TabCache,
 } from '@Storage/index';
+import type {
+  PreviewMode,
+  FileObject,
+  FileType,
+  ActivePreviewMode,
+  PreviewFile,
+  FileMetadata,
+  FileApiResponse,
+} from '@Store/models';
 
-/**
- * 预览模式类型
- */
-export type PreviewMode = 'notebook' | 'file';
+// Backward-compat re-exports for consumers importing from previewStore
+export type {
+  FileType,
+  ActivePreviewMode,
+  FileObject,
+  PreviewFile,
+  PreviewMode,
+  FileApiResponse,
+} from '@Store/models';
 
-// Re-export types from storage module
-export type { FileType, ActivePreviewMode } from '@Storage/index';
-
-/**
- * 文件元数据接口
- */
-export interface FileMetadata {
-  file: File;
-  lastModified?: string | number;
-}
-
-// Re-export FileObject from storage module
-export type FileObject = StorageFileObject;
-
-/**
- * 预览文件接口（简化版）
- */
-export interface PreviewFile {
-  id: string;
-  path: string;
-  name: string;
-  type: FileType;
-}
-
-/**
- * API 响应接口
- */
-export interface FileApiResponse {
-  content?: string;
-  dataUrl?: string;
-  size?: number;
-  error?: string;
-}
+// Types moved to @Store/models/preview
 
 /**
  * Preview Store 状态接口

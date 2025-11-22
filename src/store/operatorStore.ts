@@ -7,23 +7,12 @@ import { handleStreamResponse } from '@Services/streamHandler';
 import { showToast } from '@/components/UI/Toast';
 import useCodeStore from '@Store/codeStore';
 import { storeLog } from '@Utils/logger';
+import type { Operation, OperationResponseData } from '@Store/models/operation';
 
 /**
  * 操作接口
  */
-export interface Operation {
-  type: string;
-  payload: Record<string, any>;
-  id?: string;
-  timestamp?: string;
-}
-
-/**
- * 操作响应数据接口
- */
-export interface OperationResponseData {
-  [key: string]: any;
-}
+// Interfaces moved to @Store/models/operation
 
 /**
  * 流处理回调函数类型

@@ -16,60 +16,21 @@ import notebookAutoSaveInstance, { NotebookAutoSave } from '@Services/notebookAu
 import { notebookLog, storeLog } from '@Utils/logger';
 
 import useCodeStore from '@Store/codeStore';
+import {
+  CellModel,
+  type Cell,
+  type CellType,
+  type OutputItem,
+  type UploadMode,
+} from '@Store/models';
+import type { Task, Phase, Step } from '@Store/models';
 
-/** 单元格类型 */
-export type CellType = 'code' | 'markdown' | 'raw' | 'hybrid' | 'image' | 'thinking' | 'link';
+// Re-export model types for backward compatibility
+export type { Cell, CellType, OutputItem, UploadMode } from '@Store/models';
+export type { Task, Phase, Step } from '@Store/models';
+
 /** 视图模式类型 */
 export type ViewMode = 'step' | 'demo' | 'create';
-/** 上传模式类型 */
-export type UploadMode = 'unrestricted' | 'restricted';
-
-/** 输出项接口 */
-export interface OutputItem {
-  type: string;
-  content: any;
-  timestamp?: string;
-}
-
-/** 单元格接口 */
-export interface Cell {
-  id: string;
-  type: CellType;
-  content: string;
-  outputs?: OutputItem[];
-  enableEdit?: boolean;
-  phaseId?: string | null;
-  description?: string | null;
-  metadata?: Record<string, any> | null;
-}
-
-/** 步骤接口 */
-export interface Step {
-  id: string;
-  title: string;
-  status?: 'pending' | 'running' | 'completed' | 'error';
-  startIndex?: number | null;
-  endIndex?: number | null;
-  content?: Cell[];
-  cellIds?: string[];
-}
-
-/** 阶段接口 */
-export interface Phase {
-  id: string;
-  title: string;
-  steps: Step[];
-  icon?: any;
-  status?: 'pending' | 'running' | 'completed' | 'error';
-  intro?: Cell[];
-}
-
-/** 任务接口 */
-export interface Task {
-  id: string;
-  title: string;
-  phases: Phase[];
-}
 
 /** 运行结果接口 */
 export interface RunResult {
@@ -153,7 +114,7 @@ export interface NotebookStoreActions {
   clearCellOutputs: (cellId: string) => void;
   setCells: (cells: Cell[]) => void;
   updateCurrentCellWithContent: (content: string) => void;
-  addCell: (newCell: Partial<Cell>, index?: number) => void;
+  addCell: (newCell: Partial<Cell> & { id?: string }, index?: number) => void;
   updateTitle: (title: string) => void;
   updateCurrentCellDescription: (description: string) => void;
   addNewContent2CurrentCellDescription: (content: string) => void;
@@ -273,9 +234,7 @@ const updateCellOutputsHelper = (
   cellId: string,
   outputs: OutputItem[]
 ) => {
-  const serialized = serializeOutput(outputs);
-  const outArr: OutputItem[] = Array.isArray(serialized) ? serialized : [];
-
+  const outArr = CellModel.sanitizeOutputs(outputs);
   const isErr = get().checkOutputsIsError(outArr);
 
   set(
@@ -418,25 +377,52 @@ const useStore = create(
 
           notebookLog.info('Store cleared after saving notebook');
         } else if (id !== null && id !== state.notebookId) {
-          // 🔴 FIX: When setting a NEW notebook ID (switching notebooks), clear old cells
-          console.log('🔍 [notebookStore] Setting NEW notebookId - CLEARING old cells', {
-            oldId: state.notebookId,
-            newId: id,
-            oldCellsCount: state.cells.length,
-          });
+          // If previous notebookId is null, this is the FIRST assignment for a fresh notebook.
+          // Do NOT clear existing cells/content created before kernel init.
+          if (state.notebookId === null) {
+            console.log(
+              '🔍 [notebookStore] First-time notebookId assignment, preserving existing cells',
+              {
+                newId: id,
+                existingCells: state.cells.length,
+              }
+            );
+            set({ notebookId: id });
 
-          set({
-            notebookId: id,
-            notebookTitle: '',
-            cells: [], // ✅ Clear old cells when switching to new notebook
-            tasks: [],
-            currentPhaseId: null,
-            currentStepIndex: 0,
-            currentCellId: null,
-            error: null,
-          });
+            // Proactively persist current content so a quick refresh won't lose pre-init edits
+            try {
+              await notebookAutoSaveInstance.initialize();
+              await notebookAutoSaveInstance.queueSave({
+                notebookId: id,
+                notebookTitle: state.notebookTitle,
+                cells: state.cells,
+                tasks: state.tasks,
+                timestamp: Date.now(),
+              });
+            } catch (e) {
+              notebookLog.warn('Initial save after notebookId assignment failed', { error: e });
+            }
+          } else {
+            // Real notebook switch: clear old content to avoid cross-notebook mixing
+            console.log('🔍 [notebookStore] Switching notebookId - clearing old cells', {
+              oldId: state.notebookId,
+              newId: id,
+              oldCellsCount: state.cells.length,
+            });
 
-          console.log('✅ [notebookStore] Cleared cells for new notebook', { newId: id });
+            set({
+              notebookId: id,
+              notebookTitle: '',
+              cells: [],
+              tasks: [],
+              currentPhaseId: null,
+              currentStepIndex: 0,
+              currentCellId: null,
+              error: null,
+            });
+
+            console.log('✅ [notebookStore] Cleared cells for new notebook', { newId: id });
+          }
         } else {
           // Same ID: just set the ID (no clearing needed)
           set({ notebookId: id });
@@ -574,7 +560,7 @@ const useStore = create(
         get().updateCell(currentCellId, content);
       },
 
-      addCell: (newCell: Partial<Cell>, index?: number) =>
+      addCell: (newCell: Partial<Cell> & { id?: string }, index?: number) =>
         set(
           produce((state: NotebookStoreState) => {
             const isNotebookEmpty = state.cells.length === 0;
@@ -942,16 +928,15 @@ const useStore = create(
 
       addNewCell2End: (type: CellType, description = '', enableEdit = true): string => {
         const id = uuidv4();
-        const newCell: Partial<Cell> = {
+        const model = CellModel.create(type, {
           id,
-          type,
           content: '',
           outputs: [],
           enableEdit,
           phaseId: get().currentRunningPhaseId || null,
           description,
-        };
-        get().addCell(newCell);
+        });
+        get().addCell(model.toJSON());
         set({ lastAddedCellId: id });
         if (enableEdit) set({ editingCellId: id });
         set({ currentCellId: id });
@@ -989,9 +974,8 @@ const useStore = create(
           })();
 
         const id = uuidv4();
-        const newCell: Partial<Cell> = {
+        const model = CellModel.create(type, {
           id,
-          type,
           content: '',
           outputs: [],
           enableEdit,
@@ -1004,9 +988,9 @@ const useStore = create(
             isGenerating: true,
             generationType: type === 'image' ? 'image' : undefined,
           },
-        };
+        });
 
-        get().addCell(newCell);
+        get().addCell(model.toJSON());
         set({ lastAddedCellId: id });
         if (enableEdit) set({ editingCellId: id });
         set({ currentCellId: id });
@@ -1045,19 +1029,18 @@ const useStore = create(
 
       addNewCell2Next: (type: CellType, description = '', enableEdit = true) => {
         const id = uuidv4();
-        const newCell: Partial<Cell> = {
+        const model = CellModel.create(type, {
           id,
-          type,
           content: '',
           outputs: [],
           enableEdit,
           phaseId: get().currentRunningPhaseId || null,
           description,
-        };
+        });
 
         const currentIdx = get().cells.findIndex((c) => c.id === get().currentCellId);
         const insertIndex = currentIdx >= 0 ? currentIdx + 1 : undefined; // 若没有当前 cell，末尾插入
-        get().addCell(newCell, insertIndex);
+        get().addCell(model.toJSON(), insertIndex);
         set({ lastAddedCellId: id, editingCellId: id, currentCellId: id });
 
         const state = get();
@@ -1142,8 +1125,7 @@ const useStore = create(
         return currentCell ? currentCell.type : 'markdown';
       },
 
-      checkOutputsIsError: (outputs: OutputItem[]): boolean =>
-        outputs.some((o) => o.type === 'error'),
+      checkOutputsIsError: (outputs: OutputItem[]): boolean => CellModel.hasError(outputs),
 
       checkCurrentCodeCellOutputsIsError: (): boolean => {
         const currentCell = get().getCurrentCell();
@@ -1184,7 +1166,9 @@ const useStore = create(
               notebookLog.warn('No current cell found - cannot convert to Hybrid cell');
               return;
             }
-            currentCell.type = 'hybrid';
+            const model = CellModel.fromJSON(currentCell).convertToHybrid();
+            const updated = model.toJSON();
+            Object.assign(currentCell, updated);
           })
         ),
 
@@ -1193,23 +1177,9 @@ const useStore = create(
           produce((state: NotebookStoreState) => {
             const cell = state.cells.find((c) => c.id === cellId);
             if (!cell) return;
-
-            const lines = cell.content.split('\n');
-            const codeFence = /^```(\w+)?$/;
-
-            for (let i = 0; i < lines.length; i++) {
-              if (codeFence.test(lines[i].trim())) {
-                let codeContent = '';
-                let j = i + 1;
-                while (j < lines.length && !codeFence.test(lines[j].trim())) {
-                  codeContent += lines[j] + '\n';
-                  j++;
-                }
-                cell.type = 'code';
-                cell.content = codeContent.trim();
-                break;
-              }
-            }
+            const model = CellModel.fromJSON(cell).convertMarkdownCodeBlockToCode();
+            const updated = model.toJSON();
+            Object.assign(cell, updated);
 
             const updatedTasks = parseMarkdownCells(state.cells as any) as any;
             updateCellsPhaseId(state.cells as any, updatedTasks);
@@ -1409,32 +1379,18 @@ const useStore = create(
             tasksCount: tasks.length,
           });
 
-          // 清空当前状态
-          set({
-            cells: [],
-            tasks: [],
-            currentRunningPhaseId: null,
-            currentPhaseId: null,
-            currentStepIndex: 0,
-            error: null,
-          });
-
-          // 基本信息
-          set({
-            notebookId,
-            notebookTitle,
-            viewMode: 'create',
-          });
-
           // 直接设置 cells - 确保保留所有字段（outputs, metadata等）
           if (cells && cells.length > 0) {
-            console.log('🔍 [notebookStore] Setting cells from database', {
-              cellsCount: cells.length,
-              notebookId,
-              firstCellContent: cells[0]?.content?.substring(0, 50),
-              firstCellMetadata: cells[0]?.metadata,
-              firstCellOutputs: cells[0]?.outputs?.length || 0,
-            });
+            if (import.meta.env.DEV) {
+              const codeCellsWithOutputs = cells.filter(
+                (c) => c.type === 'code' && c.outputs && c.outputs.length > 0
+              );
+              console.log('🔍 [notebookStore] Loading cells from database:', {
+                cellsCount: cells.length,
+                codeCellsWithOutputs: codeCellsWithOutputs.length,
+              });
+            }
+
             // 确保每个cell都保留完整的字段
             const restoredCells: Cell[] = cells.map((cell) => ({
               id: cell.id,
@@ -1451,8 +1407,20 @@ const useStore = create(
             const parsedTasks = parseMarkdownCells(restoredCells as any);
             updateCellsPhaseId(restoredCells as any, parsedTasks);
 
-            // Set cells and mark as initialized
-            set({ cells: restoredCells, tasks: parsedTasks, isInitialized: true });
+            // 🔧 FIX: Use single set() call to update all state at once
+            // This prevents auto-save from triggering with empty cells
+            set({
+              notebookId,
+              notebookTitle,
+              viewMode: 'create',
+              cells: restoredCells,
+              tasks: parsedTasks,
+              isInitialized: true,
+              currentRunningPhaseId: null,
+              currentPhaseId: null,
+              currentStepIndex: 0,
+              error: null,
+            });
             notebookLog.cellOperation('update', 'batch', { count: restoredCells.length });
           } else {
             console.log('🔍 [notebookStore] No cells in database, creating default title cell');
@@ -1471,7 +1439,19 @@ const useStore = create(
             const parsedTasks = parseMarkdownCells([defaultCell] as any);
             updateCellsPhaseId([defaultCell] as any, parsedTasks);
 
-            set({ cells: [defaultCell], tasks: parsedTasks, isInitialized: true });
+            // 🔧 FIX: Use single set() call to update all state at once
+            set({
+              notebookId,
+              notebookTitle,
+              viewMode: 'create',
+              cells: [defaultCell],
+              tasks: parsedTasks,
+              isInitialized: true,
+              currentRunningPhaseId: null,
+              currentPhaseId: null,
+              currentStepIndex: 0,
+              error: null,
+            });
             notebookLog.cellOperation('create', 'title', { reason: 'default creation' });
           }
 
@@ -1538,6 +1518,8 @@ useStore.subscribe(
     if (!current.notebookId) return;
     // 初次绑定不触发
     if (!previous.notebookId && current.notebookId) return;
+    // 🔧 FIX: When switching notebooks, don't trigger auto-save for the initial load
+    if (previous.notebookId !== current.notebookId) return;
 
     const hasChanges =
       current.notebookTitle !== previous.notebookTitle ||
@@ -1548,6 +1530,17 @@ useStore.subscribe(
 
     if (hasChanges) {
       notebookLog.info('Notebook content changed - triggering auto-save');
+
+      if (import.meta.env.DEV) {
+        const codeCellsWithOutputs = current.cells.filter(
+          (c) => c.type === 'code' && c.outputs && c.outputs.length > 0
+        );
+        console.log('🔍 [notebookStore] Auto-save triggered:', {
+          totalCells: current.cells.length,
+          codeCellsWithOutputs: codeCellsWithOutputs.length,
+        });
+      }
+
       try {
         await notebookAutoSaveInstance.initialize();
         await notebookAutoSaveInstance.queueSave({

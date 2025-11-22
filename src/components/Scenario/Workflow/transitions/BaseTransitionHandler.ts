@@ -5,12 +5,7 @@
  * Ported from Python: ref/Notebook-BCC/core/transition_handlers/base_transition_handler.py
  */
 
-export interface TransitionHandlerContext {
-  scriptStore?: any;
-  apiClient?: any;
-  notebookStore?: any;
-  aiContextStore?: any;
-}
+import type { TransitionHandlerContext } from '@Store/models';
 
 export abstract class BaseTransitionHandler {
   public readonly fromState: string;

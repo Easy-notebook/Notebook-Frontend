@@ -1,6 +1,7 @@
 /** Reflecting API Handler - Calls VDSAgents /reflecting endpoint */
 import { BaseAPIHandler } from './BaseAPIHandler';
-import { StateJSON } from '../types/StateJSON';
+import { StateJSON } from '@Store/models';
+import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 
 export class ReflectingAPIHandler extends BaseAPIHandler {
   async *call(
@@ -12,6 +13,21 @@ export class ReflectingAPIHandler extends BaseAPIHandler {
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(stateData);
     }
+
+    // Get latest notebook state directly from notebookStore
+    const latestNotebook = globalUpdateInterface.getNotebookState();
+
+    // Update stateData with latest notebook data
+    stateData.state.notebook = {
+      ...stateData.state.notebook,
+      ...latestNotebook,
+    };
+
+    console.log('[ReflectingAPI] Injected latest notebook data:', {
+      notebook_id: latestNotebook.notebook_id,
+      cell_count: latestNotebook.cell_count,
+      title: latestNotebook.title,
+    });
 
     const stream = kwargs?.stream ?? true;
     console.log(`[ReflectingAPI] Calling (stage=${stageId}, step=${stepId}, stream=${stream})`);

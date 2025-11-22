@@ -6,7 +6,7 @@
 import { useRef, forwardRef, useImperativeHandle, useMemo, useState, useEffect } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import useStore from '@Store/notebookStore';
-import { Cell } from '@Store/notebookStore';
+import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from './utils/cellConverters';
 import '@Utils/logger'; // Initialize debug tools
 

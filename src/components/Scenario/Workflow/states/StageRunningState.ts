@@ -12,7 +12,7 @@
  */
 
 import { BaseState, APIResponseType } from './BaseState';
-import { WorkflowEvent } from '../store/workflowStateMachine';
+import { WorkflowEvent } from '@Store/models';
 
 export class StageRunningState extends BaseState {
   constructor() {
