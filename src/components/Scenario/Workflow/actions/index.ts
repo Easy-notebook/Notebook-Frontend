@@ -98,6 +98,7 @@ export {
   getAllActionTypes,
   clearRegistry,
   getRegistry,
+  executeAction,
 } from './base';
 
 // Import all action category modules to trigger registration

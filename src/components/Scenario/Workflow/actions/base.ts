@@ -117,3 +117,47 @@ export function clearRegistry(): void {
 export function getRegistry(): Map<string, typeof ActionBase> {
   return _actionRegistry;
 }
+
+/**
+ * Execute an action by type with parameters.
+ * This is a convenience function that creates an action instance and executes it.
+ *
+ * @param actionType - The action type identifier
+ * @param params - Parameters to pass to the action (can be a simple value or execution step)
+ * @returns Result of the action execution
+ */
+export async function executeAction(actionType: string, params?: any): Promise<any> {
+  const ActionClass = getActionClass(actionType);
+
+  if (!ActionClass) {
+    console.warn(`[executeAction] Unknown action type: ${actionType}`);
+    return;
+  }
+
+  // Dynamically import script store to avoid circular dependencies
+  const { useScriptStore } = await import('../store/useScriptStore');
+  const scriptStore = useScriptStore.getState();
+
+  // Create action instance
+  // @ts-expect-error ActionClass is a concrete class, not abstract
+  const action = new ActionClass(scriptStore);
+
+  // Convert params to ExecutionStep format if it's a simple value
+  let step: ExecutionStep;
+  if (typeof params === 'string' || typeof params === 'number') {
+    step = {
+      action: actionType,
+      content: String(params),
+    } as ExecutionStep;
+  } else if (params && typeof params === 'object' && 'action' in params) {
+    step = params as ExecutionStep;
+  } else {
+    step = {
+      action: actionType,
+      ...params,
+    } as ExecutionStep;
+  }
+
+  // Execute action
+  return await action.execute(step);
+}
