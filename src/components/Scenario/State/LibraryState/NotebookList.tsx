@@ -7,7 +7,7 @@ import { Star, Calendar, Plus } from 'lucide-react';
 import NotebookCard from './NotebookCard';
 import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import type { NotebookListProps } from './types';
 
 const NotebookList: React.FC<
@@ -41,7 +41,7 @@ const NotebookList: React.FC<
       setIsCreatingNotebook(true);
       try {
         console.log('🚀 Creating new notebook from LibraryState...');
-        const newNotebookId = await notebookApiIntegration.initializeNotebook();
+        const newNotebookId = await NotebookLifecycleService.initializeNotebook();
         useStore.getState().setNotebookId(newNotebookId);
         useCodeStore.getState().setKernelReady(true);
         console.log('✅ Created notebook:', newNotebookId);

@@ -1,13 +1,6 @@
-/**
- * CompleteWorkflowPlanningAction - Marks workflow planning as complete
- * Action Type: complete_workflow_planning
- *
- * Transitions from IDLE to STAGE_RUNNING
- */
-
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
-import { usePipelineStore } from '../../store/usePipelineStore';
+import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
 export class CompleteWorkflowPlanningAction extends ActionBase {
   /**
@@ -19,25 +12,29 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
   execute(step: ExecutionStep): void {
     const { total_stages } = step;
 
-    const state = usePipelineStore.getState();
+    // Get the workflow state machine's current state JSON
+    const stateMachine = useWorkflowStateMachine.getState();
+    const stateJSON = stateMachine.stateJSON;
+    const observation = stateJSON.observation;
 
     console.log(
       `[CompleteWorkflowPlanningAction] Workflow planning complete with ${total_stages} stages`
     );
 
-    // Mark workflow as planned
-    state.state.FSM.workflow_planned = true;
+    // Mark workflow as planned (custom flag on FSM)
+    // @ts-expect-error – we extend FSM with a custom flag
+    stateJSON.state.FSM.workflow_planned = true;
 
-    // If FSM is in IDLE state, prepare to transition to first stage
-    if (state.state.FSM.state === 'IDLE') {
-      const plannedStages = state.observation.location.progress.stages.planned || [];
+    // If FSM is in IDLE state, transition to first planned stage
+    if (stateJSON.state.FSM.state === 'IDLE') {
+      const plannedStages = observation.location.progress.stages.planned || [];
 
       if (plannedStages.length > 0) {
         // Set current stage to the first planned stage
-        state.observation.location.current.stage_id = plannedStages[0].stage_id;
+        observation.location.current.stage_id = plannedStages[0].stage_id;
 
         // Transition to STAGE_RUNNING
-        state.state.FSM.state = 'STAGE_RUNNING';
+        stateJSON.state.FSM.state = 'STAGE_RUNNING';
 
         console.log(
           `[CompleteWorkflowPlanningAction] ✅ Transitioned to STAGE_RUNNING, current stage: ${plannedStages[0].stage_id}`
@@ -47,8 +44,8 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
       }
     }
 
-    // Update pipeline store
-    usePipelineStore.setState(state);
+    // Update the workflow state machine with the modified stateJSON
+    useWorkflowStateMachine.setState(stateJSON);
   }
 }
 

@@ -3,7 +3,7 @@ import { ArrowRight, PlusCircle } from 'lucide-react';
 
 import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 
 import AICommandInput from './AICommandInput';
 import Header from './Header';
@@ -65,14 +65,14 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
     if (now - lastTriggerAtRef.current < 1000) return;
     lastTriggerAtRef.current = now;
     await createNewNotebook();
-  }, []);
+  }, [createNewNotebook]);
 
   const createNewNotebook = useCallback(async () => {
     if (isCreatingNotebook) return;
     setIsCreatingNotebook(true);
     try {
       console.log('🔍 [EmptyState] Creating new notebook - START');
-      const newNotebookId = await notebookApiIntegration.initializeNotebook();
+      const newNotebookId = await NotebookLifecycleService.initializeNotebook();
       console.log('🔍 [EmptyState] Received new notebookId from backend', { newNotebookId });
 
       console.log('🔍 [EmptyState] Setting notebookId in store (NO LOAD)', { newNotebookId });
@@ -231,7 +231,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
   const handleTouchEnd = useCallback(() => {
     if (isCreatingNotebook) return;
     endGesture();
-  }, [isCreatingNotebook]);
+  }, [isCreatingNotebook, endGesture]);
 
   // ====== Pointer（推荐路径）======
   useEffect(() => {
@@ -279,7 +279,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
       el.removeEventListener('pointerup', onPointerUp as any);
       el.removeEventListener('pointercancel', onPointerUp as any);
     };
-  }, [isCreatingNotebook]);
+  }, [isCreatingNotebook, endGesture]);
 
   // ====== 横向/纵向滚轮（改为右滚触发） ======
   const handleWheel = useCallback(

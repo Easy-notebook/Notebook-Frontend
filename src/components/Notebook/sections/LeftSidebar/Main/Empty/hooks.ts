@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { message } from 'antd';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { usePersistence } from '../../../../../../services/persistence/PersistenceContext';
 import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
@@ -78,7 +78,7 @@ export const useNotebooks = () => {
 
     setIsCreatingNotebook(true);
     try {
-      const newNotebookId = await notebookApiIntegration.initializeNotebook();
+      const newNotebookId = await NotebookLifecycleService.initializeNotebook();
       useStore.getState().setNotebookId(newNotebookId);
       useCodeStore.getState().setKernelReady(true);
 
@@ -117,7 +117,7 @@ export const useNotebooks = () => {
         );
       }
     },
-    [notebooks]
+    [] // notebooks is not needed - we use setNotebooks function form
   );
 
   // Delete notebook (if needed in the future)

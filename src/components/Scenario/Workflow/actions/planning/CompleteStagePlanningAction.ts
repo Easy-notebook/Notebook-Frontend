@@ -7,7 +7,7 @@
 
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
-import { usePipelineStore } from '../../store/usePipelineStore';
+import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
 export class CompleteStagePlanningAction extends ActionBase {
   /**
@@ -25,14 +25,16 @@ export class CompleteStagePlanningAction extends ActionBase {
       return;
     }
 
-    const state = usePipelineStore.getState();
+    // Use WorkflowStateMachine as the single source of truth
+    const stateMachine = useWorkflowStateMachine.getState();
+    const stateJSON = stateMachine.stateJSON;
 
     console.log(
       `[CompleteStagePlanningAction] Stage planning complete: ${stage_id} with ${total_steps} steps`
     );
 
     // Find and mark stage as planning complete
-    const stage = state.observation.location.progress.stages.planned?.find(
+    const stage = stateJSON.observation.location.progress.stages.planned?.find(
       (s: any) => s.stage_id === stage_id
     );
 
@@ -41,15 +43,15 @@ export class CompleteStagePlanningAction extends ActionBase {
     }
 
     // If FSM is in STAGE_RUNNING, prepare to transition to first step
-    if (state.state.FSM.state === 'STAGE_RUNNING') {
-      const plannedSteps = state.observation.location.progress.steps.planned || [];
+    if (stateJSON.state.FSM.state === 'STAGE_RUNNING') {
+      const plannedSteps = stateJSON.observation.location.progress.steps.planned || [];
 
       if (plannedSteps.length > 0) {
         // Set current step to the first planned step
-        state.observation.location.current.step_id = plannedSteps[0].step_id;
+        stateJSON.observation.location.current.step_id = plannedSteps[0].step_id;
 
         // Transition to STEP_RUNNING
-        state.state.FSM.state = 'STEP_RUNNING';
+        stateJSON.state.FSM.state = 'STEP_RUNNING';
 
         console.log(
           `[CompleteStagePlanningAction] ✅ Transitioned to STEP_RUNNING, current step: ${plannedSteps[0].step_id}`
@@ -59,8 +61,8 @@ export class CompleteStagePlanningAction extends ActionBase {
       }
     }
 
-    // Update pipeline store
-    usePipelineStore.setState(state);
+    // Update workflow state machine with modified stateJSON
+    stateMachine.setState(stateJSON);
   }
 }
 

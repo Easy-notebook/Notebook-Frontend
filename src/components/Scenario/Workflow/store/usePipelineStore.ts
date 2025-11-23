@@ -3,10 +3,54 @@
  * @description Pipeline Store for managing workflow template structure and execution state.
  *
  * Ported from: ref/Notebook-BCC/stores/pipeline_store.py
+ *
+ * ⚠️⚠️⚠️ DEPRECATED AND REMOVED - DO NOT USE ⚠️⚠️⚠️
+ * ===================================================
+ * This store has been REMOVED in favor of the unified stateJSON architecture.
+ * Most functionality is now NO-OP (does nothing).
+ *
+ * 🔴 **REMOVED FEATURES**:
+ * - initializeWorkflow() - now NO-OP, use useWorkflowStateMachine instead
+ * - startWorkflowExecution() - now NO-OP, use useWorkflowStateMachine instead
+ * - setWorkflowTemplate() - now NO-OP, data stored in stateJSON
+ * - updateStepsForStage() - now NO-OP, data stored in stateJSON
+ *
+ * **Single Source of Truth**: useWorkflowStateMachine.stateJSON
+ *
+ * Migration Guide:
+ * ---------------
+ * OLD (BROKEN):
+ *   const pipelineStore = usePipelineStore.getState();
+ *   const observation = pipelineStore.observation; // ❌ DOESN'T EXIST!
+ *   pipelineStore.initializeWorkflow(request); // ❌ NO-OP!
+ *   pipelineStore.startWorkflowExecution(userData); // ❌ NO-OP!
+ *
+ * NEW (CORRECT):
+ *   const stateMachine = useWorkflowStateMachine.getState();
+ *   const stateJSON = stateMachine.stateJSON;
+ *   const observation = stateJSON.observation; // ✅ Correct
+ *
+ * Where to find data:
+ * - Workflow state: useWorkflowStateMachine.stateJSON
+ * - Observation data: useWorkflowStateMachine.stateJSON.observation
+ * - FSM state: useWorkflowStateMachine.stateJSON.state.FSM
+ * - Progress stages: useWorkflowStateMachine.stateJSON.observation.location.progress.stages
+ * - Progress steps: useWorkflowStateMachine.stateJSON.observation.location.progress.steps
+ * - Current location: useWorkflowStateMachine.stateJSON.observation.location.current
+ *
+ * This file is kept ONLY for:
+ * - Type definitions (WorkflowTemplate, WorkflowStage, WorkflowStep, etc.)
+ * - Preventing compile errors during migration
+ * - UI components still referencing it (will be migrated)
+ *
+ * 🚫 DO NOT USE THIS STORE IN ANY NEW CODE!
+ * 🚫 DO NOT ADD ANY NEW FEATURES TO THIS STORE!
  */
 
 /**
- * Responsibilities:
+ * @deprecated Use useWorkflowStateMachine.stateJSON instead
+ *
+ * Responsibilities (legacy):
  * - Manages workflow template (WorkflowTemplate with stages and steps)
  * - Handles workflow activation state
  * - Provides initialization and reset functionality
@@ -41,7 +85,7 @@ export type PreStage = (typeof PIPELINE_STAGES)[keyof typeof PIPELINE_STAGES];
 /**
  * Workflow step definition
  */
-import type { WorkflowStep, WorkflowStage, WorkflowTemplate, PlanningRequest } from '@Store/models';
+import type { WorkflowStep, WorkflowTemplate, PlanningRequest } from '@Store/models';
 
 // ==============================================
 // STORE STATE & ACTIONS
@@ -189,35 +233,22 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   // Workflow Template Management
   // ==============================================
 
-  setWorkflowTemplate: (template: WorkflowTemplate) => {
-    console.log('[PipelineStore] Setting workflow template:', template.name);
-    set({ workflowTemplate: template });
+  setWorkflowTemplate: (_template: WorkflowTemplate) => {
+    console.warn(
+      '[PipelineStore] ⚠️ DEPRECATED NO-OP: setWorkflowTemplate() does nothing. Use useWorkflowStateMachine.stateJSON instead.'
+    );
+    // NO-OP: Data should be in stateJSON.observation.location.progress.stages
   },
 
   getWorkflowTemplate: () => {
     return get().workflowTemplate;
   },
 
-  updateStepsForStage: (stageId: string, newSteps: WorkflowStep[]) => {
-    const { workflowTemplate } = get();
-
-    if (!workflowTemplate) {
-      console.warn(`[PipelineStore] Cannot update steps: no workflow template`);
-      return;
-    }
-
-    const updatedStages = workflowTemplate.stages.map((stage) =>
-      stage.id === stageId ? { ...stage, steps: newSteps } : stage
+  updateStepsForStage: (_stageId: string, _newSteps: WorkflowStep[]) => {
+    console.warn(
+      '[PipelineStore] ⚠️ DEPRECATED NO-OP: updateStepsForStage() does nothing. Use useWorkflowStateMachine.stateJSON instead.'
     );
-
-    set({
-      workflowTemplate: {
-        ...workflowTemplate,
-        stages: updatedStages,
-      },
-    });
-
-    console.log(`[PipelineStore] Updated ${newSteps.length} steps for stage: ${stageId}`);
+    // NO-OP: Data should be in stateJSON.observation.location.progress.steps
   },
 
   // ==============================================
@@ -250,194 +281,30 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   // Initialization
   // ==============================================
 
-  initializeWorkflow: async (planningRequest: PlanningRequest) => {
-    console.log('[PipelineStore] Initializing workflow with request:', planningRequest);
-
-    try {
-      // Create predefined workflow template
-      // This matches the backend structure in pipeline_store.py
-      const workflowTemplate: WorkflowTemplate = {
-        id: 'dcls_workflow',
-        name: 'Data Science Lifecycle (DCLS) Analysis',
-        description: 'Complete data science workflow based on existence first principles',
-        stages: [
-          {
-            id: 'chapter_0_planning',
-            title: 'Planning & Analysis',
-            description: 'Initial problem analysis and workflow planning',
-            steps: [
-              {
-                id: 'chapter_0_planning_section_1_design_workflow',
-                step_id: 'chapter_0_planning_section_1_design_workflow',
-                title: 'Design Workflow',
-                description: 'Design customized workflow based on requirements',
-              },
-            ],
-          },
-        ],
-      };
-
-      // Set workflow template but don't activate yet
-      set({
-        workflowTemplate,
-        isWorkflowActive: false,
-      });
-
-      console.log('[PipelineStore] Workflow template initialized successfully');
-      console.log('[PipelineStore] Ready for user confirmation to start execution');
-
-      return workflowTemplate;
-    } catch (error) {
-      console.error('[PipelineStore] Failed to initialize workflow:', error);
-
-      // Reset to safe state on error
-      set({ isWorkflowActive: false });
-
-      throw error;
-    }
+  initializeWorkflow: async (_planningRequest: PlanningRequest) => {
+    console.warn(
+      '[PipelineStore] ⚠️ DEPRECATED NO-OP: initializeWorkflow() does nothing. Use useWorkflowStateMachine instead.'
+    );
+    // NO-OP: Return empty template to prevent errors
+    return {
+      id: 'deprecated',
+      name: 'DEPRECATED',
+      description: 'This store is deprecated, use useWorkflowStateMachine.stateJSON',
+      stages: [],
+      metadata: {},
+    };
   },
 
-  startWorkflowExecution: async (userData?: {
+  startWorkflowExecution: async (_userData?: {
     user_problem?: string;
     user_submit_files?: string[];
     context_description?: string;
   }) => {
-    const { workflowTemplate } = get();
-
-    if (!workflowTemplate) {
-      console.error('[PipelineStore] Cannot start workflow: no template available');
-      return;
-    }
-
-    if (!workflowTemplate.stages || workflowTemplate.stages.length === 0) {
-      console.error('[PipelineStore] Cannot start workflow: no stages');
-      return;
-    }
-
-    const firstStage = workflowTemplate.stages[0];
-
-    if (!firstStage.steps || firstStage.steps.length === 0) {
-      console.error('[PipelineStore] Cannot start workflow: no steps in first stage');
-      return;
-    }
-
-    try {
-      // Import dynamically to avoid circular dependencies
-      const { useWorkflowStateMachine } = await import('./workflowStateMachine');
-      const { getAsyncAdapter } = await import('../utils/workflowInitializer');
-
-      // Reset state machine to clean state (in case it was in FAILED or other state)
-      console.log('[PipelineStore] Resetting state machine to IDLE...');
-      useWorkflowStateMachine.getState().reset();
-
-      // Mark workflow as active
-      set({ isWorkflowActive: true });
-
-      // Get stateJSON - DO NOT set stage_id yet, it should be null in IDLE state
-      const stateJSON = useWorkflowStateMachine.getState().stateJSON;
-
-      // Ensure location.current is completely null for IDLE state
-      stateJSON.observation.location.current.stage_id = null;
-      stateJSON.observation.location.current.step_id = null;
-      stateJSON.observation.location.current.behavior_id = null;
-      stateJSON.observation.location.current.behavior_iteration = 0;
-
-      // Inject user variables AFTER reset
-      if (userData) {
-        console.log('[PipelineStore] Injecting user variables:', userData);
-        stateJSON.state.variables.user_problem = userData.user_problem || '';
-        stateJSON.state.variables.user_submit_files = userData.user_submit_files || [];
-
-        // Also update the goals template with actual values
-        const goals = stateJSON.observation.location.goals;
-        if (goals) {
-          let updatedGoals = goals;
-          if (userData.user_problem) {
-            updatedGoals = updatedGoals.replace('%user_problem%', userData.user_problem);
-          }
-          if (userData.user_submit_files && userData.user_submit_files.length > 0) {
-            updatedGoals = updatedGoals.replace(
-              '%user_submit_files%',
-              userData.user_submit_files.join(', ')
-            );
-          }
-          stateJSON.observation.location.goals = updatedGoals;
-        }
-      }
-
-      useWorkflowStateMachine.getState().setState(stateJSON);
-
-      console.log('[PipelineStore] Workflow state initialized in IDLE (all IDs are null)');
-      console.log('[PipelineStore] User variables:', stateJSON.state.variables);
-      console.log('[PipelineStore] Current FSM state:', stateJSON.state.FSM.state);
-
-      // Get AsyncStateMachineAdapter
-      const asyncAdapter = getAsyncAdapter();
-      if (!asyncAdapter) {
-        throw new Error('AsyncStateMachineAdapter not initialized');
-      }
-
-      // Start execution loop - continuously call step() until terminal state or max iterations
-      console.log('[PipelineStore] Starting execution loop...');
-
-      const MAX_ITERATIONS = 50; // Safety limit
-      let iteration = 0;
-      let currentState = stateJSON;
-
-      const TERMINAL_STATES = ['COMPLETE', 'FAILED', 'CANCELED', 'WORKFLOW_COMPLETED'];
-
-      while (iteration < MAX_ITERATIONS) {
-        iteration++;
-
-        const fsmState = currentState.state.FSM.state;
-        console.log(`[PipelineStore] Iteration ${iteration}: FSM state = ${fsmState}`);
-
-        // Check if we've reached a terminal state
-        if (TERMINAL_STATES.includes(fsmState)) {
-          console.log(`[PipelineStore] Reached terminal state: ${fsmState}`);
-          break;
-        }
-
-        try {
-          // Execute one step
-          const [nextState, transitionName] = await asyncAdapter.step(currentState);
-
-          if (!transitionName) {
-            // No transition occurred - this state doesn't require API call
-            console.log(`[PipelineStore] No transition from ${fsmState}, stopping loop`);
-            break;
-          }
-
-          // Update state machine with the result
-          useWorkflowStateMachine.getState().setState(nextState);
-
-          console.log(`[PipelineStore] Iteration ${iteration} complete: ${transitionName}`);
-          console.log(`[PipelineStore] New FSM state: ${nextState.state.FSM.state}`);
-
-          // Update current state for next iteration
-          currentState = nextState;
-        } catch (error) {
-          console.error(`[PipelineStore] Error in iteration ${iteration}:`, error);
-          // Don't break - let it continue to next iteration
-          // The error might be transient
-        }
-
-        // Small delay to prevent overwhelming the UI
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-
-      if (iteration >= MAX_ITERATIONS) {
-        console.warn(`[PipelineStore] Reached maximum iterations (${MAX_ITERATIONS})`);
-      }
-
-      console.log('[PipelineStore] Workflow execution loop completed');
-      console.log(`[PipelineStore] Total iterations: ${iteration}`);
-      console.log(`[PipelineStore] Final FSM state: ${currentState.state.FSM.state}`);
-    } catch (error) {
-      console.error('[PipelineStore] Failed to start workflow execution:', error);
-      set({ isWorkflowActive: false });
-      throw error;
-    }
+    console.warn(
+      '[PipelineStore] ⚠️ DEPRECATED NO-OP: startWorkflowExecution() does nothing. Use useWorkflowStateMachine.startWorkflow() instead.'
+    );
+    // NO-OP: Workflow execution should be started via useWorkflowStateMachine
+    // The execution loop logic has been moved to useWorkflowStateMachine or a dedicated workflow controller
   },
 
   // ==============================================

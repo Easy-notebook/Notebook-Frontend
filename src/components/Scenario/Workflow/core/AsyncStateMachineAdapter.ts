@@ -29,6 +29,7 @@ export interface APIType {
 
 export class AsyncStateMachineAdapter {
   private apiClient: any;
+  private scriptStore?: any;
   private lastTransitionName: string | null = null;
 
   // API Handlers
@@ -38,11 +39,12 @@ export class AsyncStateMachineAdapter {
 
   constructor(apiClient?: any, scriptStore?: any) {
     this.apiClient = apiClient;
+    this.scriptStore = scriptStore;
 
     // Initialize API handlers
-    this.planningHandler = new PlanningAPIHandler(apiClient);
-    this.generatingHandler = new GeneratingAPIHandler(apiClient);
-    this.reflectingHandler = new ReflectingAPIHandler(apiClient);
+    this.planningHandler = new PlanningAPIHandler(apiClient, scriptStore);
+    this.generatingHandler = new GeneratingAPIHandler(apiClient, scriptStore);
+    this.reflectingHandler = new ReflectingAPIHandler(apiClient, scriptStore);
 
     console.log('[AsyncFSM] Initialized AsyncStateMachineAdapter with API handlers');
 
@@ -64,9 +66,9 @@ export class AsyncStateMachineAdapter {
     this.apiClient = apiClient;
 
     // Reinitialize API handlers
-    this.planningHandler = new PlanningAPIHandler(apiClient);
-    this.generatingHandler = new GeneratingAPIHandler(apiClient);
-    this.reflectingHandler = new ReflectingAPIHandler(apiClient);
+    this.planningHandler = new PlanningAPIHandler(apiClient, this.scriptStore);
+    this.generatingHandler = new GeneratingAPIHandler(apiClient, this.scriptStore);
+    this.reflectingHandler = new ReflectingAPIHandler(apiClient, this.scriptStore);
 
     // Inject into TransitionCoordinator
     const coordinator = getTransitionCoordinator();

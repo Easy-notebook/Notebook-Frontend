@@ -3,7 +3,7 @@ import { Editor } from '@tiptap/react';
 import { Node as ProseMirrorNode } from 'prosemirror-model';
 import useStore from '@Store/notebookStore';
 import { handleFileUpload } from '@Utils/fileUtils';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { FileService } from '@Services/notebook/FileService';
 import { Backend_BASE_URL } from '@Config/base_url';
 
 interface SimpleDragManagerProps {
@@ -242,7 +242,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
         await handleFileUpload({
           notebookId,
           files: filesToUpload,
-          notebookApiIntegration,
+          FileService,
           uploadConfig,
           setUploading: () => {},
           setUploadProgress: () => {},
@@ -293,7 +293,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
           abortControllerRef,
           fetchFileList: async () => {
             try {
-              await notebookApiIntegration.listFiles(notebookId);
+              await FileService.listFiles(notebookId);
             } catch {
               // Ignore file list errors
             }

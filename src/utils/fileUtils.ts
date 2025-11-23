@@ -15,7 +15,7 @@ interface ApiResponse {
   files?: FileItem[];
 }
 
-interface NotebookApiIntegration {
+interface FileServiceInterface {
   listFiles: (notebookId: string) => Promise<ApiResponse>;
   uploadFiles: (
     notebookId: string,
@@ -47,7 +47,7 @@ type ToastFunction = (options: ToastOptions) => void;
 
 interface FetchFileListParams {
   notebookId: string;
-  notebookApiIntegration: NotebookApiIntegration;
+  fileService: FileServiceInterface;
   setFileList: (files: FileItem[]) => void;
   toast: ToastFunction;
 }
@@ -55,7 +55,7 @@ interface FetchFileListParams {
 interface HandleFileUploadParams {
   notebookId: string;
   files: File[];
-  notebookApiIntegration: NotebookApiIntegration;
+  fileService: FileServiceInterface;
   uploadConfig: UploadConfig;
   setUploading: (uploading: boolean) => void;
   setUploadProgress: (progress: number) => void;
@@ -72,7 +72,7 @@ interface HandleFileUploadParams {
 interface HandlePreviewParams {
   notebookId: string;
   filename: string;
-  notebookApiIntegration: NotebookApiIntegration;
+  fileService: FileServiceInterface;
   setSelectedFile: (filename: string) => void;
   setPreviewContent: (content: string) => void;
   setPreviewType: (type: 'image' | 'text') => void;
@@ -85,14 +85,14 @@ interface HandlePreviewParams {
 interface HandleDownloadParams {
   notebookId: string;
   filename: string;
-  notebookApiIntegration: NotebookApiIntegration;
+  fileService: FileServiceInterface;
   toast: ToastFunction;
 }
 
 interface HandleDeleteFileParams {
   notebookId: string;
   filename: string;
-  notebookApiIntegration: NotebookApiIntegration;
+  fileService: FileServiceInterface;
   fetchFileList: () => Promise<void>;
   toast: ToastFunction;
 }
@@ -103,14 +103,14 @@ interface HandleDeleteFileParams {
  */
 export const fetchFileList = async ({
   notebookId,
-  notebookApiIntegration,
+  fileService,
   setFileList,
   toast,
 }: FetchFileListParams): Promise<void> => {
   if (!notebookId) return;
 
   try {
-    const data: ApiResponse = await notebookApiIntegration.listFiles(notebookId);
+    const data: ApiResponse = await fileService.listFiles(notebookId);
     if (data.status === 'ok') {
       setFileList(data.files);
     } else {
@@ -156,7 +156,7 @@ export const validateFile = (file: File, uploadConfig: UploadConfig): boolean =>
 export const handleFileUpload = async ({
   notebookId,
   files,
-  notebookApiIntegration,
+  fileService,
   uploadConfig,
   setUploading,
   setUploadProgress,
@@ -188,7 +188,7 @@ export const handleFileUpload = async ({
 
     files.forEach((file: File) => validateFile(file, uploadConfig));
 
-    const result: ApiResponse = await notebookApiIntegration.uploadFiles(
+    const result: ApiResponse = await fileService.uploadFiles(
       notebookId,
       files,
       uploadConfig,
@@ -250,7 +250,7 @@ export const handleFileUpload = async ({
 export const handlePreview = async ({
   notebookId,
   filename,
-  notebookApiIntegration,
+  fileService,
   setSelectedFile,
   setPreviewContent,
   setPreviewType,
@@ -266,11 +266,11 @@ export const handlePreview = async ({
     setSelectedFile(filename);
 
     if (PREVIEWABLE_IMAGE_TYPES.includes(ext)) {
-      const imageUrl: string = await notebookApiIntegration.getFilePreviewUrl(notebookId, filename);
+      const imageUrl: string = await fileService.getFilePreviewUrl(notebookId, filename);
       setPreviewContent(imageUrl);
       setPreviewType('image');
     } else if (PREVIEWABLE_TEXT_TYPES.includes(ext)) {
-      const content: string = await notebookApiIntegration.getFileContent(notebookId, filename);
+      const content: string = await fileService.getFileContent(notebookId, filename);
       setPreviewContent(content);
       setPreviewType('text');
     }
@@ -293,13 +293,13 @@ export const handlePreview = async ({
 export const handleDownload = async ({
   notebookId,
   filename,
-  notebookApiIntegration,
+  fileService,
   toast,
 }: HandleDownloadParams): Promise<void> => {
   if (!notebookId) return;
 
   try {
-    await notebookApiIntegration.downloadFile(notebookId, filename);
+    await fileService.downloadFile(notebookId, filename);
     toast({
       title: 'Success',
       description: `${filename} downloaded successfully`,
@@ -322,14 +322,14 @@ export const handleDownload = async ({
 export const handleDeleteFile = async ({
   notebookId,
   filename,
-  notebookApiIntegration,
+  fileService,
   fetchFileList,
   toast,
 }: HandleDeleteFileParams): Promise<void> => {
   if (!notebookId) return;
 
   try {
-    await notebookApiIntegration.deleteFile(notebookId, filename);
+    await fileService.deleteFile(notebookId, filename);
     await fetchFileList();
     toast({
       title: 'Success',

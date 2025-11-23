@@ -67,10 +67,12 @@ const DSLCPipeline: React.FC<DSLCPipelineProps> = ({ onAddCell }) => {
     currentPreStage, // Use a dedicated state for pre-workflow stages
     isAnimating,
     animationDirection,
-    initializeWorkflow,
     isWorkflowActive,
     setPreStage,
   } = usePipelineStore();
+
+  // ✅ Use new architecture: useWorkflowStateMachine for workflow control
+  const { startWorkflow } = useWorkflowStateMachine();
 
   // This effect is no longer needed here as it's handled by other components.
   // If it were necessary, it should be placed in a top-level App component.
@@ -80,7 +82,7 @@ const DSLCPipeline: React.FC<DSLCPipelineProps> = ({ onAddCell }) => {
 
   const handleConfirmProblem = useCallback(async () => {
     try {
-      console.log('[Pipeline] Problem confirmed, initializing workflow...');
+      console.log('[Pipeline] Problem confirmed, starting workflow with new architecture...');
 
       const preStageState = usePreStageStore.getState();
       const planningRequest = {
@@ -91,37 +93,19 @@ const DSLCPipeline: React.FC<DSLCPipelineProps> = ({ onAddCell }) => {
         csv_file_path: preStageState.csv_file_path || '',
       };
 
-      // Initialize workflow template locally
-      await initializeWorkflow(planningRequest);
+      console.log('[Pipeline] Planning request:', planningRequest);
 
-      // Send workflow initialization request to backend
-      console.log('[Pipeline] Sending workflow initialization to backend...');
-      const { default: useOperatorStore } = await import('@Store/operatorStore');
-      const { default: useStore } = await import('@Store/notebookStore');
+      // ✅ NEW ARCHITECTURE: Use useWorkflowStateMachine.startWorkflow()
+      // This replaces the deprecated initializeWorkflow() and startWorkflowExecution()
+      console.log('[Pipeline] Starting workflow via useWorkflowStateMachine...');
+      await startWorkflow(planningRequest);
 
-      const notebookId = useStore.getState().notebookId;
-      if (!notebookId) {
-        throw new Error('No notebook ID available');
-      }
-
-      // Send the planning request to backend to start workflow
-      await useOperatorStore.getState().sendOperation(notebookId, {
-        type: 'start_workflow',
-        payload: planningRequest,
-      });
-
-      console.log('[Pipeline] Workflow initialization sent to backend successfully');
-
-      // Start the workflow state machine
-      console.log('[Pipeline] Starting workflow execution...');
-      const pipelineStore = usePipelineStore.getState();
-      pipelineStore.startWorkflowExecution();
-      console.log('[Pipeline] Workflow state machine started');
+      console.log('[Pipeline] Workflow started successfully via new architecture');
     } catch (error) {
-      console.error('[Pipeline] Failed to confirm problem and initialize workflow:', error);
-      alert('Failed to initialize workflow. Please check the console and try again.');
+      console.error('[Pipeline] Failed to start workflow:', error);
+      alert('Failed to start workflow. Please check the console and try again.');
     }
-  }, [initializeWorkflow]);
+  }, [startWorkflow]);
 
   const renderContent = () => {
     if (isWorkflowActive) {

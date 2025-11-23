@@ -1,7 +1,8 @@
 // store/codeStore.ts
 import { create } from 'zustand';
 import useStore from '@Store/notebookStore';
-import { NotebookApiService } from '@Services/notebookServices';
+import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
+import { CodeExecutionService } from '@Services/notebook/CodeExecutionService';
 import { storeLog } from '@Utils/logger';
 import {
   DISPLAY_MODES,
@@ -70,6 +71,7 @@ export type CodeStore = CodeStoreState & CodeStoreActions;
  * 3) 轮询逻辑
  * 4) 单个 Cell 执行 / 取消执行方法
  */
+
 const useCodeStore = create<CodeStore>((set, get) => ({
   // ========== 全局内核状态 ==========
   isKernelReady: false,
@@ -90,7 +92,7 @@ const useCodeStore = create<CodeStore>((set, get) => ({
 
     try {
       get().setError(null);
-      const result: KernelInitResult = await NotebookApiService.initializeNotebook();
+      const result: KernelInitResult = await NotebookLifecycleService.initializeNotebook();
       if (result.status === 'ok') {
         get().setKernelReady(true);
         if (result.notebook_id) {
@@ -111,7 +113,9 @@ const useCodeStore = create<CodeStore>((set, get) => ({
   restartKernel: async (): Promise<boolean> => {
     try {
       get().setError(null);
-      const result: KernelInitResult = await NotebookApiService.restartNotebook();
+      const result: KernelInitResult = await NotebookLifecycleService.restartNotebook(
+        useStore.getState().notebookId || ''
+      );
       if (result.status === 'ok') {
         get().setKernelReady(true);
         return true;
@@ -191,7 +195,7 @@ const useCodeStore = create<CodeStore>((set, get) => ({
 
     const intervalId = setInterval(async () => {
       try {
-        const status: ExecutionStatus = await NotebookApiService.getExecutionStatus(notebookId);
+        const status: ExecutionStatus = await CodeExecutionService.getExecutionStatus(notebookId);
         const cellExec = get().getCellExecState(cellId);
         // 如果已经不在执行，就停止轮询
         if (!cellExec.isExecuting) {
@@ -224,7 +228,7 @@ const useCodeStore = create<CodeStore>((set, get) => ({
           statusCheckInterval: null,
         });
       }
-    }, 1000);
+    }, 1000) as any;
 
     get().setCellExecState(cellId, { statusCheckInterval: intervalId });
   },
@@ -239,7 +243,7 @@ const useCodeStore = create<CodeStore>((set, get) => ({
     get().setCellExecState(cellId, { isCancelling: true });
 
     try {
-      await NotebookApiService.cancelExecution(notebookId);
+      await CodeExecutionService.cancelExecution(notebookId);
       get().stopStatusCheck(cellId);
       get().setCellExecState(cellId, {
         isExecuting: false,
@@ -270,7 +274,7 @@ const useCodeStore = create<CodeStore>((set, get) => ({
       return { success: false, error: '内核初始化失败' };
     }
     if (notebookId) {
-      await NotebookApiService.executeCode('print("fast check")', notebookId);
+      await CodeExecutionService.executeCode('print("fast check")', notebookId);
     }
 
     // 清除旧输出
@@ -294,7 +298,7 @@ const useCodeStore = create<CodeStore>((set, get) => ({
         return { success: false, error: 'Cell 不存在' };
       }
 
-      const result = await NotebookApiService.executeCode(codeCell.content, notebookId!);
+      const result = await CodeExecutionService.executeCode(codeCell.content, notebookId!);
 
       // 更新 outputs
       if (import.meta.env.DEV) {

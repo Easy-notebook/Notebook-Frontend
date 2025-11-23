@@ -1,18 +1,12 @@
-// store/operatorStore.ts
-
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { OperationService } from '@Services/notebook/OperationService';
 import { handleStreamResponse } from '@Services/stream';
 import { showToast } from '@/components/UI/Toast';
 import useCodeStore from '@Store/codeStore';
 import { storeLog } from '@Utils/logger';
+import { apiLog } from '@Utils/logger';
 import type { Operation, OperationResponseData } from '@Store/models/operation';
-
-/**
- * 操作接口
- */
-// Interfaces moved to @Store/models/operation
 
 /**
  * 流处理回调函数类型
@@ -31,44 +25,21 @@ export type ToastFunction = (message: {
  * Operator Store 状态接口
  */
 export interface OperatorStoreState {
-  operations: Operation[]; // 存储所有操作历史
-  operationResponses: Record<string, OperationResponseData[]>; // 存储每个操作对应的响应
-  isSendingOperation: boolean; // 标记是否正在发送操作
-  error: string | null; // 存储error_message
+  operations: Operation[];
+  operationResponses: Record<string, OperationResponseData[]>;
+  isSendingOperation: boolean;
+  error: string | null;
 }
 
 /**
  * Operator Store Actions 接口
  */
 export interface OperatorStoreActions {
-  /**
-   * 添加一个操作到操作历史
-   */
   addOperation: (operation: Operation) => string;
-
-  /**
-   * 发送操作到后端
-   */
   sendOperation: (notebookId: string | null, operation: Operation) => Promise<void>;
-
-  /**
-   * 获取操作历史
-   */
   getOperationHistory: () => Operation[];
-
-  /**
-   * 获取某个操作的响应记录
-   */
   getOperationResponses: (operationId: string) => OperationResponseData[];
-
-  /**
-   * 清空操作历史和响应记录
-   */
   clearOperations: () => void;
-
-  /**
-   * 重置错误状态
-   */
   resetError: () => void;
 }
 
@@ -77,19 +48,12 @@ export interface OperatorStoreActions {
  */
 export type OperatorStore = OperatorStoreState & OperatorStoreActions;
 
-/**
- * Operator Store 用于缓存用户操作和处理与后端的交互
- */
 const useOperatorStore = create<OperatorStore>((set, get) => ({
-  operations: [], // 存储所有操作历史
-  operationResponses: {}, // 存储每个操作对应的响应
-  isSendingOperation: false, // 标记是否正在发送操作
-  error: null, // 存储error_message
+  operations: [],
+  operationResponses: {},
+  isSendingOperation: false,
+  error: null,
 
-  /**
-   * 添加一个操作到操作历史
-   * @param operation - 操作对象
-   */
   addOperation: (operation: Operation): string => {
     const newOperation: Operation = {
       ...operation,
@@ -99,7 +63,7 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
     set((state) => ({
       operations: [...state.operations, newOperation],
     }));
-    return newOperation.id!; // 返回操作ID以便跟踪
+    return newOperation.id!;
   },
 
   /**
@@ -111,15 +75,22 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
     const state = get();
 
     if (!notebookId) {
-      notebookId = await useCodeStore.getState().initializeKernel();
-      if (!notebookId) {
-        showToast({ message: '无法初始化内核', type: 'error' });
+      const kernelId = await useCodeStore.getState().initializeKernel();
+      if (!kernelId) {
+        showToast({
+          description: '无法初始化内核',
+          variant: 'destructive',
+        });
         return;
       }
+      notebookId = kernelId;
     }
 
     if (state.isSendingOperation) {
-      showToast({ message: '正在处理其他操作，请稍后...', type: 'warning' });
+      showToast({
+        description: '正在处理其他操作，请稍后...',
+        variant: 'default',
+      });
       return;
     }
 
@@ -127,49 +98,107 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
     const operationId = get().addOperation(operation);
 
     try {
-      console.log('[DEBUG] operatorStore - Sending operation:', {
+      storeLog.debug('Sending operation', {
         operationId,
         operationType: operation.type,
         notebookId,
       });
-      // 使用统一接口发送操作，传入自定义的流处理函数
-      await notebookApiIntegration.sendOperation(
-        notebookId,
-        operation,
-        async (data: OperationResponseData) => {
-          try {
-            console.log('[DEBUG] operatorStore - Received stream update:', {
-              operationId,
-              dataType: data.type,
-              hasPayload: !!data.payload,
-              hasDataPayload: !!(data as any).data?.payload,
-              payloadKeys: data.payload ? Object.keys(data.payload) : [],
-              dataPayloadKeys: (data as any).data?.payload
-                ? Object.keys((data as any).data.payload)
-                : [],
-              rawData: data,
-            });
-            // 处理流式响应
-            await handleStreamResponse(data, showToast);
 
-            // 更新操作响应状态
-            set((state) => ({
-              operationResponses: {
-                ...state.operationResponses,
-                [operationId]: [...(state.operationResponses[operationId] || []), data],
-              },
-            }));
-          } catch (error) {
-            storeLog.error('Error processing operation', {
-              error,
-              operationId,
-              operationType: operation.type,
-            });
-            console.error('[DEBUG] operatorStore - Error processing stream update:', error);
+      // Use OperationService to send operation
+      const stream = await OperationService.sendOperation(notebookId, operation);
+      if (!stream) return;
+
+      const reader = stream.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      const readStream = async (): Promise<void> => {
+        const { done, value } = await reader.read();
+        if (done) {
+          apiLog.debug('Stream closed');
+          if (buffer.trim()) {
+            processBuffer();
+          }
+          return;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        processBuffer();
+        readStream();
+      };
+
+      const processBuffer = () => {
+        let depth = 0;
+        let start = 0;
+        let inString = false;
+        let escape = false;
+
+        for (let i = 0; i < buffer.length; i++) {
+          const char = buffer[i];
+
+          if (escape) {
+            escape = false;
+            continue;
+          }
+
+          if (char === '\\') {
+            escape = true;
+            continue;
+          }
+
+          if (char === '"') {
+            inString = !inString;
+            continue;
+          }
+
+          if (inString) continue;
+
+          if (char === '{') {
+            depth++;
+          } else if (char === '}') {
+            depth--;
+            if (depth === 0) {
+              const jsonStr = buffer.substring(start, i + 1);
+              try {
+                const data = JSON.parse(jsonStr) as OperationResponseData;
+                apiLog.debug('Received stream update', {
+                  operationId,
+                  dataType: data.type,
+                  hasPayload: !!data.payload,
+                });
+
+                // Handle stream response (cast to StreamData as they're compatible)
+                // Wrap showToast to match expected signature
+                const toastWrapper = async (toast: {
+                  message: string;
+                  type: 'success' | 'error' | 'warning' | 'info';
+                }) => {
+                  showToast({
+                    description: toast.message,
+                    variant: toast.type === 'error' ? 'destructive' : 'default',
+                  });
+                };
+                handleStreamResponse(data as any, toastWrapper);
+
+                // Update operation responses
+                set((state) => ({
+                  operationResponses: {
+                    ...state.operationResponses,
+                    [operationId]: [...(state.operationResponses[operationId] || []), data],
+                  },
+                }));
+              } catch (e) {
+                apiLog.error('Failed to parse JSON', { error: e, json: jsonStr.substring(0, 100) });
+              }
+              start = i + 1;
+            }
           }
         }
-      );
-      console.log('[DEBUG] operatorStore - Operation completed:', { operationId });
+        buffer = buffer.substring(start);
+      };
+
+      await readStream();
+      storeLog.debug('Operation completed', { operationId });
     } catch (error: any) {
       storeLog.error('Failed to send operation', {
         error: error.message,
@@ -178,8 +207,8 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
       });
       set({ error: error.message });
       showToast({
-        message: `操作发送失败: ${error.message}`,
-        type: 'error',
+        description: `操作发送失败: ${error.message}`,
+        variant: 'destructive',
       });
     } finally {
       set({ isSendingOperation: false });

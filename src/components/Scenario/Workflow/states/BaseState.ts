@@ -91,7 +91,7 @@ export abstract class BaseState {
    * @param apiResponse - API response data
    * @returns Updated state JSON
    */
-  initializeFromResponse(stateData: Record<string, any>, apiResponse: any): Record<string, any> {
+  initializeFromResponse(stateData: Record<string, any>, _apiResponse: any): Record<string, any> {
     // Default: no-op, just return state as-is
     return stateData;
   }
@@ -118,10 +118,10 @@ export abstract class BaseState {
   setApiClient(apiClient: any): void {
     this.apiClient = apiClient;
 
-    // Initialize API handlers
-    this.planningHandler = new PlanningAPIHandler(apiClient);
-    this.generatingHandler = new GeneratingAPIHandler(apiClient);
-    this.reflectingHandler = new ReflectingAPIHandler(apiClient);
+    // Initialize API handlers (scriptStore not available in BaseState context)
+    this.planningHandler = new PlanningAPIHandler(apiClient, undefined);
+    this.generatingHandler = new GeneratingAPIHandler(apiClient, undefined);
+    this.reflectingHandler = new ReflectingAPIHandler(apiClient, undefined);
 
     console.log(`[State.${this.stateName}] API client and handlers injected`);
   }

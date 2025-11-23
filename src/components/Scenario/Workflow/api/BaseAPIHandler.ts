@@ -5,10 +5,12 @@
 
 export abstract class BaseAPIHandler {
   protected apiClient: any;
+  protected scriptStore?: any;
   protected name: string;
 
-  constructor(apiClient: any, name?: string) {
+  constructor(apiClient: any, scriptStore?: any, name?: string) {
     this.apiClient = apiClient;
+    this.scriptStore = scriptStore;
     this.name = name || this.constructor.name;
   }
 

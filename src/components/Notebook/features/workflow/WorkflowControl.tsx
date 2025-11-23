@@ -12,7 +12,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FaRedo, FaPlay, FaStop, FaPause } from 'react-icons/fa';
 import { Terminal } from 'lucide-react';
-import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 import {
   useWorkflowStateMachine,
@@ -155,21 +154,30 @@ const AutoWorkflowControls: React.FC<AutoWorkflowControlsProps> = ({
 };
 
 const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackViewMode }) => {
-  const { workflowTemplate } = usePipelineStore();
   const { addThinkingLog } = useAIPlanningContextStore();
-  const { currentState, stateJSON, transition, startWorkflow, reset, cancel, pause, resume } =
+  const { currentState, stateJSON, transition, reset, cancel, pause, resume } =
     useWorkflowStateMachine();
   const { setShowCommandInput } = useAIAgentStore();
   const { currentView } = useRouteStore();
 
-  // Get current location from stateJSON
+  // ✅ Get current location from stateJSON (new architecture)
   const currentLocation = stateJSON.observation?.location?.current;
   const currentStageId = currentLocation?.stage_id;
   const currentStepId = currentLocation?.step_id;
 
+  // ✅ Get stages and steps from stateJSON (memoized to avoid reference changes)
+  const plannedStages = useMemo(
+    () => stateJSON.observation?.location?.progress?.stages?.planned || [],
+    [stateJSON.observation?.location?.progress?.stages?.planned]
+  );
+  const plannedSteps = useMemo(
+    () => stateJSON.observation?.location?.progress?.steps?.planned || [],
+    [stateJSON.observation?.location?.progress?.steps?.planned]
+  );
+
   const prerequisitesMet = useMemo(() => {
-    return !!workflowTemplate;
-  }, [workflowTemplate]);
+    return plannedStages.length > 0;
+  }, [plannedStages]);
 
   const derivedState = useMemo<DerivedState>(() => {
     const isRunning = RUNNING_STATES.includes(currentState);
@@ -186,7 +194,8 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
         shouldRender: true,
       };
     }
-    if (!workflowTemplate?.stages || !Array.isArray(workflowTemplate.stages)) {
+
+    if (!plannedStages || !Array.isArray(plannedStages) || plannedStages.length === 0) {
       return {
         isExecuting: false,
         isPaused: false,
@@ -196,10 +205,12 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
         shouldRender: false,
       };
     }
-    const stage = workflowTemplate.stages.find((s: any) => s.id === currentStageId);
-    const step = stage?.steps?.find((st: any) => st.id === currentStepId);
-    const completedStepsCount = stage?.steps?.findIndex((st: any) => st.id === currentStepId) ?? 0;
-    const totalSteps = stage?.steps?.length ?? 0;
+
+    // ✅ Find stage and step from stateJSON
+    const stage = plannedStages.find((s: any) => s.stage_id === currentStageId);
+    const step = plannedSteps.find((st: any) => st.step_id === currentStepId);
+    const completedStepsCount = plannedSteps.findIndex((st: any) => st.step_id === currentStepId);
+    const totalSteps = plannedSteps.length;
 
     // If workflow is running, paused, or terminal, we should show step info even if we don't have it yet
     const shouldShowStepInfo =
@@ -217,16 +228,16 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
       currentStepInfo: shouldShowStepInfo
         ? step
           ? {
-              name: step.title || `步骤: ${step.id}`,
-              progress: `${completedStepsCount + 1}/${totalSteps}`,
+              name: step.title || `步骤: ${step.step_id}`,
+              progress: `${completedStepsCount >= 0 ? completedStepsCount + 1 : 0}/${totalSteps}`,
             }
           : stage
-            ? { name: stage.title || `阶段: ${stage.id}` }
+            ? { name: stage.title || `阶段: ${stage.stage_id}` }
             : { name: '准备中...' }
         : null,
       shouldRender: true,
     };
-  }, [prerequisitesMet, workflowTemplate, currentStageId, currentStepId, currentState]);
+  }, [prerequisitesMet, plannedStages, plannedSteps, currentStageId, currentStepId, currentState]);
 
   const isExecuting = derivedState.isExecuting;
   const isPaused = derivedState.isPaused;
@@ -254,10 +265,10 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   const onStart = () => {
     addThinkingLog('User started the PCS agent');
     reset();
-    // Start from the first stage
-    if (workflowTemplate?.stages?.[0]?.id) {
-      startWorkflow(workflowTemplate.stages[0].id);
-    }
+    // ✅ Start workflow using new architecture
+    // startWorkflow() will be called with planning request from UI
+    // For now, just reset and let the workflow be started via planning request
+    console.log('[WorkflowControl] Workflow reset, ready to start via planning request');
   };
 
   if (!shouldRender) return null;

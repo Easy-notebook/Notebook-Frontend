@@ -5,7 +5,7 @@ import type { TreeDataNode, TreeProps } from 'antd';
 import { Folder, FolderOpen, Download, Trash, Eye, RefreshCw, MoreHorizontal } from 'lucide-react';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { FileService } from '@Services/notebook/FileService';
 import {
   fetchFileList,
   handleFileUpload,
@@ -247,7 +247,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
   const utilsApi = useMemo(
     () => ({
       listFiles: async (nid: string) => {
-        const resp: any = await notebookApiIntegration.listFiles(nid);
+        const resp: any = await FileService.listFiles(nid);
         const mapNode = (f: any): any => ({
           name: f.name,
           size: f.size,
@@ -271,7 +271,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         onProgress?: (e: ProgressEvent) => void,
         signal?: AbortSignal
       ) => {
-        return await notebookApiIntegration.uploadFiles(
+        return await FileService.uploadFile(
           nid,
           files,
           {
@@ -294,11 +294,11 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         }
       },
       getFileContent: async (nid: string, filename: string) => {
-        const resp: any = await notebookApiIntegration.getFile(nid, filename);
+        const resp: any = await FileService.getFile(nid, filename);
         return resp.content || '';
       },
       downloadFile: async (_nid: string, filename: string) => {
-        const blob = await notebookApiIntegration.downloadFile(_nid, filename);
+        const blob = await FileService.downloadFile(_nid, filename);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -309,7 +309,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         URL.revokeObjectURL(url);
       },
       deleteFile: async (nid: string, filename: string) => {
-        return await notebookApiIntegration.deleteFile(nid, filename);
+        return await FileService.deleteFile(nid, filename);
       },
     }),
     [uploadConfig.targetDir]
@@ -321,7 +321,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     try {
       await fetchFileList({
         notebookId,
-        notebookApiIntegration: utilsApi as any,
+        FileService: utilsApi as any,
         setFileList: (list) => setFiles(list as FileNode[]),
         toast,
       });
@@ -541,7 +541,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
       handleDownload({
         notebookId,
         filename: file.path,
-        notebookApiIntegration: utilsApi as any,
+        FileService: utilsApi as any,
         toast,
       });
     },
@@ -554,7 +554,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleDeleteFile({
           notebookId,
           filename: file.path,
-          notebookApiIntegration: utilsApi as any,
+          FileService: utilsApi as any,
           fetchFileList: fetchFileListWrapper,
           toast,
         });
@@ -592,7 +592,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          notebookApiIntegration: utilsApi as any,
+          FileService: utilsApi as any,
           uploadConfig,
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),
@@ -631,7 +631,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          notebookApiIntegration: utilsApi as any,
+          FileService: utilsApi as any,
           uploadConfig,
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),

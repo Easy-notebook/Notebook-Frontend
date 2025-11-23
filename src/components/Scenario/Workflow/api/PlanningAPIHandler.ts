@@ -2,19 +2,20 @@
 import { BaseAPIHandler } from './BaseAPIHandler';
 import { StateJSON } from '@Store/models';
 import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
-import { getActionClass } from '../actions';
 
 export class PlanningAPIHandler extends BaseAPIHandler {
   /**
    * Call Planning API with streaming action support
    *
-   * Returns async generator that yields actions as they arrive
+   * Returns async generator that yields actions as they arrive.
+   * Actions are NOT executed here - they will be executed by AsyncStateMachineAdapter
+   * to maintain consistency with GeneratingAPIHandler and ReflectingAPIHandler.
    */
   async *call(
     stateData: Record<string, any>,
     stageId?: string,
     stepId?: string,
-    kwargs?: Record<string, any>
+    _kwargs?: Record<string, any>
   ): AsyncGenerator<any> {
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(stateData);
@@ -35,44 +36,29 @@ export class PlanningAPIHandler extends BaseAPIHandler {
       title: latestNotebook.title,
     });
 
-    console.log(`[PlanningAPI] Calling (stage=${stageId}, step=${stepId})`);
-
     try {
+      let actionCount = 0;
+
       // Call WorkflowAPIClient's streaming callPlanningAPI method
       const actionStream = this.apiClient.callPlanningAPI(stateData as StateJSON);
 
-      // Process each action as it arrives
+      // Stream actions without executing them
+      // Execution will be handled by AsyncStateMachineAdapter for consistency
       for await (const actionData of actionStream) {
-        console.log('[PlanningAPI] Received action:', actionData);
-
         // Extract action object (format: {"action": {...}})
         const action = actionData.action;
         if (!action || !action.type) {
-          console.warn('[PlanningAPI] Invalid action format:', actionData);
           continue;
         }
 
-        // Get action handler class
-        const ActionClass = getActionClass(action.type);
-        if (!ActionClass) {
-          console.warn(`[PlanningAPI] Unknown action type: ${action.type}`);
-          continue;
-        }
+        actionCount++;
+        console.log(`[PlanningAPI] Action ${actionCount}: ${action.type || 'unknown'}`);
 
-        // Execute action
-        try {
-          const actionInstance = new ActionClass(this.scriptStore);
-          await actionInstance.execute(action);
-          console.log(`[PlanningAPI] ✅ Executed action: ${action.type}`);
-        } catch (error) {
-          console.error(`[PlanningAPI] Failed to execute action ${action.type}:`, error);
-        }
-
-        // Yield action for external processing if needed
+        // Yield action for execution by AsyncStateMachineAdapter
         yield action;
       }
 
-      console.log('[PlanningAPI] ✅ Planning stream completed');
+      console.log(`[PlanningAPI] ✅ Planning stream completed: ${actionCount} actions`);
     } catch (error) {
       console.error(`[PlanningAPI] Failed:`, error);
       throw error;

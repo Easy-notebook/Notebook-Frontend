@@ -8,7 +8,8 @@ import { createUserAskQuestionAction } from '@Store/actionCreators';
 import { Command, Paperclip, X, FileText } from 'lucide-react';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useCodeStore from '@Store/codeStore';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
+import { FileService } from '@Services/notebook/FileService';
 
 // File upload types
 interface UploadFile {
@@ -297,7 +298,7 @@ const CommandInput: React.FC = () => {
           // Ensure notebookId exists
           let currentNotebookId = notebookId;
           if (!currentNotebookId) {
-            currentNotebookId = await notebookApiIntegration.initializeNotebook();
+            currentNotebookId = await NotebookLifecycleService.initializeNotebook();
             useStore.getState().setNotebookId(currentNotebookId);
             useCodeStore.getState().setKernelReady(true);
           }
@@ -313,11 +314,7 @@ const CommandInput: React.FC = () => {
             targetDir: 'assets',
           };
 
-          const result = await notebookApiIntegration.uploadFiles(
-            currentNotebookId!,
-            [file],
-            uploadConfig
-          );
+          const result = await FileService.uploadFile(currentNotebookId!, [file], uploadConfig);
 
           if (result && (result as any).status === 'ok') {
             validFiles.push({

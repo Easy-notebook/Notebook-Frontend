@@ -25,9 +25,8 @@ export function useLinkHandler(editor: Editor | null) {
         Promise.all([
           import('@Store/notebookStore'),
           import('@Store/previewStore'),
-          import('@Services/notebookServices'),
           import('@Config/base_url'),
-        ]).then(async ([nbMod, pvMod, , cfgMod]) => {
+        ]).then(async ([nbMod, pvMod, cfgMod]) => {
           const useNotebookStore = (nbMod as any).default;
           const usePreviewStore = (pvMod as any).default;
           const Backend_BASE_URL = cfgMod?.Backend_BASE_URL;

@@ -57,7 +57,8 @@
   --sidebar-right-width: 300px;
 
   /* Dynamic sidebar width - updated by JavaScript */
-  --nb-sidebar-width: 64px; /* Default: collapsed (mini only) */
+  --nb-sidebar-width: 64px;
+  /* Default: collapsed (mini only) */
 
   /* Effects */
   --glass-blur: blur(30px) saturate(180%);
@@ -95,7 +96,8 @@
 /* Glass morphism effect - can be applied to any container */
 .glass-morphism {
   position: relative;
-  overflow: hidden; /* ensure clipping of inner blur on Safari */
+  overflow: hidden;
+  /* ensure clipping of inner blur on Safari */
   border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
@@ -113,7 +115,8 @@
 /* Subtle glass effect for sidebars */
 .glass-subtle {
   position: relative;
-  overflow: hidden; /* ensure clipping of inner blur on Safari */
+  overflow: hidden;
+  /* ensure clipping of inner blur on Safari */
 }
 
 .glass-subtle::before {
@@ -163,6 +166,7 @@
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.8;
   }
@@ -174,12 +178,15 @@
   100% {
     transform: translate(0, 0) scale(1);
   }
+
   25% {
     transform: translate(-20px, -30px) scale(1.05);
   }
+
   50% {
     transform: translate(15px, 20px) scale(0.98);
   }
+
   75% {
     transform: translate(-10px, 15px) scale(1.02);
   }
@@ -190,9 +197,11 @@
   100% {
     transform: translate(0, 0) scale(1);
   }
+
   33% {
     transform: translate(25px, -20px) scale(1.08);
   }
+
   66% {
     transform: translate(-15px, 25px) scale(0.95);
   }
@@ -203,9 +212,11 @@
   100% {
     transform: translate(0, 0) scale(1);
   }
+
   30% {
     transform: translate(-30px, 20px) scale(1.06);
   }
+
   60% {
     transform: translate(20px, -25px) scale(0.97);
   }
@@ -216,9 +227,11 @@
   100% {
     transform: translate(0, 0) scale(1);
   }
+
   40% {
     transform: translate(30px, 25px) scale(1.04);
   }
+
   80% {
     transform: translate(-20px, -15px) scale(0.99);
   }
@@ -229,6 +242,7 @@
   100% {
     transform: translate(-50%, -50%) scale(1);
   }
+
   50% {
     transform: translate(-50%, -50%) scale(1.1);
   }
@@ -239,6 +253,7 @@
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.7;
   }
@@ -501,6 +516,7 @@
   padding: 0.2rem 0.5rem;
   margin-top: 1.5rem;
   line-height: 1.5;
+  padding-bottom: 1rem;
 }
 
 /* 三级标题：渐变文字 */
@@ -1029,6 +1045,7 @@
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.3;
   }
@@ -1057,7 +1074,8 @@
 /* CodeMirror 编辑区域 */
 .markdown-editor-codemirror .cm-content {
   padding: 0 !important;
-  padding-left: 0 !important; /* 确保没有行号空间 */
+  padding-left: 0 !important;
+  /* 确保没有行号空间 */
   background: transparent !important;
   border: none !important;
   outline: none !important;
@@ -1322,7 +1340,8 @@
   line-height: 1.6 !important;
   margin: 1.5rem 0 1rem 0 !important;
   padding: 0 !important;
-  caret-color: #3b82f6 !important; /* 蓝色光标 */
+  caret-color: #3b82f6 !important;
+  /* 蓝色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror h2 {
@@ -1336,7 +1355,8 @@
   line-height: 1.5 !important;
   display: inline-block !important;
   min-width: fit-content !important;
-  caret-color: #ffffff !important; /* 白色光标在渐变背景上 */
+  caret-color: #ffffff !important;
+  /* 白色光标在渐变背景上 */
 }
 
 .tiptap-notebook-editor .ProseMirror h3 {
@@ -1349,7 +1369,8 @@
   margin: 1rem 0 0.5rem 0 !important;
   line-height: 1.2 !important;
   padding: 0 !important;
-  caret-color: #dc2626 !important; /* 红色光标 */
+  caret-color: #dc2626 !important;
+  /* 红色光标 */
 }
 
 /* TipTap h4-h6 标题样式 - 补充缺失的样式 */
@@ -1364,7 +1385,8 @@
   line-height: 1.2rem !important;
   padding-left: 0.5rem !important;
   border-left: 3px solid #3490dc !important;
-  caret-color: #7c3aed !important; /* 紫色光标 */
+  caret-color: #7c3aed !important;
+  /* 紫色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror h5 {
@@ -1400,7 +1422,8 @@
   margin-bottom: 0.2rem !important;
   line-height: 1.6 !important;
   color: #202124 !important;
-  caret-color: #f59e0b !important; /* 橙色光标 */
+  caret-color: #f59e0b !important;
+  /* 橙色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror ul li::before {
@@ -1459,7 +1482,8 @@
   border-radius: 0.375rem !important;
   font-weight: 500 !important;
   color: #41b883 !important;
-  caret-color: #ef4444 !important; /* 红色光标 */
+  caret-color: #ef4444 !important;
+  /* 红色光标 */
 }
 
 /* TipTap 代码块样式 */
@@ -1489,7 +1513,8 @@
   margin: 1.5rem 0 !important;
   color: #35495e !important;
   font-style: italic !important;
-  caret-color: #6b7280 !important; /* 灰色光标 */
+  caret-color: #6b7280 !important;
+  /* 灰色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror blockquote p {
@@ -1555,7 +1580,8 @@
   text-align: left !important;
   border: none !important;
   border-bottom: 1px solid rgba(65, 184, 131, 0.06) !important;
-  caret-color: #8b5cf6 !important; /* 紫色光标 */
+  caret-color: #8b5cf6 !important;
+  /* 紫色光标 */
 }
 
 .tiptap-notebook-editor .ProseMirror th {
@@ -1758,9 +1784,11 @@
   ::-webkit-scrollbar-thumb {
     background: rgba(65, 184, 131, 0.3);
   }
+
   ::-webkit-scrollbar-thumb:hover {
     background: rgba(65, 184, 131, 0.4);
   }
+
   * {
     scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
     scrollbar-width: thin;
@@ -1893,7 +1921,8 @@ vds-container {
     sans-serif;
   line-height: 1.4;
   font-size: 0.9rem;
-  color: #000000 !important; /* 强制黑色 */
+  color: #000000 !important;
+  /* 强制黑色 */
 }
 
 /* 确保所有VDS子元素都是黑色 */
@@ -1907,46 +1936,54 @@ vds-tbody *,
 vds-tr *,
 vds-td *,
 vds-code-block * {
-  color: #000000 !important; /* 强制黑色，除非特殊指定 */
+  color: #000000 !important;
+  /* 强制黑色，除非特殊指定 */
 }
 
 /* VDS标题保持渐变色 */
 vds-title {
-  color: transparent !important; /* 让渐变色生效 */
+  color: transparent !important;
+  /* 让渐变色生效 */
 }
 
 /* VDS表格头部改为黑色文字 */
 vds-th,
 vds-th * {
-  color: #ffffff !important; /* 表头保持白色 */
+  color: #ffffff !important;
+  /* 表头保持白色 */
 }
 
 /* 特殊颜色保持原样 */
 .vds-cell.vds-numeric,
 .vds-cell.vds-numeric * {
-  color: #3490dc !important; /* 数值类型保持蓝色 */
+  color: #3490dc !important;
+  /* 数值类型保持蓝色 */
 }
 
 .vds-null,
 .vds-null * {
-  color: #ef4444 !important; /* 空值保持红色 */
+  color: #ef4444 !important;
+  /* 空值保持红色 */
 }
 
 .vds-col-unique,
 .vds-col-unique * {
-  color: #41b883 !important; /* 唯一值统计保持绿色 */
+  color: #41b883 !important;
+  /* 唯一值统计保持绿色 */
 }
 
 .vds-col-missing,
 .vds-col-missing * {
-  color: #ef4444 !important; /* 缺失值统计保持红色 */
+  color: #ef4444 !important;
+  /* 缺失值统计保持红色 */
 }
 
 .vds-error-label,
 .vds-error-label *,
 .vds-error-value,
 .vds-error-value * {
-  color: #ef4444 !important; /* 错误信息保持红色 */
+  color: #ef4444 !important;
+  /* 错误信息保持红色 */
 }
 
 /* VDS 帮助面板 */
@@ -2456,6 +2493,7 @@ vds-cleaning-report {
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.6;
   }
@@ -2556,6 +2594,7 @@ vds-cleaning-report {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -2594,30 +2633,39 @@ vds-cleaning-report {
 .theme-50 {
   background-color: #f0fdf4;
 }
+
 .theme-100 {
   background-color: #dcfce7;
 }
+
 .theme-200 {
   background-color: #bbf7d0;
 }
+
 .theme-400 {
   background-color: #4ade80;
 }
+
 .theme-500 {
   background-color: #22c55e;
 }
+
 .theme-600 {
   color: #16a34a;
 }
+
 .theme-700 {
   color: #15803d;
 }
+
 .theme-800 {
   color: #166534;
 }
+
 .theme-900 {
   color: #14532d;
 }
+
 .theme-25 {
   background-color: #f7fee7;
 }
@@ -2625,12 +2673,15 @@ vds-cleaning-report {
 .border-theme-100 {
   border-color: #dcfce7;
 }
+
 .border-theme-200 {
   border-color: #bbf7d0;
 }
+
 .border-theme-400 {
   border-color: #4ade80;
 }
+
 .border-theme-500 {
   border-color: #22c55e;
 }
@@ -2638,12 +2689,15 @@ vds-cleaning-report {
 .text-theme-600 {
   color: #16a34a;
 }
+
 .text-theme-700 {
   color: #15803d;
 }
+
 .text-theme-800 {
   color: #166534;
 }
+
 .text-theme-900 {
   color: #14532d;
 }
@@ -2733,6 +2787,7 @@ vds-cleaning-report {
 .dark .glass-morphism {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
+
 .dark .glass-morphism::before {
   background: rgba(35, 35, 42, 0.7);
 }
@@ -2770,9 +2825,11 @@ vds-cleaning-report {
 /* Aliases used by components (e.g., SelectContent) */
 .acrylic {
   position: relative;
-  overflow: hidden; /* Safari clipping fix */
+  overflow: hidden;
+  /* Safari clipping fix */
   border: 1px solid var(--card-border);
 }
+
 .acrylic::before {
   content: '';
   position: absolute;
@@ -2786,9 +2843,11 @@ vds-cleaning-report {
 
 .mica {
   position: relative;
-  overflow: hidden; /* Safari clipping fix */
+  overflow: hidden;
+  /* Safari clipping fix */
   border: 1px solid var(--card-border);
 }
+
 .mica::before {
   content: '';
   position: absolute;

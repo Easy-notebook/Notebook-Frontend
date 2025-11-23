@@ -1,8 +1,8 @@
 // store/previewStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { FileContentResponse } from '@Services/notebookServices';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import type { FileContentResponse } from '@Services/types';
+import { FileService } from '@Services/notebook/FileService';
 import { fileLog, storeLog } from '@Utils/logger';
 import { persistenceService } from '@Services/persistence/instance';
 import { getFileType, getActivePreviewMode, getMimeType } from '@Storage/index';
@@ -311,7 +311,7 @@ const usePreviewStore = create<PreviewStore>()(
 
             for (const pathToTry of pathsToTry) {
               try {
-                response = await notebookApiIntegration.getFile(notebookId, pathToTry);
+                response = await FileService.getFile(notebookId, pathToTry);
                 if (response && response.status !== 'error') {
                   fileLog.debug('File found at path', {
                     originalPath: filePath,
@@ -327,7 +327,7 @@ const usePreviewStore = create<PreviewStore>()(
             // If no path worked, throw the original error
             // Get file from backend
             if (!response) {
-              response = await notebookApiIntegration.getFile(notebookId, filePath);
+              response = await FileService.getFile(notebookId, filePath);
             }
 
             if (!response || response.status === 'error') {
@@ -1004,7 +1004,7 @@ const usePreviewStore = create<PreviewStore>()(
 
             // 🔄 Also fetch files from backend for this notebook and merge
             try {
-              const resp = await notebookApiIntegration.listFiles(notebookId);
+              const resp = await FileService.listFiles(notebookId);
               if (resp && (resp as any).status === 'ok' && Array.isArray((resp as any).files)) {
                 const nodes = (resp as any).files as any[];
                 const flatten = (arr: any[]): any[] =>
@@ -1203,10 +1203,7 @@ const usePreviewStore = create<PreviewStore>()(
             fileLog.info('Split preview: Fetching from backend', { filePath });
 
             // Get file from backend
-            const response: FileContentResponse = await notebookApiIntegration.getFile(
-              notebookId,
-              filePath
-            );
+            const response: FileContentResponse = await FileService.getFile(notebookId, filePath);
 
             if (!response || response.status === 'error') {
               throw new Error(response?.message || 'Failed to fetch file for split preview');
@@ -1409,18 +1406,15 @@ const usePreviewStore = create<PreviewStore>()(
                 } else {
                   // Try to fetch from backend to validate existence
                   let validationSuccess = false;
-                  const pathsToTry = [
+                  const pathsToTry: string[] = [
                     filePath,
                     `assets/${filePath}`, // Try with assets prefix
                     filePath.split('/').pop(), // Try just the filename
-                  ].filter(Boolean);
+                  ].filter((path): path is string => Boolean(path));
 
                   for (const pathToTry of pathsToTry) {
                     try {
-                      const response = await notebookApiIntegration.getFile(
-                        tabNotebookId,
-                        pathToTry
-                      );
+                      const response = await FileService.getFile(tabNotebookId, pathToTry);
                       if (response && response.status !== 'error') {
                         // File exists on backend, add to valid tabs
                         validTabs.push({

@@ -92,54 +92,18 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
     }
     console.log('[StartWorkflow] ========== ACTIONS DISPATCHED ==========');
 
-    // IMPORTANT: Update workflowTemplate in PipelineStore with the stages from Planning API
-    this.syncWorkflowTemplate(stagesData, title, description);
+    // Note: Stages data is already stored in newState.observation.location.progress.stages
+    // UI components should read directly from stateJSON instead of a separate store
 
     this.syncNotebookToState(newState);
     return newState;
   }
 
   /**
-   * Sync workflow template to PipelineStore
-   * This ensures the UI components (WorkflowTODOPanel, WorkflowPanel) display the correct stages
+   * REMOVED: syncWorkflowTemplate
+   *
+   * Previously synced to usePipelineStore (now deprecated).
+   * UI components should read directly from stateJSON.observation.location.progress.stages
+   * instead of using a separate workflowTemplate store.
    */
-  private syncWorkflowTemplate(
-    stagesData: any[],
-    workflowTitle: string,
-    workflowDescription: string
-  ): void {
-    try {
-      // Import PipelineStore dynamically to avoid circular dependencies
-      import('../store/usePipelineStore').then(({ usePipelineStore }) => {
-        const pipelineStore = usePipelineStore.getState();
-
-        // Convert stages from Planning API format to WorkflowTemplate format
-        const stages = stagesData.map((stage, index) => ({
-          id: stage.stage_id,
-          title: stage.title || `Stage ${index + 1}`,
-          description: stage.goal || '',
-          steps: [], // Steps will be populated later by START_STEP transition
-          metadata: {
-            verified_artifacts: stage.verified_artifacts || {},
-            required_variables: stage.required_variables || {},
-          },
-        }));
-
-        const workflowTemplate = {
-          id: 'dcls_workflow',
-          name: workflowTitle || 'Data Science Lifecycle (DCLS) Analysis',
-          description:
-            workflowDescription ||
-            'Complete data science workflow based on existence first principles',
-          stages,
-          metadata: {},
-        };
-
-        console.log('[StartWorkflow] Updating workflowTemplate with', stages.length, 'stages');
-        pipelineStore.setWorkflowTemplate(workflowTemplate);
-      });
-    } catch (error) {
-      console.error('[StartWorkflow] Failed to sync workflow template:', error);
-    }
-  }
 }

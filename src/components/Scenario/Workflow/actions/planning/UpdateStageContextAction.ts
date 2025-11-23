@@ -7,7 +7,7 @@
 
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
-import { usePipelineStore } from '../../store/usePipelineStore';
+import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
 export class UpdateStageContextAction extends ActionBase {
   /**
@@ -26,11 +26,24 @@ export class UpdateStageContextAction extends ActionBase {
       return;
     }
 
-    const pipelineStore = usePipelineStore.getState();
-    const observation = pipelineStore.observation;
+    const stateMachine = useWorkflowStateMachine.getState();
+    const stateJSON = stateMachine.stateJSON;
+    const observation = stateJSON.observation;
+
+    // Validate observation structure
+    if (!observation?.location?.progress?.stages?.planned) {
+      console.warn('[UpdateStageContextAction] Invalid observation structure:', {
+        hasObservation: !!observation,
+        hasLocation: !!observation?.location,
+        hasProgress: !!observation?.location?.progress,
+        hasStages: !!observation?.location?.progress?.stages,
+        hasPlanned: !!observation?.location?.progress?.stages?.planned,
+      });
+      return;
+    }
 
     // Find the stage
-    const stage = observation.location.progress.stages.planned?.find(
+    const stage = observation.location.progress.stages.planned.find(
       (s: any) => s.stage_id === stage_id
     );
 
@@ -47,10 +60,13 @@ export class UpdateStageContextAction extends ActionBase {
       stage.notes = notes;
     }
 
-    console.log(`[UpdateStageContextAction] ✅ Updated context for stage: ${stage_id}`);
+    console.log(`[UpdateStageContextAction] ✅ Updated context for stage: ${stage_id}`, {
+      focus,
+      notes,
+    });
 
-    // Update pipeline store
-    usePipelineStore.setState({ observation });
+    // Update workflow state machine with modified stateJSON
+    stateMachine.setState(stateJSON);
   }
 }
 

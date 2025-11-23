@@ -34,6 +34,12 @@ export interface ExecutionStep {
   language?: string;
   stepId?: string; // legacy
   phaseId?: string; // legacy
+  stage_id?: string; // For UpdateStageContextAction and PlanStageAction
+  notes?: string; // For UpdateStageContextAction
+  task?: string; // For PlanStageAction and PlanStepAction
+  acceptance?: string; // For PlanStageAction and PlanStepAction
+  step_id?: string; // For PlanStepAction
+  total_stages?: number; // Added to support workflow planning total stages
 }
 
 // Pipeline template types

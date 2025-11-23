@@ -11,7 +11,6 @@
 import React, { useMemo } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { useWorkflowStateMachine } from '@/components/Scenario/Workflow/store/workflowStateMachine';
-import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import { extractSectionTitle } from '@Notebook/utils/String';
 import WorkflowErrorBoundary from './WorkflowErrorBoundary';
 
@@ -89,29 +88,50 @@ const WorkflowNavigator: React.FC<WorkflowNavigatorProps> = ({
 };
 
 const WorkflowPanel: React.FC = () => {
-  const { workflowTemplate } = usePipelineStore();
-  const { stateJSON } = useWorkflowStateMachine();
+  const { stateJSON } = useWorkflowStateMachine(); // ✅ Use stateJSON as single source of truth
 
-  // Get current location from stateJSON
+  // ✅ Get current location from stateJSON
   const currentLocation = stateJSON.observation?.location?.current;
   const currentStageId = currentLocation?.stage_id;
   const currentStepId = currentLocation?.step_id;
 
+  // ✅ Get stages from stateJSON.observation.location.progress.stages.planned (memoized)
+  const plannedStages = useMemo(
+    () => stateJSON.observation?.location?.progress?.stages?.planned || [],
+    [stateJSON.observation?.location?.progress?.stages?.planned]
+  );
+  const plannedSteps = useMemo(
+    () => stateJSON.observation?.location?.progress?.steps?.planned || [],
+    [stateJSON.observation?.location?.progress?.steps?.planned]
+  );
+
   const navigatorData = useMemo(() => {
     if (
-      !workflowTemplate?.stages ||
-      !Array.isArray(workflowTemplate.stages) ||
-      workflowTemplate.stages.length === 0 ||
+      !plannedStages ||
+      !Array.isArray(plannedStages) ||
+      plannedStages.length === 0 ||
       !currentStageId ||
       !currentStepId
     )
       return null;
+
+    // ✅ Convert stateJSON format to expected format
+    // In new architecture, steps are stored separately, need to map them to stages
+    const stagesWithSteps = plannedStages.map((stage: any) => ({
+      id: stage.stage_id,
+      title: stage.title,
+      steps: plannedSteps.map((step: any) => ({
+        id: step.step_id,
+        title: step.title,
+      })),
+    }));
+
     return {
-      stages: workflowTemplate.stages,
+      stages: stagesWithSteps,
       currentStageId,
       currentStepId,
     };
-  }, [workflowTemplate, currentStageId, currentStepId]);
+  }, [plannedStages, plannedSteps, currentStageId, currentStepId]);
 
   return (
     <WorkflowErrorBoundary>

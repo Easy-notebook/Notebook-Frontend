@@ -87,10 +87,12 @@ export function action(actionType: string) {
  * Get the action class for a given action type.
  *
  * @param actionType - The action type identifier
- * @returns The action class, or undefined if not found
+ * @returns The action class constructor, or undefined if not found
  */
-export function getActionClass(actionType: string): typeof ActionBase | undefined {
-  return _actionRegistry.get(actionType);
+export function getActionClass(
+  actionType: string
+): (new (scriptStore: any) => ActionBase) | undefined {
+  return _actionRegistry.get(actionType) as (new (scriptStore: any) => ActionBase) | undefined;
 }
 
 /**

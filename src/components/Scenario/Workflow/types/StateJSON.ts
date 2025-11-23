@@ -58,6 +58,15 @@ export interface StageProgress {
     verified_artifacts: Record<string, any>;
     required_variables?: string[];
   }>;
+  planned?: Array<{
+    stage_id: string;
+    title: string;
+    task: string;
+    acceptance: string;
+    planning_complete: boolean;
+    focus?: string;
+    notes?: string;
+  }>;
   focus: string;
   current_outputs: OutputTracking;
 }
@@ -84,6 +93,13 @@ export interface StepProgress {
     goal: string;
     verified_artifacts: Record<string, any>;
     required_variables?: string[];
+  }>;
+  planned?: Array<{
+    step_id: string;
+    title: string;
+    task: string;
+    acceptance: string;
+    planning_complete: boolean;
   }>;
   focus: string;
   current_outputs: OutputTracking;

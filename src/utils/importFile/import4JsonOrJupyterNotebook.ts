@@ -4,8 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import useStore from '@Store/notebookStore';
 import type { Cell, CellType, OutputItem } from '@Store/models';
 import { useToast } from '@/components/UI/Toast';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { parseMarkdownContent } from '@Editor/utils/markdownParser';
+import { fileLog } from '@Utils/logger';
 
 // Type definitions for imported notebook formats
 interface CustomNotebookData {
@@ -66,23 +67,24 @@ const ImportNotebook4JsonOrJupyter = () => {
 
   const initializeNotebook = useCallback(async () => {
     try {
-      const notebook_id = await notebookApiIntegration.initializeNotebook();
+      const result = await NotebookLifecycleService.initializeNotebook();
+      const notebook_id = result.notebook_id;
       if (notebook_id) {
         setNotebookId(notebook_id);
         toast({
           title: 'Success',
           description: 'New Notebook created successfully',
-          variant: 'success',
+          variant: 'default',
         });
       } else {
         throw new Error('Failed to create Notebook');
       }
     } catch (err) {
-      console.error('Error creating Notebook:', err);
+      fileLog.error('Error creating Notebook', { error: err });
       setError('Failed to create Notebook. Please try again.');
       toast({
         title: 'Error',
-        description: err.message,
+        description: err instanceof Error ? err.message : 'Unknown error',
         variant: 'destructive',
       });
     }
@@ -150,7 +152,6 @@ const ImportNotebook4JsonOrJupyter = () => {
     },
     [
       clearCells,
-      setNotebookId,
       initializeNotebook,
       addCell,
       setCurrentPhase,
@@ -158,7 +159,7 @@ const ImportNotebook4JsonOrJupyter = () => {
       setViewMode,
       setCurrentRunningPhaseId,
       set,
-    ]
+    ] // setNotebookId is a stable store setter
   );
 
   // Import Jupyter Notebook format
@@ -250,7 +251,6 @@ const ImportNotebook4JsonOrJupyter = () => {
     },
     [
       clearCells,
-      setNotebookId,
       initializeNotebook,
       addCell,
       setCurrentPhase,
@@ -258,7 +258,7 @@ const ImportNotebook4JsonOrJupyter = () => {
       setViewMode,
       setCurrentRunningPhaseId,
       set,
-    ]
+    ] // setNotebookId is a stable store setter
   );
 
   // 处理文件导入
@@ -282,12 +282,12 @@ const ImportNotebook4JsonOrJupyter = () => {
             toast({
               title: 'Success',
               description: 'Jupyter Notebook imported successfully',
-              variant: 'success',
+              variant: 'default',
             });
             e.target.value = ''; // 清除文件输入
           } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            console.error('Error importing Jupyter Notebook:', err);
+            fileLog.error('Error importing Jupyter Notebook', { error: err });
             setError(
               'Failed to import Jupyter Notebook. Please check the file format and try again.'
             );
@@ -312,12 +312,12 @@ const ImportNotebook4JsonOrJupyter = () => {
             toast({
               title: 'Success',
               description: 'Custom Notebook imported successfully',
-              variant: 'success',
+              variant: 'default',
             });
             e.target.value = ''; // 清除文件输入
           } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            console.error('Error importing custom Notebook:', err);
+            fileLog.error('Error importing custom Notebook', { error: err });
             setError('Failed to import Notebook. Please check the file format and try again.');
             toast({
               title: 'Error',

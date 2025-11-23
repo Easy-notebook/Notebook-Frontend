@@ -7,7 +7,7 @@
 
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
-import { usePipelineStore } from '../../store/usePipelineStore';
+import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
 export class PlanStepAction extends ActionBase {
   /**
@@ -27,8 +27,10 @@ export class PlanStepAction extends ActionBase {
       return;
     }
 
-    const pipelineStore = usePipelineStore.getState();
-    const observation = pipelineStore.observation;
+    // Use WorkflowStateMachine as the single source of truth
+    const stateMachine = useWorkflowStateMachine.getState();
+    const stateJSON = stateMachine.stateJSON;
+    const observation = stateJSON.observation;
 
     // Initialize planned steps array if not exists
     if (!observation.location.progress.steps.planned) {
@@ -61,8 +63,8 @@ export class PlanStepAction extends ActionBase {
       console.log(`[PlanStepAction] ✅ Added new step: ${step_id}`);
     }
 
-    // Update pipeline store
-    usePipelineStore.setState({ observation });
+    // Update workflow state machine with modified stateJSON
+    stateMachine.setState(stateJSON);
   }
 }
 

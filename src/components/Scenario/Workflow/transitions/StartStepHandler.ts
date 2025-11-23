@@ -35,52 +35,18 @@ export class StartStepHandler extends BaseTransitionHandler {
     this.updateFSMState(ns, 'STEP_RUNNING', 'START_STEP');
     if (fs.title) this.executeAction('new_step', fs.title);
 
-    // IMPORTANT: Update workflowTemplate with steps for current stage
-    this.syncStepsToWorkflowTemplate(ns, steps);
+    // Note: Steps data is already stored in ns.observation.location.progress.steps
+    // UI components should read directly from stateJSON instead of a separate store
 
     this.syncNotebookToState(ns);
     return ns;
   }
 
   /**
-   * Sync steps to PipelineStore's workflowTemplate
-   * This ensures the UI displays the correct steps for the current stage
+   * REMOVED: syncStepsToWorkflowTemplate
+   *
+   * Previously synced to usePipelineStore (now deprecated).
+   * UI components should read directly from stateJSON.observation.location.progress.steps
+   * instead of using a separate workflowTemplate store.
    */
-  private syncStepsToWorkflowTemplate(state: Record<string, any>, steps: any[]): void {
-    try {
-      // Get current stage ID
-      const currentStageId = state.observation?.location?.current?.stage_id;
-      if (!currentStageId) {
-        console.warn('[StartStep] Cannot sync steps: no current stage_id');
-        return;
-      }
-
-      // Import PipelineStore dynamically to avoid circular dependencies
-      import('../store/usePipelineStore').then(({ usePipelineStore }) => {
-        const pipelineStore = usePipelineStore.getState();
-
-        // Convert steps from Planning API format to WorkflowStep format
-        const workflowSteps = steps.map((step, index) => ({
-          id: step.step_id,
-          step_id: step.step_id,
-          title: step.title || `Step ${index + 1}`,
-          description: step.goal || '',
-          metadata: {
-            verified_artifacts: step.verified_artifacts || {},
-            required_variables: step.required_variables || {},
-          },
-        }));
-
-        console.log(
-          '[StartStep] Updating',
-          workflowSteps.length,
-          'steps for stage:',
-          currentStageId
-        );
-        pipelineStore.updateStepsForStage(currentStageId, workflowSteps);
-      });
-    } catch (error) {
-      console.error('[StartStep] Failed to sync steps to workflow template:', error);
-    }
-  }
 }

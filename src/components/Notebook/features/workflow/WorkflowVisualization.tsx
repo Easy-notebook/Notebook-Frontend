@@ -1,33 +1,39 @@
 import React, { useMemo } from 'react';
 import { CheckCircle, Circle, PlayCircle, Clock } from 'lucide-react';
 import { useWorkflowStateMachine } from '@/components/Scenario/Workflow/store/workflowStateMachine';
-import { usePipelineStore } from '@/components/Scenario/Workflow/store/usePipelineStore';
 
 interface WorkflowVisualizationProps {
   className?: string;
 }
 
 const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({ className = '' }) => {
-  const { workflowTemplate } = usePipelineStore();
-  const { stateJSON } = useWorkflowStateMachine();
+  const { stateJSON } = useWorkflowStateMachine(); // ✅ Use stateJSON as single source of truth
 
-  // Get current location from stateJSON
+  // ✅ Get current location from stateJSON
   const currentLocation = stateJSON.observation?.location?.current;
   const currentStageId = currentLocation?.stage_id;
   const currentStepId = currentLocation?.step_id;
 
+  // ✅ Get stages and steps from stateJSON (memoized)
+  const plannedStages = useMemo(
+    () => stateJSON.observation?.location?.progress?.stages?.planned || [],
+    [stateJSON.observation?.location?.progress?.stages?.planned]
+  );
+  const plannedSteps = useMemo(
+    () => stateJSON.observation?.location?.progress?.steps?.planned || [],
+    [stateJSON.observation?.location?.progress?.steps?.planned]
+  );
+
   // Compute stage status
   const stagesWithStatus = useMemo(() => {
-    if (!workflowTemplate?.stages || !Array.isArray(workflowTemplate.stages)) {
+    if (!plannedStages || !Array.isArray(plannedStages) || plannedStages.length === 0) {
       return [];
     }
 
-    return workflowTemplate.stages.map((stage: any) => {
-      const isCurrentStage = stage.id === currentStageId;
-      const currentStageIndex = workflowTemplate.stages.findIndex(
-        (s: any) => s.id === currentStageId
-      );
-      const stageIndex = workflowTemplate.stages.findIndex((s: any) => s.id === stage.id);
+    return plannedStages.map((stage: any) => {
+      const isCurrentStage = stage.stage_id === currentStageId;
+      const currentStageIndex = plannedStages.findIndex((s: any) => s.stage_id === currentStageId);
+      const stageIndex = plannedStages.findIndex((s: any) => s.stage_id === stage.stage_id);
 
       let status: 'pending' | 'active' | 'completed' = 'pending';
       if (stageIndex < currentStageIndex) {
@@ -36,36 +42,38 @@ const WorkflowVisualization: React.FC<WorkflowVisualizationProps> = ({ className
         status = 'active';
       }
 
-      // Compute step status within this stage
-      const stepsWithStatus =
-        stage.steps?.map((step: any, stepIndex: number) => {
-          const isCurrentStep = isCurrentStage && step.id === currentStepId;
-          const currentStepIndex = stage.steps.findIndex((s: any) => s.id === currentStepId);
+      // ✅ Get steps for visualization (in new architecture, all steps are in one array)
+      const stepsWithStatus = plannedSteps.map((step: any, stepIndex: number) => {
+        const isCurrentStep = isCurrentStage && step.step_id === currentStepId;
+        const currentStepIndex = plannedSteps.findIndex((s: any) => s.step_id === currentStepId);
 
-          let stepStatus: 'pending' | 'active' | 'completed' = 'pending';
-          if (isCurrentStage) {
-            if (stepIndex < currentStepIndex) {
-              stepStatus = 'completed';
-            } else if (isCurrentStep) {
-              stepStatus = 'active';
-            }
-          } else if (status === 'completed') {
+        let stepStatus: 'pending' | 'active' | 'completed' = 'pending';
+        if (isCurrentStage) {
+          if (stepIndex < currentStepIndex) {
             stepStatus = 'completed';
+          } else if (isCurrentStep) {
+            stepStatus = 'active';
           }
+        } else if (status === 'completed') {
+          stepStatus = 'completed';
+        }
 
-          return {
-            ...step,
-            status: stepStatus,
-          };
-        }) || [];
+        return {
+          id: step.step_id,
+          title: step.title,
+          status: stepStatus,
+        };
+      });
 
       return {
-        ...stage,
+        id: stage.stage_id,
+        title: stage.title,
+        description: stage.task, // task field from stateJSON
         status,
         steps: stepsWithStatus,
       };
     });
-  }, [workflowTemplate, currentStageId, currentStepId]);
+  }, [plannedStages, plannedSteps, currentStageId, currentStepId]);
 
   if (!stagesWithStatus || stagesWithStatus.length === 0) {
     return null;

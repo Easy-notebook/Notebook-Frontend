@@ -14,6 +14,8 @@ export default [
       '**/KnowledgeForest/index.tsx',
       '**/__tests__/**/*.test.ts',
       '**/__tests__/**/*.test.tsx',
+      '**/__tests__/**/*-test.ts',
+      '**/__tests__/**/*-test.tsx',
     ],
   },
   {

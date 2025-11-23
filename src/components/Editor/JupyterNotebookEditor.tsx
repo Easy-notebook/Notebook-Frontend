@@ -17,7 +17,7 @@ import LinkCell from './Cells/LinkCell';
 import DraggableCellList from './DragAndDrop/DraggableCellList';
 import ShortcutsHelp from './KeyboardShortcuts/ShortcutsHelp';
 import { handleFileUpload } from '@Utils/fileUtils';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { FileService } from '@Services/notebook/FileService';
 import { Backend_BASE_URL } from '@Config/base_url';
 import {
   focusNotebookAtEnd,
@@ -513,24 +513,24 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
 
           // Adapter to satisfy fileUtils NotebookApiIntegration typing
           const filesApi = {
-            listFiles: (id: string) => notebookApiIntegration.listFiles(id) as Promise<unknown>,
+            listFiles: (id: string) => FileService.listFiles(id) as Promise<unknown>,
             uploadFiles: (
               id: string,
               f: File[],
               cfg: unknown,
               _onProgress: (e: ProgressEvent) => void,
               signal: AbortSignal
-            ) => notebookApiIntegration.uploadFiles(id, f, cfg, signal) as Promise<unknown>,
+            ) => FileService.uploadFile(id, f, cfg, signal) as Promise<unknown>,
             getFilePreviewUrl: async (id: string, filename: string) =>
               `${Backend_BASE_URL}/assets/${encodeURIComponent(id)}/${encodeURIComponent(filename)}`,
             getFileContent: async (id: string, filename: string) => {
-              const res = await notebookApiIntegration.getFile(id, filename);
+              const res = await FileService.getFile(id, filename);
               if ((res as any).status === 'ok' && (res as any).content)
                 return (res as any).content as string;
               throw new Error((res as any).message || 'Failed to get file content');
             },
             downloadFile: async (id: string, filename: string) => {
-              await notebookApiIntegration.downloadFile(id, filename);
+              await FileService.downloadFile(id, filename);
             },
             deleteFile: async () => {
               throw new Error('deleteFile not implemented');
@@ -540,7 +540,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
           await handleFileUpload({
             notebookId,
             files,
-            notebookApiIntegration: filesApi as any,
+            FileService: filesApi as any,
             uploadConfig,
             setUploading,
             setUploadProgress,
@@ -571,7 +571,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
             abortControllerRef: abortControllerRef as MutableRefObject<AbortController | null>,
             fetchFileList: async () => {
               try {
-                await notebookApiIntegration.listFiles(notebookId);
+                await FileService.listFiles(notebookId);
               } catch {
                 /* noop */
               }

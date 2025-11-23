@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import useStore from '@Store/notebookStore';
 import { handleFileUpload } from '@Utils/fileUtils';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { FileService } from '@Services/notebook/FileService';
 import { Backend_BASE_URL } from '@Config/base_url';
 import { generateCellId } from '../utils/cellConverters';
 
@@ -84,7 +84,7 @@ export const UploadDropExtension = Extension.create({
               handleFileUpload({
                 notebookId,
                 files,
-                notebookApiIntegration,
+                FileService,
                 uploadConfig,
                 setUploading,
                 setUploadProgress,
@@ -162,7 +162,7 @@ export const UploadDropExtension = Extension.create({
                 abortControllerRef: abortControllerRef as any,
                 fetchFileList: async () => {
                   try {
-                    await notebookApiIntegration.listFiles(notebookId);
+                    await FileService.listFiles(notebookId);
                   } catch {
                     // Ignore file list errors
                   }
@@ -218,7 +218,7 @@ export const UploadDropExtension = Extension.create({
               handleFileUpload({
                 notebookId,
                 files,
-                notebookApiIntegration,
+                FileService,
                 uploadConfig,
                 setUploading,
                 setUploadProgress,
@@ -296,7 +296,7 @@ export const UploadDropExtension = Extension.create({
                 abortControllerRef: abortControllerRef as any,
                 fetchFileList: async () => {
                   try {
-                    await notebookApiIntegration.listFiles(notebookId);
+                    await FileService.listFiles(notebookId);
                   } catch {
                     // Ignore file list errors
                   }

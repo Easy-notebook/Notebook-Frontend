@@ -19,7 +19,8 @@ import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
 import useCodeStore from '@Store/codeStore';
-import { notebookApiIntegration } from '@Services/notebookServices';
+import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
+import { FileService } from '@Services/notebook/FileService';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 
 import type { UploadFile, AICommandInputProps, VDSQuestion } from './types';
@@ -193,7 +194,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       if (!currentNotebookId) {
         console.log('[DEBUG] AICommandInput - No notebookId, initializing new notebook');
         try {
-          currentNotebookId = await notebookApiIntegration.initializeNotebook();
+          currentNotebookId = await NotebookLifecycleService.initializeNotebook();
           console.log('[DEBUG] AICommandInput - New notebook initialized:', currentNotebookId);
           useStore.getState().setNotebookId(currentNotebookId);
           useCodeStore.getState().setKernelReady(true);
@@ -221,11 +222,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           config: uploadConfig,
         });
 
-        const result = await notebookApiIntegration.uploadFiles(
-          currentNotebookId!,
-          [csv],
-          uploadConfig
-        );
+        const result = await FileService.uploadFile(currentNotebookId!, [csv], uploadConfig);
         console.log('[DEBUG] AICommandInput - Upload result:', result);
 
         if (result && (result as any).status === 'ok') {
@@ -381,31 +378,20 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             aiPlanningStore.addVariable(key, value as unknown as Record<string, unknown>);
           });
 
-          // Start workflow immediately
+          // Start workflow immediately using new architecture
           (async () => {
             try {
-              console.log('[AICommandInput] Initializing workflow...');
-              const { usePipelineStore } = await import(
-                '@/components/Scenario/Workflow/store/usePipelineStore'
+              console.log('[AICommandInput] Starting workflow with new architecture...');
+              const { useWorkflowStateMachine } = await import(
+                '@/components/Scenario/Workflow/store/workflowStateMachine'
               );
 
-              // Initialize workflow template
-              await usePipelineStore.getState().initializeWorkflow(planningRequest);
+              // ✅ NEW ARCHITECTURE: Use useWorkflowStateMachine.startWorkflow()
+              // This replaces the deprecated initializeWorkflow() and startWorkflowExecution()
+              console.log('[AICommandInput] Planning request:', planningRequest);
 
-              // Start state machine - This will reset and then execute
-              // We need to pass user variables to startWorkflowExecution so they can be set AFTER reset
-              console.log('[AICommandInput] Starting workflow execution with user data...');
-
-              const userData = {
-                user_problem: command.trim(),
-                user_submit_files: currentFile?.name ? [`assets/${currentFile.name}`] : [],
-                context_description: preStageState.datasetInfo || 'No additional context provided',
-              };
-
-              console.log('[AICommandInput] User data to inject:', userData);
-
-              await usePipelineStore.getState().startWorkflowExecution(userData);
-              console.log('[AICommandInput] Workflow started successfully');
+              await useWorkflowStateMachine.getState().startWorkflow(planningRequest);
+              console.log('[AICommandInput] Workflow started successfully via new architecture');
 
               // Navigate to workspace view
               console.log('[AICommandInput] Navigating to workspace...');

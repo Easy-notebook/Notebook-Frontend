@@ -28,7 +28,7 @@ export interface KernelInitResult {
 }
 
 export interface ExecutionStatus {
-  status: 'running' | 'idle' | 'error';
+  status: 'running' | 'idle' | 'error' | 'ok';
   elapsed_time?: number;
   outputs?: any[];
 }
