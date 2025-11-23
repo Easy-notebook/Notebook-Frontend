@@ -9,6 +9,8 @@ import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from '@Editor/utils/cellConverters';
 
 const DEBUG = true;
+const SYNC_DEFER_MS = 0;
+const SYNC_LOCK_MS = 50;
 
 interface UseEditorSyncProps {
   editor: Editor | null;
@@ -22,13 +24,22 @@ export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSync
   // Initialize lastCellsRef
   useEffect(() => {
     lastCellsRef.current = cells;
-  }, []);
+  }, [cells]);
 
   // Sync external cell changes to editor
   useEffect(() => {
-    if (editor && cells && !isInternalUpdate.current) {
-      const lastCells = lastCellsRef.current;
+    const lastCells = lastCellsRef.current;
 
+    if (DEBUG) {
+      console.log('🔄 [useEditorSync] Effect triggered', {
+        hasEditor: !!editor,
+        cellsCount: cells?.length,
+        isInternalUpdate: isInternalUpdate.current,
+        lastCellsCount: lastCells.length,
+      });
+    }
+
+    if (editor && cells && !isInternalUpdate.current) {
       // Complete update check: ensure all cell types are handled correctly
       const needsTiptapUpdate =
         cells.length !== lastCells.length ||
@@ -81,6 +92,14 @@ export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSync
           return false;
         });
 
+      if (DEBUG) {
+        console.log('🔄 [useEditorSync] Update check result', {
+          needsUpdate: needsTiptapUpdate,
+          currentCells: cells.length,
+          lastCells: lastCells.length,
+        });
+      }
+
       if (needsTiptapUpdate) {
         if (DEBUG) {
           console.log('=== 外部cells变化，需要更新tiptap ===');
@@ -100,11 +119,11 @@ export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSync
         // Use setTimeout to defer setContent to next event loop, avoiding flushSync warning
         setTimeout(() => {
           editor.commands.setContent(expectedHtml, false);
-        }, 0);
+        }, SYNC_DEFER_MS);
 
         setTimeout(() => {
           isInternalUpdate.current = false;
-        }, 50);
+        }, SYNC_LOCK_MS);
 
         // Update cache
         lastCellsRef.current = cells;

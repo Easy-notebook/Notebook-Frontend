@@ -79,6 +79,7 @@ export interface NotebookStoreState {
 
   // 初始化状态
   isInitialized: boolean;
+  isLoaded: boolean;
 }
 
 /** Notebook Store Actions 接口 */
@@ -289,6 +290,7 @@ const useStore = create(
       isDetachedCellFullscreen: false,
 
       isInitialized: false,
+      isLoaded: false,
 
       // ================= 获取器 =================
       getCurrentCellId: () => get().currentCellId,
@@ -438,6 +440,7 @@ const useStore = create(
               currentStepIndex: 0,
               currentCellId: null,
               error: null,
+              isLoaded: false,
             });
 
             console.log('✅ [notebookStore] Cleared cells for new notebook', { newId: id });
@@ -1505,10 +1508,14 @@ const useStore = create(
           });
 
           showToast({ description: `已加载笔记本: ${notebookTitle}` });
+          set({ isLoaded: true });
           return true;
         } catch (error) {
-          notebookLog.error('Failed to load notebook', { notebookId, error });
-          showToast({ description: `加载笔记本失败: ${String(error)}`, variant: 'destructive' });
+          notebookLog.error('Failed to load notebook from database', {
+            notebookId,
+            error,
+          });
+          set({ error: 'Failed to load notebook', isLoaded: true }); // Ensure isLoaded is true even on error to unblock UI
           return false;
         }
       },

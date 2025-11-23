@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Editor } from '@tiptap/react';
-import { Shuffle, X } from 'lucide-react';
 import useStore from '@Store/notebookStore';
 
 interface EditorCoverProps {
@@ -163,7 +162,6 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-white/90 hover:bg-white text-gray-700 rounded shadow-sm backdrop-blur-sm transition-colors"
               type="button"
             >
-              <Shuffle size={12} />
               Change Cover
             </button>
             <button
@@ -172,7 +170,6 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
               className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-white/90 hover:bg-white text-red-600 rounded shadow-sm backdrop-blur-sm transition-colors"
               type="button"
             >
-              <X size={12} />
               Remove
             </button>
           </div>
@@ -209,7 +206,7 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
                       className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-gray-50 rounded text-left whitespace-nowrap"
                       type="button"
                     >
-                      <Shuffle size={12} /> Change
+                      Change
                     </button>
                     <button
                       onClick={(e) => {
@@ -222,7 +219,7 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
                       className="flex items-center gap-2 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded text-left whitespace-nowrap"
                       type="button"
                     >
-                      <X size={12} /> Remove
+                      Remove
                     </button>
                   </div>
                 )}

@@ -3,13 +3,15 @@
  * Handles TipTap editor lifecycle events (onCreate, onUpdate, onBlur, onDestroy, onTransaction)
  */
 
-import { useRef } from 'react';
 import { Editor, EditorEvents } from '@tiptap/react';
 import type { Cell } from '@Store/models';
 import { convertEditorStateToCells } from '@Editor/utils/cellConverters';
 import useStore from '@Store/notebookStore';
 
 const DEBUG = true;
+const DEBOUNCE_TIME = 50;
+const SYNC_LOCK_MS = 50;
+const FORCE_SYNC_DELAY = 10;
 
 interface UseEditorEventsProps {
   cells: Cell[];
@@ -106,7 +108,7 @@ export function useEditorEvents({
       if (!editor || isInternalUpdate.current) return;
 
       // Reduce debounce time, improve real-time save responsiveness
-      const debounceTime = 50;
+      const debounceTime = DEBOUNCE_TIME;
 
       // Use debounce to delay sync, avoid frequent updates
       if (syncTimeoutRef.current) {
@@ -207,7 +209,7 @@ export function useEditorEvents({
           setCells(mergedCells);
           setTimeout(() => {
             isInternalUpdate.current = false;
-          }, 50);
+          }, SYNC_LOCK_MS);
         } else if (markdownDiffs.length > 0) {
           // Only Markdown content change, no structural change
           isInternalUpdate.current = true;
@@ -223,7 +225,7 @@ export function useEditorEvents({
           }
           setTimeout(() => {
             isInternalUpdate.current = false;
-          }, 10);
+          }, FORCE_SYNC_DELAY);
         }
       }, debounceTime);
     } catch (error) {
@@ -249,7 +251,7 @@ export function useEditorEvents({
         setCells(newCells);
         setTimeout(() => {
           isInternalUpdate.current = false;
-        }, 10);
+        }, FORCE_SYNC_DELAY);
       }
     } catch (error) {
       console.warn('TipTap onBlur error:', error);

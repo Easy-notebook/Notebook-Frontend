@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { notebookApiIntegration } from '@Services/notebookServices';
-import { handleStreamResponse } from '@Services/streamHandler';
+import { handleStreamResponse } from '@Services/stream';
 import { showToast } from '@/components/UI/Toast';
 import useCodeStore from '@Store/codeStore';
 import { storeLog } from '@Utils/logger';
