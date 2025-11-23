@@ -504,6 +504,7 @@
   -webkit-background-clip: text;
   background-clip: text;
   line-height: 1.6;
+  margin-bottom: 2rem;
 }
 
 /* 二级标题：渐变背景 & 白字 */
@@ -516,7 +517,7 @@
   padding: 0.2rem 0.5rem;
   margin-top: 1.5rem;
   line-height: 1.5;
-  padding-bottom: 1rem;
+  margin-bottom: 1rem;
 }
 
 /* 三级标题：渐变文字 */

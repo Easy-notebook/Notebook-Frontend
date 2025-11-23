@@ -30,7 +30,15 @@ export class FileService extends BaseService {
       const formData = new FormData();
       formData.append('notebook_id', notebookId);
       formData.append('mode', uploadConfig.mode);
-      formData.append('allowed_types', JSON.stringify(uploadConfig.allowedTypes || []));
+      // Append allowed_types as individual fields for backend list compatibility
+      if (uploadConfig.allowedTypes && uploadConfig.allowedTypes.length > 0) {
+        uploadConfig.allowedTypes.forEach((type) => {
+          formData.append('allowed_types', type);
+        });
+      } else {
+        // Fallback to empty list representation if needed, or just don't send
+        formData.append('allowed_types', '[]');
+      }
       formData.append('max_files', (uploadConfig.maxFiles || 10).toString());
       if (uploadConfig.targetDir) {
         formData.append('target_dir', uploadConfig.targetDir);

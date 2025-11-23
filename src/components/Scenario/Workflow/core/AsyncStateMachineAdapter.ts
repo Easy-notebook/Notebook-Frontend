@@ -411,3 +411,37 @@ export class AsyncStateMachineAdapter {
     return executionStep;
   }
 }
+
+// ==============================================
+// Singleton Instance
+// ==============================================
+let asyncStateMachineInstance: AsyncStateMachineAdapter | null = null;
+
+/**
+ * Get or create the AsyncStateMachine singleton instance
+ *
+ * This ensures we reuse the same instance with the same apiClient and scriptStore
+ */
+export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> {
+  if (!asyncStateMachineInstance) {
+    // Dynamic import to avoid circular dependencies
+    const { WorkflowAPIClient } = await import('../api/WorkflowAPIClient');
+    const useStore = (await import('@/store/notebookStore')).default;
+
+    const apiClient = new WorkflowAPIClient();
+    const scriptStore = useStore.getState();
+
+    asyncStateMachineInstance = new AsyncStateMachineAdapter(apiClient, scriptStore);
+    console.log('[AsyncFSM] Created singleton instance');
+  }
+
+  return asyncStateMachineInstance;
+}
+
+/**
+ * Reset the singleton instance (useful for testing)
+ */
+export function resetAsyncStateMachine(): void {
+  asyncStateMachineInstance = null;
+  console.log('[AsyncFSM] Reset singleton instance');
+}

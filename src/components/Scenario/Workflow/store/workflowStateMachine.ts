@@ -57,7 +57,7 @@ interface WorkflowStateMachineActions {
   transition: (event: WorkflowEvent, apiResponse?: any) => void;
 
   // Workflow control
-  startWorkflow: (stageId: string) => void;
+  startWorkflow: (payload: string | { stageId?: string; [key: string]: any }) => Promise<void>;
   fail: (error: Error | string) => void;
   cancel: () => void;
   reset: () => void;
@@ -151,19 +151,56 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   // ==============================================
   // Workflow Control
   // ==============================================
-  startWorkflow: (stageId: string) => {
-    console.log(`[FSM] Starting workflow with stage: ${stageId}`);
+  startWorkflow: async (payload: string | { stageId?: string; [key: string]: any }) => {
+    let stageId = 'planning';
+    let variables: Record<string, any> = {};
 
-    // Update stateJSON with initial stage
+    if (typeof payload === 'string') {
+      stageId = payload;
+    } else if (typeof payload === 'object' && payload !== null) {
+      const { stageId: sid, ...vars } = payload;
+      if (sid) stageId = sid;
+      variables = vars;
+    }
+
+    console.log(`[FSM] Starting workflow with stage: ${stageId}`, variables);
+
+    // Update stateJSON with initial stage and variables
     const stateJSON = get().stateJSON;
     stateJSON.observation.location.current.stage_id = stageId;
     stateJSON.observation.location.current.step_id = null;
     stateJSON.observation.location.current.behavior_id = null;
 
+    // Merge variables
+    if (Object.keys(variables).length > 0) {
+      stateJSON.state.variables = {
+        ...stateJSON.state.variables,
+        ...variables,
+      };
+    }
+
     set({ stateJSON });
 
-    // Trigger START_WORKFLOW event
-    get().transition(WorkflowEvent.START_WORKFLOW);
+    // ✅ FIX: Execute IDLE state to call planning API
+    // IDLE state will call /planning API, which returns stages
+    // Then the API response will trigger START_WORKFLOW transition
+    console.log('[FSM] Executing IDLE state to call planning API...');
+    const { getAsyncStateMachine } = await import('../core/AsyncStateMachineAdapter');
+    const asyncFSM = getAsyncStateMachine();
+
+    try {
+      const [updatedStateJSON, transitionName] = await asyncFSM.step(get().stateJSON);
+      console.log(`[FSM] Planning API completed with transition: ${transitionName}`);
+
+      // Update state with the result from planning API
+      set({
+        stateJSON: updatedStateJSON,
+        currentState: updatedStateJSON.state.FSM.state as WorkflowState,
+      });
+    } catch (error) {
+      console.error('[FSM] Failed to execute IDLE state:', error);
+      get().fail(error as Error);
+    }
   },
 
   fail: (error: Error | string) => {
@@ -172,7 +209,8 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
     const stateJSON = get().stateJSON;
     stateJSON.state.FSM.state = WorkflowState.FAILED;
-    stateJSON.state.error = errorMessage;
+    if (!stateJSON.metadata) stateJSON.metadata = {};
+    stateJSON.metadata.error = errorMessage;
 
     set({
       currentState: WorkflowState.FAILED,

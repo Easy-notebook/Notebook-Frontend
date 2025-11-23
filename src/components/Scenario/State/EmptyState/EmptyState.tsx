@@ -60,19 +60,18 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
 
   const lastTriggerAtRef = useRef<number>(0);
 
-  const safeTrigger = useCallback(async () => {
-    const now = Date.now();
-    if (now - lastTriggerAtRef.current < 1000) return;
-    lastTriggerAtRef.current = now;
-    await createNewNotebook();
-  }, [createNewNotebook]);
-
   const createNewNotebook = useCallback(async () => {
     if (isCreatingNotebook) return;
     setIsCreatingNotebook(true);
     try {
       console.log('🔍 [EmptyState] Creating new notebook - START');
-      const newNotebookId = await NotebookLifecycleService.initializeNotebook();
+      const response = await NotebookLifecycleService.initializeNotebook();
+      const newNotebookId = response.notebook_id;
+
+      if (!newNotebookId) {
+        throw new Error('Failed to get notebook ID from initialization response');
+      }
+
       console.log('🔍 [EmptyState] Received new notebookId from backend', { newNotebookId });
 
       console.log('🔍 [EmptyState] Setting notebookId in store (NO LOAD)', { newNotebookId });
@@ -96,6 +95,13 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
       wheelDownAccumRef.current = 0;
     }
   }, [isCreatingNotebook, onAddCell]);
+
+  const safeTrigger = useCallback(async () => {
+    const now = Date.now();
+    if (now - lastTriggerAtRef.current < 1000) return;
+    lastTriggerAtRef.current = now;
+    await createNewNotebook();
+  }, [createNewNotebook]);
 
   // ====== 手势：开始/移动/结束 ======
   const beginGesture = (x: number, y: number) => {

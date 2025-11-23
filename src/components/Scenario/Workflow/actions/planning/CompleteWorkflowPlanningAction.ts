@@ -45,7 +45,7 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
     }
 
     // Update the workflow state machine with the modified stateJSON
-    useWorkflowStateMachine.setState(stateJSON);
+    stateMachine.setState(stateJSON);
   }
 }
 

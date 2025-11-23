@@ -194,7 +194,13 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       if (!currentNotebookId) {
         console.log('[DEBUG] AICommandInput - No notebookId, initializing new notebook');
         try {
-          currentNotebookId = await NotebookLifecycleService.initializeNotebook();
+          const response = await NotebookLifecycleService.initializeNotebook();
+          currentNotebookId = response.notebook_id || null;
+
+          if (!currentNotebookId) {
+            throw new Error('Failed to get notebook ID from initialization response');
+          }
+
           console.log('[DEBUG] AICommandInput - New notebook initialized:', currentNotebookId);
           useStore.getState().setNotebookId(currentNotebookId);
           useCodeStore.getState().setKernelReady(true);
