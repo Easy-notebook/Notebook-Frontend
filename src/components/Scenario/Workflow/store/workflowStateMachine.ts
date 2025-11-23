@@ -181,25 +181,82 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
     set({ stateJSON });
 
+    // Set isExecuting flag in notebookStore to prevent auto-navigation during workflow
+    const { default: useNotebookStore } = await import('@Store/notebookStore');
+    useNotebookStore.getState().isExecuting = true;
+    console.log('[FSM] Set notebookStore.isExecuting = true');
+
+    // Navigate to workspace if notebookId exists and not already in workspace
+    const notebookId = useNotebookStore.getState().notebookId;
+    if (notebookId) {
+      const { default: useRouteStore } = await import('@Store/routeStore');
+      const currentView = useRouteStore.getState().currentView;
+
+      if (currentView !== 'workspace') {
+        console.log('[FSM] Navigating to workspace:', notebookId);
+        useRouteStore.getState().navigateToWorkspace(notebookId);
+      } else {
+        console.log('[FSM] Already in workspace view, skipping navigation');
+      }
+    } else {
+      console.warn('[FSM] No notebookId available for navigation');
+    }
+
     // ✅ FIX: Execute IDLE state to call planning API
     // IDLE state will call /planning API, which returns stages
     // Then the API response will trigger START_WORKFLOW transition
     console.log('[FSM] Executing IDLE state to call planning API...');
     const { getAsyncStateMachine } = await import('../core/AsyncStateMachineAdapter');
-    const asyncFSM = getAsyncStateMachine();
+    const asyncFSM = await getAsyncStateMachine();
 
     try {
-      const [updatedStateJSON, transitionName] = await asyncFSM.step(get().stateJSON);
+      // Execute IDLE → STAGE_RUNNING (planning API)
+      let [currentStateJSON, transitionName] = await asyncFSM.step(get().stateJSON);
       console.log(`[FSM] Planning API completed with transition: ${transitionName}`);
 
       // Update state with the result from planning API
       set({
-        stateJSON: updatedStateJSON,
-        currentState: updatedStateJSON.state.FSM.state as WorkflowState,
+        stateJSON: currentStateJSON,
+        currentState: currentStateJSON.state.FSM.state as WorkflowState,
       });
+
+      // Continue workflow execution if in BEHAVIOR_COMPLETED state
+      // After planning completes, we need to start the first step
+      while (
+        currentStateJSON.state.FSM.state === 'BEHAVIOR_COMPLETED' ||
+        currentStateJSON.state.FSM.state === 'STAGE_RUNNING'
+      ) {
+        console.log(`[FSM] Auto-continuing from state: ${currentStateJSON.state.FSM.state}`);
+
+        // Execute next transition
+        [currentStateJSON, transitionName] = await asyncFSM.step(currentStateJSON);
+        console.log(`[FSM] Next transition completed: ${transitionName}`);
+
+        // Update state
+        set({
+          stateJSON: currentStateJSON,
+          currentState: currentStateJSON.state.FSM.state as WorkflowState,
+        });
+
+        // Safety: Break if we reach a terminal or running state
+        const state = currentStateJSON.state.FSM.state;
+        if (
+          state === 'BEHAVIOR_RUNNING' ||
+          state === 'FAILED' ||
+          state === 'COMPLETE' ||
+          state === 'CANCELED'
+        ) {
+          console.log(`[FSM] Workflow auto-execution stopped at state: ${state}`);
+          break;
+        }
+      }
     } catch (error) {
-      console.error('[FSM] Failed to execute IDLE state:', error);
+      console.error('[FSM] Failed to execute workflow:', error);
       get().fail(error as Error);
+    } finally {
+      // Reset isExecuting flag when workflow execution pauses or completes
+      useNotebookStore.getState().isExecuting = false;
+      console.log('[FSM] Set notebookStore.isExecuting = false');
     }
   },
 

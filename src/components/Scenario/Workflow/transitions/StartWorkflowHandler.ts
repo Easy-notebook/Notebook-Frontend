@@ -12,20 +12,73 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
   }
 
   canHandle(apiResponse: any): boolean {
-    return (
-      typeof apiResponse === 'object' &&
-      'stages' in apiResponse &&
-      Array.isArray(apiResponse.stages)
-    );
+    // Planning API in IDLE state returns actions with plan_stage and complete_workflow_planning
+    if (typeof apiResponse !== 'object' || apiResponse === null) {
+      return false;
+    }
+
+    // Check for streaming planning API format (actions array)
+    if ('actions' in apiResponse && Array.isArray(apiResponse.actions)) {
+      const actions = apiResponse.actions;
+      // Look for plan_stage or complete_workflow_planning actions
+      for (const action of actions) {
+        if (typeof action === 'object' && action !== null) {
+          const actionType = action.type || '';
+          if (actionType === 'plan_stage' || actionType === 'complete_workflow_planning') {
+            console.log(
+              '[StartWorkflow] canHandle: Found planning actions, this is IDLE → planning API'
+            );
+            return true;
+          }
+        }
+      }
+    }
+
+    // Legacy format: stages array (kept for backwards compatibility)
+    if ('stages' in apiResponse && Array.isArray(apiResponse.stages)) {
+      console.log('[StartWorkflow] canHandle: Found stages array (legacy format)');
+      return true;
+    }
+
+    return false;
   }
 
   apply(state: Record<string, any>, apiResponse: any): Record<string, any> {
     console.log('[StartWorkflow] ============================================');
     console.log('[StartWorkflow] APPLY METHOD CALLED');
     console.log('[StartWorkflow] ============================================');
-    console.trace('[StartWorkflow] Call stack');
 
     const newState = this.deepCopyState(state);
+
+    // Check if using streaming actions format (new) or stages array format (legacy)
+    const isStreamingFormat = 'actions' in apiResponse && Array.isArray(apiResponse.actions);
+
+    if (isStreamingFormat) {
+      // Streaming format: actions have already been executed by AsyncStateMachineAdapter
+      // including complete_workflow_planning which set the state to STAGE_RUNNING
+      console.log('[StartWorkflow] Using streaming format - actions already executed');
+      console.log('[StartWorkflow] Current FSM state:', newState.state.FSM.state);
+      console.log(
+        '[StartWorkflow] Current stage_id:',
+        newState.observation.location.current.stage_id
+      );
+
+      // Verify the state was set correctly by complete_workflow_planning action
+      const plannedStages = newState.observation.location.progress.stages?.planned || [];
+      console.log(`[StartWorkflow] Found ${plannedStages.length} planned stages`);
+
+      // Ensure FSM state is STAGE_RUNNING (should already be set by complete_workflow_planning)
+      if (newState.state.FSM.state !== 'STAGE_RUNNING') {
+        console.warn('[StartWorkflow] FSM state is not STAGE_RUNNING, correcting...');
+        this.updateFSMState(newState, 'STAGE_RUNNING', 'START_WORKFLOW');
+      }
+
+      this.syncNotebookToState(newState);
+      return newState;
+    }
+
+    // Legacy format: stages array - process as before
+    console.log('[StartWorkflow] Using legacy stages array format');
     const stagesData = apiResponse.stages || [];
     const focus = apiResponse.focus || '';
     const title = apiResponse.title || '';

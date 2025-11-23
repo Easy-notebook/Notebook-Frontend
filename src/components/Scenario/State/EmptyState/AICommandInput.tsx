@@ -19,7 +19,6 @@ import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
 import useCodeStore from '@Store/codeStore';
-import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { FileService } from '@Services/notebook/FileService';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 
@@ -107,12 +106,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   }, [input, files.length, calcIsMultiline]);
 
   // Keep the resize handler typed to satisfy AntD's onResize signature
-  const handleTextAreaResize = useCallback(
-    (_: { width: number; height: number }) => {
-      calcIsMultiline();
-    },
-    [calcIsMultiline]
-  );
+  const handleTextAreaResize = useCallback(() => {
+    calcIsMultiline();
+  }, [calcIsMultiline]);
 
   // Force dark mode text color via DOM manipulation
   useEffect(() => {
@@ -191,56 +187,56 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       let currentNotebookId = notebookId;
       console.log('[DEBUG] AICommandInput - Current notebookId from store:', currentNotebookId);
 
-      if (!currentNotebookId) {
-        console.log('[DEBUG] AICommandInput - No notebookId, initializing new notebook');
-        try {
-          const response = await NotebookLifecycleService.initializeNotebook();
-          currentNotebookId = response.notebook_id || null;
-
-          if (!currentNotebookId) {
-            throw new Error('Failed to get notebook ID from initialization response');
-          }
-
-          console.log('[DEBUG] AICommandInput - New notebook initialized:', currentNotebookId);
-          useStore.getState().setNotebookId(currentNotebookId);
-          useCodeStore.getState().setKernelReady(true);
-          console.log('[DEBUG] AICommandInput - Notebook ID and kernel status updated');
-        } catch (initError) {
-          console.error('[DEBUG] AICommandInput - Failed to create notebook:', initError);
-          alert('Failed to create notebook. Please try again.');
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          return;
-        }
-      }
+      // Remove explicit notebook initialization to avoid double creation
+      // The upload_file API will handle notebook creation if notebookId is empty
 
       console.log('[DEBUG] AICommandInput - Setting upload state to true');
       setIsUploading(true);
 
       try {
-        console.log('[DEBUG] AICommandInput - Initializing kernel...');
-        await useCodeStore.getState().initializeKernel();
-        console.log('[DEBUG] AICommandInput - Kernel initialized successfully');
+        // Skip kernel initialization before upload as it might create a duplicate notebook
+        // We will initialize/verify kernel AFTER upload with the correct notebookId
 
         console.log('[DEBUG] AICommandInput - Starting file upload with:', {
-          notebookId: currentNotebookId,
+          notebookId: currentNotebookId || 'NEW',
           fileName: csv.name,
           fileSize: csv.size,
           config: uploadConfig,
         });
 
-        const result = await FileService.uploadFile(currentNotebookId!, [csv], uploadConfig);
+        let result;
+        if (currentNotebookId) {
+          // Existing notebook: use upload_file
+          result = await FileService.uploadFile(currentNotebookId, [csv], uploadConfig);
+        } else {
+          // No notebook: use create_notebook_with_files
+          result = await FileService.createNotebookWithFiles([csv], uploadConfig.targetDir);
+        }
+
         console.log('[DEBUG] AICommandInput - Upload result:', result);
 
         if (result && (result as any).status === 'ok') {
+          // Extract notebook_id from response (support both top-level and data-level)
+          const newNotebookId =
+            (result as any).notebook_id || (result.data && (result.data as any).notebook_id);
+
           console.log(
-            '[DEBUG] AICommandInput - File upload successful, setting notebookId:',
-            currentNotebookId
+            '[DEBUG] AICommandInput - File upload successful, received notebookId:',
+            newNotebookId
           );
-          if (currentNotebookId !== notebookId) {
+
+          if (newNotebookId) {
+            currentNotebookId = newNotebookId;
             useStore.getState().setNotebookId(currentNotebookId!);
+            // Assume kernel is ready or will be initialized by backend during creation
+            useCodeStore.getState().setKernelReady(true);
             console.log('[DEBUG] AICommandInput - NotebookId updated in store:', currentNotebookId);
+          } else if (currentNotebookId) {
+            console.log('[DEBUG] AICommandInput - Using existing notebookId:', currentNotebookId);
           } else {
-            console.log('[DEBUG] AICommandInput - NotebookId already matches:', currentNotebookId);
+            console.warn(
+              '[DEBUG] AICommandInput - No notebookId returned from upload and no existing ID'
+            );
           }
 
           const newFiles: UploadFile[] = [
@@ -306,10 +302,12 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
                 );
                 setTimeout(async () => {
                   setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
-                  // Navigate to pipeline route
-                  const { default: useRouteStore } = await import('@Store/routeStore');
-                  useRouteStore.getState().navigateToPipeline();
-                }, 500); // 给用户一点时间看到问题生成，然后跳转
+                  // Remove auto-navigation to pipeline to avoid conflict with user submission
+                  // The user will stay in empty state until they ask a question or click a suggestion
+                  console.log(
+                    '[DEBUG] AICommandInput - Questions generated, waiting for user input'
+                  );
+                }, 500); // 给用户一点时间看到问题生成
               } else {
                 console.log('[DEBUG] AICommandInput - No questions generated from response');
               }
@@ -399,16 +397,11 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
               await useWorkflowStateMachine.getState().startWorkflow(planningRequest);
               console.log('[AICommandInput] Workflow started successfully via new architecture');
 
-              // Navigate to workspace view
-              console.log('[AICommandInput] Navigating to workspace...');
-              const { default: useRouteStore } = await import('@Store/routeStore');
-              const currentNotebookId = useStore.getState().notebookId;
-              if (currentNotebookId) {
-                useRouteStore.getState().navigateToWorkspace(currentNotebookId);
-                console.log('[AICommandInput] Navigated to workspace:', currentNotebookId);
-              } else {
-                console.warn('[AICommandInput] No notebookId available for navigation');
-              }
+              // Navigation will be handled automatically by useNotebookEffects
+              // after workflow execution completes and isExecuting becomes false
+              console.log(
+                '[AICommandInput] Workflow execution in progress, navigation will happen automatically'
+              );
             } catch (error) {
               console.error('[AICommandInput] Failed to start workflow:', error);
             }

@@ -20,9 +20,11 @@ export class PlanStepAction extends ActionBase {
    *   - acceptance: Acceptance criteria
    */
   execute(step: ExecutionStep): void {
-    const { step_id, title, task, acceptance } = step;
+    // Backend sends step_id, but convertActionToExecutionStep converts it to stepId
+    const stepId = (step as any).stepId || (step as any).step_id;
+    const { title, task, acceptance } = step;
 
-    if (!step_id || !title || !task || !acceptance) {
+    if (!stepId || !title || !task || !acceptance) {
       console.error('[PlanStepAction] Missing required fields:', step);
       return;
     }
@@ -39,11 +41,11 @@ export class PlanStepAction extends ActionBase {
 
     // Check if step already exists
     const existingIndex = observation.location.progress.steps.planned.findIndex(
-      (s: any) => s.step_id === step_id
+      (s: any) => s.step_id === stepId
     );
 
     const stepData = {
-      step_id,
+      step_id: stepId,
       title,
       task,
       acceptance,
@@ -56,11 +58,11 @@ export class PlanStepAction extends ActionBase {
         ...observation.location.progress.steps.planned[existingIndex],
         ...stepData,
       };
-      console.log(`[PlanStepAction] ✅ Updated step: ${step_id}`);
+      console.log(`[PlanStepAction] ✅ Updated step: ${stepId}`);
     } else {
       // Add new step
       observation.location.progress.steps.planned.push(stepData);
-      console.log(`[PlanStepAction] ✅ Added new step: ${step_id}`);
+      console.log(`[PlanStepAction] ✅ Added new step: ${stepId}`);
     }
 
     // Update workflow state machine with modified stateJSON

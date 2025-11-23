@@ -98,8 +98,9 @@ export const useNotebookEffects = ({
   ]);
 
   // Auto-navigate to workspace when notebook is created in EmptyState
+  // Skip auto-navigation during workflow execution to prevent interrupting streaming actions
   useEffect(() => {
-    if (routeView === 'empty' && notebookId && cells.length > 0) {
+    if (routeView === 'empty' && notebookId && cells.length > 0 && !isExecuting) {
       uiLog.info('EmptyState: Auto-navigating to workspace', {
         notebookId,
         cellCount: cells.length,
@@ -107,6 +108,11 @@ export const useNotebookEffects = ({
       setTimeout(() => {
         navigateToWorkspace(notebookId);
       }, 100);
+    } else if (isExecuting && cells.length > 0) {
+      uiLog.debug('EmptyState: Skipping auto-navigation during workflow execution', {
+        notebookId,
+        cellCount: cells.length,
+      });
     }
-  }, [routeView, notebookId, cells.length, navigateToWorkspace]);
+  }, [routeView, notebookId, cells.length, isExecuting, navigateToWorkspace]);
 };

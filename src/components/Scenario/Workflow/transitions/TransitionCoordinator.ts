@@ -173,13 +173,24 @@ export class TransitionCoordinator {
    * Only certain states support auto-triggering:
    * - STEP_COMPLETED: Can auto-trigger NEXT_STEP or COMPLETE_STAGE
    * - STAGE_COMPLETED: Can auto-trigger NEXT_STAGE or COMPLETE_WORKFLOW
+   * - BEHAVIOR_COMPLETED: Needs to call next API (planning/generating/reflecting)
    *
-   * States that require API response (e.g., BEHAVIOR_COMPLETED) are excluded.
+   * States that require API response call AsyncStateMachineAdapter.step()
    */
   private autoTriggerNextTransition(state: Record<string, any>): Record<string, any> {
     const currentStateName = state.state?.FSM?.state;
 
     if (!currentStateName) {
+      return state;
+    }
+
+    // BEHAVIOR_COMPLETED requires calling the next API via AsyncStateMachineAdapter
+    // This should be handled by the calling code (e.g., workflowStateMachine.startWorkflow)
+    // NOT by TransitionCoordinator, which only handles transition logic
+    if (currentStateName === 'BEHAVIOR_COMPLETED') {
+      console.log(
+        `[Auto-Trigger] ${currentStateName} requires API call - caller should invoke AsyncStateMachineAdapter.step()`
+      );
       return state;
     }
 

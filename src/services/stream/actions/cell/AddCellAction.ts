@@ -42,6 +42,7 @@ export class AddCellAction extends StreamAction {
     console.log('🆕 [AddCellAction] 收到创建cell请求:', {
       cellType,
       description: description?.substring(0, 50),
+      content: content?.substring(0, 50),
       contentLength: content?.length,
       commandId,
       uniqueIdentifier: serverUniqueIdentifier,
@@ -50,7 +51,7 @@ export class AddCellAction extends StreamAction {
 
     let newCellId: string | null = null;
 
-    if (cellType && description) {
+    if (cellType && (description || content)) {
       const enableEdit = !metadata?.isGenerating;
 
       // If image/video generation task with unique identifier
@@ -94,11 +95,13 @@ export class AddCellAction extends StreamAction {
           });
         }
       } else {
-        // Normal cell creation
+        // Normal cell creation - create with initial content if available
         const normalizedType = normalizeCellTypeForStore(cellType);
+        const initialContent = content || description;
+
         newCellId = await globalUpdateInterface.addNewCell2End(
           normalizedType,
-          description,
+          initialContent, // Use content as initial value
           enableEdit
         );
 
@@ -112,24 +115,12 @@ export class AddCellAction extends StreamAction {
             trackerSize: generationTracker.getSize(),
           });
         }
-      }
-    }
 
-    // Set initial content if provided
-    if (content && newCellId) {
-      const target = useStore.getState().cells.find((c) => c.id === newCellId);
-      const appended = `${target?.content || ''}${content}`;
-      useStore.getState().updateCell(newCellId, appended);
-      console.log('✅ [AddCellAction] 已设置初始内容:', {
-        cellId: newCellId,
-        contentLength: appended.length,
-      });
-    } else if (content) {
-      console.error('❌ [AddCellAction] 有内容但newCellId为null:', {
-        contentLength: content.length,
-        cellType,
-        description,
-      });
+        console.log('✅ [AddCellAction] Cell创建完成（含初始内容）:', {
+          cellId: newCellId,
+          initialContentLength: initialContent.length,
+        });
+      }
     }
 
     // Update metadata if provided

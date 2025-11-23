@@ -21,17 +21,22 @@ interface UseEditorSyncProps {
 export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSyncProps) {
   const lastCellsRef = useRef<Cell[]>([]);
 
-  // Initialize lastCellsRef
-  useEffect(() => {
-    lastCellsRef.current = cells;
-  }, [cells]);
-
   // Sync external cell changes to editor
   useEffect(() => {
     const lastCells = lastCellsRef.current;
 
+    console.log('🔄 [useEditorSync] Effect triggered', {
+      hasEditor: !!editor,
+      cellsCount: cells?.length,
+      isInternalUpdate: isInternalUpdate.current,
+      lastCellsCount: lastCells.length,
+      cellsRef: cells,
+      lastCellsRef: lastCells,
+      areSame: cells === lastCells,
+    });
+
     if (DEBUG) {
-      console.log('🔄 [useEditorSync] Effect triggered', {
+      console.log('🔄 [useEditorSync] Effect triggered (DEBUG)', {
         hasEditor: !!editor,
         cellsCount: cells?.length,
         isInternalUpdate: isInternalUpdate.current,
@@ -92,8 +97,17 @@ export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSync
           return false;
         });
 
+      console.log('🔄 [useEditorSync] Update check result', {
+        needsUpdate: needsTiptapUpdate,
+        currentCells: cells.length,
+        lastCells: lastCells.length,
+        cellIds: cells.map((c) => c.id),
+        lastCellIds: lastCells.map((c) => c.id),
+        lengthDiff: cells.length !== lastCells.length,
+      });
+
       if (DEBUG) {
-        console.log('🔄 [useEditorSync] Update check result', {
+        console.log('🔄 [useEditorSync] Update check result (DEBUG)', {
           needsUpdate: needsTiptapUpdate,
           currentCells: cells.length,
           lastCells: lastCells.length,
@@ -101,6 +115,7 @@ export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSync
       }
 
       if (needsTiptapUpdate) {
+        console.log('✅ [useEditorSync] WILL UPDATE TIPTAP!');
         if (DEBUG) {
           console.log('=== 外部cells变化，需要更新tiptap ===');
           console.log(
@@ -116,9 +131,20 @@ export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSync
         isInternalUpdate.current = true;
         const expectedHtml = convertCellsToHtml(cells);
 
+        console.log('🔧 [useEditorSync] About to setContent', {
+          htmlLength: expectedHtml.length,
+          htmlPreview: expectedHtml.substring(0, 500),
+        });
+
         // Use setTimeout to defer setContent to next event loop, avoiding flushSync warning
         setTimeout(() => {
-          editor.commands.setContent(expectedHtml, false);
+          console.log('🔧 [useEditorSync] Calling editor.commands.setContent NOW');
+          const result = editor.commands.setContent(expectedHtml, false);
+          console.log('🔧 [useEditorSync] setContent result:', result);
+          console.log(
+            '🔧 [useEditorSync] Editor HTML after setContent:',
+            editor.getHTML().substring(0, 500)
+          );
         }, SYNC_DEFER_MS);
 
         setTimeout(() => {

@@ -83,6 +83,9 @@
  *     - complete_stage_planning: Complete stage planning (STAGE_RUNNING → STEP_RUNNING)
  *     - delegate_task: Delegate step to agent (STEP_RUNNING state)
  *     - complete_step_planning: Complete step planning (STEP_RUNNING → BEHAVIOR_RUNNING)
+ *
+ * Reflecting Actions (Streaming Protocol):
+ *     - complete_reflection: Marks reflection as complete (BEHAVIOR_COMPLETED → BEHAVIOR_RUNNING)
  */
 
 import { getAllActionTypes as _getAllActionTypes } from './base';

@@ -75,10 +75,18 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     },
     ref
   ) => {
-    // Store state
-    const storeData = useStore();
-    const cells = useMemo(() => storeData?.cells ?? [], [storeData?.cells]);
-    const setCells = useMemo(() => storeData?.setCells ?? (() => {}), [storeData?.setCells]);
+    // Store state - use selector to ensure reactivity
+    const cells = useStore((state) => state.cells);
+    const setCells = useStore((state) => state.setCells);
+
+    // Debug: Log cells changes
+    useEffect(() => {
+      console.log('🔍 [TiptapNotebookEditor] cells changed', {
+        cellsCount: cells.length,
+        cellIds: cells.map((c) => c.id),
+        cellTypes: cells.map((c) => c.type),
+      });
+    }, [cells]);
 
     // Editor state
     const editorRef = useRef<Editor | null>(null);

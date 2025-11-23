@@ -34,7 +34,28 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
       return false;
     }
 
-    // Distinguish from reflecting API: check for control signals
+    // Distinguish from planning API: check for planning control signals
+    // Planning API actions include: plan_stage, plan_step, delegate_task, complete_*_planning
+    for (const action of actions) {
+      if (typeof action === 'object' && action !== null) {
+        const actionType = action.type || '';
+        if (
+          actionType === 'plan_stage' ||
+          actionType === 'complete_workflow_planning' ||
+          actionType === 'plan_step' ||
+          actionType === 'update_stage_context' ||
+          actionType === 'complete_stage_planning' ||
+          actionType === 'delegate_task' ||
+          actionType === 'complete_step_planning'
+        ) {
+          // This is a planning API response, not generating API
+          console.log('[CompleteBehavior] canHandle: Found planning signal, this is planning API');
+          return false;
+        }
+      }
+    }
+
+    // Distinguish from reflecting API: check for reflecting control signals
     // If any action is a control signal, this is from reflecting API
     for (const action of actions) {
       if (typeof action === 'object' && action !== null) {
@@ -45,7 +66,9 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
           actionType === 'mark_stage_complete'
         ) {
           // This is a reflecting API response, not generating API
-          console.log('[CompleteBehavior] canHandle: Found control signal, this is reflecting API');
+          console.log(
+            '[CompleteBehavior] canHandle: Found reflecting signal, this is reflecting API'
+          );
           return false;
         }
       }

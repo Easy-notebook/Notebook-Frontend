@@ -61,7 +61,11 @@ export function convertCellsToHtml(cells: Cell[]) {
         // Create title node with cover, icon, and cellId attributes
         return `<div data-type="title" data-cover="${cover || ''}" data-icon="${icon || ''}" data-cell-id="${cell.id}">${titleText}</div>`;
       }
-      return convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter);
+      if (DEBUG)
+        console.log(`转换Markdown单元格 ${index}: ID=${cell.id}, content="${cell.content}"`);
+      const html = convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter);
+      if (DEBUG) console.log(`Markdown转HTML结果 ${index}: "${html}"`);
+      return html;
     } else if (cell.type === 'image') {
       // image cell转换为HTML - 包含cellId和metadata信息
       if (DEBUG) console.log(`转换图片单元格 ${index}: ID=${cell.id}`);

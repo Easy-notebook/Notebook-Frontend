@@ -56,7 +56,7 @@ interface GlobalUpdateInterface {
   setAllowPagination: (allow: boolean) => void;
   setAddedLastCellID: (id: string) => void;
   getAddedLastCellID: () => string;
-  addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => string;
+  addNewCell2End: (type: CellType, content?: string, enableEdit?: boolean) => string;
   addNewCellWithUniqueIdentifier: (
     type: CellType,
     description?: string,
@@ -66,7 +66,7 @@ interface GlobalUpdateInterface {
   ) => string;
   updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<any>) => boolean;
   addNewContent2CurrentCell: (content: string) => void;
-  addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
+  addNewCell2Next: (type: CellType, content?: string, enableEdit?: boolean) => void;
   runSingleCell: (cellId: string) => void;
   runCurrentCodeCell: () => Promise<void>;
   setCurrentCellMode_onlyCode: () => void;
@@ -228,8 +228,8 @@ const globalUpdateInterface: GlobalUpdateInterface = {
   setAddedLastCellID: (id: string) => useStore.getState().setLastAddedCellId(id),
   getAddedLastCellID: (): string => useStore.getState().lastAddedCellId || '',
 
-  addNewCell2End: (type: CellType, description = '', enableEdit = true) =>
-    useStore.getState().addNewCell2End(type, description, enableEdit),
+  addNewCell2End: (type: CellType, content = '', enableEdit = true) =>
+    useStore.getState().addNewCell2End(type, content, enableEdit),
   addNewCellWithUniqueIdentifier: (
     type: CellType,
     description = '',
@@ -244,8 +244,8 @@ const globalUpdateInterface: GlobalUpdateInterface = {
     useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, updates),
   addNewContent2CurrentCell: (content: string) =>
     useStore.getState().addNewContent2CurrentCell(content),
-  addNewCell2Next: (type: CellType, description = '', enableEdit = true) =>
-    useStore.getState().addNewCell2Next(type, description, enableEdit),
+  addNewCell2Next: (type: CellType, content = '', enableEdit = true) =>
+    useStore.getState().addNewCell2Next(type, content, enableEdit),
 
   runSingleCell: (cellId: string) => useStore.getState().runSingleCell(cellId),
   runCurrentCodeCell: async () => {

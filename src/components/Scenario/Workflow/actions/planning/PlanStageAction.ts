@@ -20,9 +20,11 @@ export class PlanStageAction extends ActionBase {
    *   - acceptance: Acceptance criteria
    */
   execute(step: ExecutionStep): void {
-    const { stage_id, title, task, acceptance } = step;
+    // Backend sends stage_id, but convertActionToExecutionStep converts it to stageId
+    const stageId = (step as any).stageId || (step as any).stage_id;
+    const { title, task, acceptance } = step;
 
-    if (!stage_id || !title || !task || !acceptance) {
+    if (!stageId || !title || !task || !acceptance) {
       console.error('[PlanStageAction] Missing required fields:', step);
       return;
     }
@@ -38,11 +40,11 @@ export class PlanStageAction extends ActionBase {
 
     // Check if stage already exists
     const existingIndex = observation.location.progress.stages.planned.findIndex(
-      (s: any) => s.stage_id === stage_id
+      (s: any) => s.stage_id === stageId
     );
 
     const stageData = {
-      stage_id,
+      stage_id: stageId,
       title,
       task,
       acceptance,
@@ -55,11 +57,11 @@ export class PlanStageAction extends ActionBase {
         ...observation.location.progress.stages.planned[existingIndex],
         ...stageData,
       };
-      console.log(`[PlanStageAction] ✅ Updated stage: ${stage_id}`);
+      console.log(`[PlanStageAction] ✅ Updated stage: ${stageId}`);
     } else {
       // Add new stage
       observation.location.progress.stages.planned.push(stageData);
-      console.log(`[PlanStageAction] ✅ Added new stage: ${stage_id}`);
+      console.log(`[PlanStageAction] ✅ Added new stage: ${stageId}`);
     }
 
     // Update workflow state machine with modified stateJSON

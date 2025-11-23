@@ -28,7 +28,9 @@ export class FileService extends BaseService {
       apiLog.debug('Upload config', { uploadConfig });
 
       const formData = new FormData();
-      formData.append('notebook_id', notebookId);
+      if (notebookId) {
+        formData.append('notebook_id', notebookId);
+      }
       formData.append('mode', uploadConfig.mode);
       // Append allowed_types as individual fields for backend list compatibility
       if (uploadConfig.allowedTypes && uploadConfig.allowedTypes.length > 0) {
@@ -202,6 +204,36 @@ export class FileService extends BaseService {
       return await this.handleResponse<ApiResponse>(response);
     } catch (error) {
       apiLog.error('Failed to delete file', { error });
+      throw error;
+    }
+  }
+  // Create notebook with files
+  static async createNotebookWithFiles(
+    files: File[],
+    targetDir = ''
+  ): Promise<ApiResponse & { notebook_id: string; files: string[]; target_dir: string }> {
+    try {
+      apiLog.debug('FileService.createNotebookWithFiles called');
+      const formData = new FormData();
+
+      if (targetDir) {
+        formData.append('target_dir', targetDir);
+      }
+
+      files.forEach((file) => {
+        formData.append('files', file);
+      });
+
+      const url = `${this.baseUrl}/create_notebook_with_files`;
+      const response = await axios.post(url, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      return response.data;
+    } catch (error: any) {
+      apiLog.error('Failed to create notebook with files', { error });
       throw error;
     }
   }

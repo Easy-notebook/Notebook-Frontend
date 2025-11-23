@@ -3,6 +3,14 @@
  */
 
 export * from './TriggerVideoGenerationAction';
+export * from './TriggerImageGenerationAction';
+export * from './TriggerWebpageGenerationAction';
 export * from './VideoGenerationTaskStartedAction';
 export * from './VideoGenerationStatusUpdateAction';
-// Note: Image and webpage generation actions can be added similarly
+
+// Auto-import to trigger registration
+import './TriggerVideoGenerationAction';
+import './TriggerImageGenerationAction';
+import './TriggerWebpageGenerationAction';
+import './VideoGenerationTaskStartedAction';
+import './VideoGenerationStatusUpdateAction';

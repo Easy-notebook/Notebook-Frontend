@@ -136,7 +136,7 @@ export interface NotebookStoreActions {
   runCurrentCodeCell: () => Promise<void>;
 
   // 单元格创建
-  addNewCell2End: (type: CellType, description?: string, enableEdit?: boolean) => string;
+  addNewCell2End: (type: CellType, content?: string, enableEdit?: boolean) => string;
   addNewCellWithUniqueIdentifier: (
     type: CellType,
     description?: string,
@@ -145,7 +145,7 @@ export interface NotebookStoreActions {
     prompt?: string
   ) => string;
   updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<Cell>) => boolean;
-  addNewCell2Next: (type: CellType, description?: string, enableEdit?: boolean) => void;
+  addNewCell2Next: (type: CellType, content?: string, enableEdit?: boolean) => void;
   addNewContent2CurrentCell: (content: string) => void;
 
   // 单元格类型获取
@@ -158,6 +158,7 @@ export interface NotebookStoreActions {
   // 单元格元数据管理
   updateCellCanEdit: (cellId: string, isEditable: boolean) => void;
   updateCellMetadata: (cellId: string, metadata: Record<string, any>) => void;
+  updateCellObject: (cellId: string, updates: Partial<Cell>) => void;
 
   // 单元格类型转换
   convertCurrentCodeCellToHybridCell: () => void;
@@ -959,15 +960,15 @@ const useStore = create(
         await get().runSingleCell(currentCellId);
       },
 
-      addNewCell2End: (type: CellType, description = '', enableEdit = true): string => {
+      addNewCell2End: (type: CellType, content = '', enableEdit = true): string => {
         const id = uuidv4();
         const model = CellModel.create(type, {
           id,
-          content: '',
+          content,
           outputs: [],
           enableEdit,
           phaseId: get().currentRunningPhaseId || null,
-          description,
+          description: '',
         });
         get().addCell(model.toJSON());
         set({ lastAddedCellId: id });
@@ -1060,15 +1061,15 @@ const useStore = create(
         return true;
       },
 
-      addNewCell2Next: (type: CellType, description = '', enableEdit = true) => {
+      addNewCell2Next: (type: CellType, content = '', enableEdit = true) => {
         const id = uuidv4();
         const model = CellModel.create(type, {
           id,
-          content: '',
+          content,
           outputs: [],
           enableEdit,
           phaseId: get().currentRunningPhaseId || null,
-          description,
+          description: '',
         });
 
         const currentIdx = get().cells.findIndex((c) => c.id === get().currentCellId);
@@ -1187,6 +1188,27 @@ const useStore = create(
             const cell = state.cells.find((c) => c.id === cellId);
             if (cell) {
               cell.metadata = { ...(cell.metadata || {}), ...metadata };
+            }
+          })
+        ),
+
+      updateCellObject: (cellId: string, updates: Partial<Cell>) =>
+        set(
+          produce((state: NotebookStoreState) => {
+            const cell = state.cells.find((c) => c.id === cellId);
+            if (cell) {
+              // Merge updates into the cell
+              Object.assign(cell, updates);
+
+              // If metadata is being updated, merge it properly
+              if (updates.metadata) {
+                cell.metadata = { ...(cell.metadata || {}), ...updates.metadata };
+              }
+
+              // If outputs are being updated, ensure they're serialized
+              if (updates.outputs) {
+                cell.outputs = serializeOutput(updates.outputs);
+              }
             }
           })
         ),

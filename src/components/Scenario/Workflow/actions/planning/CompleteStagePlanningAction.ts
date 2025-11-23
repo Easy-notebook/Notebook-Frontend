@@ -18,9 +18,11 @@ export class CompleteStagePlanningAction extends ActionBase {
    *   - total_steps: Total number of steps planned
    */
   execute(step: ExecutionStep): void {
-    const { stage_id, total_steps } = step;
+    // Backend sends stage_id, but convertActionToExecutionStep converts it to stageId
+    const stageId = (step as any).stageId || (step as any).stage_id;
+    const totalSteps = (step as any).totalSteps || (step as any).total_steps;
 
-    if (!stage_id) {
+    if (!stageId) {
       console.error('[CompleteStagePlanningAction] Missing stage_id:', step);
       return;
     }
@@ -30,12 +32,12 @@ export class CompleteStagePlanningAction extends ActionBase {
     const stateJSON = stateMachine.stateJSON;
 
     console.log(
-      `[CompleteStagePlanningAction] Stage planning complete: ${stage_id} with ${total_steps} steps`
+      `[CompleteStagePlanningAction] Stage planning complete: ${stageId} with ${totalSteps} steps`
     );
 
     // Find and mark stage as planning complete
     const stage = stateJSON.observation.location.progress.stages.planned?.find(
-      (s: any) => s.stage_id === stage_id
+      (s: any) => s.stage_id === stageId
     );
 
     if (stage) {

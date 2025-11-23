@@ -1,4 +1,4 @@
-import { ActionBase, registerAction } from '../base';
+import { ActionBase, registerAction, executeAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
 import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
@@ -10,7 +10,8 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
    *   - total_stages: Total number of stages planned
    */
   execute(step: ExecutionStep): void {
-    const { total_stages } = step;
+    // Backend sends total_stages, but convertActionToExecutionStep converts it to totalStages
+    const totalStages = (step as any).totalStages || (step as any).total_stages;
 
     // Get the workflow state machine's current state JSON
     const stateMachine = useWorkflowStateMachine.getState();
@@ -18,7 +19,7 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
     const observation = stateJSON.observation;
 
     console.log(
-      `[CompleteWorkflowPlanningAction] Workflow planning complete with ${total_stages} stages`
+      `[CompleteWorkflowPlanningAction] Workflow planning complete with ${totalStages} stages`
     );
 
     // Mark workflow as planned (custom flag on FSM)
@@ -39,6 +40,15 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
         console.log(
           `[CompleteWorkflowPlanningAction] ✅ Transitioned to STAGE_RUNNING, current stage: ${plannedStages[0].stage_id}`
         );
+
+        // Execute new_section action for the first stage
+        const firstStageTitle = plannedStages[0].title;
+        if (firstStageTitle) {
+          console.log(
+            `[CompleteWorkflowPlanningAction] Executing new_section for first stage: "${firstStageTitle}"`
+          );
+          executeAction('new_section', firstStageTitle);
+        }
       } else {
         console.warn('[CompleteWorkflowPlanningAction] No stages planned, cannot transition');
       }

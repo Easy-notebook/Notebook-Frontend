@@ -321,7 +321,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     try {
       await fetchFileList({
         notebookId,
-        FileService: utilsApi as any,
+        fileService: utilsApi as any,
         setFileList: (list) => setFiles(list as FileNode[]),
         toast,
       });
@@ -541,7 +541,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
       handleDownload({
         notebookId,
         filename: file.path,
-        FileService: utilsApi as any,
+        fileService: utilsApi as any,
         toast,
       });
     },
@@ -554,7 +554,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleDeleteFile({
           notebookId,
           filename: file.path,
-          FileService: utilsApi as any,
+          fileService: utilsApi as any,
           fetchFileList: fetchFileListWrapper,
           toast,
         });
@@ -592,7 +592,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          FileService: utilsApi as any,
+          fileService: utilsApi as any,
           uploadConfig,
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),
@@ -631,7 +631,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          FileService: utilsApi as any,
+          fileService: utilsApi as any,
           uploadConfig,
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),

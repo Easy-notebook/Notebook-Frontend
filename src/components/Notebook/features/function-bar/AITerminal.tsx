@@ -10,6 +10,8 @@ import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useCodeStore from '@Store/codeStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { FileService } from '@Services/notebook/FileService';
+import { ActionCommandHandler } from '@Services/stream/commands';
+import { CommandHintComponent } from './CommandHint';
 
 // File upload types
 interface UploadFile {
@@ -382,6 +384,27 @@ const CommandInput: React.FC = () => {
         const timestamp = new Date().toLocaleTimeString();
 
         if (command.startsWith('/')) {
+          // Try to handle as action command first
+          const showToast = async (options: {
+            message: string;
+            type: 'success' | 'error' | 'info';
+          }) => {
+            // Use the built-in toast system if available, otherwise console log
+            console.log(`[Toast ${options.type}]`, options.message);
+            // You can integrate with your actual toast system here
+            // For now, we'll just log to console
+          };
+
+          const isActionCommand = await ActionCommandHandler.handleCommand(command, showToast);
+
+          if (isActionCommand) {
+            // Command was handled by action system
+            console.log('[AITerminal] Command handled by action system:', command);
+            setIsLoading(false);
+            return;
+          }
+
+          // Not an action command, proceed with original command handling
           setActiveView('script');
           const commandId = `action-${Date.now()}`;
           const actionData = {
@@ -706,12 +729,15 @@ const CommandInput: React.FC = () => {
             />
           </div>
 
-          {/* Mode indicator */}
+          {/* Mode indicator and Command Hints */}
           {input && (
             <div className="relative z-10 px-6 pb-3">
-              <div className="text-theme-600 dark:text-theme-400 font-medium text-sm">
+              <div className="text-theme-600 dark:text-theme-400 font-medium text-sm mb-2">
                 {input.startsWith('/') ? '⌘ Command mode' : '💭 Question mode'}
               </div>
+
+              {/* Show command hints for command mode */}
+              {input.startsWith('/') && <CommandHintComponent input={input} />}
             </div>
           )}
 

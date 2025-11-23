@@ -67,9 +67,35 @@ export {
 import * as cell from './cell';
 import * as qa from './qa';
 import * as generation from './generation';
+import * as notebook from './notebook';
+import * as view from './view';
+import * as phase from './phase';
+import * as editor from './editor';
+import * as code from './code';
+import * as convert from './convert';
+import * as error from './error';
+import * as agent from './agent';
+import * as workflow from './workflow';
+import * as link from './link';
+import * as misc from './misc';
 
 // Export all action classes for direct access if needed
-export { cell, qa, generation };
+export {
+  cell,
+  qa,
+  generation,
+  notebook,
+  view,
+  phase,
+  editor,
+  code,
+  convert,
+  error,
+  agent,
+  workflow,
+  link,
+  misc,
+};
 
 // Log all registered actions
 console.log('[StreamActions] All actions registered:', _getAllStreamActionTypes());

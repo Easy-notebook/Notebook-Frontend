@@ -188,7 +188,16 @@ export class AsyncStateMachineAdapter {
           streamingLogger.printReport();
 
           console.log(`[AsyncFSM] Streaming execution complete: ${actions.length} actions`);
-          apiResponse = { actions, count: actions.length };
+
+          // ✅ FIX: Actions already executed and handled transitions
+          // Get the current state from workflow state machine instead of applying another transition
+          const { useWorkflowStateMachine } = await import('../store/workflowStateMachine');
+          const currentStateJSON = useWorkflowStateMachine.getState().stateJSON;
+
+          console.log(
+            `[AsyncFSM] Returning current state after streaming: ${currentStateJSON.state.FSM.state}`
+          );
+          return [currentStateJSON, 'STREAMING_COMPLETE'];
         }
       }
 
@@ -393,7 +402,10 @@ export class AsyncStateMachineAdapter {
       text_array: 'textArray',
       thinking_text: 'thinkingText',
       step_id: 'stepId',
+      stage_id: 'stageId',
       phase_id: 'phaseId',
+      total_steps: 'totalSteps',
+      total_stages: 'totalStages',
     };
 
     // Apply field mapping
@@ -426,10 +438,10 @@ export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> 
   if (!asyncStateMachineInstance) {
     // Dynamic import to avoid circular dependencies
     const { WorkflowAPIClient } = await import('../api/WorkflowAPIClient');
-    const useStore = (await import('@/store/notebookStore')).default;
+    const { useScriptStore } = await import('../store/useScriptStore');
 
     const apiClient = new WorkflowAPIClient();
-    const scriptStore = useStore.getState();
+    const scriptStore = useScriptStore.getState();
 
     asyncStateMachineInstance = new AsyncStateMachineAdapter(apiClient, scriptStore);
     console.log('[AsyncFSM] Created singleton instance');
