@@ -1,21 +1,14 @@
 // src/router/AppRouter.tsx
 import React from 'react';
-import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, useParams } from 'react-router-dom';
 import NotebookApp from '../components/Notebook/NotebookApp';
+import { isHashRoutingEnabled } from '@/utils/routerMode';
 
 /**
  * App Component with Route-aware NotebookApp
  */
 const RouteAwareNotebookApp: React.FC = () => {
-  const params = useParams();
-  const location = window.location;
-
-  // 初始化路由状态
-  React.useEffect(() => {
-    // 由于所有路由都指向同一个 NotebookApp 实例
-    // 路由状态的同步将由 useRouteSync hook 在 NotebookApp 中处理
-  }, [params, location]);
-
+  useParams();
   return <NotebookApp />;
 };
 
@@ -23,8 +16,10 @@ const RouteAwareNotebookApp: React.FC = () => {
  * Main App Router Component
  */
 const AppRouter: React.FC = () => {
+  const RouterComponent = isHashRoutingEnabled ? HashRouter : BrowserRouter;
+
   return (
-    <BrowserRouter>
+    <RouterComponent>
       <Routes>
         {/* 主页 - 显示 NotebookApp (EmptyState) */}
         <Route path="/" element={<RouteAwareNotebookApp />} />
@@ -38,7 +33,7 @@ const AppRouter: React.FC = () => {
         {/* 其他路由重定向到主页 */}
         <Route path="*" element={<RouteAwareNotebookApp />} />
       </Routes>
-    </BrowserRouter>
+    </RouterComponent>
   );
 };
 

@@ -81,17 +81,6 @@ export function useEditorSync({ editor, cells, isInternalUpdate }: UseEditorSync
           return false;
         });
 
-      // Additional check: skip tiptap update if triggered by InputRule
-      const hasNewCodeBlock = cells.some(
-        (cell) => cell.type === 'code' && !lastCells.find((lastCell) => lastCell.id === cell.id)
-      );
-
-      if (hasNewCodeBlock) {
-        if (DEBUG) console.log('检测到新代码块，跳过tiptap更新以避免冲突');
-        lastCellsRef.current = cells; // Still update cache
-        return;
-      }
-
       if (needsTiptapUpdate) {
         if (DEBUG) {
           console.log('=== 外部cells变化，需要更新tiptap ===');

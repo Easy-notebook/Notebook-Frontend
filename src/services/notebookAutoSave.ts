@@ -4,7 +4,8 @@
  */
 
 import { debounce } from 'lodash-es';
-import { NotebookORM, FileORM, StorageManager } from '@Storage/index';
+import { PersistenceService } from '../services/persistence/PersistenceService';
+import { IPersistenceService } from '../services/persistence/interfaces';
 import type { Cell, Task } from '@Store/models';
 import { notebookLog, storageLog } from '@Utils/logger';
 
@@ -22,13 +23,6 @@ interface LoadedNotebook {
   tasks: Task[];
 }
 
-interface SaveResult {
-  id: string;
-  hasLocalContent: boolean;
-  storageType: string;
-  size: number;
-}
-
 // Types for cells/tasks are provided by @Store/models
 
 /**
@@ -41,6 +35,7 @@ export class NotebookAutoSave {
   private isInitialized = false;
   private saveInProgress = false;
   private readonly isDevelopment = import.meta.env.DEV;
+  private persistence: IPersistenceService;
 
   // Debounced save function with 25ms delay
   private readonly debouncedSave = debounce(async (): Promise<void> => {
@@ -49,6 +44,7 @@ export class NotebookAutoSave {
 
   private constructor() {
     // Private constructor for singleton
+    this.persistence = new PersistenceService();
   }
 
   /**
@@ -73,7 +69,7 @@ export class NotebookAutoSave {
       notebookLog.info('Initializing notebook auto-save service');
 
       // Ensure storage is initialized
-      await StorageManager.initialize();
+      await this.persistence.initialize();
 
       this.isInitialized = true;
       notebookLog.info('Notebook auto-save service initialized successfully');
@@ -107,15 +103,15 @@ export class NotebookAutoSave {
     // Safety check: prevent accidental data loss from empty cells
     if (!snapshot.cells || snapshot.cells.length === 0) {
       try {
-        const existingData = await NotebookAutoSave.loadNotebook(snapshot.notebookId);
+        const existingData = await this.loadNotebookInternal(snapshot.notebookId);
         if (existingData?.cells && existingData.cells.length > 0) {
           notebookLog.warn(
             'Preventing data loss: notebook has existing content, skipping empty save',
             {
               notebookId: snapshot.notebookId,
               existingCellsCount: existingData.cells.length,
-              snapshotTitle: snapshot.title,
-              existingTitle: existingData.title,
+              snapshotTitle: snapshot.notebookTitle,
+              existingTitle: existingData.notebookTitle,
               reason: 'Empty snapshot would overwrite existing content',
             }
           );
@@ -131,7 +127,7 @@ export class NotebookAutoSave {
         // If we can't check existing content, be conservative and allow the save
         notebookLog.warn('Failed to check existing notebook content, proceeding with save', {
           notebookId: snapshot.notebookId,
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
           decision: 'allowing_save_due_to_check_failure',
         });
       }
@@ -191,7 +187,7 @@ export class NotebookAutoSave {
 
     try {
       // 1. Update notebook metadata
-      await NotebookORM.saveNotebook({
+      await this.persistence.notebooks.saveNotebook({
         id: notebookId,
         name: notebookTitle || `Notebook ${notebookId.slice(0, 8)}`,
         description: '',
@@ -205,7 +201,7 @@ export class NotebookAutoSave {
       // 2. Save notebook content as a single main file
       if (import.meta.env.DEV) {
         const codeCellsWithOutputs = (cells || []).filter(
-          (c) => c.type === 'code' && c.outputs && c.outputs.length > 0
+          (c: Cell) => c.type === 'code' && c.outputs && c.outputs.length > 0
         );
         console.log('🔍 [notebookAutoSave] Saving notebook:', {
           notebookId: notebookId.slice(0, 8),
@@ -242,7 +238,7 @@ export class NotebookAutoSave {
         });
       }
 
-      const saveResult: SaveResult = await FileORM.saveFile({
+      const saveResult = await this.persistence.files.saveFile({
         notebookId,
         filePath: `notebook_${notebookId}.json`,
         fileName: `${notebookTitle || 'Untitled'}.easynb`,
@@ -289,12 +285,19 @@ export class NotebookAutoSave {
   }
 
   /**
-   * Load notebook from database with validation
+   * Load notebook from database with validation (Static wrapper for singleton usage)
    * @param notebookId - The unique identifier of the notebook
    * @returns Promise resolving to loaded notebook data or null if not found
    * @throws Error if notebookId is invalid or load fails
    */
   static async loadNotebook(notebookId: string): Promise<LoadedNotebook | null> {
+    return NotebookAutoSave.getInstance().loadNotebookInternal(notebookId);
+  }
+
+  /**
+   * Internal load notebook implementation using instance persistence
+   */
+  private async loadNotebookInternal(notebookId: string): Promise<LoadedNotebook | null> {
     if (!notebookId?.trim()) {
       throw new Error('Invalid notebook ID provided');
     }
@@ -304,7 +307,7 @@ export class NotebookAutoSave {
 
       // Try to load main notebook file first
       const expectedFilePath = `notebook_${notebookId}.json`;
-      const mainFile = await FileORM.getFile(notebookId, expectedFilePath);
+      const mainFile = await this.persistence.files.getFile(notebookId, expectedFilePath);
 
       if (mainFile?.content) {
         try {
@@ -319,7 +322,7 @@ export class NotebookAutoSave {
 
           if (import.meta.env.DEV) {
             const codeCellsWithOutputs = loadedCells.filter(
-              (c) => c.type === 'code' && c.outputs && c.outputs.length > 0
+              (c: Cell) => c.type === 'code' && c.outputs && c.outputs.length > 0
             );
             console.log('🔍 [notebookAutoSave] Loading notebook from database:', {
               notebookId: notebookId.slice(0, 8),
@@ -348,7 +351,7 @@ export class NotebookAutoSave {
       }
 
       // Fallback: try to load from notebook metadata
-      const notebook = await NotebookORM.getNotebook(notebookId);
+      const notebook = await this.persistence.notebooks.getNotebook(notebookId);
 
       if (!notebook) {
         notebookLog.debug('Notebook not found in database', { notebookId });

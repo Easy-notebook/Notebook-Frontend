@@ -2,6 +2,7 @@
 // Navigation utilities for the application
 
 import useRouteStore from '@Store/routeStore';
+import { getCurrentAppPath } from './routerMode';
 
 /**
  * Navigate to the home page (EmptyState)
@@ -32,7 +33,7 @@ export const navigateToWorkspace = (notebookId: string): void => {
  * Get the current route information
  */
 export const getCurrentRoute = () => {
-  const path = window.location.pathname;
+  const path = getCurrentAppPath();
 
   if (path === '/') {
     return { type: 'home' } as const;
@@ -54,21 +55,21 @@ export const getCurrentRoute = () => {
  * Check if the current route is the home page
  */
 export const isHomeRoute = (): boolean => {
-  return window.location.pathname === '/';
+  return getCurrentAppPath() === '/';
 };
 
 /**
  * Check if the current route is the library
  */
 export const isLibraryRoute = (): boolean => {
-  return window.location.pathname === '/FoKn/Library';
+  return getCurrentAppPath() === '/FoKn/Library';
 };
 
 /**
  * Check if the current route is a workspace
  */
 export const isWorkspaceRoute = (): boolean => {
-  return window.location.pathname.startsWith('/workspace/');
+  return getCurrentAppPath().startsWith('/workspace/');
 };
 
 /**

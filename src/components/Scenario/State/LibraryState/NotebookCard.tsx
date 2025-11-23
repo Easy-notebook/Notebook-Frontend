@@ -11,7 +11,7 @@ import {
   Download,
   Trash2,
 } from 'lucide-react';
-import { FileORM } from '@Storage/index';
+import { usePersistence } from '@Services/persistence/PersistenceContext';
 import CodeCell from '@Editor/Cells/CodeCell';
 import MarkdownCell from '@Editor/Cells/MarkdownCell';
 import HybridCell from '@Editor/Cells/HybridCell';
@@ -34,9 +34,11 @@ interface PreviewCell {
 const looksLikeBase64 = (s: string): boolean =>
   /^[A-Za-z0-9+/=\s]+$/.test(s) && s.replace(/\s+/g, '').length % 4 === 0;
 
-const NotebookCard: React.FC<NotebookCardProps> = memo(
+export const NotebookCard: React.FC<NotebookCardProps> = memo(
   ({ notebook, viewMode, onSelect, onToggleStar, onDelete, onExport }) => {
     const [previewCells, setPreviewCells] = useState<PreviewCell[]>([]);
+    const [loading, setLoading] = useState(false);
+    const persistence = usePersistence();
 
     // Load notebook cells for preview
     useEffect(() => {
@@ -44,11 +46,13 @@ const NotebookCard: React.FC<NotebookCardProps> = memo(
 
       const loadCells = async () => {
         try {
-          const main = await FileORM.getFile(notebook.id, `notebook_${notebook.id}.json`);
+          setLoading(true);
+          const main = await persistence.files.getFile(notebook.id, `notebook_${notebook.id}.json`);
           const raw = main?.content;
 
           if (!raw) {
             if (!cancelled) setPreviewCells([]);
+            setLoading(false);
             return;
           }
 

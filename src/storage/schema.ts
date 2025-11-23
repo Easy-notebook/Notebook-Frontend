@@ -31,18 +31,18 @@ export interface FileMetadataEntity {
   fileType: string;
   size: number;
   lastModified: string;
-  
+
   // Cache management
   cachedAt: number;
   lastAccessedAt: number;
   accessCount: number;
-  
+
   // Content storage strategy
   storageType: 'local' | 'remote' | 'hybrid';
   hasLocalContent: boolean; // Whether content is stored locally
   remoteUrl?: string; // Backend URL for large files
   contentHash?: string; // Content hash for verification
-  
+
   // Soft reference for large files
   isLargeFile: boolean; // Files > threshold only store metadata
   contentPreview?: string; // Small preview/summary for large files
@@ -86,6 +86,22 @@ export interface TabStateEntity {
 }
 
 /**
+ * Split file entity - tracks files for split preview cache
+ */
+export interface SplitFileEntity {
+  id: string; // `${notebookId}::${filePath}`
+  notebookId: string;
+  filePath: string;
+  fileName: string;
+  content: string;
+  type: string;
+  size: number;
+  lastModified: string;
+  cachedAt: number;
+  metadata?: any;
+}
+
+/**
  * Storage configuration
  */
 export interface StorageConfigEntity {
@@ -104,11 +120,12 @@ export interface StorageConfigEntity {
  */
 export const DB_STORES = {
   NOTEBOOKS: 'notebooks',
-  FILES_METADATA: 'files_metadata', 
+  FILES_METADATA: 'files_metadata',
   FILES_CONTENT: 'files_content',
   ACTIVITIES: 'activities',
   CONFIG: 'config',
-  TAB_STATES: 'tab_states'
+  TAB_STATES: 'tab_states',
+  SPLIT_FILES: 'split_files',
 } as const;
 
 /**
@@ -119,9 +136,9 @@ export const DB_INDEXES = {
   NOTEBOOKS: {
     lastAccessed: 'lastAccessedAt',
     accessCount: 'accessCount',
-    updatedAt: 'updatedAt'
+    updatedAt: 'updatedAt',
   },
-  
+
   // File metadata indexes
   FILES_METADATA: {
     notebookId: 'notebookId',
@@ -129,26 +146,33 @@ export const DB_INDEXES = {
     lastAccessed: 'lastAccessedAt',
     storageType: 'storageType',
     isLargeFile: 'isLargeFile',
-    cachedAt: 'cachedAt'
+    cachedAt: 'cachedAt',
   },
-  
+
   // File content indexes
   FILES_CONTENT: {
-    fileId: 'fileId'
+    fileId: 'fileId',
   },
-  
+
   // Activity indexes
   ACTIVITIES: {
     notebookId: 'notebookId',
     timestamp: 'timestamp',
     notebookTimestamp: ['notebookId', 'timestamp'],
-    activityType: 'activityType'
+    activityType: 'activityType',
   },
-  
+
   // Tab state indexes
   TAB_STATES: {
-    lastUpdated: 'lastUpdated'
-  }
+    lastUpdated: 'lastUpdated',
+  },
+
+  // Split file indexes
+  SPLIT_FILES: {
+    notebookId: 'notebookId',
+    filePath: 'filePath',
+    cachedAt: 'cachedAt',
+  },
 } as const;
 
 /**
@@ -162,5 +186,5 @@ export const DEFAULT_STORAGE_CONFIG: StorageConfigEntity = {
   cleanupInterval: 60 * 60 * 1000, // 1 hour
   retentionPeriod: 7 * 24 * 60 * 60 * 1000, // 7 days
   compressionEnabled: true,
-  lastCleanup: 0
+  lastCleanup: 0,
 };

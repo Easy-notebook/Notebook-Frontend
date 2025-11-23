@@ -2,9 +2,7 @@
 // Custom hook for notebook side effects
 
 import { useEffect } from 'react';
-import { StorageManager } from '@Storage/index';
-import useStore from '@Store/notebookStore';
-import useRouteStore from '@Store/routeStore';
+
 import { useWorkflowControlStore } from '../store/workflowControlStore';
 import { uiLog } from '@Utils/logger';
 
@@ -41,20 +39,6 @@ export const useNotebookEffects = ({
     setOnContinue,
     setOnCancelCountdown,
   } = useWorkflowControlStore();
-
-  // Initialize storage system on app start
-  useEffect(() => {
-    const initializeStorage = async () => {
-      try {
-        uiLog.info('Initializing storage system');
-        await StorageManager.initialize();
-        uiLog.info('Storage system initialized successfully');
-      } catch (error) {
-        uiLog.error('Failed to initialize storage system', { error });
-      }
-    };
-    initializeStorage();
-  }, []);
 
   // Scroll to last added cell
   useEffect(() => {

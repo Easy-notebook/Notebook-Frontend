@@ -3,8 +3,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { message } from 'antd';
-import { NotebookORM, StorageManager } from '@Storage/index';
 import { notebookApiIntegration } from '@Services/notebookServices';
+import { usePersistence } from '../../../../../../services/persistence/PersistenceContext';
 import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
 import { navigateToWorkspace } from '@Utils/navigation';
@@ -19,37 +19,17 @@ export const useNotebooks = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isCreatingNotebook, setIsCreatingNotebook] = useState(false);
+  const persistence = usePersistence();
 
   const loadNotebooks = useCallback(async () => {
     try {
       setLoading(true);
-      // Ensure storage system is initialized
-      try {
-        const initTimeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Storage initialization timeout')), 5000)
-        );
-        await Promise.race([StorageManager.initialize(), initTimeout]);
-      } catch (initError) {
-        console.warn(
-          '🔄 Storage manager initialization failed, proceeding with fallback:',
-          initError
-        );
-      }
 
-      // Try new storage system first
-      let allNotebooks: any[] = [];
-      try {
-        const notebookTimeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('New storage system timeout')), 3000)
-        );
-        allNotebooks = await Promise.race([
-          NotebookORM.getNotebooks({ orderBy: 'lastAccessedAt', limit: 20 }), // Limit for sidebar
-          notebookTimeout,
-        ]);
-      } catch (error) {
-        console.warn('❌ New storage system failed, skipping legacy fallback:', error);
-        allNotebooks = [];
-      }
+      // Use new persistence service
+      const allNotebooks = await persistence.notebooks.getAllNotebooks({
+        orderBy: 'lastAccessedAt',
+        limit: 20,
+      });
 
       // Transform to CachedNotebook format
       const cachedNotebooks: CachedNotebook[] = allNotebooks.map((nb: any) => ({
@@ -70,11 +50,6 @@ export const useNotebooks = () => {
         version: nb.version || '1.0.0',
       }));
 
-      // Sort by lastAccessedAt
-      cachedNotebooks.sort(
-        (a, b) => new Date(b.lastAccessedAt).getTime() - new Date(a.lastAccessedAt).getTime()
-      );
-
       setNotebooks(cachedNotebooks);
     } catch (error) {
       console.error('❌ Error loading notebooks for sidebar:', error);
@@ -83,7 +58,7 @@ export const useNotebooks = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [persistence]);
 
   // Initial load
   useEffect(() => {
@@ -146,18 +121,21 @@ export const useNotebooks = () => {
   );
 
   // Delete notebook (if needed in the future)
-  const deleteNotebook = useCallback(async (notebookId: string) => {
-    try {
-      // Remove from storage
-      await NotebookORM.deleteNotebook(notebookId);
+  const deleteNotebook = useCallback(
+    async (notebookId: string) => {
+      try {
+        // Remove from storage
+        await persistence.notebooks.deleteNotebook(notebookId);
 
-      // Update local state
-      setNotebooks((prev) => prev.filter((nb) => nb.id !== notebookId));
-    } catch (error) {
-      console.error('Failed to delete notebook:', error);
-      message.error('Failed to delete notebook');
-    }
-  }, []);
+        // Update local state
+        setNotebooks((prev) => prev.filter((nb) => nb.id !== notebookId));
+      } catch (error) {
+        console.error('Failed to delete notebook:', error);
+        message.error('Failed to delete notebook');
+      }
+    },
+    [persistence]
+  );
 
   return {
     notebooks,

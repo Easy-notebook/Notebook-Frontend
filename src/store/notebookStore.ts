@@ -23,7 +23,7 @@ import {
   type OutputItem,
   type UploadMode,
 } from '@Store/models';
-import type { Task, Phase, Step } from '@Store/models';
+import type { Task, Phase } from '@Store/models';
 
 // Re-export model types for backward compatibility
 export type { Cell, CellType, OutputItem, UploadMode } from '@Store/models';
@@ -403,7 +403,26 @@ const useStore = create(
               notebookLog.warn('Initial save after notebookId assignment failed', { error: e });
             }
           } else {
-            // Real notebook switch: clear old content to avoid cross-notebook mixing
+            // Real notebook switch: ensure old notebook is saved before clearing
+            if (state.notebookId) {
+              try {
+                console.log('🔍 [notebookStore] Saving old notebook before switch', {
+                  oldId: state.notebookId,
+                  cells: state.cells.length,
+                });
+                await notebookAutoSaveInstance.saveNow({
+                  notebookId: state.notebookId,
+                  notebookTitle: state.notebookTitle,
+                  cells: state.cells,
+                  tasks: state.tasks,
+                  timestamp: Date.now(),
+                });
+              } catch (e) {
+                notebookLog.error('Failed to save old notebook before switch', { error: e });
+              }
+            }
+
+            // Clear old content to avoid cross-notebook mixing
             console.log('🔍 [notebookStore] Switching notebookId - clearing old cells', {
               oldId: state.notebookId,
               newId: id,
@@ -534,6 +553,17 @@ const useStore = create(
         } else {
           notebookLog.debug('Cells not empty - keeping existing cells');
         }
+
+        notebookLog.info('setCells content check', {
+          count: processedCells.length,
+          firstCell: processedCells[0]
+            ? {
+                id: processedCells[0].id,
+                type: processedCells[0].type,
+                contentPreview: (processedCells[0].content || '').substring(0, 100),
+              }
+            : 'none',
+        });
 
         const tasks = parseMarkdownCells(processedCells as any);
         updateCellsPhaseId(processedCells as any, tasks);

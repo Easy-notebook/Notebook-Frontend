@@ -1,14 +1,13 @@
-// moved to sections/LeftSideBar/Main/Empty/NotebookHistoryCard.tsx
 // Compact notebook card for sidebar history display
 
 import React, { memo, useCallback, useEffect, useState, useMemo } from 'react';
 import { Button, Skeleton } from 'antd';
 import { Star, Clock } from 'lucide-react';
-import { FileORM } from '@Storage/index';
 import { CodeCell, MarkdownCell, HybridCell, ImageCell, LinkCell } from '@Editor/Cells';
 import { formatTime } from '@/components/Scenario/State/LibraryState/utils';
 import { Card, CardContent } from '@/components/UI/card';
 import type { NotebookHistoryCardProps } from './types';
+import { usePersistence } from '@Services/persistence/PersistenceContext';
 
 interface PreviewCell {
   id: string;
@@ -22,6 +21,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
   ({ notebook, onSelect, onToggleStar }) => {
     const [previewCells, setPreviewCells] = useState<PreviewCell[]>([]);
     const [loading, setLoading] = useState(false);
+    const persistence = usePersistence();
 
     // Load notebook cells for preview
     useEffect(() => {
@@ -30,7 +30,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
       const loadCells = async () => {
         try {
           setLoading(true);
-          const main = await FileORM.getFile(notebook.id, `notebook_${notebook.id}.json`);
+          const main = await persistence.files.getFile(notebook.id, `notebook_${notebook.id}.json`);
           const raw = main?.content;
 
           if (!raw) {
@@ -87,7 +87,7 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
       return () => {
         cancelled = true;
       };
-    }, [notebook.id]);
+    }, [notebook.id, persistence]);
 
     const handleCardClick = useCallback(async () => {
       try {
@@ -150,15 +150,15 @@ const NotebookHistoryCard: React.FC<NotebookHistoryCardProps> = memo(
       try {
         switch (cell.type.toLowerCase()) {
           case 'markdown':
-            return <MarkdownCell key={cell.id} {...cellProps} />;
+            return <MarkdownCell key={cell.id} {...(cellProps as any)} />;
           case 'code':
-            return <CodeCell key={cell.id} {...cellProps} />;
+            return <CodeCell key={cell.id} {...(cellProps as any)} />;
           case 'hybrid':
-            return <HybridCell key={cell.id} {...cellProps} />;
+            return <HybridCell key={cell.id} {...(cellProps as any)} />;
           case 'image':
-            return <ImageCell key={cell.id} {...cellProps} />;
+            return <ImageCell key={cell.id} {...(cellProps as any)} />;
           case 'link':
-            return <LinkCell key={cell.id} {...cellProps} />;
+            return <LinkCell key={cell.id} {...(cellProps as any)} />;
           default:
             return (
               <div key={cell.id} className="text-xs text-gray-600 truncate">

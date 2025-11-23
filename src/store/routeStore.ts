@@ -3,6 +3,7 @@
 
 import { create } from 'zustand';
 import { storeLog } from '@Utils/logger';
+import { getCurrentAppPath, updateAppHistory, isHashRoutingEnabled } from '@Utils/routerMode';
 import type { AppView } from '@Store/models';
 
 export interface RouteState {
@@ -24,7 +25,7 @@ export interface RouteState {
 
 // 获取初始路由状态，避免总是从 empty 开始
 const getInitialRouteState = () => {
-  const currentPath = window.location.pathname;
+  const currentPath = getCurrentAppPath();
   storeLog.debug('RouteStore: Initializing with path', { currentPath });
 
   if (currentPath === '/') {
@@ -71,15 +72,16 @@ const useRouteStore = create<RouteState>((set, get) => ({
   setView: (view: AppView) => set({ currentView: view }),
   setNotebookId: (id: string | null) => set({ currentNotebookId: id }),
   setRoute: (route: string) => {
-    set({ currentRoute: route });
+    const normalized = route.startsWith('/') ? route : `/${route}`;
+    set({ currentRoute: normalized });
 
     // Auto-detect view based on route
-    if (route === '/') {
+    if (normalized === '/') {
       set({ currentView: 'empty' });
-    } else if (route === '/FoKn/Library') {
+    } else if (normalized === '/FoKn/Library') {
       set({ currentView: 'library' });
-    } else if (route.startsWith('/workspace/')) {
-      const notebookId = route.split('/workspace/')[1];
+    } else if (normalized.startsWith('/workspace/')) {
+      const notebookId = normalized.split('/workspace/')[1];
       set({
         currentView: 'workspace',
         currentNotebookId: notebookId,
@@ -88,24 +90,24 @@ const useRouteStore = create<RouteState>((set, get) => ({
   },
 
   navigateToEmpty: () => {
-    window.history.pushState(null, '', '/');
+    updateAppHistory('/');
     get().setRoute('/');
   },
 
   navigateToLibrary: () => {
-    window.history.pushState(null, '', '/FoKn/Library');
+    updateAppHistory('/FoKn/Library');
     get().setRoute('/FoKn/Library');
   },
 
   navigateToWorkspace: (notebookId: string) => {
     const route = `/workspace/${notebookId}`;
-    window.history.pushState(null, '', route);
+    updateAppHistory(route);
     get().setRoute(route);
   },
 
   navigateToPipeline: () => {
     const route = '/pipeline';
-    window.history.pushState(null, '', route);
+    updateAppHistory(route);
     get().setRoute(route);
   },
 }));

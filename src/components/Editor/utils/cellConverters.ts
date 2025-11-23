@@ -25,7 +25,8 @@ export function generateCellId() {
  */
 export function convertCellsToHtml(cells: Cell[]) {
   if (!cells || cells.length === 0) {
-    return '<p></p>'; // 空内容
+    // Schema requires 'title block+', so return default title and empty paragraph
+    return '<div data-type="title">Untitled</div><p></p>';
   }
 
   if (DEBUG) {
@@ -38,6 +39,7 @@ export function convertCellsToHtml(cells: Cell[]) {
 
   // 子标题ID唯一化计数器：baseId -> (slug -> count)
   const headingSlugCounter = new Map<string, Map<string, number>>();
+  let titleGenerated = false;
 
   const htmlParts = cells.map((cell, index) => {
     if (cell.type === 'code' || cell.type === 'hybrid') {
@@ -55,6 +57,7 @@ export function convertCellsToHtml(cells: Cell[]) {
         // Extract title text (remove # prefix)
         const titleText = cell.content.trim().replace(/^#+\s*/, '');
 
+        titleGenerated = true;
         // Create title node with cover, icon, and cellId attributes
         return `<div data-type="title" data-cover="${cover || ''}" data-icon="${icon || ''}" data-cell-id="${cell.id}">${titleText}</div>`;
       }
@@ -99,7 +102,14 @@ export function convertCellsToHtml(cells: Cell[]) {
     return '';
   });
 
-  const result = htmlParts.join('\n');
+  let result = htmlParts.join('\n');
+
+  // Ensure a title exists at the beginning if one wasn't generated from the first cell
+  if (!titleGenerated) {
+    if (DEBUG) console.log('⚠️ No title found in first cell, injecting default Untitled title');
+    result = `<div data-type="title">Untitled</div>\n${result}`;
+  }
+
   if (DEBUG) console.log('=== convertCellsToHtml 完成 ===');
   return result;
 }

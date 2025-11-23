@@ -1,55 +1,65 @@
 // LibraryState/StorageCleanupTool.tsx
 // Debug tool for cleaning up old cell files and testing storage
 
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Space, Typography, Alert, Spin, Statistic, Row, Col } from 'antd';
-import { DeleteOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Button, Card, Progress, Statistic, Alert, Space, Typography, Spin, Row, Col } from 'antd';
+import {
+  DeleteOutlined,
+  ReloadOutlined,
+  InfoCircleOutlined,
+  WarningOutlined,
+} from '@ant-design/icons';
 import StorageCleanup from '@Services/storageCleanup';
+import { usePersistence } from '../../../../services/persistence/PersistenceContext';
 
 const { Title, Text, Paragraph } = Typography;
 
-interface CleanupStats {
-  notebooksWithCellFiles: number;
-  totalCellFiles: number;
-  totalSizeKB: number;
-}
-
 export const StorageCleanupTool: React.FC<{ visible: boolean }> = ({ visible }) => {
-  const [stats, setStats] = useState<CleanupStats | null>(null);
+  const [stats, setStats] = useState<{
+    notebooksWithCellFiles: number;
+    totalCellFiles: number;
+    totalSizeKB: number;
+  } | null>(null);
+
   const [loading, setLoading] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState<{ cleaned: number; errors: number } | null>(
-    null
-  );
+  const [cleaning, setCleaning] = useState(false);
+  const [result, setResult] = useState<{ cleaned: number; errors: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const persistence = usePersistence();
 
   const loadStats = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const statistics = await StorageCleanup.getCellFileStatistics();
+      const statistics = await StorageCleanup.getCellFileStatistics(persistence);
       setStats(statistics);
     } catch (err) {
+      console.error('Failed to load statistics:', err);
       setError(`Failed to load statistics: ${err}`);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (visible) {
+      loadStats();
+    }
+  }, [visible, persistence]);
+
   const runCleanup = async () => {
+    setCleaning(true);
+    setError(null);
+    setResult(null);
     try {
-      setLoading(true);
-      setError(null);
-      setCleanupResult(null);
-
-      const result = await StorageCleanup.cleanupAllNotebookCellFiles();
-      setCleanupResult(result);
-
-      // Refresh stats after cleanup
+      const cleanupResult = await StorageCleanup.cleanupAllNotebookCellFiles(persistence);
+      setResult(cleanupResult);
       await loadStats();
     } catch (err) {
-      setError(`Failed to run cleanup: ${err}`);
+      console.error('Failed to cleanup:', err);
+      setError(`Failed to cleanup: ${err}`);
     } finally {
-      setLoading(false);
+      setCleaning(false);
     }
   };
 
@@ -87,10 +97,10 @@ export const StorageCleanupTool: React.FC<{ visible: boolean }> = ({ visible }) 
 
         {error && <Alert message="Error" description={error} type="error" showIcon />}
 
-        {cleanupResult && (
+        {result && (
           <Alert
             message="Cleanup Complete"
-            description={`Successfully cleaned ${cleanupResult.cleaned} files with ${cleanupResult.errors} errors.`}
+            description={`Successfully cleaned ${result.cleaned} files with ${result.errors} errors.`}
             type="success"
             showIcon
           />
@@ -137,7 +147,7 @@ export const StorageCleanupTool: React.FC<{ visible: boolean }> = ({ visible }) 
             danger
             icon={<DeleteOutlined />}
             onClick={runCleanup}
-            loading={loading}
+            loading={loading || cleaning}
             disabled={!stats || stats.totalCellFiles === 0}
           >
             Clean Up Cell Files

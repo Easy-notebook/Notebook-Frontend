@@ -1,8 +1,8 @@
 // services/streamHandler.ts
 import globalUpdateInterface from '../interfaces/globalUpdateInterface';
-import { AgentMemoryService, AgentType } from './agentMemoryService';
 import useStore from '@Store/notebookStore';
 import { agentLog, networkLog, uiLog } from '@Utils/logger';
+import { AgentMemoryService, AgentType } from './agentMemoryService';
 // 跟踪正在生成的 cells 的映射表
 const generationCellTracker = new Map<string, string>(); // commandId -> cellId
 

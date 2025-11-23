@@ -424,6 +424,34 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     [toast, notebookId]
   );
 
+  const switchToNotebookMode = useCallback(() => {
+    const ps: any = usePreviewStore.getState();
+
+    console.log(`FileExplorer: Switching to notebook mode for ${notebookId}`);
+    console.log(`FileExplorer: Current previewMode: ${ps?.previewMode}`);
+
+    // 1. 导航到workspace路由
+    if (notebookId) {
+      // 动态导入 useRouteStore 避免循环依赖
+      import('@Store/routeStore').then(({ default: useRouteStore }) => {
+        useRouteStore.getState().navigateToWorkspace(notebookId);
+      });
+    }
+
+    // 2. 切换到notebook (现在会自动设置previewMode和清除activeFile)
+    if (typeof ps?.switchToNotebook === 'function' && notebookId) {
+      ps.switchToNotebook(notebookId);
+    } else {
+      // 如果switchToNotebook不存在，手动处理
+      ps.setActiveFile(null);
+      if (ps?.previewMode === 'file' && typeof ps?.changePreviewMode === 'function') {
+        ps.changePreviewMode();
+      }
+    }
+
+    console.log(`FileExplorer: Notebook switch initiated for ${notebookId}`);
+  }, [notebookId]);
+
   const handleFileSelect = useCallback(
     async (file: FileNodeFile) => {
       if (!file) return;
@@ -624,34 +652,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
   const handleCancelUpload = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
-
-  const switchToNotebookMode = useCallback(() => {
-    const ps: any = usePreviewStore.getState();
-
-    console.log(`FileExplorer: Switching to notebook mode for ${notebookId}`);
-    console.log(`FileExplorer: Current previewMode: ${ps?.previewMode}`);
-
-    // 1. 导航到workspace路由
-    if (notebookId) {
-      // 动态导入 useRouteStore 避免循环依赖
-      import('@Store/routeStore').then(({ default: useRouteStore }) => {
-        useRouteStore.getState().navigateToWorkspace(notebookId);
-      });
-    }
-
-    // 2. 切换到notebook (现在会自动设置previewMode和清除activeFile)
-    if (typeof ps?.switchToNotebook === 'function' && notebookId) {
-      ps.switchToNotebook(notebookId);
-    } else {
-      // 如果switchToNotebook不存在，手动处理
-      ps.setActiveFile(null);
-      if (ps?.previewMode === 'file' && typeof ps?.changePreviewMode === 'function') {
-        ps.changePreviewMode();
-      }
-    }
-
-    console.log(`FileExplorer: Notebook switch initiated for ${notebookId}`);
-  }, [notebookId]);
 
   const gapClass = widthTier === 'narrow' ? 'gap-1.5' : 'gap-2';
   const showActions = widthTier !== 'narrow';

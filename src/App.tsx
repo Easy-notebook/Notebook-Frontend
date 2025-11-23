@@ -5,6 +5,7 @@ import AppRouter from './router/AppRouter';
 import { getAntdTheme } from './theme/antdTheme';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { initializeWorkflowSystem } from './components/Scenario/Workflow/utils/workflowInitializer';
+import { PersistenceProvider } from './services/persistence/PersistenceContext';
 
 // 配置全局 message 样式和位置
 message.config({
@@ -309,7 +310,9 @@ function AppContent(): JSX.Element {
 function App(): JSX.Element {
   return (
     <ThemeProvider>
-      <AppContent />
+      <PersistenceProvider>
+        <AppContent />
+      </PersistenceProvider>
     </ThemeProvider>
   );
 }

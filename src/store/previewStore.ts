@@ -1,17 +1,11 @@
 // store/previewStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { FileContentResponse } from '@Services/notebookServices';
 import { notebookApiIntegration } from '@Services/notebookServices';
 import { fileLog, storeLog } from '@Utils/logger';
-import {
-  FileCache,
-  initializeStorage,
-  getFileType,
-  getActivePreviewMode,
-  getMimeType,
-  SplitPreviewCache,
-  TabCache,
-} from '@Storage/index';
+import { persistenceService } from '@Services/persistence/instance';
+import { getFileType, getActivePreviewMode, getMimeType } from '@Storage/index';
 import type {
   PreviewMode,
   FileObject,
@@ -19,7 +13,6 @@ import type {
   ActivePreviewMode,
   PreviewFile,
   FileMetadata,
-  FileApiResponse,
 } from '@Store/models';
 
 // Backward-compat re-exports for consumers importing from previewStore
@@ -114,7 +107,7 @@ export type PreviewStore = PreviewStoreState & PreviewStoreActions;
 // --- NotebookId-first small helpers (local, decoupled) ---
 const FILE_ID_SEP = '::';
 const makeFileId = (notebookId: string, filePath: string) =>
-  `${notebookId}${FILE_ID_SEP}${filePath}`;
+  `${notebookId}${FILE_ID_SEP}${filePath} `;
 const parseFileId = (fileId: string): { notebookId: string; filePath: string } | null => {
   const idx = fileId.indexOf(FILE_ID_SEP);
   if (idx === -1) return null;
@@ -172,7 +165,7 @@ const usePreviewStore = create<PreviewStore>()(
       // Initialize the store
       init: async () => {
         try {
-          await initializeStorage();
+          await persistenceService.initialize();
 
           // Clear any stale currentPreviewFiles from localStorage persistence
           // These should be loaded fresh from TabCache or backend
@@ -199,9 +192,9 @@ const usePreviewStore = create<PreviewStore>()(
           );
 
           /*
-          // Restore notebooks from cache after page refresh
-          const cachedNotebooks = await FileCache.getAllNotebooks();
-          storeLog.info(`Restored notebooks from cache`, {
+          // Check if we have any notebooks in cache
+          const cachedNotebooks = await persistenceService.notebooks.getAllNotebooks();
+          if (cachedNotebooks.length > 0) {fo(`Restored notebooks from cache`, {
             count: cachedNotebooks.length,
             notebooks: cachedNotebooks,
           });
@@ -225,7 +218,7 @@ const usePreviewStore = create<PreviewStore>()(
             useNotebookStore
               .getState()
               .setNotebookTitle(
-                mostRecentNotebook.name || `Notebook ${mostRecentNotebook.id.slice(0, 8)}`
+                mostRecentNotebook.name || `Notebook ${ mostRecentNotebook.id.slice(0, 8) } `
               );
 
             // Also set the current notebook ID in preview store
@@ -234,9 +227,9 @@ const usePreviewStore = create<PreviewStore>()(
             storeLog.info('Restored notebook context', { notebookId: mostRecentNotebook.id });
 
             // Also restore cached files for this notebook
-            try {
-              const cachedFiles = await FileCache.getFilesForNotebook(mostRecentNotebook.id);
-              storeLog.info('Restored cached files for notebook', {
+            if (mostRecentNotebook) {
+              const cachedFiles = await persistenceService.files.getFilesForNotebook(mostRecentNotebook.id);
+              if (cachedFiles.length > 0) {fo('Restored cached files for notebook', {
                 notebookId: mostRecentNotebook.id,
                 count: cachedFiles.length,
               });
@@ -281,7 +274,7 @@ const usePreviewStore = create<PreviewStore>()(
         const fileId = makeFileId(notebookId, filePath);
 
         // Check if file exists in cache with optimized query
-        const cachedFile = await FileCache.getFile(notebookId, filePath);
+        const cachedFile = await persistenceService.files.getFile(notebookId, filePath);
         const lastModifiedBackend = fileMetadata.lastModified || null;
         let file = fileMetadata.file;
         if (!file) {
@@ -303,22 +296,23 @@ const usePreviewStore = create<PreviewStore>()(
 
         // Determine if we need to fetch from backend
         const needsFetch =
-          !cachedFile || (lastModifiedBackend && cachedFile.lastModified !== lastModifiedBackend);
+          !cachedFile ||
+          (lastModifiedBackend && cachedFile.metadata.lastModified !== lastModifiedBackend);
 
         if (needsFetch) {
           try {
             // Try multiple path variations for better compatibility
-            let response: FileApiResponse | null = null;
+            let response: FileContentResponse | null = null;
             const pathsToTry = [
               filePath,
-              `assets/${filePath}`,
+              `assets / ${filePath} `,
               filePath.split('/').pop() || filePath, // Just filename
             ];
 
             for (const pathToTry of pathsToTry) {
               try {
                 response = await notebookApiIntegration.getFile(notebookId, pathToTry);
-                if (response && !response.error) {
+                if (response && response.status !== 'error') {
                   fileLog.debug('File found at path', {
                     originalPath: filePath,
                     resolvedPath: pathToTry,
@@ -331,12 +325,13 @@ const usePreviewStore = create<PreviewStore>()(
             }
 
             // If no path worked, throw the original error
+            // Get file from backend
             if (!response) {
               response = await notebookApiIntegration.getFile(notebookId, filePath);
             }
 
-            if (!response || response.error) {
-              throw new Error(response?.error || 'Failed to fetch file');
+            if (!response || response.status === 'error') {
+              throw new Error(response?.message || 'Failed to fetch file for split preview');
             }
 
             // Determine the file content and type
@@ -359,21 +354,21 @@ const usePreviewStore = create<PreviewStore>()(
               } else {
                 // Convert to data URL if needed
                 const fileExt = filePath.split('.').pop()?.toLowerCase();
-                content = response.dataUrl || `data:image/${fileExt};base64,${content}`;
+                content = `data: image / ${fileExt}; base64, ${content} `;
               }
             } else if (fileType === 'pdf') {
               // For PDFs, build data URL. If content empty, fall back to served assets URL
               if (typeof content === 'string' && content.startsWith('data:')) {
                 // Already data URL
               } else {
-                const dataUrl = content ? `data:application/pdf;base64,${content}` : '';
+                const dataUrl = content ? `data: application / pdf; base64, ${content} ` : '';
                 let assetsUrl = '';
                 try {
                   const base = window.Backend_BASE_URL
                     ? window.Backend_BASE_URL.replace(/\/$/, '')
                     : '';
                   const name = filePath.split('/').pop() || filePath;
-                  assetsUrl = `${base}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
+                  assetsUrl = `${base} /assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
                 } catch {
                   // Ignore URL construction errors
                 }
@@ -414,11 +409,19 @@ const usePreviewStore = create<PreviewStore>()(
               content,
               type: fileType,
               lastModified: String(lastModifiedBackend || new Date().toISOString()),
-              size: response.size || 0,
+              size: content.length || 0,
             };
 
             // Save to optimized IndexedDB
-            await FileCache.saveFile(fileObjectData);
+            await persistenceService.files.saveFile({
+              notebookId: fileObjectData.notebookId,
+              filePath: fileObjectData.path,
+              fileName: fileObjectData.name,
+              content: fileObjectData.content,
+              fileType: fileObjectData.type,
+              lastModified: fileObjectData.lastModified,
+              size: fileObjectData.size,
+            });
 
             // Create full file object for state
             const fileObject: FileObject = {
@@ -531,9 +534,26 @@ const usePreviewStore = create<PreviewStore>()(
           }
         } else {
           // File found in cache
-          const cachedMode = getActivePreviewMode(cachedFile.type as FileType);
+          // File found in cache
+          const cachedMetadata = cachedFile.metadata;
+          const cachedMode = getActivePreviewMode(cachedMetadata.fileType as FileType);
+
+          const fileObject: FileObject = {
+            id: cachedMetadata.id,
+            notebookId: cachedMetadata.notebookId,
+            path: cachedMetadata.filePath,
+            name: cachedMetadata.fileName,
+            content: cachedFile.content || '',
+            type: cachedMetadata.fileType,
+            lastModified: cachedMetadata.lastModified,
+            size: cachedMetadata.size,
+            cachedAt: cachedMetadata.cachedAt,
+            accessCount: cachedMetadata.accessCount,
+            lastAccessed: cachedMetadata.lastAccessedAt,
+          };
+
           set({
-            activeFile: cachedFile,
+            activeFile: fileObject,
             activePreviewMode: cachedMode,
             isLoading: false,
           });
@@ -578,7 +598,7 @@ const usePreviewStore = create<PreviewStore>()(
               });
             });
 
-          return cachedFile;
+          return fileObject;
         }
       },
 
@@ -714,17 +734,33 @@ const usePreviewStore = create<PreviewStore>()(
           }
 
           // Check cache first
-          const cachedFile = await FileCache.getFile(notebookId, filePath);
+          const cachedFile = await persistenceService.files.getFile(notebookId, filePath);
           if (cachedFile) {
             fileLog.info('Found file in cache', { filePath });
+
+            const cachedMetadata = cachedFile.metadata;
             // Set active preview mode based on file type
-            const previewMode = getActivePreviewMode(cachedFile.type as FileType);
+            const previewMode = getActivePreviewMode(cachedMetadata.fileType as FileType);
+
+            const fileObject: FileObject = {
+              id: cachedMetadata.id,
+              notebookId: cachedMetadata.notebookId,
+              path: cachedMetadata.filePath,
+              name: cachedMetadata.fileName,
+              content: cachedFile.content || '',
+              type: cachedMetadata.fileType,
+              lastModified: cachedMetadata.lastModified,
+              size: cachedMetadata.size,
+              cachedAt: cachedMetadata.cachedAt,
+              accessCount: cachedMetadata.accessCount,
+              lastAccessed: cachedMetadata.lastAccessedAt,
+            };
 
             set({
-              activeFile: cachedFile,
+              activeFile: fileObject,
               activePreviewMode: previewMode,
             });
-            return cachedFile;
+            return fileObject;
           }
 
           // Try to fetch from server, but handle errors gracefully
@@ -771,7 +807,7 @@ const usePreviewStore = create<PreviewStore>()(
       // Delete a file from cache
       deleteFileFromCache: async (notebookId: string, filePath: string): Promise<boolean> => {
         try {
-          await FileCache.deleteFile(notebookId, filePath);
+          await persistenceService.files.deleteFile(notebookId, filePath);
 
           // Update state if needed
           const fileId = makeFileId(notebookId, filePath);
@@ -793,7 +829,13 @@ const usePreviewStore = create<PreviewStore>()(
       // Clear all files for a notebook
       clearCacheForNotebook: async (notebookId: string): Promise<boolean> => {
         try {
-          await FileCache.clearNotebookCache(notebookId);
+          // Note: persistenceService doesn't have clearNotebookCache exposed directly on files repo yet
+          // But we can iterate and delete or add a method.
+          // For now, let's assume we might need to add it or use getFilesForNotebook + delete
+          const files = await persistenceService.files.getFilesForNotebook(notebookId);
+          await Promise.all(
+            files.map((f) => persistenceService.files.deleteFile(notebookId, f.metadata.filePath))
+          );
 
           // Update state
           const { currentPreviewFiles } = get();
@@ -853,7 +895,7 @@ const usePreviewStore = create<PreviewStore>()(
 
         const updated: FileObject = { ...file, content };
 
-        // Transform to match FileCache.saveFile expected format
+        // Transform to match persistenceService expected format
         const cacheData = {
           notebookId: updated.notebookId,
           filePath: updated.path,
@@ -868,7 +910,16 @@ const usePreviewStore = create<PreviewStore>()(
           return null;
         }
 
-        await FileCache.saveFile(cacheData);
+        await persistenceService.files.saveFile({
+          notebookId: cacheData.notebookId,
+          filePath: cacheData.filePath,
+          fileName: cacheData.fileName,
+          content: cacheData.content,
+          // We don't have fileType in cacheData, but we can derive it or pass it if available in updated
+          fileType: updated.type,
+          lastModified: cacheData.lastModified,
+          size: cacheData.size,
+        });
         set({ activeFile: updated });
         return updated;
       },
@@ -1122,7 +1173,7 @@ const usePreviewStore = create<PreviewStore>()(
           const fileId = makeFileId(notebookId, filePath);
 
           // Check if file exists in split preview cache (independent from tabs)
-          const cachedFile = await SplitPreviewCache.getFile(notebookId, filePath);
+          const cachedFile = await persistenceService.splitFiles.getFile(notebookId, filePath);
           const lastModifiedBackend = fileMetadata.lastModified || null;
 
           let file = fileMetadata.file;
@@ -1152,13 +1203,13 @@ const usePreviewStore = create<PreviewStore>()(
             fileLog.info('Split preview: Fetching from backend', { filePath });
 
             // Get file from backend
-            const response: FileApiResponse = await notebookApiIntegration.getFile(
+            const response: FileContentResponse = await notebookApiIntegration.getFile(
               notebookId,
               filePath
             );
 
-            if (!response || response.error) {
-              throw new Error(response?.error || 'Failed to fetch file for split preview');
+            if (!response || response.status === 'error') {
+              throw new Error(response?.message || 'Failed to fetch file for split preview');
             }
 
             // Process file content based on type (similar to regular preview)
@@ -1170,7 +1221,7 @@ const usePreviewStore = create<PreviewStore>()(
                 // Already in correct format
               } else {
                 const fileExt = filePath.split('.').pop()?.toLowerCase();
-                content = response.dataUrl || `data:image/${fileExt};base64,${content}`;
+                content = `data:image/${fileExt};base64,${content}`;
               }
             } else if (fileType === 'pdf') {
               if (typeof content === 'string' && content.startsWith('data:')) {
@@ -1218,7 +1269,7 @@ const usePreviewStore = create<PreviewStore>()(
             };
 
             // Cache the file for future use in split preview cache (independent from tabs)
-            await SplitPreviewCache.saveFile(notebookId, filePath, {
+            await persistenceService.splitFiles.saveFile(notebookId, filePath, {
               name: fileObject.name,
               content: fileObject.content,
               type: fileObject.type,
@@ -1300,7 +1351,7 @@ const usePreviewStore = create<PreviewStore>()(
               ? state.activeFile.id
               : null;
 
-          await TabCache.saveTabState(targetNotebookId, scopedTabs, activeTabId);
+          await persistenceService.tabs.saveTabState(targetNotebookId, scopedTabs, activeTabId);
           storeLog.info('Saved tab state for notebook', {
             notebookId: targetNotebookId,
             tabCount: scopedTabs.length,
@@ -1314,7 +1365,7 @@ const usePreviewStore = create<PreviewStore>()(
       // Load tab state from storage
       loadTabState: async (notebookId: string): Promise<void> => {
         try {
-          const tabState = await TabCache.getTabState(notebookId);
+          const tabState = await persistenceService.tabs.getTabState(notebookId);
 
           if (tabState && tabState.tabList.length > 0) {
             storeLog.info('Loading saved tab state for notebook', {
@@ -1344,7 +1395,8 @@ const usePreviewStore = create<PreviewStore>()(
                 const { notebookId: tabNotebookId, filePath } = parsed;
 
                 // Check if file exists in cache or can be fetched
-                const cachedFile = await FileCache.getFile(tabNotebookId, filePath);
+
+                const cachedFile = await persistenceService.files.getFile(tabNotebookId, filePath);
                 if (cachedFile) {
                   // File exists in cache, add to valid tabs
                   validTabs.push({
@@ -1369,7 +1421,7 @@ const usePreviewStore = create<PreviewStore>()(
                         tabNotebookId,
                         pathToTry
                       );
-                      if (response && !response.error) {
+                      if (response && response.status !== 'error') {
                         // File exists on backend, add to valid tabs
                         validTabs.push({
                           id: tab.id,
@@ -1404,7 +1456,7 @@ const usePreviewStore = create<PreviewStore>()(
               } catch (validationError) {
                 storeLog.warn('Tab validation failed', {
                   tabPath: tab.path,
-                  error: validationError.message,
+                  error: (validationError as Error).message,
                 });
                 invalidTabIds.push(tab.id);
               }
@@ -1424,7 +1476,11 @@ const usePreviewStore = create<PreviewStore>()(
               !invalidTabIds.includes(tabState.activeTabId)
             ) {
               try {
-                const activeFile = await get().loadFileById(tabState.activeTabId);
+                // Restore active tab if it exists
+                let activeFile = null;
+                if (tabState.activeTabId) {
+                  activeFile = await get().loadFileById(tabState.activeTabId);
+                }
                 if (activeFile) {
                   const activePreviewMode = getActivePreviewMode(activeFile.type as FileType);
                   set({
@@ -1447,10 +1503,10 @@ const usePreviewStore = create<PreviewStore>()(
             // Update cache to remove invalid tabs
             if (invalidTabIds.length > 0) {
               try {
-                await TabCache.saveTabState(
+                await persistenceService.tabs.saveTabState(
                   notebookId,
                   validTabs,
-                  activeTabRestored ? tabState.activeTabId : null
+                  activeTabRestored ? tabState.activeTabId || null : null
                 );
                 storeLog.info('Updated tab cache, removed invalid tabs', {
                   removedCount: invalidTabIds.length,

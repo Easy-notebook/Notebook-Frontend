@@ -13,7 +13,9 @@ export const useRouteSync = () => {
   const { setRoute, currentView, currentNotebookId } = useRouteStore();
   // Keep this to maintain hook order, even though we don't use loadFromDatabase anymore
   useNotebookStore();
-  const { switchToNotebook } = usePreviewStore();
+  const switchToNotebook = usePreviewStore((state) => state.switchToNotebook);
+  const persistedNotebookId = usePreviewStore((state) => state.currentNotebookId);
+  const skipAutoRestore = usePreviewStore((state) => state.skipAutoRestore);
 
   // 追踪最后加载的 notebookId,避免重复加载
   const lastLoadedNotebookId = useRef<string | null>(null);
@@ -99,24 +101,23 @@ export const useRouteSync = () => {
   // 在首页刷新时，若有持久化的当前notebookId，则自动恢复到工作区
   useEffect(() => {
     try {
-      if (location.pathname === '/') {
-        const persistedId = usePreviewStore.getState().currentNotebookId;
-        if (persistedId) {
-          const routeState = useRouteStore.getState();
-          // 仅当路由未指向该notebook时才导航，避免循环
-          if (
-            routeState.currentNotebookId !== persistedId ||
-            routeState.currentView !== 'workspace'
-          ) {
-            uiLog.info('Auto-restoring last notebook after refresh', { notebookId: persistedId });
-            routeState.navigateToWorkspace(persistedId);
-          }
+      if (location.pathname === '/' && persistedNotebookId && !skipAutoRestore) {
+        const routeState = useRouteStore.getState();
+        // 仅当路由未指向该notebook时才导航，避免循环
+        if (
+          routeState.currentNotebookId !== persistedNotebookId ||
+          routeState.currentView !== 'workspace'
+        ) {
+          uiLog.info('Auto-restoring last notebook after refresh', {
+            notebookId: persistedNotebookId,
+          });
+          routeState.navigateToWorkspace(persistedNotebookId);
         }
       }
     } catch (error) {
       uiLog.warn('Auto-restore on refresh failed', { error });
     }
-  }, [location.pathname]);
+  }, [location.pathname, persistedNotebookId, skipAutoRestore]);
 
   return {
     currentView,

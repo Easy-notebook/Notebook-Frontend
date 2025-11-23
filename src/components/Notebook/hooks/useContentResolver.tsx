@@ -3,6 +3,7 @@
 
 import { useCallback } from 'react';
 import { uiLog } from '@Utils/logger';
+import { getCurrentAppPath } from '@Utils/routerMode';
 import TabbedPreviewApp from '../features/viewers/TabbedPreviewApp';
 import { EmptyStatePage, LibraryStatePage, WorkspacePage, LoadingPage } from '../pages';
 import DSLCPipeline from '@/components/Scenario/Workflow/Pipeline';
@@ -120,7 +121,7 @@ export const useContentResolver = ({
 
       default: {
         // URL-based fallback
-        const currentPath = window.location.pathname;
+        const currentPath = getCurrentAppPath();
         uiLog.debug('Default route case triggered, checking URL directly', { currentPath });
 
         if (currentPath === '/') {
