@@ -8,7 +8,7 @@ import { Editor } from '@tiptap/react';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from '@Editor/utils/cellConverters';
 
-const DEBUG = false;
+const DEBUG = true;
 
 interface UseEditorSyncProps {
   editor: Editor | null;

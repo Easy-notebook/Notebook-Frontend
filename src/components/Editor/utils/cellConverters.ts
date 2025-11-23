@@ -11,7 +11,7 @@ import {
 } from './markdownConverters';
 
 // Debug flag - set to true only when debugging
-const DEBUG = false;
+const DEBUG = true;
 
 /**
  * 生成唯一的cell ID
@@ -108,6 +108,10 @@ export function convertCellsToHtml(cells: Cell[]) {
   if (!titleGenerated) {
     if (DEBUG) console.log('⚠️ No title found in first cell, injecting default Untitled title');
     result = `<div data-type="title">Untitled</div>\n${result}`;
+  } else if (cells.length === 1) {
+    // If we have a title but no other cells, append an empty paragraph to satisfy 'title block+' schema
+    if (DEBUG) console.log('⚠️ Only title found, appending empty paragraph to satisfy schema');
+    result += '\n<p></p>';
   }
 
   if (DEBUG) console.log('=== convertCellsToHtml 完成 ===');

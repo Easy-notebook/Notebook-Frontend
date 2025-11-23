@@ -9,7 +9,7 @@ import type { Cell } from '@Store/models';
 import { convertEditorStateToCells } from '@Editor/utils/cellConverters';
 import useStore from '@Store/notebookStore';
 
-const DEBUG = false;
+const DEBUG = true;
 
 interface UseEditorEventsProps {
   cells: Cell[];
