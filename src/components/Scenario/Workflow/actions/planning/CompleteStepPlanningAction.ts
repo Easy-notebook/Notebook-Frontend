@@ -17,7 +17,8 @@ export class CompleteStepPlanningAction extends ActionBase {
    *   - step_id: Step identifier
    */
   execute(step: ExecutionStep): void {
-    const { step_id } = step;
+    // Backend sends step_id, but convertActionToExecutionStep converts it to stepId
+    const step_id = step.stepId || step.step_id;
 
     if (!step_id) {
       console.error('[CompleteStepPlanningAction] Missing step_id:', step);
@@ -32,14 +33,15 @@ export class CompleteStepPlanningAction extends ActionBase {
 
     // Find and mark step as planning complete
     const currentStep = stateJSON.observation.location.progress.steps.planned?.find(
-      (s: any) => s.step_id === step_id
+      (s) => s.step_id === step_id
     );
 
     if (currentStep) {
       currentStep.planning_complete = true;
     }
 
-    // Transition to BEHAVIOR_RUNNING, ready to call /generating
+    // Transition to BEHAVIOR_RUNNING, ready to call /generating API
+    // This follows the same pattern as CompleteWorkflowPlanningAction and CompleteStagePlanningAction
     if (stateJSON.state.FSM.state === 'STEP_RUNNING') {
       stateJSON.state.FSM.state = 'BEHAVIOR_RUNNING';
       console.log('[CompleteStepPlanningAction] ✅ Transitioned to BEHAVIOR_RUNNING');

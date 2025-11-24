@@ -7,13 +7,55 @@ export class StartStepHandler extends BaseTransitionHandler {
   }
 
   canHandle(r: any): boolean {
-    return typeof r === 'object' && 'steps' in r && Array.isArray(r.steps);
+    // Legacy format: steps array
+    if (typeof r === 'object' && 'steps' in r && Array.isArray(r.steps)) return true;
+
+    // Streaming format: actions array
+    if (typeof r === 'object' && 'actions' in r && Array.isArray(r.actions)) {
+      // Check if any action is a step planning action
+      return r.actions.some(
+        (a: any) =>
+          a.type === 'plan_step' || a.type === 'add_step' || a.type === 'complete_stage_planning' // This might be the trigger
+      );
+    }
+    return false;
   }
 
-  apply(state: Record<string, any>, r: any): Record<string, any> {
+  async apply(state: Record<string, any>, r: any): Promise<Record<string, any>> {
     const ns = this.deepCopyState(state);
-    const steps = r.steps || [];
-    if (!steps.length) return ns;
+    let steps = r.steps || [];
+
+    // Extract steps from actions if using streaming format
+    if (!steps.length && r.actions && Array.isArray(r.actions)) {
+      console.log('[StartStep] Extracting steps from streaming actions');
+
+      // Filter for plan_step actions
+      const stepActions = r.actions.filter(
+        (a: any) => a.type === 'plan_step' || a.type === 'add_step'
+      );
+
+      if (stepActions.length > 0) {
+        steps = stepActions.map((a: any) => ({
+          step_id: a.step_id || a.stepId,
+          title: a.title || a.content || '',
+          goal: a.goal || a.task || '',
+          verified_artifacts: a.verified_artifacts || a.outputs || {},
+        }));
+
+        // Also check for focus in actions
+        if (!r.focus) {
+          const focusAction = r.actions.find((a: any) => a.type === 'update_focus');
+          if (focusAction) {
+            r.focus = focusAction.focus || focusAction.content;
+          }
+        }
+      }
+    }
+
+    if (!steps.length) {
+      console.warn('[StartStep] No steps found in response');
+      return ns;
+    }
 
     const p = this.getProgress(ns);
     if (!p.steps) p.steps = {};
@@ -33,7 +75,7 @@ export class StartStepHandler extends BaseTransitionHandler {
 
     this.updateLocationCurrent(ns, { step_id: fs.step_id, behavior_id: 'clear' });
     this.updateFSMState(ns, 'STEP_RUNNING', 'START_STEP');
-    if (fs.title) this.executeAction('new_step', fs.title);
+    if (fs.title) await this.executeAction('new_step', fs.title);
 
     // Note: Steps data is already stored in ns.observation.location.progress.steps
     // UI components should read directly from stateJSON instead of a separate store

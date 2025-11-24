@@ -18,13 +18,18 @@ import type { WorkflowAPIClientConfig } from '@Store/models';
 /**
  * Workflow API Client Configuration
  */
+import { WORKFLOW_API_BASE_URL } from '@/config/base_url';
+
+/**
+ * Workflow API Client Configuration
+ */
 // Config type moved to @Store/models
 
 /**
  * Default configuration
  */
 const DEFAULT_CONFIG: WorkflowAPIClientConfig = {
-  baseURL: 'http://localhost:28600',
+  baseURL: WORKFLOW_API_BASE_URL,
   timeout: 300000, // 5 minutes for streaming
 };
 

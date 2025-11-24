@@ -20,6 +20,7 @@ import {
   getTransitionCoordinator,
   initializeTransitionCoordinator,
 } from '../transitions/TransitionCoordinator';
+import { StateFactory } from '../states/StateFactory';
 import type { NotebookState, StateJSON } from '@Store/models';
 import { createInitialStateJSON } from '@Store/models';
 import { WorkflowEvent, WorkflowState } from '@Store/models';
@@ -54,10 +55,10 @@ interface WorkflowStateMachineState {
 
 interface WorkflowStateMachineActions {
   // Core transition method
-  transition: (event: WorkflowEvent, apiResponse?: any) => void;
+  transition: (event: WorkflowEvent, apiResponse?: Record<string, unknown>) => Promise<void>;
 
   // Workflow control
-  startWorkflow: (payload: string | { stageId?: string; [key: string]: any }) => Promise<void>;
+  startWorkflow: (payload: string | { stageId?: string; [key: string]: unknown }) => Promise<void>;
   fail: (error: Error | string) => void;
   cancel: () => void;
   reset: () => void;
@@ -73,7 +74,7 @@ interface WorkflowStateMachineActions {
   syncNotebookState: (notebookState: Partial<NotebookState>) => void;
 
   // API integration
-  handleAPIResponse: (apiResponse: any, apiType?: string) => void;
+  handleAPIResponse: (apiResponse: Record<string, unknown>, apiType?: string) => Promise<void>;
 }
 
 export type WorkflowStateMachine = WorkflowStateMachineState & WorkflowStateMachineActions;
@@ -105,7 +106,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   // ==============================================
   // Core Transition Method
   // ==============================================
-  transition: (event: WorkflowEvent, apiResponse?: any) => {
+  transition: async (event: WorkflowEvent, apiResponse?: Record<string, unknown>) => {
     const currentStateJSON = get().stateJSON;
     const currentFSMState = currentStateJSON.state.FSM.state;
 
@@ -116,7 +117,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
       const coordinator = getTransitionCoordinator();
 
       // Apply transition
-      const { state: updatedStateJSON } = coordinator.applyTransition(
+      const { state: updatedStateJSON } = await coordinator.applyTransition(
         currentStateJSON,
         apiResponse || {},
         undefined,
@@ -151,9 +152,17 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   // ==============================================
   // Workflow Control
   // ==============================================
-  startWorkflow: async (payload: string | { stageId?: string; [key: string]: any }) => {
+  /**
+   * Start workflow execution
+   *
+   * Start workflow execution
+   *
+   * Executes the workflow by continuously calling the async state machine.
+   * The state machine determines the flow based on state logic.
+   */
+  startWorkflow: async (payload: string | { stageId?: string; [key: string]: unknown }) => {
     let stageId = 'planning';
-    let variables: Record<string, any> = {};
+    let variables: Record<string, unknown> = {};
 
     if (typeof payload === 'string') {
       stageId = payload;
@@ -220,17 +229,37 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         currentState: currentStateJSON.state.FSM.state as WorkflowState,
       });
 
-      // Continue workflow execution if in BEHAVIOR_COMPLETED state
-      // After planning completes, we need to start the first step
-      while (
-        currentStateJSON.state.FSM.state === 'BEHAVIOR_COMPLETED' ||
-        currentStateJSON.state.FSM.state === 'STAGE_RUNNING'
-      ) {
-        console.log(`[FSM] Auto-continuing from state: ${currentStateJSON.state.FSM.state}`);
+      // Continue workflow execution through the state chain
+      // The AsyncStateMachineAdapter uses State objects to determine next steps.
+      // Loop continues until we reach a terminal state or no transition occurs.
+      let maxIterations = 20; // Safety limit to prevent infinite loops
+      let iterations = 0;
 
-        // Execute next transition
+      while (iterations < maxIterations) {
+        iterations++;
+        const currentState = currentStateJSON.state.FSM.state;
+
+        console.log(`[FSM] Auto-execution iteration ${iterations}, current state: ${currentState}`);
+
+        // Stop if we reach terminal states (but allow BEHAVIOR_RUNNING to execute first)
+        if (
+          currentState === 'FAILED' ||
+          currentState === 'COMPLETE' ||
+          currentState === 'CANCELED'
+        ) {
+          console.log(`[FSM] Workflow auto-execution stopped at terminal state: ${currentState}`);
+          break;
+        }
+
+        // Execute next step - AsyncStateMachineAdapter will:
+        // 1. Infer which API to call based on current state
+        // 2. Call the API and get response
+        // 3. Pass response to TransitionCoordinator which selects correct handler
+        // 4. Return updated state after transition
+        console.log(`[FSM] Executing step for state: ${currentState}`);
+
         [currentStateJSON, transitionName] = await asyncFSM.step(currentStateJSON);
-        console.log(`[FSM] Next transition completed: ${transitionName}`);
+        console.log(`[FSM] Transition completed: ${transitionName || 'none'}`);
 
         // Update state
         set({
@@ -238,17 +267,23 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
           currentState: currentStateJSON.state.FSM.state as WorkflowState,
         });
 
-        // Safety: Break if we reach a terminal or running state
-        const state = currentStateJSON.state.FSM.state;
-        if (
-          state === 'BEHAVIOR_RUNNING' ||
-          state === 'FAILED' ||
-          state === 'COMPLETE' ||
-          state === 'CANCELED'
-        ) {
-          console.log(`[FSM] Workflow auto-execution stopped at state: ${state}`);
+        // After executing, check if we've completed behavior execution
+        const newState = currentStateJSON.state.FSM.state;
+        if (newState === 'BEHAVIOR_COMPLETED') {
+          console.log('[FSM] Reached BEHAVIOR_COMPLETED');
+        }
+
+        // If no transition occurred, stop to prevent infinite loop
+        if (!transitionName) {
+          console.warn('[FSM] No transition occurred, stopping auto-execution');
           break;
         }
+      }
+
+      if (iterations >= maxIterations) {
+        console.warn(
+          '[FSM] Maximum iterations reached, stopping auto-execution to prevent infinite loop'
+        );
       }
     } catch (error) {
       console.error('[FSM] Failed to execute workflow:', error);
@@ -381,14 +416,14 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   // ==============================================
   // API Integration
   // ==============================================
-  handleAPIResponse: (apiResponse: any, apiType?: string) => {
+  handleAPIResponse: async (apiResponse: Record<string, unknown>, apiType?: string) => {
     console.log(`[FSM] Handling API response (type: ${apiType})`);
 
     try {
       const coordinator = getTransitionCoordinator();
       const currentStateJSON = get().stateJSON;
 
-      const { state: updatedStateJSON } = coordinator.applyTransition(
+      const { state: updatedStateJSON } = await coordinator.applyTransition(
         currentStateJSON,
         apiResponse,
         apiType,
@@ -419,13 +454,17 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
  * Call this once at app startup.
  */
 export function initializeStateMachine(context: {
-  scriptStore?: any;
-  apiClient?: any;
-  notebookStore?: any;
-  aiContextStore?: any;
+  scriptStore?: Record<string, unknown>;
+  apiClient?: Record<string, unknown>;
+  notebookStore?: Record<string, unknown>;
+  aiContextStore?: Record<string, unknown>;
 }) {
   console.log('[FSM] Initializing state machine with context');
   initializeTransitionCoordinator(context);
+
+  if (context.apiClient) {
+    StateFactory.setApiClient(context.apiClient);
+  }
 }
 
 // ==============================================

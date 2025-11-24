@@ -9,6 +9,7 @@
  * Valid outgoing transitions:
  * - NEXT_BEHAVIOR -> BEHAVIOR_RUNNING (if more behaviors needed)
  * - COMPLETE_STEP -> STEP_COMPLETED (if step is done)
+ * - REFLECTING_AGAIN -> BEHAVIOR_COMPLETED (if behavior needs to be reflected again)
  */
 
 import { BaseState, APIResponseType } from './BaseState';
@@ -23,44 +24,35 @@ export class BehaviorCompletedState extends BaseState {
     return {
       next_behavior: WorkflowEvent.NEXT_BEHAVIOR,
       complete_step: WorkflowEvent.COMPLETE_STEP,
+      reflecting_again: WorkflowEvent.REFLECTING_AGAIN,
       fail: WorkflowEvent.FAIL,
       cancel: WorkflowEvent.CANCEL,
     };
   }
 
   determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
-    // First, check if effect.current is not empty
-    // If not empty, we must transition to NEXT_BEHAVIOR to clear effects
-    // This ensures: 执行必须要有反馈并维护到对应的上下文context中才是有效的维护
-    const context = stateData.observation?.context || {};
-    const effects = context.effects || {};
-    const currentEffects = effects.current || [];
+    // Check API response for explicit completion signal
+    if (apiResponse && typeof apiResponse === 'object') {
+      const actions = apiResponse.actions || [];
 
-    if (currentEffects.length > 0) {
-      console.warn(
-        `[BehaviorCompletedState] [EXECUTION INTEGRITY CHECK] effect.current is not empty (${currentEffects.length} effects). ` +
-          `Code execution results MUST be analyzed and commented before completing step. ` +
-          `Forcing NEXT_BEHAVIOR to ensure feedback loop.`
-      );
-      return WorkflowEvent.NEXT_BEHAVIOR;
+      // Check for mark_step_complete (underscore or hyphen)
+      if (
+        Array.isArray(actions) &&
+        actions.some((a: any) => a.type === 'mark_step_complete' || a.type === 'mark-step-complete')
+      ) {
+        console.log('[BehaviorCompletedState] Received mark_step_complete action, completing step');
+        return WorkflowEvent.COMPLETE_STEP;
+      }
+
+      // Check for continue_behavior
+      if (Array.isArray(actions) && actions.some((a: any) => a.type === 'continue_behavior')) {
+        console.log(
+          '[BehaviorCompletedState] Received continue_behavior action, transitioning to NEXT_BEHAVIOR'
+        );
+        return WorkflowEvent.NEXT_BEHAVIOR;
+      }
     }
-
-    // Check if step is completed
-    const progress = this.getProgress(stateData);
-    const stepsProgress = progress.steps || {};
-    const currentOutputs = stepsProgress.current_outputs || {};
-
-    const expected = currentOutputs.expected || [];
-    const produced = currentOutputs.produced || [];
-
-    if (expected.length > 0 && produced.length >= expected.length) {
-      console.log('[BehaviorCompletedState] Step outputs satisfied, completing step');
-      return WorkflowEvent.COMPLETE_STEP;
-    }
-
-    // Need more behaviors
-    console.log('[BehaviorCompletedState] Step not complete, need next behavior');
-    return WorkflowEvent.NEXT_BEHAVIOR;
+    return WorkflowEvent.REFLECTING_AGAIN;
   }
 
   canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
@@ -70,18 +62,6 @@ export class BehaviorCompletedState extends BaseState {
       return false;
     }
 
-    // COMPLETE_STEP requires outputs to be satisfied
-    if (event === WorkflowEvent.COMPLETE_STEP) {
-      const progress = this.getProgress(stateData);
-      const stepsProgress = progress.steps || {};
-      const currentOutputs = stepsProgress.current_outputs || {};
-
-      const expected = currentOutputs.expected || [];
-      const produced = currentOutputs.produced || [];
-
-      return expected.length > 0 ? produced.length >= expected.length : true;
-    }
-
     // Other transitions are allowed
     return true;
   }
@@ -89,5 +69,9 @@ export class BehaviorCompletedState extends BaseState {
   getRequiredAPIType(): APIResponseType | null {
     // BEHAVIOR_COMPLETED state requires Reflecting API for feedback
     return APIResponseType.COMPLETE;
+  }
+
+  getExpectedTransitionName(): string | null {
+    return 'COMPLETE_STEP';
   }
 }

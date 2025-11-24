@@ -22,6 +22,8 @@ import { useScriptStore } from '../store/useScriptStore';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
 import { getWorkflowAPIClient, initializeWorkflowAPIClient } from '../api/WorkflowAPIClient';
 
+import { WORKFLOW_API_BASE_URL } from '@/config/base_url';
+
 // Global singleton instance
 let globalAsyncAdapter: AsyncStateMachineAdapter | null = null;
 
@@ -48,7 +50,7 @@ export function initializeWorkflowSystem(apiClientConfig?: {
   } else {
     workflowAPIClient = getWorkflowAPIClient();
     console.log(
-      '[WorkflowInit] WorkflowAPIClient initialized with default config (localhost:28600)'
+      `[WorkflowInit] WorkflowAPIClient initialized with default config (${WORKFLOW_API_BASE_URL})`
     );
   }
 

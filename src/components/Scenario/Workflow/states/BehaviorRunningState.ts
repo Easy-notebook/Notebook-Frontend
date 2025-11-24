@@ -35,6 +35,17 @@ export class BehaviorRunningState extends BaseState {
         return WorkflowEvent.COMPLETE_BEHAVIOR;
       }
 
+      // Check for actions array (streaming format)
+      // Any action from generating API implies we are running/completing behavior
+      // But we need to know when to transition to BEHAVIOR_COMPLETED
+      // Usually, the presence of actions means we executed them, so we can transition
+      if (Array.isArray(apiResponse.actions) && apiResponse.actions.length > 0) {
+        console.log(
+          '[BehaviorRunningState] Received actions from generating API, transitioning to BEHAVIOR_COMPLETED'
+        );
+        return WorkflowEvent.COMPLETE_BEHAVIOR;
+      }
+
       // Check if feedback passed
       const feedback = apiResponse.feedback || {};
       if (feedback.passed === true) {
@@ -75,5 +86,9 @@ export class BehaviorRunningState extends BaseState {
   getRequiredAPIType(): APIResponseType | null {
     // BEHAVIOR_RUNNING state requires Generating API to execute actions
     return APIResponseType.GENERATING;
+  }
+
+  getExpectedTransitionName(): string | null {
+    return 'COMPLETE_BEHAVIOR';
   }
 }

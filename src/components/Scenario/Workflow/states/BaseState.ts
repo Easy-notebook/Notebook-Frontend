@@ -82,6 +82,16 @@ export abstract class BaseState {
   abstract getRequiredAPIType(): APIResponseType | null;
 
   /**
+   * Get the expected transition name for the API call.
+   *
+   * This provides a hint to the API about what transition is expected
+   * to happen after this API call. Used for logging and API context.
+   *
+   * @returns Transition name string, or null if not applicable
+   */
+  abstract getExpectedTransitionName(): string | null;
+
+  /**
    * Initialize or update state data from API response.
    *
    * This is called after a transition handler completes.

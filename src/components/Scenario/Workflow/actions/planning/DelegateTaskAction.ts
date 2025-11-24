@@ -20,7 +20,13 @@ export class DelegateTaskAction extends ActionBase {
    *   - acceptance: Acceptance criteria
    */
   execute(step: ExecutionStep): void {
-    const { step_id, agent, task_description, acceptance } = step;
+    // Backend sends step_id/task_description, but convertActionToExecutionStep converts to stepId/taskDescription
+    const step_id = step.stepId || step.step_id;
+    const task_description =
+      (step as ExecutionStep & { taskDescription?: string }).taskDescription ||
+      (step.metadata?.task_description as string | undefined);
+    const agent = (step as ExecutionStep & { agent?: string }).agent;
+    const acceptance = step.acceptance;
 
     if (!step_id || !agent || !task_description || !acceptance) {
       console.error('[DelegateTaskAction] Missing required fields:', step);
@@ -33,7 +39,7 @@ export class DelegateTaskAction extends ActionBase {
 
     // Find the current step
     const currentStep = stateJSON.observation.location.progress.steps.planned?.find(
-      (s: any) => s.step_id === step_id
+      (s) => s.step_id === step_id
     );
 
     if (!currentStep) {

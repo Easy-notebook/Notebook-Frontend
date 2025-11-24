@@ -19,30 +19,55 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
       return false;
     }
 
-    // Check for behavior fields
-    const hasBehaviorId = 'behavior_id' in apiResponse;
-    const hasAgent = 'agent' in apiResponse;
-    const hasTask = 'task' in apiResponse;
-    const hasTitle = 'title' in apiResponse;
+    // Legacy format: direct behavior object
+    if ('behavior_id' in apiResponse) {
+      return true;
+    }
 
-    // Accept if has behavior_id and either (agent, task, or title)
-    // Title can be used as task description
-    return hasBehaviorId && (hasAgent || hasTask || hasTitle);
+    // Streaming format: actions array
+    if ('actions' in apiResponse && Array.isArray(apiResponse.actions)) {
+      return apiResponse.actions.some(
+        (a: any) =>
+          a.type === 'plan_behavior' ||
+          a.type === 'start_behavior' ||
+          a.type === 'complete_step_planning' // This might be the trigger
+      );
+    }
+
+    return false;
   }
 
-  apply(state: Record<string, any>, apiResponse: any): Record<string, any> {
+  async apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>> {
     const newState = this.deepCopyState(state);
+    let data = apiResponse;
+
+    // Extract behavior from actions if streaming
+    if ('actions' in apiResponse && Array.isArray(apiResponse.actions)) {
+      console.log('[StartBehavior] Extracting behavior from streaming actions');
+      const behaviorAction = apiResponse.actions.find(
+        (a: any) => a.type === 'plan_behavior' || a.type === 'start_behavior'
+      );
+
+      if (behaviorAction) {
+        data = behaviorAction;
+      } else {
+        // If no explicit behavior action, check if we have enough info in the response or other actions
+        // Sometimes complete_step_planning implies starting the first behavior?
+        // For now, warn if not found
+        console.warn('[StartBehavior] No behavior action found in streaming response');
+      }
+    }
 
     // Extract behavior fields
-    const behaviorId = apiResponse.behavior_id;
-    const stepId = apiResponse.step_id || state.observation?.location?.current?.step_id;
-    const agent = apiResponse.agent || 'default_agent';
+    const behaviorId = data.behavior_id || data.behaviorId;
+    const stepId = data.step_id || data.stepId || state.observation?.location?.current?.step_id;
+    const agent = data.agent || 'default_agent';
     // Use task if available, otherwise use title, otherwise use focus
-    const task = (apiResponse.task || apiResponse.title || apiResponse.focus || '').trim();
-    const inputs = apiResponse.inputs || {};
-    const outputs = apiResponse.outputs || {};
-    const acceptance = apiResponse.acceptance || [];
-    const whathappened = apiResponse.whathappened || {};
+    const task = (data.task || data.title || data.focus || '').trim();
+    const inputs = data.inputs || {};
+    const outputs = data.outputs || {};
+    const acceptance = data.acceptance || [];
+    const whathappened = data.whathappened || {};
 
     console.log(`[StartBehavior] Applying behavior: ${behaviorId}`);
     console.log(`[StartBehavior] Task/Title: ${task}`);

@@ -9,10 +9,12 @@ export class CompleteStepHandler extends BaseTransitionHandler {
   canHandle(r: any): boolean {
     if (typeof r !== 'object' || r._auto_trigger) return false;
     const acts = r.actions || [];
-    return acts.some((a: any) => a?.type === 'mark_step_complete');
+    return acts.some(
+      (a: any) => a?.type === 'mark_step_complete' || a?.type === 'mark-step-complete'
+    );
   }
 
-  apply(state: Record<string, any>, _r: any): Record<string, any> {
+  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
     const ns = this.deepCopyState(state);
     const p = this.getProgress(ns);
 
@@ -24,6 +26,24 @@ export class CompleteStepHandler extends BaseTransitionHandler {
 
     if (p.steps?.current) {
       p.steps.current.completion_status = 'all_acceptance_criteria_passed';
+    }
+
+    // Clear effects.current and move to history
+    if (ns.state?.effects) {
+      if (ns.state.effects.current && ns.state.effects.current.length > 0) {
+        // Move current effects to history
+        if (!ns.state.effects.history) {
+          ns.state.effects.history = [];
+        }
+        ns.state.effects.history.push(...ns.state.effects.current);
+
+        console.log(
+          `[CompleteStepHandler] Moved ${ns.state.effects.current.length} effects to history`
+        );
+
+        // Clear current effects
+        ns.state.effects.current = [];
+      }
     }
 
     this.updateFSMState(ns, 'STEP_COMPLETED', 'COMPLETE_STEP');

@@ -43,7 +43,7 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
     return false;
   }
 
-  apply(state: Record<string, any>, apiResponse: any): Record<string, any> {
+  async apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>> {
     console.log('[StartWorkflow] ============================================');
     console.log('[StartWorkflow] APPLY METHOD CALLED');
     console.log('[StartWorkflow] ============================================');
@@ -121,11 +121,11 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
     console.log('[StartWorkflow] ========== EXECUTING ACTIONS ==========');
     if (title) {
       console.log('[StartWorkflow] ACTION 1: update_title with title:', title);
-      this.executeAction('update_title', title);
+      await this.executeAction('update_title', title);
     } else if (focus) {
       // Fallback to focus if no title provided
       console.log('[StartWorkflow] ACTION 1: update_title with focus:', focus);
-      this.executeAction('update_title', focus);
+      await this.executeAction('update_title', focus);
     }
 
     // Execute description as plain markdown text (matches backend: line 115-116)
@@ -134,14 +134,14 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
         '[StartWorkflow] ACTION 2: add-text with description:',
         description.substring(0, 100)
       );
-      this.executeAction('add-text', description, { shotType: 'markdown' });
+      await this.executeAction('add-text', description, { shotType: 'markdown' });
     }
 
     // Execute new_section action - will add "### {title}" markdown automatically (matches backend: line 119-121)
     const firstStageTitle = firstStage.title || '';
     if (firstStageTitle) {
       console.log('[StartWorkflow] ACTION 3: new_section with firstStageTitle:', firstStageTitle);
-      this.executeAction('new_section', firstStageTitle);
+      await this.executeAction('new_section', firstStageTitle);
     }
     console.log('[StartWorkflow] ========== ACTIONS DISPATCHED ==========');
 

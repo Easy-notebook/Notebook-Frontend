@@ -13,7 +13,7 @@ export class CompleteStageHandler extends BaseTransitionHandler {
     return acts.some((a: any) => a?.type === 'mark_stage_complete');
   }
 
-  apply(state: Record<string, any>, _r: any): Record<string, any> {
+  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
     const ns = this.deepCopyState(state);
     const p = this.getProgress(ns);
 

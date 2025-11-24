@@ -345,15 +345,78 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       if (result?.success && result.outputs) {
         // Add outputs to effect context
         const outputs: any = result.outputs;
+        const stateMachine = (
+          await import('./workflowStateMachine')
+        ).useWorkflowStateMachine.getState();
+        const stateJSON = stateMachine.stateJSON;
+
+        // Ensure effects.current exists
+        if (!stateJSON.state.effects) {
+          stateJSON.state.effects = { current: [], history: [] };
+        }
+        if (!stateJSON.state.effects.current) {
+          stateJSON.state.effects.current = [];
+        }
+
         if (Array.isArray(outputs)) {
           outputs.forEach((item: any) => {
-            const effectText = item.content || item.text || item.toString();
-            useAIPlanningContextStore.getState().addEffect(effectText);
+            // Map ExecutionOutput to Effect
+            const outputType = item.type || 'text';
+            let effectType: 'text' | 'image_url' | 'error' = 'text';
+            let effectContent = item.content || item.text || item.toString();
+
+            if (outputType === 'image') {
+              effectType = 'image_url';
+              // If content is base64, we might need to handle it, but for now assume it's a URL or base64 string
+            } else if (outputType === 'error') {
+              effectType = 'error';
+            }
+
+            // Update AIPlanningContext (Legacy)
+            useAIPlanningContextStore.getState().addEffect(effectContent);
+
+            // Update WorkflowStateMachine (New Architecture)
+            if (effectType === 'error') {
+              stateJSON.state.effects.current.push({
+                type: 'error',
+                error: {
+                  name: 'ExecutionError',
+                  message: effectContent,
+                  traceback: [],
+                },
+                cell_ref: codecellId,
+              });
+            } else if (effectType === 'image_url') {
+              stateJSON.state.effects.current.push({
+                type: 'image_url',
+                image_url: effectContent,
+                cell_ref: codecellId,
+              });
+            } else {
+              stateJSON.state.effects.current.push({
+                type: 'text',
+                text: effectContent,
+                cell_ref: codecellId,
+              });
+            }
           });
         } else {
+          // Handle single output (legacy/fallback)
           const effectText = outputs.content || outputs.text || outputs.toString();
           useAIPlanningContextStore.getState().addEffect(effectText);
+
+          stateJSON.state.effects.current.push({
+            type: 'text',
+            text: effectText,
+            cell_ref: codecellId,
+          });
         }
+
+        // Sync state back to store
+        stateMachine.setState(stateJSON);
+        console.log(
+          `[ScriptStore] Updated state.effects.current with execution results from ${codecellId}`
+        );
       }
 
       if (autoDebug && !result?.success) {

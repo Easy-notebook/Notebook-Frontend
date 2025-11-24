@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 背景圆角矩形 -->
+  <rect x="5" y="5" width="90" height="90" rx="20" ry="20" 
+        fill="white" 
+        stroke="url(#gradient)" 
+        stroke-width="3"/>
+  
+  <!-- 渐变定义 -->
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#41B883"/>
+      <stop offset="50%" style="stop-color:#3490DC"/>
+      <stop offset="100%" style="stop-color:#6574CD"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- DS文字 -->
+  <text x="50" y="65" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif"
+        font-weight="bold" 
+        font-size="45"
+        text-anchor="middle"
+        fill="url(#gradient)">
+    EA
+  </text>
+</svg>

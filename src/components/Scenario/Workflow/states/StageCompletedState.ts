@@ -73,4 +73,8 @@ export class StageCompletedState extends BaseState {
     // STAGE_COMPLETED state requires Reflecting API for feedback
     return APIResponseType.COMPLETE;
   }
+
+  getExpectedTransitionName(): string | null {
+    return 'COMPLETE_WORKFLOW';
+  }
 }

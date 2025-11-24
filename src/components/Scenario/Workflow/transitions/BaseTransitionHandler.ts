@@ -31,7 +31,7 @@ export abstract class BaseTransitionHandler {
   /**
    * Apply the transition to the state.
    */
-  abstract apply(state: Record<string, any>, apiResponse: any): Record<string, any>;
+  abstract apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>>;
 
   /**
    * Set the context (stores) for this handler.
@@ -46,17 +46,17 @@ export abstract class BaseTransitionHandler {
   /**
    * Apply the transition and log it.
    */
-  applyAndLog(
+  async applyAndLog(
     state: Record<string, any>,
     apiResponse: any,
     _apiType?: string
-  ): Record<string, any> {
+  ): Promise<Record<string, any>> {
     const fromState = state.state?.FSM?.state || 'UNKNOWN';
 
     console.log(`[Transition] Applying: ${this.transitionName} (${fromState} → ${this.toState})`);
 
     // Apply the transition
-    const updatedState = this.apply(state, apiResponse);
+    const updatedState = await this.apply(state, apiResponse);
 
     const toState = updatedState.state?.FSM?.state || 'UNKNOWN';
 

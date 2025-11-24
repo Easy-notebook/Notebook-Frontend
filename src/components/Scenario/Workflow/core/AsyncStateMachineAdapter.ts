@@ -20,33 +20,51 @@
 
 import { StateJSON } from '@Store/models';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
-import { PlanningAPIHandler, GeneratingAPIHandler, ReflectingAPIHandler } from '../api';
+
 import streamingLogger from '../__tests__/streaming-debug-logger';
+import { StateFactory } from '../states/StateFactory';
 
 export interface APIType {
   value: string;
 }
 
+interface APIClient {
+  planningAPI: (
+    stateJSON: StateJSON,
+    stageId: string,
+    stepId: string,
+    options: Record<string, unknown>
+  ) => Promise<unknown>;
+  generatingAPI: (
+    stateJSON: StateJSON,
+    stageId: string,
+    stepId: string,
+    options: Record<string, unknown>
+  ) => AsyncGenerator<unknown>;
+  reflectingAPI: (
+    stateJSON: StateJSON,
+    stageId: string,
+    stepId: string,
+    options: Record<string, unknown>
+  ) => AsyncGenerator<unknown>;
+}
+
+interface ScriptStore {
+  execAction: (step: Record<string, unknown>) => Promise<void>;
+}
+
+/**
+ * Type guard to check if a value is an async iterable
+ */
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return value != null && typeof (value as any)[Symbol.asyncIterator] === 'function';
+}
+
 export class AsyncStateMachineAdapter {
-  private apiClient: any;
-  private scriptStore?: any;
   private lastTransitionName: string | null = null;
 
-  // API Handlers
-  private planningHandler: PlanningAPIHandler;
-  private generatingHandler: GeneratingAPIHandler;
-  private reflectingHandler: ReflectingAPIHandler;
-
-  constructor(apiClient?: any, scriptStore?: any) {
-    this.apiClient = apiClient;
-    this.scriptStore = scriptStore;
-
-    // Initialize API handlers
-    this.planningHandler = new PlanningAPIHandler(apiClient, scriptStore);
-    this.generatingHandler = new GeneratingAPIHandler(apiClient, scriptStore);
-    this.reflectingHandler = new ReflectingAPIHandler(apiClient, scriptStore);
-
-    console.log('[AsyncFSM] Initialized AsyncStateMachineAdapter with API handlers');
+  constructor(apiClient?: APIClient, scriptStore?: ScriptStore) {
+    console.log('[AsyncFSM] Initialized AsyncStateMachineAdapter');
 
     // Inject dependencies into TransitionCoordinator
     if (scriptStore || apiClient) {
@@ -62,17 +80,14 @@ export class AsyncStateMachineAdapter {
   /**
    * Set or update the API client
    */
-  setApiClient(apiClient: any): void {
-    this.apiClient = apiClient;
-
-    // Reinitialize API handlers
-    this.planningHandler = new PlanningAPIHandler(apiClient, this.scriptStore);
-    this.generatingHandler = new GeneratingAPIHandler(apiClient, this.scriptStore);
-    this.reflectingHandler = new ReflectingAPIHandler(apiClient, this.scriptStore);
-
+  setApiClient(apiClient: APIClient): void {
     // Inject into TransitionCoordinator
     const coordinator = getTransitionCoordinator();
     coordinator.setContext({ apiClient });
+
+    // Inject into StateFactory
+    StateFactory.setApiClient(apiClient);
+
     console.log('[AsyncFSM] API client injected');
   }
 
@@ -87,7 +102,11 @@ export class AsyncStateMachineAdapter {
    * 3. Call the appropriate API
    * 4. Pass API response to TransitionCoordinator
    * 5. TransitionCoordinator selects appropriate Handler and applies transition
-   * 6. Return updated state
+   * 6. Special handling for BEHAVIOR_COMPLETED:
+   *    - If reflecting returns mark-step-complete → transition to STEP_COMPLETED
+   *    - If not → implicit next_behavior (clear effects + call /generating)
+   *    - Check behavior iteration limit to prevent infinite loops
+   * 7. Return updated state
    *
    * @param stateJSON - Current state JSON
    * @returns Tuple of (updated state JSON, transition name)
@@ -107,106 +126,114 @@ export class AsyncStateMachineAdapter {
 
     console.log(`[AsyncFSM] Current state: ${fsmStateStr} (normalized: ${normalized})`);
 
-    // Determine which API to call based on state
-    const apiType = this.inferAPIType(normalized);
+    // Get State object
+    const state = StateFactory.getState(normalized);
+    if (!state) {
+      console.warn(`[AsyncFSM] Unknown state: ${normalized}`);
+      return [stateJSON, null];
+    }
 
-    if (!apiType) {
+    // Determine API type from State object
+    const apiTypeEnum = state.getRequiredAPIType();
+
+    if (!apiTypeEnum) {
       console.log(`[AsyncFSM] State ${normalized} does not require API call`);
       return [stateJSON, null];
     }
 
+    const apiType = apiTypeEnum as string;
+
     try {
       console.log(`[AsyncFSM] Calling ${apiType} API for state: ${normalized}`);
 
-      // Predict transition name for correct log file naming
-      const predictedTransitionName = this.predictTransitionName(normalized, apiType);
+      // Get expected transition name from State object
+      const predictedTransitionName = state.getExpectedTransitionName() || apiType;
 
-      // Call the appropriate API
-      let apiResponse = await this.callAPI(stateJSON, apiType, predictedTransitionName);
+      // Call the API via the State object
+      // The State object uses its internal handlers which are initialized with apiClient
+      let apiResponse = await state.callAPI(stateJSON, predictedTransitionName);
 
       // Get TransitionCoordinator
       const coordinator = getTransitionCoordinator();
 
       // For planning/generating/reflecting APIs, execute actions as they arrive (streaming)
-      if (apiType === 'planning' || apiType === 'generating' || apiType === 'reflecting') {
-        // If response is an async iterator, execute actions immediately as they arrive
-        if (!apiResponse.actions && typeof apiResponse[Symbol.asyncIterator] === 'function') {
-          const actions = [];
-          console.log(`[AsyncFSM] Starting streaming action execution...`);
+      let parsedResponse: Record<string, unknown> = {};
 
-          // Start streaming debug session
-          streamingLogger.startSession(`${apiType}-${Date.now()}`);
-          streamingLogger.streamingStarted();
+      // If response is an async iterator, execute actions immediately as they arrive
+      if (isAsyncIterable(apiResponse)) {
+        const actions = [];
+        console.log(`[AsyncFSM] Starting streaming action execution...`);
 
-          // Get scriptStore from TransitionCoordinator context
-          const scriptStore = coordinator.getContext().scriptStore;
+        // Start streaming debug session
+        streamingLogger.startSession(`${apiType}-${Date.now()}`);
+        streamingLogger.streamingStarted();
 
-          for await (const rawAction of apiResponse) {
-            const actionIndex = actions.length;
+        // Get scriptStore from TransitionCoordinator context
+        const scriptStore = coordinator.getContext().scriptStore;
 
-            // IMPORTANT: Backend returns {"action": {...}} format, need to unwrap
-            const action = rawAction.action || rawAction;
-            const actionType = action.type || 'unknown';
+        for await (const rawAction of apiResponse) {
+          const actionIndex = actions.length;
 
-            console.log(`[AsyncFSM] Raw action received:`, JSON.stringify(rawAction, null, 2));
-            console.log(`[AsyncFSM] Parsed action type: ${actionType}, executing immediately...`);
+          // IMPORTANT: Backend returns {"action": {...}} format, need to unwrap
+          const action = (rawAction as Record<string, unknown>).action || rawAction;
+          const actionType = (action as Record<string, unknown>).type || 'unknown';
 
-            // Log action received
-            streamingLogger.actionReceived(actionIndex, actionType);
+          console.log(`[AsyncFSM] Raw action received:`, JSON.stringify(rawAction, null, 2));
+          console.log(`[AsyncFSM] Parsed action type: ${actionType}, executing immediately...`);
 
-            // Execute action immediately using scriptStore
-            if (scriptStore) {
-              try {
-                streamingLogger.actionExecutionStart(actionIndex);
+          // Log action received
+          streamingLogger.actionReceived(actionIndex, actionType as string);
 
-                // Convert backend action format to frontend ExecutionStep format
-                const executionStep = this.convertActionToExecutionStep(action);
+          // Execute action immediately using scriptStore
+          if (scriptStore) {
+            try {
+              streamingLogger.actionExecutionStart(actionIndex);
 
-                console.log(`[AsyncFSM] Executing action step:`, executionStep);
-                await scriptStore.execAction(executionStep);
-
-                streamingLogger.actionExecutionEnd(actionIndex);
-                console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
-              } catch (error) {
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
-                console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
-              }
-            } else {
-              console.warn(
-                '[AsyncFSM] No scriptStore available, action will be executed by handler'
+              // Convert backend action format to frontend ExecutionStep format
+              const executionStep = this.convertActionToExecutionStep(
+                action as Record<string, unknown>
               );
-              streamingLogger.actionExecutionEnd(actionIndex, 'No scriptStore available');
-            }
 
-            // Still collect actions for transition handler (store the unwrapped action)
-            actions.push(action);
+              console.log(`[AsyncFSM] Executing action step:`, executionStep);
+              await scriptStore.execAction(executionStep);
+
+              streamingLogger.actionExecutionEnd(actionIndex);
+              console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
+            } catch (error) {
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
+              console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
+            }
+          } else {
+            console.warn('[AsyncFSM] No scriptStore available, action will be executed by handler');
+            streamingLogger.actionExecutionEnd(actionIndex, 'No scriptStore available');
           }
 
-          streamingLogger.streamingEnded();
-          streamingLogger.endSession();
-          streamingLogger.printReport();
-
-          console.log(`[AsyncFSM] Streaming execution complete: ${actions.length} actions`);
-
-          // ✅ FIX: Actions already executed and handled transitions
-          // Get the current state from workflow state machine instead of applying another transition
-          const { useWorkflowStateMachine } = await import('../store/workflowStateMachine');
-          const currentStateJSON = useWorkflowStateMachine.getState().stateJSON;
-
-          console.log(
-            `[AsyncFSM] Returning current state after streaming: ${currentStateJSON.state.FSM.state}`
-          );
-          return [currentStateJSON, 'STREAMING_COMPLETE'];
+          // Still collect actions for transition handler (store the unwrapped action)
+          actions.push(action as Record<string, unknown>);
         }
+
+        streamingLogger.streamingEnded();
+        streamingLogger.endSession();
+        streamingLogger.printReport();
+
+        console.log(`[AsyncFSM] Streaming execution complete: ${actions.length} actions`);
+
+        // Set parsedResponse to collected actions for TransitionCoordinator
+        parsedResponse = { actions };
+
+        // Update stateJSON to latest from store as actions might have changed it
+        const { useWorkflowStateMachine } = await import('../store/workflowStateMachine');
+        stateJSON = useWorkflowStateMachine.getState().stateJSON;
+      } else {
+        // Not iterable, parse normally
+        parsedResponse = this.parseAPIResponse(apiResponse);
       }
 
-      // Parse API response if needed
-      const parsedResponse = this.parseAPIResponse(apiResponse);
-
       // Apply transition (TransitionCoordinator selects appropriate handler)
-      // Note: For generating/reflecting, actions are already executed above
-      const { state: updatedState, transitionName } = coordinator.applyTransition(
+      // Note: For generating/reflecting, actions are already executed above, but we pass them
+      // to the coordinator so handlers like NextBehaviorHandler can inspect them.
+      const { state: updatedState, transitionName } = await coordinator.applyTransition(
         stateJSON,
         parsedResponse,
         apiType,
@@ -225,138 +252,25 @@ export class AsyncStateMachineAdapter {
   }
 
   /**
-   * Infer which API type to call based on current FSM state
-   *
-   * Logic (based on Planning First protocol):
-   * - IDLE → planning (START_WORKFLOW)
-   * - STAGE_RUNNING → planning (START_STEP)
-   * - STEP_RUNNING → planning (START_BEHAVIOR)
-   * - BEHAVIOR_RUNNING → generating (get actions to execute)
-   * - *_COMPLETED → reflecting (reflect on completion)
-   */
-  private inferAPIType(stateStr: string): string | null {
-    if (stateStr.includes('BEHAVIOR') && stateStr.includes('RUNNING')) {
-      return 'generating';
-    }
-
-    if (stateStr.includes('COMPLETED')) {
-      return 'reflecting';
-    }
-
-    if (stateStr.includes('STEP') && stateStr.includes('RUNNING')) {
-      return 'planning';
-    }
-
-    if (stateStr.includes('STAGE') && stateStr.includes('RUNNING')) {
-      return 'planning';
-    }
-
-    if (stateStr === 'IDLE') {
-      return 'planning';
-    }
-
-    // Terminal states don't need API calls
-    if (stateStr === 'COMPLETE' || stateStr === 'FAILED' || stateStr === 'CANCELED') {
-      return null;
-    }
-
-    console.warn(
-      `[AsyncFSM] Cannot infer API type for state: ${stateStr}, defaulting to 'planning'`
-    );
-    return 'planning';
-  }
-
-  /**
-   * Predict transition name based on current state and API type
-   *
-   * This is used for correct log file naming
-   */
-  private predictTransitionName(stateName: string, apiType: string): string {
-    const stateApiToTransition: Record<string, string> = {
-      IDLE_planning: 'START_WORKFLOW',
-      STAGE_RUNNING_planning: 'START_STEP',
-      STEP_RUNNING_planning: 'START_BEHAVIOR',
-      BEHAVIOR_RUNNING_generating: 'COMPLETE_BEHAVIOR',
-      BEHAVIOR_COMPLETED_reflecting: 'COMPLETE_STEP',
-      STEP_COMPLETED_reflecting: 'COMPLETE_STAGE',
-      STAGE_COMPLETED_reflecting: 'COMPLETE_WORKFLOW',
-    };
-
-    const key = `${stateName}_${apiType}`;
-    const predicted = stateApiToTransition[key];
-
-    if (predicted) {
-      console.log(`[AsyncFSM] Predicted transition: ${stateName} + ${apiType} API → ${predicted}`);
-      return predicted;
-    } else {
-      console.warn(
-        `[AsyncFSM] Cannot predict transition for (${stateName}, ${apiType}), using API type as fallback`
-      );
-      return apiType;
-    }
-  }
-
-  /**
-   * Call the appropriate API based on type
-   * Uses API Handlers for clean separation of concerns
-   */
-  private async callAPI(
-    stateJSON: StateJSON,
-    apiType: string,
-    transitionName: string
-  ): Promise<any> {
-    if (!this.apiClient) {
-      throw new Error('API client not configured');
-    }
-
-    console.log(`[AsyncFSM] Calling ${apiType} API (transition: ${transitionName})`);
-
-    // Extract location data
-    const location = stateJSON.observation.location.current;
-    const stageId = location.stage_id || 'unknown';
-    const stepId = location.step_id || 'none';
-
-    // Call appropriate API handler
-    // All APIs now return AsyncGenerator for streaming
-    if (apiType === 'planning') {
-      return this.planningHandler.call(stateJSON, stageId, stepId, {
-        transition_name: transitionName,
-      });
-    } else if (apiType === 'generating') {
-      return this.generatingHandler.call(stateJSON, stageId, stepId, {
-        transition_name: transitionName,
-        stream: true,
-      });
-    } else if (apiType === 'reflecting') {
-      return this.reflectingHandler.call(stateJSON, stageId, stepId, {
-        transition_name: transitionName,
-        stream: true,
-      });
-    } else {
-      throw new Error(`Unknown API type: ${apiType}`);
-    }
-  }
-
-  /**
    * Parse API response (handle dict, JSON string, and XML string)
    */
-  private parseAPIResponse(response: any): any {
+  private parseAPIResponse(response: unknown): Record<string, unknown> {
     if (typeof response === 'object' && response !== null) {
-      return response;
+      return response as Record<string, unknown>;
     }
 
     if (typeof response === 'string') {
       // Try JSON first
       try {
-        return JSON.parse(response);
+        return JSON.parse(response) as Record<string, unknown>;
       } catch {
         // TODO: Try XML parsing
         console.warn('[AsyncFSM] XML parsing not implemented, returning raw string');
-        return response;
+        return { rawString: response };
       }
     }
 
-    return response;
+    return {};
   }
 
   /**
@@ -381,10 +295,10 @@ export class AsyncStateMachineAdapter {
    * Convert backend action format to frontend ExecutionStep format
    * Backend uses snake_case, frontend uses camelCase
    */
-  private convertActionToExecutionStep(action: any): any {
+  private convertActionToExecutionStep(action: Record<string, unknown>): Record<string, unknown> {
     const actionType = action.type || 'unknown';
 
-    const executionStep: any = {
+    const executionStep: Record<string, unknown> = {
       action: actionType,
       content: action.content || '',
       storeId: action.store_id || this.generateUUID(),
@@ -406,6 +320,7 @@ export class AsyncStateMachineAdapter {
       phase_id: 'phaseId',
       total_steps: 'totalSteps',
       total_stages: 'totalStages',
+      task_description: 'taskDescription',
     };
 
     // Apply field mapping
@@ -444,6 +359,10 @@ export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> 
     const scriptStore = useScriptStore.getState();
 
     asyncStateMachineInstance = new AsyncStateMachineAdapter(apiClient, scriptStore);
+
+    // Initialize StateFactory with apiClient
+    StateFactory.setApiClient(apiClient);
+
     console.log('[AsyncFSM] Created singleton instance');
   }
 

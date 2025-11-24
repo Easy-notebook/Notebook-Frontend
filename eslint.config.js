@@ -10,6 +10,7 @@ export default [
   {
     ignores: [
       'dist',
+      'assets',
       'ref',
       '**/KnowledgeForest/index.tsx',
       '**/__tests__/**/*.test.ts',

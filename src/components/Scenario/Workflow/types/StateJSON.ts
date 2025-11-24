@@ -118,6 +118,8 @@ export interface BehaviorProgress {
     behavior_id: string;
     title: string;
     verified_artifacts: Record<string, any>;
+    iteration?: number; // Current iteration count for this behavior (防止无限循环)
+    max_iterations?: number; // Maximum allowed iterations (default: 5)
   } | null;
   iteration: number | null;
   focus: string;
@@ -207,6 +209,7 @@ export interface StateJSON {
   observation: Observation;
   state: State;
   metadata?: Record<string, any>;
+  [key: string]: unknown;
 }
 
 /**

@@ -172,3 +172,11 @@ export class StateFactory {
     return Object.keys(this.STATE_CLASSES);
   }
 }
+
+/**
+ * Get the StateFactory class (for use in other modules).
+ * This is a convenience function to access the StateFactory singleton.
+ */
+export function getStateFactory(): typeof StateFactory {
+  return StateFactory;
+}

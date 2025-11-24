@@ -34,6 +34,7 @@ export class StepRunningState extends BaseState {
       // Planning API can return either:
       // 1. behaviors array: { behaviors: [...] }
       // 2. single behavior object: { behavior_id, title, agent, task, ... }
+      // 3. actions array (streaming): { actions: [{ type: 'plan_behavior', ... }] }
 
       // Check for behaviors array (legacy format)
       if (Array.isArray(apiResponse.behaviors) && apiResponse.behaviors.length > 0) {
@@ -49,6 +50,19 @@ export class StepRunningState extends BaseState {
           '[StepRunningState] Planning response received with behavior object, transitioning to BEHAVIOR_RUNNING'
         );
         return WorkflowEvent.START_BEHAVIOR;
+      }
+
+      // Check for actions array (streaming format)
+      if (Array.isArray(apiResponse.actions)) {
+        const hasBehaviorAction = apiResponse.actions.some(
+          (a: any) => a.type === 'plan_behavior' || a.type === 'start_behavior'
+        );
+        if (hasBehaviorAction) {
+          console.log(
+            '[StepRunningState] Planning response received with behavior actions, transitioning to BEHAVIOR_RUNNING'
+          );
+          return WorkflowEvent.START_BEHAVIOR;
+        }
       }
     }
 
@@ -98,5 +112,9 @@ export class StepRunningState extends BaseState {
   getRequiredAPIType(): APIResponseType | null {
     // STEP_RUNNING state requires Planning API to get behaviors
     return APIResponseType.PLANNING;
+  }
+
+  getExpectedTransitionName(): string | null {
+    return 'START_BEHAVIOR';
   }
 }

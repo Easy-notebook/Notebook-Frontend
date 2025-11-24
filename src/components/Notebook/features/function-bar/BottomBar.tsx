@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Terminal, AlertCircle, FileText, Bug } from 'lucide-react';
+import { FRONTEND_BASE_URL } from '@/config/base_url';
 
 // moved to features/function-bar
 function BottomBar() {
@@ -29,9 +30,9 @@ function BottomBar() {
 
   // Set up drag events for resizing
   useEffect(() => {
-    const handleMouseDown = (e) => {
+    const handleMouseDown = (e: MouseEvent) => {
       // Only allow dragging from the resize handle
-      if (e.target.classList.contains('resize-handle')) {
+      if (e.target instanceof Element && e.target.classList.contains('resize-handle')) {
         isDraggingRef.current = true;
         startYRef.current = e.clientY;
         startHeightRef.current = height;
@@ -40,7 +41,7 @@ function BottomBar() {
       }
     };
 
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (isDraggingRef.current && expanded) {
         const deltaY = startYRef.current - e.clientY;
         const newHeight = Math.max(100, startHeightRef.current + deltaY);
@@ -202,8 +203,10 @@ function BottomBar() {
                 <p className="text-xs text-gray-500">Starting development server...</p>
                 <p className="text-xs text-gray-500">Compiled successfully!</p>
                 <p className="text-xs mt-1.5">You can now view the project in the browser.</p>
+
+                <p className="text-xs mt-1.5">You can now view the project in the browser.</p>
                 <p className="text-xs mt-0.5">
-                  Local: <span className="text-theme-800">http://localhost:3000</span>
+                  Local: <span className="text-theme-800">{FRONTEND_BASE_URL}</span>
                 </p>
                 <p className="text-xs">
                   Network: <span className="text-theme-800">http://192.168.1.5:3000</span>

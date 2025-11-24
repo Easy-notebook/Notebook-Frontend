@@ -200,6 +200,7 @@ export const MainContentArea = ({
           storageKey="main-content-area-layout"
           wrapPanelsInCard={true}
           centerOverflowHidden={false}
+          rightPanelResizable={false}
         />
       </div>
     </>

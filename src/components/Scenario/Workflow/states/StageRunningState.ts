@@ -31,11 +31,26 @@ export class StageRunningState extends BaseState {
   determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
     // Check if we have a planning response with steps
     if (apiResponse && typeof apiResponse === 'object') {
+      // Legacy format: steps array
       if (Array.isArray(apiResponse.steps) && apiResponse.steps.length > 0) {
         console.log(
           '[StageRunningState] Planning response received with steps, transitioning to STEP_RUNNING'
         );
         return WorkflowEvent.START_STEP;
+      }
+
+      // Streaming format: actions array
+      if (Array.isArray(apiResponse.actions)) {
+        const hasStepAction = apiResponse.actions.some(
+          (a: any) =>
+            a.type === 'plan_step' || a.type === 'add_step' || a.type === 'complete_stage_planning'
+        );
+        if (hasStepAction) {
+          console.log(
+            '[StageRunningState] Planning response received with step actions, transitioning to STEP_RUNNING'
+          );
+          return WorkflowEvent.START_STEP;
+        }
       }
     }
 
@@ -77,5 +92,9 @@ export class StageRunningState extends BaseState {
   getRequiredAPIType(): APIResponseType | null {
     // STAGE_RUNNING state requires Planning API to get steps
     return APIResponseType.PLANNING;
+  }
+
+  getExpectedTransitionName(): string | null {
+    return 'START_STEP';
   }
 }

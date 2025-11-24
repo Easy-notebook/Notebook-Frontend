@@ -10,7 +10,7 @@ export class NextStepHandler extends BaseTransitionHandler {
     return typeof r === 'object' && r._auto_trigger === 'NEXT_STEP';
   }
 
-  apply(state: Record<string, any>, _r: any): Record<string, any> {
+  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
     const ns = this.deepCopyState(state);
     const p = this.getProgress(ns);
     const sp = p.steps || {};
@@ -28,7 +28,7 @@ export class NextStepHandler extends BaseTransitionHandler {
 
     this.updateLocationCurrent(ns, { step_id: next.step_id, behavior_id: 'clear' });
     this.updateFSMState(ns, 'STEP_RUNNING', 'NEXT_STEP');
-    if (next.title) this.executeAction('new_step', next.title);
+    if (next.title) await this.executeAction('new_step', next.title);
     this.syncNotebookToState(ns);
     return ns;
   }

@@ -62,8 +62,8 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
         const actionType = action.type || '';
         if (
           actionType === 'complete_reflection' ||
-          actionType === 'mark_step_complete' ||
-          actionType === 'mark_stage_complete'
+          actionType === 'mark-step-complete' ||
+          actionType === 'mark-stage-complete'
         ) {
           // This is a reflecting API response, not generating API
           console.log(
@@ -81,7 +81,7 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
     return canHandle;
   }
 
-  apply(state: Record<string, any>, apiResponse: any): Record<string, any> {
+  async apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>> {
     const newState = this.deepCopyState(state);
 
     const actions = apiResponse.actions || [];
