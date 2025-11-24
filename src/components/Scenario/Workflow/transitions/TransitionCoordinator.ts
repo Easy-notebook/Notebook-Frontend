@@ -189,7 +189,7 @@ export class TransitionCoordinator {
   private async autoTriggerNextTransition(
     state: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const currentStateName = state.state?.FSM?.state;
+    const currentStateName = (state as any).state?.FSM?.state;
 
     if (!currentStateName) {
       console.log('[Auto-Trigger] No current state name found');
@@ -215,7 +215,7 @@ export class TransitionCoordinator {
     // Only auto-trigger if effect.current is not empty (forcing NEXT_BEHAVIOR)
     // Otherwise it needs to call Reflecting API or Planning API
     if (currentStateName === 'BEHAVIOR_COMPLETED') {
-      const context = state.observation?.context || {};
+      const context = (state as any).observation?.context || {};
       const effects = context.effects || {};
       const currentEffects = effects.current || [];
 

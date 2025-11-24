@@ -125,7 +125,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
       );
 
       // Extract new FSM state
-      const newFSMState = updatedStateJSON.state.FSM.state;
+      const newFSMState = (updatedStateJSON as StateJSON).state.FSM.state;
 
       // Update store
       set({
@@ -430,7 +430,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
         true
       );
 
-      const newFSMState = updatedStateJSON.state.FSM.state;
+      const newFSMState = (updatedStateJSON as StateJSON).state.FSM.state;
 
       set({
         currentState: newFSMState as WorkflowState,

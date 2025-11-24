@@ -18,7 +18,7 @@
  * - AsyncStateMachineAdapter: Coordinate above components
  */
 
-import { StateJSON } from '@Store/models';
+import { StateJSON, ExecutionStep } from '@Store/models';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
 
 import streamingLogger from '../__tests__/streaming-debug-logger';
@@ -29,28 +29,13 @@ export interface APIType {
 }
 
 interface APIClient {
-  planningAPI: (
-    stateJSON: StateJSON,
-    stageId: string,
-    stepId: string,
-    options: Record<string, unknown>
-  ) => Promise<unknown>;
-  generatingAPI: (
-    stateJSON: StateJSON,
-    stageId: string,
-    stepId: string,
-    options: Record<string, unknown>
-  ) => AsyncGenerator<unknown>;
-  reflectingAPI: (
-    stateJSON: StateJSON,
-    stageId: string,
-    stepId: string,
-    options: Record<string, unknown>
-  ) => AsyncGenerator<unknown>;
+  callPlanningAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
+  callGeneratingAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
+  callReflectingAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
 }
 
 interface ScriptStore {
-  execAction: (step: Record<string, unknown>) => Promise<void>;
+  execAction: (step: ExecutionStep) => Promise<void>;
 }
 
 /**
