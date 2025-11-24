@@ -22,7 +22,7 @@ export class CompleteWorkflowHandler extends BaseTransitionHandler {
     return acts.some((a: any) => a?.type === 'complete_workflow');
   }
 
-  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
+  async apply(state: Record<string, any>, _apiResponse: any): Promise<Record<string, any>> {
     console.log('[CompleteWorkflow] Completing workflow...');
 
     const newState = this.deepCopyState(state);

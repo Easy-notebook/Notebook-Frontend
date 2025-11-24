@@ -6,11 +6,11 @@ export class NextStageHandler extends BaseTransitionHandler {
     super('STAGE_COMPLETED', 'STAGE_RUNNING', 'NEXT_STAGE');
   }
 
-  canHandle(r: any): boolean {
-    return typeof r === 'object' && r._auto_trigger === 'NEXT_STAGE';
+  canHandle(apiResponse: any): boolean {
+    return typeof apiResponse === 'object' && apiResponse._auto_trigger === 'NEXT_STAGE';
   }
 
-  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
+  async apply(state: Record<string, any>, _apiResponse: any): Promise<Record<string, any>> {
     const ns = this.deepCopyState(state);
     const p = this.getProgress(ns);
     const sp = p.stages || {};

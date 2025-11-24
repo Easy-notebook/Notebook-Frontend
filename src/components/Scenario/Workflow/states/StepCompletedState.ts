@@ -28,7 +28,10 @@ export class StepCompletedState extends BaseState {
     };
   }
 
-  determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
+  determineNextTransition(
+    stateData: Record<string, any>,
+    _apiResponse?: any
+  ): WorkflowEvent | null {
     // Check if there are planed steps
     const remainingSteps = this.getRemainingStepsFromPlanned(stateData);
 

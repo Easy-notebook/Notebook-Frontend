@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useStore from '@Store/notebookStore';
-import { X, Plus, BookOpen, Save, MoreHorizontal, Code, Globe } from 'lucide-react';
+import { X, BookOpen, Save, MoreHorizontal, Code, Globe } from 'lucide-react';
 // moved to features/viewers/web
 import WebViewManager from './WebViewManager';
 
