@@ -27,7 +27,32 @@ export class NextStageHandler extends BaseTransitionHandler {
 
     if (cur) {
       if (!sp.completed) sp.completed = [];
-      sp.completed.push({ ...cur, completion_status: 'success' });
+
+      // ✅ Preserve steps history from current stage for UI display and debugging
+      const stepsHistory = {
+        planned: (p.steps?.planned || []).map((step: any) => ({
+          step_id: step.step_id,
+          title: step.title,
+          task: step.task,
+          acceptance: step.acceptance,
+        })),
+        completed: (p.steps?.completed || []).map((step: any) => ({
+          step_id: step.step_id,
+          title: step.title,
+          goal: step.goal,
+          verified_artifacts: step.verified_artifacts || {},
+        })),
+      };
+
+      sp.completed.push({
+        ...cur,
+        completion_status: 'success',
+        steps: stepsHistory,
+      });
+
+      console.log(
+        `[NextStageHandler] ✅ Completed stage ${cur.stage_id} with ${stepsHistory.completed.length}/${stepsHistory.planned.length} steps`
+      );
     }
 
     if (!planed.length) {
@@ -54,7 +79,16 @@ export class NextStageHandler extends BaseTransitionHandler {
       step_id: 'clear',
       behavior_id: 'clear',
     });
-    if (p.steps) p.steps = {};
+
+    // ✅ FIX: Properly initialize steps structure for new stage
+    // Instead of just clearing with {}, initialize with proper structure
+    p.steps = {
+      planned: [],
+      current: null,
+      completed: [],
+    };
+
+    console.log(`[NextStageHandler] Cleared and initialized steps for new stage: ${next.stage_id}`);
 
     this.updateFSMState(ns, 'STAGE_RUNNING', 'NEXT_STAGE');
     if (next.title) await this.executeAction('new_section', next.title);

@@ -48,6 +48,37 @@ Each level (stages, steps, behaviors) follows a consistent pattern:
 
 **IMPORTANT**: There is NO `planed` property stored in the state. It is always calculated on-demand from `planned`, `completed`, and `current`.
 
+### Stage Completion with Steps History
+
+When a stage completes and transitions to `completed`, it **preserves its steps history** to enable complete workflow visualization:
+
+```typescript
+{
+  stage_id: "stage_1",
+  title: "Data Analysis",
+  goal: "Analyze the dataset",
+  verified_artifacts: { ... },
+  completion_status: "success",
+  steps: {
+    planned: [
+      { step_id: "step_1", title: "Load data", task: "...", acceptance: "..." },
+      { step_id: "step_2", title: "Clean data", task: "...", acceptance: "..." }
+    ],
+    completed: [
+      { step_id: "step_1", title: "Load data", goal: "...", verified_artifacts: {...} },
+      { step_id: "step_2", title: "Clean data", goal: "...", verified_artifacts: {...} }
+    ]
+  }
+}
+```
+
+**Benefits:**
+- **UI Visualization**: Display complete workflow history across all stages
+- **Progress Tracking**: Show which steps were executed in each completed stage
+- **Debugging**: Trace execution flow and identify issues
+- **Backward Compatible**: `steps` field is optional, existing data still works
+
+
 ## 3. Maintenance Lifecycle
 
 ### Phase 1: Planning (Initialization)

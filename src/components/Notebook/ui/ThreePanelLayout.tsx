@@ -166,15 +166,35 @@ export const ThreePanelLayout = ({
     injectPanelStyles();
   }, []);
 
-  const wrapContent = (content: ReactNode, panelClassName: string, isCenter = false) => {
+  const wrapContent = (
+    content: ReactNode,
+    panelClassName: string,
+    isCenter = false,
+    isRight = false
+  ) => {
     // For center panel, respect centerOverflowHidden parameter
-    const overflowClass = isCenter && !centerOverflowHidden ? '' : 'overflow-hidden';
+    // For right panel, always enforce overflow-x-hidden to prevent width issues
+    const overflowClass =
+      isCenter && !centerOverflowHidden
+        ? ''
+        : isRight
+          ? 'overflow-x-hidden overflow-y-auto'
+          : 'overflow-hidden';
+
+    // For right panel, add strict width constraints to prevent internal components from breaking layout
+    const strictWidthStyle = isRight
+      ? {
+          maxWidth: '100%',
+          minWidth: 0,
+          width: '100%',
+        }
+      : {};
 
     if (wrapPanelsInCard) {
       return (
         <Card
           className={`h-full flex flex-col ${overflowClass} ${panelClassName}`}
-          style={{ boxSizing: 'border-box' }}
+          style={{ boxSizing: 'border-box', ...strictWidthStyle }}
         >
           {content}
         </Card>
@@ -183,7 +203,7 @@ export const ThreePanelLayout = ({
     return (
       <div
         className={`h-full ${overflowClass} ${panelClassName}`}
-        style={{ boxSizing: 'border-box' }}
+        style={{ boxSizing: 'border-box', ...strictWidthStyle }}
       >
         {content}
       </div>
@@ -251,8 +271,9 @@ export const ThreePanelLayout = ({
               minSize={rightMinSize}
               maxSize={rightMaxSize}
               order={3}
+              style={{ overflow: 'hidden' }}
             >
-              {wrapContent(rightPanel, rightClassName)}
+              {wrapContent(rightPanel, rightClassName, false, true)}
             </Panel>
           </>
         )}

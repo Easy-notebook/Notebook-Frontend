@@ -44,6 +44,22 @@ export interface StageProgress {
     title: string;
     goal: string;
     verified_artifacts: Record<string, any>;
+    completion_status?: string; // 'success' | 'failed'
+    // ✅ NEW: Preserve steps executed in this stage for UI display and debugging
+    steps?: {
+      planned: Array<{
+        step_id: string;
+        title: string;
+        task: string;
+        acceptance: string;
+      }>;
+      completed: Array<{
+        step_id: string;
+        title: string;
+        goal: string;
+        verified_artifacts: Record<string, any>;
+      }>;
+    };
   }>;
   current: {
     stage_id: string;
