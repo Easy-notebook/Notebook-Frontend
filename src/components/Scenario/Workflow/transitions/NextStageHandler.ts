@@ -15,21 +15,38 @@ export class NextStageHandler extends BaseTransitionHandler {
     const p = this.getProgress(ns);
     const sp = p.stages || {};
     const cur = sp.current;
-    const rem = sp.remaining || [];
+
+    // Determine next stage from planned list
+    const planned = sp.planned || [];
+    const completedIds = (sp.completed || []).map((s: any) => s.stage_id);
+    const currentId = cur?.stage_id;
+
+    const planed = planned.filter(
+      (s: any) => !completedIds.includes(s.stage_id) && s.stage_id !== currentId
+    );
 
     if (cur) {
       if (!sp.completed) sp.completed = [];
       sp.completed.push({ ...cur, completion_status: 'success' });
     }
 
-    if (!rem.length) {
+    if (!planed.length) {
+      console.log('[NextStageHandler] No planed stages found, completing workflow');
       this.updateFSMState(ns, 'COMPLETE', 'NO_MORE_STAGES');
       return ns;
     }
 
-    const next = rem[0];
+    // Next stage is the first one in the planed list
+    // We need to map it to the expected format (goal, verified_artifacts)
+    const nextPlanned = planed[0];
+    const next = {
+      ...nextPlanned,
+      goal: nextPlanned.task || '',
+      verified_artifacts: {},
+    };
+
     sp.current = next;
-    sp.remaining = rem.slice(1);
+    // No need to update 'planed' array anymore
     sp.current_outputs = this.initOutputsTracking(next.verified_artifacts || {});
 
     this.updateLocationCurrent(ns, {

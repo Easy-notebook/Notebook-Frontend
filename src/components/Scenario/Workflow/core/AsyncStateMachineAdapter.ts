@@ -122,7 +122,21 @@ export class AsyncStateMachineAdapter {
     const apiTypeEnum = state.getRequiredAPIType();
 
     if (!apiTypeEnum) {
-      console.log(`[AsyncFSM] State ${normalized} does not require API call`);
+      console.log(
+        `[AsyncFSM] State ${normalized} does not require API call, attempting auto-trigger`
+      );
+
+      // Attempt auto-trigger for logic-only states (like STAGE_COMPLETED)
+      const coordinator = getTransitionCoordinator();
+      const { state: newState, transitionName } =
+        await coordinator.autoTriggerNextTransition(stateJSON);
+
+      if (transitionName) {
+        console.log(`[AsyncFSM] Auto-triggered transition: ${transitionName}`);
+        this.lastTransitionName = transitionName;
+        return [newState as StateJSON, transitionName];
+      }
+
       return [stateJSON, null];
     }
 

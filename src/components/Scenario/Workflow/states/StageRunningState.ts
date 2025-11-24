@@ -54,13 +54,13 @@ export class StageRunningState extends BaseState {
       }
     }
 
-    // Check if stage is completed (no remaining steps)
+    // Check if stage is completed (no planed steps)
     const progress = this.getProgress(stateData);
     const stepsProgress = progress.steps || {};
-    const remainingSteps = stepsProgress.remaining || [];
+    const remainingSteps = stepsProgress.planed || [];
 
     if (remainingSteps.length === 0 && !stepsProgress.current) {
-      console.log('[StageRunningState] No remaining steps, stage completed');
+      console.log('[StageRunningState] No planed steps, stage completed');
       return WorkflowEvent.COMPLETE_STAGE;
     }
 
@@ -78,10 +78,10 @@ export class StageRunningState extends BaseState {
 
     // Additional conditions for specific transitions
     if (event === WorkflowEvent.COMPLETE_STAGE) {
-      // Can only complete if no steps remaining
+      // Can only complete if no steps planed
       const progress = this.getProgress(stateData);
       const stepsProgress = progress.steps || {};
-      const remainingSteps = stepsProgress.remaining || [];
+      const remainingSteps = stepsProgress.planed || [];
       return remainingSteps.length === 0;
     }
 

@@ -52,6 +52,22 @@ export class CompleteStagePlanningAction extends ActionBase {
         // Set current step to the first planned step
         stateJSON.observation.location.current.step_id = plannedSteps[0].step_id;
 
+        // IMPORTANT: We no longer populate 'planed'.
+        // It is derived dynamically from planned - completed - current.
+
+        const currentStep = {
+          ...plannedSteps[0],
+          goal: plannedSteps[0].task || '',
+          verified_artifacts: {},
+        };
+
+        stateJSON.observation.location.progress.steps.current = currentStep;
+        stateJSON.observation.location.progress.steps.completed = [];
+
+        console.log(
+          `[CompleteStagePlanningAction] Initialized current step: ${currentStep.step_id}`
+        );
+
         // Transition to STEP_RUNNING
         stateJSON.state.FSM.state = 'STEP_RUNNING';
 

@@ -34,6 +34,22 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
         // Set current stage to the first planned stage
         observation.location.current.stage_id = plannedStages[0].stage_id;
 
+        // IMPORTANT: We no longer populate 'planed'.
+        // It is derived dynamically from planned - completed - current.
+
+        const currentStage = {
+          ...plannedStages[0],
+          goal: plannedStages[0].task || '',
+          verified_artifacts: {},
+        };
+
+        observation.location.progress.stages.current = currentStage;
+        observation.location.progress.stages.completed = [];
+
+        console.log(
+          `[CompleteWorkflowPlanningAction] Initialized current stage: ${currentStage.stage_id}`
+        );
+
         // Transition to STAGE_RUNNING
         stateJSON.state.FSM.state = 'STAGE_RUNNING';
 

@@ -278,13 +278,13 @@ export const handleStreamResponse = async (data, showToast) => { ... }
 **Migration Steps:**
 1. ✅ Create new action-based architecture
 2. ✅ Implement core actions (cell, QA, generation)
-3. ⏳ Implement remaining actions from old handler
+3. ⏳ Implement planed actions from old handler
 4. ⏳ Update all imports to use new handler
 5. ⏳ Remove old handler after full migration
 
 ## Future Enhancements
 
-- [ ] Add remaining stream action types from old handler
+- [ ] Add planed stream action types from old handler
 - [ ] Add view/UI actions
 - [ ] Add workflow actions
 - [ ] Add comprehensive test coverage

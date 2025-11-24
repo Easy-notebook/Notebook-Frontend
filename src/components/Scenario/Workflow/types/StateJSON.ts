@@ -51,13 +51,6 @@ export interface StageProgress {
     goal: string;
     verified_artifacts: Record<string, any>;
   } | null;
-  remaining: Array<{
-    stage_id: string;
-    title: string;
-    goal: string;
-    verified_artifacts: Record<string, any>;
-    required_variables?: string[];
-  }>;
   planned?: Array<{
     stage_id: string;
     title: string;
@@ -87,13 +80,6 @@ export interface StepProgress {
     goal: string;
     verified_artifacts: Record<string, any>;
   } | null;
-  remaining: Array<{
-    step_id: string;
-    title: string;
-    goal: string;
-    verified_artifacts: Record<string, any>;
-    required_variables?: string[];
-  }>;
   planned?: Array<{
     step_id: string;
     title: string;
@@ -232,7 +218,6 @@ export function createInitialStateJSON(
           stages: {
             completed: [],
             current: null,
-            remaining: [],
             focus: '',
             current_outputs: {
               expected: [],
@@ -243,7 +228,6 @@ export function createInitialStateJSON(
           steps: {
             completed: [],
             current: null,
-            remaining: [],
             focus: '',
             current_outputs: {
               expected: [],

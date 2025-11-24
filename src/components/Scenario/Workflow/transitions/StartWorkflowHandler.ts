@@ -106,7 +106,7 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
     };
     stagesProgress.completed = [];
     stagesProgress.focus = focus;
-    stagesProgress.remaining = stagesData.slice(1);
+    stagesProgress.planed = stagesData.slice(1);
     stagesProgress.current_outputs = this.initOutputsTracking(firstStage.verified_artifacts || {});
 
     this.updateLocationCurrent(newState, {

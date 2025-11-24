@@ -29,18 +29,16 @@ export class StageCompletedState extends BaseState {
   }
 
   determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
-    // Check if there are remaining stages
-    const progress = this.getProgress(stateData);
-    const stagesProgress = progress.stages || {};
-    const remainingStages = stagesProgress.remaining || [];
+    // Check if there are planed stages
+    const remainingStages = this.getRemainingStagesFromPlanned(stateData);
 
     if (remainingStages.length === 0) {
-      console.log('[StageCompletedState] No remaining stages, completing workflow');
+      console.log('[StageCompletedState] No planed stages, completing workflow');
       return WorkflowEvent.COMPLETE_WORKFLOW;
     }
 
     // Move to next stage
-    console.log(`[StageCompletedState] Moving to next stage (${remainingStages.length} remaining)`);
+    console.log(`[StageCompletedState] Moving to next stage (${remainingStages.length} planed)`);
     return WorkflowEvent.NEXT_STAGE;
   }
 
@@ -51,16 +49,14 @@ export class StageCompletedState extends BaseState {
       return false;
     }
 
-    const progress = this.getProgress(stateData);
-    const stagesProgress = progress.stages || {};
-    const remainingStages = stagesProgress.remaining || [];
+    const remainingStages = this.getRemainingStagesFromPlanned(stateData);
 
-    // COMPLETE_WORKFLOW requires no remaining stages
+    // COMPLETE_WORKFLOW requires no planed stages
     if (event === WorkflowEvent.COMPLETE_WORKFLOW) {
       return remainingStages.length === 0;
     }
 
-    // NEXT_STAGE requires remaining stages
+    // NEXT_STAGE requires planed stages
     if (event === WorkflowEvent.NEXT_STAGE) {
       return remainingStages.length > 0;
     }
@@ -69,9 +65,32 @@ export class StageCompletedState extends BaseState {
     return true;
   }
 
+  /**
+   * Helper to get planed stages from planned list.
+   * planed = planned - completed - current
+   */
+  private getRemainingStagesFromPlanned(stateData: Record<string, any>): any[] {
+    const progress = this.getProgress(stateData);
+    const stagesProgress = progress.stages || {};
+    const planned = stagesProgress.planned || [];
+
+    if (planned.length === 0) {
+      return [];
+    }
+
+    const completedIds = (stagesProgress.completed || []).map((s: any) => s.stage_id);
+    const currentId = stagesProgress.current?.stage_id;
+
+    // Filter planned stages that are not completed and not current
+    return planned.filter(
+      (s: any) => !completedIds.includes(s.stage_id) && s.stage_id !== currentId
+    );
+  }
+
   getRequiredAPIType(): APIResponseType | null {
-    // STAGE_COMPLETED state requires Reflecting API for feedback
-    return APIResponseType.COMPLETE;
+    // STAGE_COMPLETED is a logic-only state - no API call needed
+    // It auto-triggers COMPLETE_WORKFLOW or NEXT_STAGE based on remaining stages
+    return null;
   }
 
   getExpectedTransitionName(): string | null {

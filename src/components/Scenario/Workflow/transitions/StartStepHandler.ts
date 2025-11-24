@@ -70,7 +70,7 @@ export class StartStepHandler extends BaseTransitionHandler {
     };
     sp.completed = [];
     sp.focus = r.focus || '';
-    sp.remaining = steps.slice(1);
+    sp.planed = steps.slice(1);
     sp.current_outputs = this.initOutputsTracking(fs.verified_artifacts || {});
 
     this.updateLocationCurrent(ns, { step_id: fs.step_id, behavior_id: 'clear' });

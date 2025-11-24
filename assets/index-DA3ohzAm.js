@@ -58395,12 +58395,10 @@ class aHt extends Rm {
       .text(' Key: ')
       .code(e, 'text');
     (r !== void 0 &&
-      n
-        .text(' Hit rate: ')
-        .badge(`${(r * 100).toFixed(1)}%`, {
-          backgroundColor: r > 0.8 ? '#10B981' : '#F59E0B',
-          color: '#FFFFFF',
-        }),
+      n.text(' Hit rate: ').badge(`${(r * 100).toFixed(1)}%`, {
+        backgroundColor: r > 0.8 ? '#10B981' : '#F59E0B',
+        color: '#FFFFFF',
+      }),
       this.info(n));
   }
   cacheMiss(e, r) {
@@ -58446,26 +58444,20 @@ class aHt extends Rm {
         .badge(r.toUpperCase(), { backgroundColor: i[r], color: '#FFFFFF' });
     (n &&
       (n.success !== void 0 &&
-        a
-          .text(' Status: ')
-          .badge(n.success ? 'SUCCESS' : 'FAILED', {
-            backgroundColor: n.success ? '#10B981' : '#DC2626',
-            color: '#FFFFFF',
-          }),
+        a.text(' Status: ').badge(n.success ? 'SUCCESS' : 'FAILED', {
+          backgroundColor: n.success ? '#10B981' : '#DC2626',
+          color: '#FFFFFF',
+        }),
       n.size !== void 0 &&
-        a
-          .text(' Size: ')
-          .badge(`${(n.size / 1024).toFixed(2)}KB`, {
-            backgroundColor: '#6366F1',
-            color: '#FFFFFF',
-          }),
+        a.text(' Size: ').badge(`${(n.size / 1024).toFixed(2)}KB`, {
+          backgroundColor: '#6366F1',
+          color: '#FFFFFF',
+        }),
       n.duration !== void 0 &&
-        a
-          .text(' Duration: ')
-          .badge(`${n.duration}ms`, {
-            backgroundColor: n.duration > 1e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        a.text(' Duration: ').badge(`${n.duration}ms`, {
+          backgroundColor: n.duration > 1e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       n.error && a.text(' Error: ').text(n.error)),
       r === 'clear' || (n == null ? void 0 : n.success) === !1 ? this.warn(a) : this.info(a));
   }
@@ -58507,12 +58499,10 @@ class oHt extends Rm {
         .text(' Status: ')
         .badge(n.toString(), { backgroundColor: o, color: '#FFFFFF' });
     (i !== void 0 &&
-      l
-        .text(' Duration: ')
-        .badge(`${i}ms`, {
-          backgroundColor: i > 1e3 ? '#DC2626' : i > 500 ? '#F59E0B' : '#10B981',
-          color: '#FFFFFF',
-        }),
+      l.text(' Duration: ').badge(`${i}ms`, {
+        backgroundColor: i > 1e3 ? '#DC2626' : i > 500 ? '#F59E0B' : '#10B981',
+        color: '#FFFFFF',
+      }),
       a !== void 0 &&
         l
           .text(' Size: ')
@@ -58735,12 +58725,10 @@ class sHt extends Rm {
       r.from && n.text(' From: ').code(r.from, 'text'),
       r.to && n.text(' To: ').code(r.to, 'text'),
       r.duration !== void 0 &&
-        n
-          .text(' Duration: ')
-          .badge(`${r.duration}ms`, {
-            backgroundColor: r.duration > 500 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        n.text(' Duration: ').badge(`${r.duration}ms`, {
+          backgroundColor: r.duration > 500 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       r.trigger && n.text(' Trigger: ').text(r.trigger)),
       this.info(n));
   }
@@ -58761,12 +58749,10 @@ class sHt extends Rm {
         .text(' ID: ')
         .code(r, 'text');
     (n &&
-      o
-        .text(' Result: ')
-        .badge(n.toUpperCase(), {
-          backgroundColor: n === 'success' ? '#10B981' : '#DC2626',
-          color: '#FFFFFF',
-        }),
+      o.text(' Result: ').badge(n.toUpperCase(), {
+        backgroundColor: n === 'success' ? '#10B981' : '#DC2626',
+        color: '#FFFFFF',
+      }),
       i && i.length > 0 && o.text(' Errors: ').code(JSON.stringify(i), 'json'),
       n === 'error' ? this.error(o) : this.info(o));
   }
@@ -59039,12 +59025,10 @@ class cHt extends Rm {
           .text(' Cells: ')
           .badge(n.cellCount.toString(), { backgroundColor: '#8B5CF6', color: '#FFFFFF' }),
       n.duration !== void 0 &&
-        a
-          .text(' Duration: ')
-          .badge(`${n.duration}ms`, {
-            backgroundColor: n.duration > 1e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          })),
+        a.text(' Duration: ').badge(`${n.duration}ms`, {
+          backgroundColor: n.duration > 1e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        })),
       e === 'delete' || (e === 'save' && n != null && n.error) ? this.warn(a) : this.info(a));
   }
   workflowExecution(e, r, n) {
@@ -59087,12 +59071,10 @@ class cHt extends Rm {
         .code(e, 'text');
     (n &&
       (n.duration !== void 0 &&
-        a
-          .text(' Duration: ')
-          .badge(`${n.duration}ms`, {
-            backgroundColor: n.duration > 5e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        a.text(' Duration: ').badge(`${n.duration}ms`, {
+          backgroundColor: n.duration > 5e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       n.outputLength !== void 0 &&
         a
           .text(' Output: ')
@@ -59239,12 +59221,10 @@ class uHt extends Rm {
         .badge(n.toUpperCase(), { backgroundColor: a[n], color: '#FFFFFF' });
     (i &&
       (i.duration !== void 0 &&
-        o
-          .text(' Duration: ')
-          .badge(`${i.duration}ms`, {
-            backgroundColor: i.duration > 1e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        o.text(' Duration: ').badge(`${i.duration}ms`, {
+          backgroundColor: i.duration > 1e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       i.error && o.text(' Error: ').text(i.error),
       i.result && o.text(' Result: ').code(JSON.stringify(i.result), 'json')),
       n === 'error' ? this.error(o) : this.info(o));
@@ -59267,20 +59247,16 @@ class uHt extends Rm {
         .badge(r.toUpperCase(), { backgroundColor: i[r], color: '#FFFFFF' });
     (n &&
       (n.size !== void 0 &&
-        a
-          .text(' Size: ')
-          .badge(`${(n.size / 1024).toFixed(2)}KB`, {
-            backgroundColor: '#6366F1',
-            color: '#FFFFFF',
-          }),
+        a.text(' Size: ').badge(`${(n.size / 1024).toFixed(2)}KB`, {
+          backgroundColor: '#6366F1',
+          color: '#FFFFFF',
+        }),
       n.key && a.text(' Key: ').code(n.key, 'text'),
       n.success !== void 0 &&
-        a
-          .text(' Status: ')
-          .badge(n.success ? 'SUCCESS' : 'FAILED', {
-            backgroundColor: n.success ? '#10B981' : '#DC2626',
-            color: '#FFFFFF',
-          })),
+        a.text(' Status: ').badge(n.success ? 'SUCCESS' : 'FAILED', {
+          backgroundColor: n.success ? '#10B981' : '#DC2626',
+          color: '#FFFFFF',
+        })),
       this.info(a));
   }
   middleware(e, r, n, i) {
@@ -59374,20 +59350,16 @@ class dHt extends Rm {
         .code(r, 'text');
     (n &&
       (n.size !== void 0 &&
-        a
-          .text(' Size: ')
-          .badge(`${(n.size / 1024).toFixed(2)}KB`, {
-            backgroundColor: '#6366F1',
-            color: '#FFFFFF',
-          }),
+        a.text(' Size: ').badge(`${(n.size / 1024).toFixed(2)}KB`, {
+          backgroundColor: '#6366F1',
+          color: '#FFFFFF',
+        }),
       n.type && a.text(' Type: ').badge(n.type, { backgroundColor: '#8B5CF6', color: '#FFFFFF' }),
       n.duration !== void 0 &&
-        a
-          .text(' Duration: ')
-          .badge(`${n.duration}ms`, {
-            backgroundColor: n.duration > 1e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        a.text(' Duration: ').badge(`${n.duration}ms`, {
+          backgroundColor: n.duration > 1e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       n.newPath && a.text(' New Path: ').code(n.newPath, 'text')),
       e === 'delete' ? this.warn(a) : this.info(a));
   }
@@ -59436,20 +59408,16 @@ class dHt extends Rm {
           .text(' Content: ')
           .badge(`${n.contentLength} chars`, { backgroundColor: '#6366F1', color: '#FFFFFF' }),
       n.loadTime !== void 0 &&
-        a
-          .text(' Load Time: ')
-          .badge(`${n.loadTime}ms`, {
-            backgroundColor: n.loadTime > 1e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        a.text(' Load Time: ').badge(`${n.loadTime}ms`, {
+          backgroundColor: n.loadTime > 1e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       n.error && a.text(' Error: ').text(n.error),
       n.fromCache !== void 0 &&
-        a
-          .text(' Source: ')
-          .badge(n.fromCache ? 'CACHE' : 'SERVER', {
-            backgroundColor: n.fromCache ? '#10B981' : '#3B82F6',
-            color: '#FFFFFF',
-          })),
+        a.text(' Source: ').badge(n.fromCache ? 'CACHE' : 'SERVER', {
+          backgroundColor: n.fromCache ? '#10B981' : '#3B82F6',
+          color: '#FFFFFF',
+        })),
       e === 'error' ? this.error(a) : this.info(a));
   }
   typeDetection(e, r, n, i) {
@@ -59460,12 +59428,10 @@ class dHt extends Rm {
       .text(' Type: ')
       .badge(r, { backgroundColor: '#6366F1', color: '#FFFFFF' });
     (n !== void 0 &&
-      a
-        .text(' Confidence: ')
-        .badge(`${(n * 100).toFixed(1)}%`, {
-          backgroundColor: n > 0.8 ? '#10B981' : n > 0.5 ? '#F59E0B' : '#DC2626',
-          color: '#FFFFFF',
-        }),
+      a.text(' Confidence: ').badge(`${(n * 100).toFixed(1)}%`, {
+        backgroundColor: n > 0.8 ? '#10B981' : n > 0.5 ? '#F59E0B' : '#DC2626',
+        color: '#FFFFFF',
+      }),
       i && a.text(' ').badge('FALLBACK', { backgroundColor: '#F59E0B', color: '#FFFFFF' }),
       this.debug(a));
   }
@@ -59478,19 +59444,15 @@ class dHt extends Rm {
         .code(r, 'text');
     (n &&
       (n.cacheSize !== void 0 &&
-        a
-          .text(' Cache Size: ')
-          .badge(`${(n.cacheSize / 1024).toFixed(2)}KB`, {
-            backgroundColor: '#6366F1',
-            color: '#FFFFFF',
-          }),
+        a.text(' Cache Size: ').badge(`${(n.cacheSize / 1024).toFixed(2)}KB`, {
+          backgroundColor: '#6366F1',
+          color: '#FFFFFF',
+        }),
       n.hitRate !== void 0 &&
-        a
-          .text(' Hit Rate: ')
-          .badge(`${(n.hitRate * 100).toFixed(1)}%`, {
-            backgroundColor: n.hitRate > 0.8 ? '#10B981' : '#F59E0B',
-            color: '#FFFFFF',
-          }),
+        a.text(' Hit Rate: ').badge(`${(n.hitRate * 100).toFixed(1)}%`, {
+          backgroundColor: n.hitRate > 0.8 ? '#10B981' : '#F59E0B',
+          color: '#FFFFFF',
+        }),
       n.evictionReason && a.text(' Reason: ').text(n.evictionReason)),
       this.debug(a));
   }
@@ -59513,12 +59475,10 @@ class dHt extends Rm {
           .text(' Progress: ')
           .badge(`${n.progress}%`, { backgroundColor: '#8B5CF6', color: '#FFFFFF' }),
       n.processingTime !== void 0 &&
-        a
-          .text(' Time: ')
-          .badge(`${n.processingTime}ms`, {
-            backgroundColor: n.processingTime > 1e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        a.text(' Time: ').badge(`${n.processingTime}ms`, {
+          backgroundColor: n.processingTime > 1e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       n.errors &&
         n.errors.length > 0 &&
         a
@@ -59558,12 +59518,10 @@ class dHt extends Rm {
       (n.changeType &&
         a.text(' Change: ').badge(n.changeType, { backgroundColor: '#8B5CF6', color: '#FFFFFF' }),
       n.stats &&
-        a
-          .text(' Size: ')
-          .badge(`${(n.stats.size / 1024).toFixed(2)}KB`, {
-            backgroundColor: '#6366F1',
-            color: '#FFFFFF',
-          })),
+        a.text(' Size: ').badge(`${(n.stats.size / 1024).toFixed(2)}KB`, {
+          backgroundColor: '#6366F1',
+          color: '#FFFFFF',
+        })),
       e === 'error' ? this.error(a) : this.debug(a));
   }
   splitView(e, r) {
@@ -59611,12 +59569,10 @@ class fHt extends Rm {
           .text(' Messages: ')
           .badge(n.messageCount.toString(), { backgroundColor: '#6366F1', color: '#FFFFFF' }),
       n.duration !== void 0 &&
-        a
-          .text(' Duration: ')
-          .badge(`${n.duration}ms`, {
-            backgroundColor: n.duration > 5e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        a.text(' Duration: ').badge(`${n.duration}ms`, {
+          backgroundColor: n.duration > 5e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       n.reason && a.text(' Reason: ').text(n.reason)),
       this.info(a));
   }
@@ -59635,12 +59591,10 @@ class fHt extends Rm {
           .text(' Tokens: ')
           .badge(i.tokens.toString(), { backgroundColor: '#8B5CF6', color: '#FFFFFF' }),
       i.processingTime !== void 0 &&
-        o
-          .text(' Time: ')
-          .badge(`${i.processingTime}ms`, {
-            backgroundColor: i.processingTime > 1e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          })),
+        o.text(' Time: ').badge(`${i.processingTime}ms`, {
+          backgroundColor: i.processingTime > 1e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        })),
       this.debug(o));
   }
   streaming(e, r, n) {
@@ -59683,12 +59637,10 @@ class fHt extends Rm {
         .code(n.substring(0, 100) + (n.length > 100 ? '...' : ''), r === 'json' ? 'json' : 'text');
     (i &&
       (i.responseTime !== void 0 &&
-        o
-          .text(' Time: ')
-          .badge(`${i.responseTime}ms`, {
-            backgroundColor: i.responseTime > 5e3 ? '#F59E0B' : '#10B981',
-            color: '#FFFFFF',
-          }),
+        o.text(' Time: ').badge(`${i.responseTime}ms`, {
+          backgroundColor: i.responseTime > 5e3 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        }),
       i.tokens !== void 0 &&
         o
           .text(' Tokens: ')
@@ -59738,12 +59690,10 @@ class fHt extends Rm {
         .text('Recommendation ')
         .badge(e.toUpperCase(), { backgroundColor: i[e], color: '#FFFFFF' });
     (n !== void 0 &&
-      a
-        .text(' Confidence: ')
-        .badge(`${(n * 100).toFixed(1)}%`, {
-          backgroundColor: n > 0.8 ? '#10B981' : n > 0.6 ? '#F59E0B' : '#DC2626',
-          color: '#FFFFFF',
-        }),
+      a.text(' Confidence: ').badge(`${(n * 100).toFixed(1)}%`, {
+        backgroundColor: n > 0.8 ? '#10B981' : n > 0.6 ? '#F59E0B' : '#DC2626',
+        color: '#FFFFFF',
+      }),
       a.text(' Recommendation: ').code(JSON.stringify(r, null, 2), 'json'),
       this.info(a));
   }
@@ -59764,12 +59714,10 @@ class fHt extends Rm {
           .text(' Memory: ')
           .badge(`${(a / 1024).toFixed(2)}KB`, { backgroundColor: '#9CA3AF', color: '#FFFFFF' }),
       o !== void 0 &&
-        s
-          .text(' Accuracy: ')
-          .badge(`${(o * 100).toFixed(1)}%`, {
-            backgroundColor: o > 0.9 ? '#10B981' : o > 0.7 ? '#F59E0B' : '#DC2626',
-            color: '#FFFFFF',
-          }),
+        s.text(' Accuracy: ').badge(`${(o * 100).toFixed(1)}%`, {
+          backgroundColor: o > 0.9 ? '#10B981' : o > 0.7 ? '#F59E0B' : '#DC2626',
+          color: '#FFFFFF',
+        }),
       l !== void 0 &&
         s
           .text(' Throughput: ')
@@ -60598,14 +60546,14 @@ function BSe(t = null, e = {}) {
           stages: {
             completed: [],
             current: null,
-            remaining: [],
+            planed: [],
             focus: '',
             current_outputs: { expected: [], produced: [], in_progress: [] },
           },
           steps: {
             completed: [],
             current: null,
-            remaining: [],
+            planed: [],
             focus: '',
             current_outputs: { expected: [], produced: [], in_progress: [] },
           },
@@ -80567,19 +80515,17 @@ const uo = {
     createGeneratingVideoCell: (t, e = {}) => {
       const r = vr.getState().addNewCell2End('image');
       return (
-        vr
-          .getState()
-          .updateCellMetadata(r, {
-            isGenerating: !0,
-            generationStartTime: Date.now(),
-            prompt: t,
-            generationType: 'video',
-            generationParams: {
-              quality: e.quality || 'standard',
-              ratio: e.ratio || '16:9',
-              duration: e.duration || '5',
-            },
-          }),
+        vr.getState().updateCellMetadata(r, {
+          isGenerating: !0,
+          generationStartTime: Date.now(),
+          prompt: t,
+          generationType: 'video',
+          generationParams: {
+            quality: e.quality || 'standard',
+            ratio: e.ratio || '16:9',
+            duration: e.duration || '5',
+          },
+        }),
         vr.getState().updateCell(r, ''),
         r
       );
@@ -81517,15 +81463,13 @@ const MC = class MC {
           l >= a &&
             (Wy.warn('Video generation poll timeout', { taskId: r, attempts: l }),
             this.stopPolling(r),
-            vr
-              .getState()
-              .updateCellByUniqueIdentifier(n, {
-                metadata: {
-                  isGenerating: !1,
-                  generationError: 'Generation timeout',
-                  generationStatus: 'timeout',
-                },
-              }) && Lx.info('Video generation timeout status updated', { taskId: r })));
+            vr.getState().updateCellByUniqueIdentifier(n, {
+              metadata: {
+                isGenerating: !1,
+                generationError: 'Generation timeout',
+                generationStatus: 'timeout',
+              },
+            }) && Lx.info('Video generation timeout status updated', { taskId: r })));
       } catch (c) {
         (Wy.error('Video generation status poll error', { taskId: r, error: c }),
           this.stopPolling(r));
@@ -81592,17 +81536,15 @@ class yXe extends Ko {
       i && dle.stopPolling(i);
       const u = `![${s || 'Generated Video'}](${o})`,
         d = vr.getState().updateCellByUniqueIdentifier(l, { content: u }),
-        f = vr
-          .getState()
-          .updateCellByUniqueIdentifier(l, {
-            metadata: {
-              isGenerating: !1,
-              generationCompleted: !0,
-              generationEndTime: Date.now(),
-              videoUrl: o,
-              generationStatus: 'completed',
-            },
-          });
+        f = vr.getState().updateCellByUniqueIdentifier(l, {
+          metadata: {
+            isGenerating: !1,
+            generationCompleted: !0,
+            generationEndTime: Date.now(),
+            videoUrl: o,
+            generationStatus: 'completed',
+          },
+        });
       d &&
         f &&
         (console.log('✅ 视频生成完成，内容已更新'),
@@ -81610,15 +81552,13 @@ class yXe extends Ko {
     } else
       (a === 'failed' || c) &&
         (i && dle.stopPolling(i),
-        vr
-          .getState()
-          .updateCellByUniqueIdentifier(l, {
-            metadata: {
-              isGenerating: !1,
-              generationError: c || 'Generation failed',
-              generationStatus: 'failed',
-            },
-          }) &&
+        vr.getState().updateCellByUniqueIdentifier(l, {
+          metadata: {
+            isGenerating: !1,
+            generationError: c || 'Generation failed',
+            generationStatus: 'failed',
+          },
+        }) &&
           (console.log('❌ 视频生成失败状态已更新'),
           await n({ message: `视频生成失败: ${c || 'Unknown error'}`, type: 'error' })));
   }
@@ -166290,13 +166230,11 @@ const z6r = { WITH_2_BLANKS: '  ' },
   Mlt = class ok {
     static pack(e, r, n) {
       return m3r(this, arguments, function* (i, a, o, l = []) {
-        return this.compiler
-          .compile(i, PAe(o), l)
-          .generateAsync({
-            type: a,
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            compression: 'DEFLATE',
-          });
+        return this.compiler.compile(i, PAe(o), l).generateAsync({
+          type: a,
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          compression: 'DEFLATE',
+        });
       });
     }
     static toString(e, r, n = []) {
@@ -228430,7 +228368,7 @@ class E8r extends qb {
     }),
       (u.completed = []),
       (u.focus = o),
-      (u.remaining = a.slice(1)),
+      (u.planed = a.slice(1)),
       (u.current_outputs = this.initOutputsTracking(d.verified_artifacts || {})),
       this.updateLocationCurrent(n, {
         stage_id: d.stage_id,
@@ -228509,7 +228447,7 @@ class k8r extends qb {
       }),
       (o.completed = []),
       (o.focus = r.focus || ''),
-      (o.remaining = i.slice(1)),
+      (o.planed = i.slice(1)),
       (o.current_outputs = this.initOutputsTracking(l.verified_artifacts || {})),
       this.updateLocationCurrent(n, { step_id: l.step_id, behavior_id: 'clear' }),
       this.updateFSMState(n, 'STEP_RUNNING', 'START_STEP'),
@@ -228769,12 +228707,12 @@ class I8r extends qb {
   async apply(e, r) {
     const n = this.deepCopyState(e),
       a = this.getProgress(n).steps || {},
-      o = a.remaining || [];
+      o = a.planed || [];
     if (!o.length) return (this.updateFSMState(n, 'STAGE_COMPLETED', 'NO_MORE_STEPS'), n);
     const l = o[0];
     return (
       (a.current = l),
-      (a.remaining = o.slice(1)),
+      (a.planed = o.slice(1)),
       (a.current_outputs = this.initOutputsTracking(l.verified_artifacts || {})),
       this.updateLocationCurrent(n, { step_id: l.step_id, behavior_id: 'clear' }),
       this.updateFSMState(n, 'STEP_RUNNING', 'NEXT_STEP'),
@@ -228820,7 +228758,7 @@ class N8r extends qb {
       i = this.getProgress(n),
       a = i.stages || {},
       o = a.current,
-      l = a.remaining || [];
+      l = a.planed || [];
     if (
       (o &&
         (a.completed || (a.completed = []),
@@ -228831,7 +228769,7 @@ class N8r extends qb {
     const s = l[0];
     return (
       (a.current = s),
-      (a.remaining = l.slice(1)),
+      (a.planed = l.slice(1)),
       (a.current_outputs = this.initOutputsTracking(s.verified_artifacts || {})),
       this.updateLocationCurrent(n, {
         stage_id: s.stage_id,
@@ -229208,14 +229146,14 @@ class j8r extends N3 {
         );
     }
     const i = this.getProgress(e).steps || {};
-    return (i.remaining || []).length === 0 && !i.current
-      ? (console.log('[StageRunningState] No remaining steps, stage completed'), Li.COMPLETE_STAGE)
+    return (i.planed || []).length === 0 && !i.current
+      ? (console.log('[StageRunningState] No planed steps, stage completed'), Li.COMPLETE_STAGE)
       : (console.log('[StageRunningState] No transition conditions met'), null);
   }
   canTransitionTo(e, r) {
     return Object.values(this.getValidTransitions()).includes(e)
       ? e === Li.COMPLETE_STAGE
-        ? ((this.getProgress(r).steps || {}).remaining || []).length === 0
+        ? ((this.getProgress(r).steps || {}).planed || []).length === 0
         : !0
       : !1;
   }
@@ -229239,16 +229177,16 @@ class z8r extends N3 {
     };
   }
   determineNextTransition(e, r) {
-    const a = (this.getProgress(e).stages || {}).remaining || [];
+    const a = (this.getProgress(e).stages || {}).planed || [];
     return a.length === 0
-      ? (console.log('[StageCompletedState] No remaining stages, completing workflow'),
+      ? (console.log('[StageCompletedState] No planed stages, completing workflow'),
         Li.COMPLETE_WORKFLOW)
-      : (console.log(`[StageCompletedState] Moving to next stage (${a.length} remaining)`),
+      : (console.log(`[StageCompletedState] Moving to next stage (${a.length} planed)`),
         Li.NEXT_STAGE);
   }
   canTransitionTo(e, r) {
     if (!Object.values(this.getValidTransitions()).includes(e)) return !1;
-    const o = (this.getProgress(r).stages || {}).remaining || [];
+    const o = (this.getProgress(r).stages || {}).planed || [];
     return e === Li.COMPLETE_WORKFLOW ? o.length === 0 : e === Li.NEXT_STAGE ? o.length > 0 : !0;
   }
   getRequiredAPIType() {
@@ -229335,16 +229273,15 @@ class H8r extends N3 {
     };
   }
   determineNextTransition(e, r) {
-    const a = (this.getProgress(e).steps || {}).remaining || [];
+    const a = (this.getProgress(e).steps || {}).planed || [];
     return a.length === 0
-      ? (console.log('[StepCompletedState] No remaining steps, completing stage'),
-        Li.COMPLETE_STAGE)
-      : (console.log(`[StepCompletedState] Moving to next step (${a.length} remaining)`),
+      ? (console.log('[StepCompletedState] No planed steps, completing stage'), Li.COMPLETE_STAGE)
+      : (console.log(`[StepCompletedState] Moving to next step (${a.length} planed)`),
         Li.NEXT_STEP);
   }
   canTransitionTo(e, r) {
     if (!Object.values(this.getValidTransitions()).includes(e)) return !1;
-    const o = (this.getProgress(r).steps || {}).remaining || [];
+    const o = (this.getProgress(r).steps || {}).planed || [];
     return e === Li.COMPLETE_STAGE ? o.length === 0 : e === Li.NEXT_STEP ? o.length > 0 : !0;
   }
   getRequiredAPIType() {
@@ -317020,24 +316957,24 @@ function rve() {
     (hK = {
       failure: function (e, r) {
         if (e.length < 1) throw new Error('Failure must have errors');
-        return new t({ status: 'failure', remaining: r, errors: e });
+        return new t({ status: 'failure', planed: r, errors: e });
       },
       error: function (e, r) {
         if (e.length < 1) throw new Error('Failure must have errors');
-        return new t({ status: 'error', remaining: r, errors: e });
+        return new t({ status: 'error', planed: r, errors: e });
       },
       success: function (e, r, n) {
-        return new t({ status: 'success', value: e, source: n, remaining: r, errors: [] });
+        return new t({ status: 'success', value: e, source: n, planed: r, errors: [] });
       },
       cut: function (e) {
-        return new t({ status: 'cut', remaining: e, errors: [] });
+        return new t({ status: 'cut', planed: e, errors: [] });
       },
     }));
   var t = function (e) {
     ((this._value = e.value),
       (this._status = e.status),
       (this._hasValue = e.value !== void 0),
-      (this._remaining = e.remaining),
+      (this._remaining = e.planed),
       (this._source = e.source),
       (this._errors = e.errors));
   };
@@ -317047,7 +316984,7 @@ function rve() {
         ? new t({
             value: e(this._value, this._source),
             status: this._status,
-            remaining: this._remaining,
+            planed: this._remaining,
             source: this._source,
             errors: this._errors,
           })
@@ -317057,7 +316994,7 @@ function rve() {
       return new t({
         value: this._value,
         status: this._status,
-        remaining: e,
+        planed: e,
         source: this._source,
         errors: this._errors,
       });
@@ -317077,7 +317014,7 @@ function rve() {
     (t.prototype.value = function () {
       return this._value;
     }),
-    (t.prototype.remaining = function () {
+    (t.prototype.planed = function () {
       return this._remaining;
     }),
     (t.prototype.source = function () {
@@ -317245,22 +317182,22 @@ function vft() {
                       var w = b.result,
                         g = b.hasCut;
                       if (!w.isSuccess()) return { result: w, hasCut: g };
-                      var S = x(w.remaining());
+                      var S = x(w.planed());
                       if (S.isCut()) return { result: w, hasCut: !0 };
                       if (S.isSuccess()) {
                         var C;
                         x.isCaptured ? (C = w.value().withValue(x, S.value())) : (C = w.value());
-                        var k = S.remaining(),
+                        var k = S.planed(),
                           E = m.to(k);
                         return { result: n.success(C, k, E), hasCut: g };
                       } else
                         return g
-                          ? { result: n.error(S.errors(), S.remaining()), hasCut: g }
+                          ? { result: n.error(S.errors(), S.planed()), hasCut: g }
                           : { result: S, hasCut: g };
                     },
                     { result: n.success(new o(), m), hasCut: !1 }
                   ).result,
-                  v = m.to(y.remaining());
+                  v = m.to(y.planed());
                 return y.map(function (b) {
                   return b.withValue(t.sequence.source, v);
                 });
@@ -317338,7 +317275,7 @@ function vft() {
         var l = (t.zeroOrMore = function (f) {
           return function (h) {
             for (var p = [], m; (m = f(h)) && m.isSuccess(); )
-              ((h = m.remaining()), p.push(m.value()));
+              ((h = m.planed()), p.push(m.value()));
             return m.isError() ? m : n.success(p, h);
           };
         });
@@ -317354,8 +317291,8 @@ function vft() {
             if (y.isSuccess()) {
               var v = t.sequence.capture(f, 'main'),
                 b = l(t.then(t.sequence(h, v), t.sequence.extract(v))),
-                x = b(y.remaining());
-              return n.success([y.value()].concat(x.value()), x.remaining());
+                x = b(y.planed());
+              return n.success([y.value()].concat(x.value()), x.planed());
             } else return p || y.isError() ? y : n.success([], m);
           };
         };
@@ -317374,11 +317311,11 @@ function vft() {
             var b = v,
               x = f(v);
             if (!x.isSuccess()) return x;
-            for (var w = y(x.remaining()); w.isSuccess(); ) {
-              var g = w.remaining(),
-                S = b.to(w.remaining()),
+            for (var w = y(x.planed()); w.isSuccess(); ) {
+              var g = w.planed(),
+                S = b.to(w.planed()),
                 C = w.value();
-              ((x = n.success(C(x.value(), S), g, S)), (w = y(x.remaining())));
+              ((x = n.success(C(x.value(), S), g, S)), (w = y(x.planed())));
             }
             return w.isError() ? w : x;
           };
@@ -317534,9 +317471,9 @@ function iBr() {
           }
           function c(d) {
             for (var f, h; ; )
-              if (((f = u(d.remaining())), f.isSuccess()))
+              if (((f = u(d.planed())), f.isSuccess()))
                 ((h = d.source().to(f.source())),
-                  (d = r.success(f.value()(d.value(), h), f.remaining(), h)));
+                  (d = r.success(f.value()(d.value(), h), f.planed(), h)));
               else return f.isFailure() ? d : f;
           }
           function u(d) {
@@ -372309,7 +372246,7 @@ class av {
         this.items.length,
         0
       ),
-      { remaining: s, transform: o, selection: l }
+      { planed: s, transform: o, selection: l }
     );
   }
   addTransform(e, r, n, i) {
@@ -372537,7 +372474,7 @@ function Ptn(t, e, r) {
   if (!a) return null;
   let o = a.selection.resolve(a.transform.doc),
     l = (r ? t.done : t.undone).addTransform(a.transform, e.selection.getBookmark(), i, n),
-    s = new mS(r ? l : a.remaining, r ? a.remaining : l, null, 0, -1);
+    s = new mS(r ? l : a.planed, r ? a.planed : l, null, 0, -1);
   return a.transform.setSelection(o).setMeta(yE, { redo: r, historyState: s });
 }
 let hae = !1,
@@ -385327,34 +385264,29 @@ const Eon = () => {
                                               : j.jsxs('ul', {
                                                   className: 'space-y-1',
                                                   children: [
-                                                    C.toDoList
-                                                      .slice(0, 3)
-                                                      .map((E, _) =>
-                                                        j.jsxs(
-                                                          'li',
-                                                          {
-                                                            className:
-                                                              'truncate text-slate-700 dark:text-white flex items-start space-x-1',
-                                                            children: [
-                                                              j.jsx('span', {
-                                                                className:
-                                                                  'text-slate-400 dark:text-gray-500',
-                                                                children: '•',
-                                                              }),
-                                                              j.jsx('span', {
-                                                                children:
-                                                                  typeof E == 'string'
-                                                                    ? E
-                                                                    : JSON.stringify(E).slice(
-                                                                        0,
-                                                                        50
-                                                                      ),
-                                                              }),
-                                                            ],
-                                                          },
-                                                          _
-                                                        )
-                                                      ),
+                                                    C.toDoList.slice(0, 3).map((E, _) =>
+                                                      j.jsxs(
+                                                        'li',
+                                                        {
+                                                          className:
+                                                            'truncate text-slate-700 dark:text-white flex items-start space-x-1',
+                                                          children: [
+                                                            j.jsx('span', {
+                                                              className:
+                                                                'text-slate-400 dark:text-gray-500',
+                                                              children: '•',
+                                                            }),
+                                                            j.jsx('span', {
+                                                              children:
+                                                                typeof E == 'string'
+                                                                  ? E
+                                                                  : JSON.stringify(E).slice(0, 50),
+                                                            }),
+                                                          ],
+                                                        },
+                                                        _
+                                                      )
+                                                    ),
                                                     C.toDoList.length > 3 &&
                                                       j.jsxs('li', {
                                                         className:
@@ -386421,22 +386353,20 @@ const Eon = () => {
                                                       'text-xs text-gray-500 dark:text-gray-400 mb-2',
                                                     children: '⚡ 执行的操作:',
                                                   }),
-                                                  w
-                                                    .slice(0, 3)
-                                                    .map((g, S) =>
-                                                      j.jsx(
-                                                        pBe,
-                                                        {
-                                                          type: g[1],
-                                                          content:
-                                                            g[0].length > 100
-                                                              ? g[0].substring(0, 100) + '...'
-                                                              : g[0],
-                                                          agent: v.agentType || v.agent,
-                                                        },
-                                                        `${v.id}-xml-${S}`
-                                                      )
-                                                    ),
+                                                  w.slice(0, 3).map((g, S) =>
+                                                    j.jsx(
+                                                      pBe,
+                                                      {
+                                                        type: g[1],
+                                                        content:
+                                                          g[0].length > 100
+                                                            ? g[0].substring(0, 100) + '...'
+                                                            : g[0],
+                                                        agent: v.agentType || v.agent,
+                                                      },
+                                                      `${v.id}-xml-${S}`
+                                                    )
+                                                  ),
                                                   w.length > 3 &&
                                                     j.jsxs('div', {
                                                       className:

@@ -209,7 +209,7 @@ function fixMismatchedTags(xmlString: string): string {
     lastIndex = start + token.length;
   }
 
-  // Add remaining text
+  // Add planed text
   result.push(xmlString.substring(lastIndex));
 
   return result.join('');

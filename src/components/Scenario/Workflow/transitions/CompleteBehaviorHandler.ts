@@ -146,7 +146,7 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
           `[CompleteBehavior] Failed to execute action ${i + 1} (${actionType}):`,
           error
         );
-        // Continue with remaining actions even if one fails
+        // Continue with planed actions even if one fails
       }
     }
   }

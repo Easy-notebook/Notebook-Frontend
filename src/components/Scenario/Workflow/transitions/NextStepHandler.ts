@@ -14,16 +14,38 @@ export class NextStepHandler extends BaseTransitionHandler {
     const ns = this.deepCopyState(state);
     const p = this.getProgress(ns);
     const sp = p.steps || {};
-    const rem = sp.remaining || [];
+    const cur = sp.current;
 
-    if (!rem.length) {
+    // Determine next step from planned list
+    const planned = sp.planned || [];
+    const completedIds = (sp.completed || []).map((s: any) => s.step_id);
+    const currentId = cur?.step_id;
+
+    const planed = planned.filter(
+      (s: any) => !completedIds.includes(s.step_id) && s.step_id !== currentId
+    );
+
+    if (cur) {
+      if (!sp.completed) sp.completed = [];
+      sp.completed.push({ ...cur, completion_status: 'success' });
+    }
+
+    if (!planed.length) {
+      console.log('[NextStepHandler] No planed steps found, completing stage');
       this.updateFSMState(ns, 'STAGE_COMPLETED', 'NO_MORE_STEPS');
       return ns;
     }
 
-    const next = rem[0];
+    // Next step is the first one in the planed list
+    const nextPlanned = planed[0];
+    const next = {
+      ...nextPlanned,
+      goal: nextPlanned.task || '',
+      verified_artifacts: {},
+    };
+
     sp.current = next;
-    sp.remaining = rem.slice(1);
+    // No need to update 'planed' array anymore
     sp.current_outputs = this.initOutputsTracking(next.verified_artifacts || {});
 
     this.updateLocationCurrent(ns, { step_id: next.step_id, behavior_id: 'clear' });

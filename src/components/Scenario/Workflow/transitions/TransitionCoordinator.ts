@@ -18,6 +18,7 @@ import { NextStepHandler } from './NextStepHandler';
 import { CompleteStageHandler } from './CompleteStageHandler';
 import { NextStageHandler } from './NextStageHandler';
 import { ReflectingAgainHandler } from './ReflectingAgainHandler';
+import { CompleteWorkflowHandler } from './CompleteWorkflowHandler';
 import { getStateFactory } from '../states/StateFactory';
 
 export class TransitionCoordinator {
@@ -44,8 +45,8 @@ export class TransitionCoordinator {
       new CompleteStepHandler(),
       new NextStepHandler(),
       new CompleteStageHandler(),
-      new CompleteStageHandler(),
       new NextStageHandler(),
+      new CompleteWorkflowHandler(),
       new ReflectingAgainHandler(),
     ];
 
@@ -106,7 +107,13 @@ export class TransitionCoordinator {
     // Auto-trigger next transition if enabled
     let finalState = updatedState;
     if (autoTrigger) {
-      finalState = await this.autoTriggerNextTransition(updatedState);
+      const autoResult = await this.autoTriggerNextTransition(updatedState);
+      finalState = autoResult.state;
+      if (autoResult.transitionName) {
+        console.log(
+          `[Coordinator] Auto-triggered follow-up transition: ${autoResult.transitionName}`
+        );
+      }
     }
 
     return { state: finalState, transitionName };
@@ -186,14 +193,14 @@ export class TransitionCoordinator {
    * - IDLE, STAGE_RUNNING, STEP_RUNNING, BEHAVIOR_RUNNING
    * These should be handled by AsyncStateMachineAdapter.step()
    */
-  private async autoTriggerNextTransition(
+  public async autoTriggerNextTransition(
     state: Record<string, unknown>
-  ): Promise<Record<string, unknown>> {
+  ): Promise<{ state: Record<string, unknown>; transitionName: string | null }> {
     const currentStateName = (state as any).state?.FSM?.state;
 
     if (!currentStateName) {
       console.log('[Auto-Trigger] No current state name found');
-      return state;
+      return { state, transitionName: null };
     }
 
     // States that ALWAYS require API calls - never auto-trigger
@@ -208,7 +215,7 @@ export class TransitionCoordinator {
       console.log(
         `[Auto-Trigger] Skipping ${currentStateName} - always requires API call via AsyncStateMachineAdapter.step()`
       );
-      return state;
+      return { state, transitionName: null };
     }
 
     // Special handling for BEHAVIOR_COMPLETED:
@@ -223,7 +230,7 @@ export class TransitionCoordinator {
         console.log(
           '[Auto-Trigger] BEHAVIOR_COMPLETED with empty effect.current - needs API call via AsyncStateMachineAdapter.step()'
         );
-        return state;
+        return { state, transitionName: null };
       }
 
       // effect.current is not empty, can auto-trigger NEXT_BEHAVIOR
@@ -237,7 +244,7 @@ export class TransitionCoordinator {
 
     if (!AUTO_TRIGGER_ALLOWED_STATES.includes(currentStateName)) {
       console.log(`[Auto-Trigger] State ${currentStateName} does not support auto-triggering`);
-      return state;
+      return { state, transitionName: null };
     }
 
     // Get the State class instance for current state
@@ -246,19 +253,19 @@ export class TransitionCoordinator {
 
     if (!stateClass) {
       console.warn(`[Auto-Trigger] No State class found for ${currentStateName}`);
-      return state;
+      return { state, transitionName: null };
     }
 
     // Ask the State class to determine the next transition
     // State.determineNextTransition() knows the business logic:
     // - BEHAVIOR_COMPLETED: checks effect.current (we already checked above)
-    // - STEP_COMPLETED: checks remaining steps
-    // - STAGE_COMPLETED: checks remaining stages
+    // - STEP_COMPLETED: checks planed steps
+    // - STAGE_COMPLETED: checks planed stages
     const nextEvent = stateClass.determineNextTransition(state);
 
     if (!nextEvent) {
       console.log(`[Auto-Trigger] State ${currentStateName} has no next transition`);
-      return state;
+      return { state, transitionName: null };
     }
 
     console.log(`[Auto-Trigger] ${currentStateName} determined next event: ${nextEvent}`);
@@ -273,13 +280,14 @@ export class TransitionCoordinator {
 
     if (!handler) {
       console.warn(`[Auto-Trigger] No handler found for ${fromState} + ${nextEvent}`);
-      return state;
+      return { state, transitionName: null };
     }
 
     console.log(`[Auto-Trigger] Applying ${handler.constructor.name} for ${nextEvent}`);
 
     // Apply the transition (pass empty response since this is auto-triggered)
-    return await handler.apply(state, {});
+    const newState = await handler.apply(state, {});
+    return { state: newState, transitionName: handler.transitionName };
   }
 }
 

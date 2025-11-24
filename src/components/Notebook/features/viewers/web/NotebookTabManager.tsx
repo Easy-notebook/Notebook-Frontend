@@ -228,7 +228,7 @@ const NotebookTabManager: React.FC = () => {
       setTabs((prev) => {
         const updatedTabs = prev.filter((tab) => tab.id !== tabId);
 
-        // If closing active tab, select the last remaining tab
+        // If closing active tab, select the last planed tab
         if (tabId === activeTabId && updatedTabs.length > 0) {
           const newActiveTab = updatedTabs[updatedTabs.length - 1];
           setActiveTabId(newActiveTab.id);
