@@ -60,6 +60,7 @@ const CommandInput: React.FC = () => {
     getCurrentStepCellsIDs,
     getCurrentViewCells,
     setIsRightSidebarCollapsed,
+    isRightSidebarCollapsed,
   } = useStore();
 
   const [input, setInput] = useState('');
@@ -368,7 +369,10 @@ const CommandInput: React.FC = () => {
             },
           });
         } else {
-          setIsRightSidebarCollapsed(true);
+          // Only open sidebar if it is currently closed
+          if (isRightSidebarCollapsed) {
+            setIsRightSidebarCollapsed(false);
+          }
           setActiveView('qa');
           const qaId = `qa-${uuidv4()}`;
           const qaData = {
