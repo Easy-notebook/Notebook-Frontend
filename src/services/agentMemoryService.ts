@@ -93,6 +93,19 @@ interface AgentMemoryStore {
   [agent_id: string]: AgentMemory;
 }
 
+export interface AgentContext {
+  current_cell_id?: string;
+  current_code?: string;
+  error_message?: string;
+  related_cells?: any[];
+  related_actions?: string[];
+  related_qa_ids?: string[];
+  current_qa_id?: string;
+  question_content?: string;
+  command_id?: string;
+  command_content?: string;
+}
+
 export class AgentMemoryService {
   private static memories: AgentMemoryStore = {};
   private static readonly STORAGE_KEY = 'agent_memories_v2';
@@ -481,17 +494,7 @@ export class AgentMemoryService {
   static prepareMemoryContextForBackend(
     notebookId: string | null,
     agentType: AgentType,
-    currentContext: {
-      current_cell_id?: string;
-      current_code?: string;
-      error_message?: string;
-      related_cells?: any[];
-      related_qa_ids?: string[];
-      current_qa_id?: string;
-      question_content?: string;
-      command_id?: string;
-      command_content?: string;
-    }
+    currentContext: AgentContext
   ): any {
     // 如果notebookId为null，生成一个临时的session ID
     const effectiveNotebookId = notebookId || `temp-session-${Date.now()}`;

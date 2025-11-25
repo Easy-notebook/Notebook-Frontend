@@ -68,7 +68,6 @@ const CommandInput: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
-  const [topPosition, setTopPosition] = useState('75%');
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -155,45 +154,10 @@ const CommandInput: React.FC = () => {
     });
   }, [qaList, viewMode, getCurrentStepCellsIDs]);
 
-  // Handle escape key to close and click outside
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') {
-        setShowCommandInput(false);
-        setInput('');
-        setFiles([]);
-      }
-    };
-
-    const handleClickOutside = (e) => {
-      if (modalRef.current && !modalRef.current.contains(e.target)) {
-        setShowCommandInput(false);
-        setInput('');
-        setFiles([]);
-      }
-    };
-
-    if (showCommandInput) {
-      document.addEventListener('keydown', handleEscape);
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('keydown', handleEscape);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [showCommandInput, setShowCommandInput]);
-
-  // Auto focus input when modal opens and calculate position
+  // Auto focus input when modal opens
   useEffect(() => {
     if (showCommandInput && textareaRef.current) {
       textareaRef.current.focus();
-    }
-
-    // Calculate 75% of container height
-    if (showCommandInput && containerRef.current) {
-      const containerHeight = containerRef.current.offsetHeight;
-      const topPos = containerHeight * 0.75;
-      setTopPosition(`${topPos}px`);
     }
   }, [showCommandInput]);
 
@@ -201,77 +165,6 @@ const CommandInput: React.FC = () => {
   useEffect(() => {
     adjustTextareaHeight();
   }, [input, adjustTextareaHeight]);
-
-  // 从命令推断用户目标的辅助方法
-  const _inferGoalsFromCommand = useCallback((command: string): string[] => {
-    const inferredGoals: string[] = [];
-    const lowerCommand = command.toLowerCase();
-
-    // 基于命令模式推断目标
-    if (
-      lowerCommand.includes('plot') ||
-      lowerCommand.includes('chart') ||
-      lowerCommand.includes('图') ||
-      lowerCommand.includes('画')
-    ) {
-      inferredGoals.push('data_visualization');
-    }
-    if (
-      lowerCommand.includes('load') ||
-      lowerCommand.includes('read') ||
-      lowerCommand.includes('import') ||
-      lowerCommand.includes('读取') ||
-      lowerCommand.includes('加载')
-    ) {
-      inferredGoals.push('data_loading');
-    }
-    if (
-      lowerCommand.includes('clean') ||
-      lowerCommand.includes('process') ||
-      lowerCommand.includes('transform') ||
-      lowerCommand.includes('清理') ||
-      lowerCommand.includes('处理')
-    ) {
-      inferredGoals.push('data_processing');
-    }
-    if (
-      lowerCommand.includes('analyze') ||
-      lowerCommand.includes('analysis') ||
-      lowerCommand.includes('分析') ||
-      lowerCommand.includes('统计')
-    ) {
-      inferredGoals.push('data_analysis');
-    }
-    if (
-      lowerCommand.includes('model') ||
-      lowerCommand.includes('train') ||
-      lowerCommand.includes('predict') ||
-      lowerCommand.includes('模型') ||
-      lowerCommand.includes('训练')
-    ) {
-      inferredGoals.push('machine_learning');
-    }
-    if (
-      lowerCommand.includes('save') ||
-      lowerCommand.includes('export') ||
-      lowerCommand.includes('output') ||
-      lowerCommand.includes('保存') ||
-      lowerCommand.includes('导出')
-    ) {
-      inferredGoals.push('data_export');
-    }
-
-    return inferredGoals;
-  }, []);
-
-  // 从问题推断用户目标的辅助方法
-  const _inferGoalsFromQuestion = useCallback(
-    (question: string): string[] => {
-      // 使用相同的推断逻辑
-      return _inferGoalsFromCommand(question);
-    },
-    [_inferGoalsFromCommand]
-  );
 
   // File upload handlers
   const handleFileChange = useCallback(
@@ -379,7 +272,6 @@ const CommandInput: React.FC = () => {
   const handleSubmit = useCallback(
     async (command) => {
       try {
-        setShowCommandInput(false);
         setIsLoading(true);
         const timestamp = new Date().toLocaleTimeString();
 
@@ -426,7 +318,7 @@ const CommandInput: React.FC = () => {
             notebookId,
             'command' as AgentType,
             {
-              current_cell_id: currentCellId,
+              current_cell_id: currentCellId ?? undefined,
               related_cells: getCurrentViewCells(),
               related_actions: actionsToShow.map((action) => action.id),
               command_id: commandId,
@@ -439,7 +331,7 @@ const CommandInput: React.FC = () => {
             notebookId,
             'command' as AgentType,
             [command], // 用户明确表达的目标
-            _inferGoalsFromCommand(command), // 从命令推断的目标
+            [], // 从命令推断的目标 - removed per user edit
             command, // 当前焦点
             [] // 当前阻塞
           );
@@ -501,7 +393,7 @@ const CommandInput: React.FC = () => {
             notebookId,
             'general' as AgentType,
             {
-              current_cell_id: currentCellId,
+              current_cell_id: currentCellId ?? undefined,
               related_cells: getCurrentViewCells(),
               related_qa_ids: qasToShow.map((qa) => qa.id),
               current_qa_id: qaId,
@@ -509,16 +401,6 @@ const CommandInput: React.FC = () => {
             }
           );
           console.log('AITerminal: 记忆上下文准备完成', memoryContext);
-
-          // 更新用户意图（从用户问题推断）
-          AgentMemoryService.updateUserIntent(
-            notebookId,
-            'general' as AgentType,
-            [command], // 用户明确表达的目标
-            _inferGoalsFromQuestion(command), // 推断的目标
-            command, // 当前焦点
-            [] // 当前阻塞（如果有的话）
-          );
 
           // 记录QA交互启动
           AgentMemoryService.recordOperationInteraction(
@@ -580,9 +462,6 @@ const CommandInput: React.FC = () => {
       qasToShow,
       actionsToShow,
       getCurrentViewCells,
-      setIsRightSidebarCollapsed,
-      _inferGoalsFromCommand,
-      _inferGoalsFromQuestion,
       files,
     ]
   );
@@ -599,18 +478,27 @@ const CommandInput: React.FC = () => {
     [input, handleSubmit, setInput]
   );
 
+  // Auto focus input when modal opens
+  useEffect(() => {
+    if (showCommandInput && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [showCommandInput]);
+
+  // 监听输入变化自动调整高度
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
+
   if (!showCommandInput) return null;
 
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 flex items-start justify-center z-[100] pointer-events-none"
-      style={{ paddingTop: topPosition }}
-    >
+    <div ref={containerRef} className="absolute inset-0 z-[100] pointer-events-none">
       <div
-        className="w-4/5 max-w-5xl transform transition-all duration-200 rounded-3xl p-4 bg-black/3 dark:bg-white/3 pointer-events-auto"
+        className="absolute left-1/2 -translate-x-1/2 w-4/5 max-w-5xl transition-all duration-200 rounded-3xl p-4 bg-black/3 dark:bg-white/3 pointer-events-auto"
         ref={modalRef}
         style={{
+          top: '75%',
           backdropFilter: 'blur(4px)',
           WebkitBackdropFilter: 'blur(4px)',
         }}

@@ -29,7 +29,7 @@ export const useNotebookKeyboardShortcuts = ({
   handleModeChange,
   getTotalSteps,
 }: KeyboardShortcutsProps) => {
-  const { setShowCommandInput } = useAIAgentStore();
+  const { showCommandInput, setShowCommandInput } = useAIAgentStore();
 
   // Command input shortcut (Alt/Ctrl + /)
   useEffect(() => {
@@ -37,13 +37,13 @@ export const useNotebookKeyboardShortcuts = ({
       const tag = e.target.tagName.toLowerCase();
       if ((e.altKey || e.metaKey) && e.key === '/' && tag !== 'input' && tag !== 'textarea') {
         e.preventDefault();
-        setShowCommandInput(true);
-        uiLog.debug('Command input shown via keyboard shortcut');
+        setShowCommandInput(!showCommandInput);
+        uiLog.debug('Command input toggled via keyboard shortcut');
       }
     };
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
-  }, [setShowCommandInput]);
+  }, [showCommandInput, setShowCommandInput]);
 
   // Navigation and mode toggle shortcuts
   useEffect(() => {

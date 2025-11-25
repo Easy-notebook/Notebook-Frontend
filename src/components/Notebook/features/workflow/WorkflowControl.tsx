@@ -157,7 +157,7 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   const { addThinkingLog } = useAIPlanningContextStore();
   const { currentState, stateJSON, transition, reset, cancel, pause, resume } =
     useWorkflowStateMachine();
-  const { setShowCommandInput } = useAIAgentStore();
+  const { showCommandInput, setShowCommandInput } = useAIAgentStore();
   const { currentView } = useRouteStore();
 
   // ✅ Get current location from stateJSON (new architecture)
@@ -287,7 +287,7 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
     return (
       <div className={`absolute ${bottomPosition} right-6 z-50`}>
         <button
-          onClick={() => setShowCommandInput(true)}
+          onClick={() => setShowCommandInput(!showCommandInput)}
           className="p-2 rounded-full bg-white dark:bg-gray-800 bg-opacity-25 dark:bg-opacity-30 backdrop-blur-md shadow-lg border border-white/30 dark:border-gray-600/30 hover:bg-opacity-35 dark:hover:bg-opacity-40 transition-all hover:scale-105"
           title="Open AI Command Bar"
           aria-label="Open AI Command Bar"
