@@ -100,7 +100,7 @@ export interface NotebookStoreActions {
   setAllowedTypes: (allowedTypes: string[]) => void;
   setMaxFiles: (maxFiles: number | null) => void;
   setIsRightSidebarCollapsed: (isRightSidebarCollapsed: boolean) => void;
-  setNotebookId: (id: string | null) => Promise<void>;
+  setNotebookId: (id: string | null, options?: { preserveContent?: boolean }) => Promise<void>;
   setNotebookTitle: (title: string) => void;
   setCurrentPhase: (phaseId: string | null) => void;
   setCurrentStepIndex: (index: number) => void;
@@ -330,7 +330,7 @@ const useStore = create(
             }
           })
         ),
-      setNotebookId: async (id: string | null) => {
+      setNotebookId: async (id: string | null, options?: { preserveContent?: boolean }) => {
         const state = get();
 
         // If setting to null, ensure current notebook is saved first, then clear the store
@@ -425,26 +425,51 @@ const useStore = create(
               }
             }
 
-            // Clear old content to avoid cross-notebook mixing
-            console.log('🔍 [notebookStore] Switching notebookId - clearing old cells', {
-              oldId: state.notebookId,
-              newId: id,
-              oldCellsCount: state.cells.length,
-            });
+            if (options?.preserveContent) {
+              console.log(
+                '🔍 [notebookStore] Switching notebookId with preserveContent - keeping cells',
+                {
+                  oldId: state.notebookId,
+                  newId: id,
+                  cellsCount: state.cells.length,
+                }
+              );
+              set({ notebookId: id });
 
-            set({
-              notebookId: id,
-              notebookTitle: '',
-              cells: [],
-              tasks: [],
-              currentPhaseId: null,
-              currentStepIndex: 0,
-              currentCellId: null,
-              error: null,
-              isLoaded: false,
-            });
+              // Trigger auto-save for new ID with existing content to ensure persistence
+              try {
+                await notebookAutoSaveInstance.queueSave({
+                  notebookId: id,
+                  notebookTitle: state.notebookTitle,
+                  cells: state.cells,
+                  tasks: state.tasks,
+                  timestamp: Date.now(),
+                });
+              } catch (e) {
+                notebookLog.warn('Save after preserveContent switch failed', { error: e });
+              }
+            } else {
+              // Clear old content to avoid cross-notebook mixing
+              console.log('🔍 [notebookStore] Switching notebookId - clearing old cells', {
+                oldId: state.notebookId,
+                newId: id,
+                oldCellsCount: state.cells.length,
+              });
 
-            console.log('✅ [notebookStore] Cleared cells for new notebook', { newId: id });
+              set({
+                notebookId: id,
+                notebookTitle: '',
+                cells: [],
+                tasks: [],
+                currentPhaseId: null,
+                currentStepIndex: 0,
+                currentCellId: null,
+                error: null,
+                isLoaded: false,
+              });
+
+              console.log('✅ [notebookStore] Cleared cells for new notebook', { newId: id });
+            }
           }
         } else {
           // Same ID: just set the ID (no clearing needed)
@@ -814,7 +839,8 @@ const useStore = create(
         ),
 
       updateCellOutputs: (cellId: string, outputs: OutputItem[]) => {
-        updateCellOutputsHelper(set, get, cellId, outputs);
+        const serializedOutputs = serializeOutput(outputs);
+        updateCellOutputsHelper(set, get, cellId, serializedOutputs);
       },
 
       moveCellToIndex: (fromIndex: number, toIndex: number) => {
@@ -1582,10 +1608,8 @@ useStore.subscribe(
 
     const hasChanges =
       current.notebookTitle !== previous.notebookTitle ||
-      current.cells.length !== previous.cells.length ||
-      current.tasks.length !== previous.tasks.length ||
-      JSON.stringify(current.cells) !== JSON.stringify(previous.cells) ||
-      JSON.stringify(current.tasks) !== JSON.stringify(previous.tasks);
+      current.cells !== previous.cells ||
+      current.tasks !== previous.tasks;
 
     if (hasChanges) {
       notebookLog.info('Notebook content changed - triggering auto-save');

@@ -172,8 +172,15 @@ const usePreviewStore = create<PreviewStore>()(
           set({ currentPreviewFiles: [], activeFile: null, activePreviewMode: null });
 
           // If no current notebook is set, ensure no stale tabs from previous session are shown
-          if (!get().currentNotebookId) {
+          const state = get();
+          if (!state.currentNotebookId) {
             set({ currentPreviewFiles: [], activeFile: null, activePreviewMode: null });
+          } else {
+            // If we have a persisted notebook ID, try to restore its tabs
+            storeLog.info('Restoring tabs for persisted notebook', {
+              notebookId: state.currentNotebookId,
+            });
+            await get().loadTabState(state.currentNotebookId);
           }
 
           // Check if we should skip auto-restore (e.g., after clearing notebook state)
@@ -609,6 +616,7 @@ const usePreviewStore = create<PreviewStore>()(
         const { currentPreviewFiles, activeFile, dirtyMap, currentNotebookId } = get();
 
         fileLog.tabManagement('close', fileId);
+        storeLog.debug('Closing preview file', { fileId, currentNotebookId });
 
         // Compute next active before removal to preserve adjacency
         const closedIndex = currentPreviewFiles.findIndex((f) => f.id === fileId);
@@ -960,114 +968,9 @@ const usePreviewStore = create<PreviewStore>()(
             set({ currentNotebookId: notebookId });
           }
 
-          // 📂 Get files from storage (only for current notebook)
-          let files: any[] = [];
-          try {
-            const { FileORM } = await import('@Storage/index');
-            const fileResults = await FileORM.getFilesForNotebook(notebookId, false); // Don't load content for tabs
-
-            // 🔍 Filter out notebook main files and invalid files
-            const filteredResults = fileResults.filter((result) => {
-              const filePath = result.metadata.filePath;
-              const fileName = result.metadata.fileName;
-
-              // Skip notebook main files (they shouldn't be tabs)
-              if (filePath.startsWith('notebook_') && filePath.endsWith('.json')) {
-                storeLog.debug('Skipping notebook main file', { fileName });
-                return false;
-              }
-
-              // Skip .easynb files (they are notebook files, not separate tabs)
-              if (fileName.endsWith('.easynb')) {
-                storeLog.debug('Skipping .easynb file', { fileName });
-                return false;
-              }
-
-              return true;
-            });
-
-            files = filteredResults.map((result) => ({
-              id: makeFileId(notebookId, result.metadata.filePath),
-              path: result.metadata.filePath,
-              name: result.metadata.fileName,
-              type: result.metadata.fileType,
-              lastModified: result.metadata.lastModified,
-              size: result.metadata.size,
-              notebookId: result.metadata.notebookId,
-              exists: true,
-            }));
-
-            storeLog.info('Found valid files for tabs', {
-              validCount: files.length,
-              totalCount: fileResults.length,
-            });
-
-            // 🔄 Also fetch files from backend for this notebook and merge
-            try {
-              const resp = await FileService.listFiles(notebookId);
-              if (resp && (resp as any).status === 'ok' && Array.isArray((resp as any).files)) {
-                const nodes = (resp as any).files as any[];
-                const flatten = (arr: any[]): any[] =>
-                  arr.flatMap((n) =>
-                    n && n.type === 'directory' && Array.isArray(n.children)
-                      ? flatten(n.children)
-                      : [n]
-                  );
-                const flatFiles = flatten(nodes);
-                const filteredBackend = flatFiles.filter((f) => {
-                  const fileName = f?.name || '';
-                  const filePath = f?.path || f?.name || '';
-                  if (filePath.startsWith('notebook_') && filePath.endsWith('.json')) return false;
-                  if (fileName.endsWith('.easynb')) return false;
-                  return true;
-                });
-                const backendFiles = filteredBackend.map((f) => ({
-                  id: makeFileId(notebookId, f.path || f.name),
-                  path: f.path || f.name,
-                  name: f.name,
-                  type: getFileType((f.path || f.name) as string),
-                }));
-
-                // Merge storage files and backend files by path
-                const byPath = new Map<string, any>();
-                files.forEach((x) => byPath.set(x.path, x));
-                backendFiles.forEach((x) => {
-                  if (!byPath.has(x.path)) byPath.set(x.path, x);
-                });
-                files = Array.from(byPath.values());
-                storeLog.info('Merged files from storage+backend', { count: files.length });
-              }
-            } catch (e) {
-              storeLog.warn('Backend listFiles failed', { error: e });
-            }
-          } catch (storageError) {
-            storeLog.warn('Storage system failed', { error: storageError });
-            files = [];
-          }
-
-          // 🏷️ Convert to PreviewFile format with additional validation
-          const { validateFileForTab } = await import('@Utils/fileValidation');
-
-          const previewFiles: PreviewFile[] = files
-            .filter((file) => {
-              const validation = validateFileForTab(file.path || '', file.name || '', '');
-
-              if (!validation.isValid) {
-                storeLog.debug('Skipping invalid file', {
-                  fileName: file.name,
-                  reason: validation.reason,
-                });
-                return false;
-              }
-
-              return true;
-            })
-            .map((file) => ({
-              id: file.id || `${notebookId}::${file.path}`,
-              path: file.path,
-              name: file.name,
-              type: getFileType(file.path || file.name) as FileType,
-            }));
+          // 📂 Delegate file loading to TabManagerService
+          const { tabManagerService } = await import('@Services/tab/TabManagerService');
+          const previewFiles = await tabManagerService.loadDefaultTabs(notebookId);
 
           storeLog.info('Processed valid preview files for tabs', { count: previewFiles.length });
 
@@ -1126,12 +1029,13 @@ const usePreviewStore = create<PreviewStore>()(
           }
 
           // Set current notebook ID and switch to notebook mode
-          // 不立即清空tab列表，让loadTabState来处理
+          // Clear tabs if switching to a different notebook to prevent stale tabs
           set({
             currentNotebookId: notebookId,
             previewMode: 'notebook', // 确保切换到notebook预览模式
             activeFile: null, // 清除活跃文件
             activePreviewMode: null,
+            currentPreviewFiles: currentNotebookId !== notebookId ? [] : get().currentPreviewFiles,
           });
 
           // Load tabs from saved state or from scratch
@@ -1333,27 +1237,29 @@ const usePreviewStore = create<PreviewStore>()(
         const state = get();
         const targetNotebookId = notebookId || state.currentNotebookId;
 
+        storeLog.debug('saveTabState called', {
+          notebookId,
+          currentNotebookId: state.currentNotebookId,
+          targetNotebookId,
+          tabCount: state.currentPreviewFiles.length,
+        });
+
         if (!targetNotebookId) {
           storeLog.warn('No notebookId provided for saving tab state');
           return;
         }
 
         try {
-          // Only persist tabs that belong to this notebook
-          const scopedTabs = state.currentPreviewFiles.filter((t) =>
-            t.id?.startsWith(`${targetNotebookId}::`)
-          );
-          const activeTabId =
-            state.activeFile && state.activeFile.id.startsWith(`${targetNotebookId}::`)
-              ? state.activeFile.id
-              : null;
+          const { tabManagerService } = await import('@Services/tab/TabManagerService');
+          const activeTabId = state.activeFile?.id?.startsWith(`${targetNotebookId}::`)
+            ? state.activeFile.id
+            : null;
 
-          await persistenceService.tabs.saveTabState(targetNotebookId, scopedTabs, activeTabId);
-          storeLog.info('Saved tab state for notebook', {
-            notebookId: targetNotebookId,
-            tabCount: scopedTabs.length,
-            activeTabId,
-          });
+          await tabManagerService.saveTabs(
+            targetNotebookId,
+            state.currentPreviewFiles,
+            activeTabId
+          );
         } catch (error) {
           storeLog.error('Failed to save tab state', { error });
         }
@@ -1362,162 +1268,42 @@ const usePreviewStore = create<PreviewStore>()(
       // Load tab state from storage
       loadTabState: async (notebookId: string): Promise<void> => {
         try {
-          const tabState = await persistenceService.tabs.getTabState(notebookId);
+          const { tabManagerService } = await import('@Services/tab/TabManagerService');
+          const loadedState = await tabManagerService.loadTabs(notebookId);
 
-          if (tabState && tabState.tabList.length > 0) {
+          if (loadedState) {
+            const { tabs, activeTabId } = loadedState;
             storeLog.info('Loading saved tab state for notebook', {
               notebookId,
-              tabCount: tabState.tabList.length,
+              tabCount: tabs.length,
             });
 
-            // Validate each cached tab before restoration
-            const validTabs: PreviewFile[] = [];
-            const invalidTabIds: string[] = [];
+            // Validate tabs (simplified validation for now, relying on service filtering)
+            // In a full refactor, validation logic could also move to service or utility
 
-            // Only consider tabs that belong to this notebook
-            const candidateTabs = tabState.tabList.filter((t) =>
-              t.id?.startsWith(`${notebookId}::`)
-            );
-
-            for (const tab of candidateTabs) {
-              try {
-                // Test if the file can be loaded without actually setting it as active
-                const parsed = parseFileId(tab.id);
-                if (!parsed) {
-                  storeLog.warn('Invalid tab ID format', { tabId: tab.id });
-                  invalidTabIds.push(tab.id);
-                  continue;
-                }
-
-                const { notebookId: tabNotebookId, filePath } = parsed;
-
-                // Check if file exists in cache or can be fetched
-
-                const cachedFile = await persistenceService.files.getFile(tabNotebookId, filePath);
-                if (cachedFile) {
-                  // File exists in cache, add to valid tabs
-                  validTabs.push({
-                    id: tab.id,
-                    path: tab.path,
-                    name: tab.name,
-                    type: tab.type as FileType,
-                  });
-                  storeLog.debug('Tab validated from cache', { tabPath: tab.path });
-                } else {
-                  // Try to fetch from backend to validate existence
-                  let validationSuccess = false;
-                  const pathsToTry: string[] = [
-                    filePath,
-                    `assets/${filePath}`, // Try with assets prefix
-                    filePath.split('/').pop(), // Try just the filename
-                  ].filter((path): path is string => Boolean(path));
-
-                  for (const pathToTry of pathsToTry) {
-                    try {
-                      const response = await FileService.getFile(tabNotebookId, pathToTry);
-                      if (response && response.status !== 'error') {
-                        // File exists on backend, add to valid tabs
-                        validTabs.push({
-                          id: tab.id,
-                          path: tab.path,
-                          name: tab.name,
-                          type: tab.type as FileType,
-                        });
-                        storeLog.debug('Tab validated from backend', {
-                          tabPath: tab.path,
-                          resolvedPath: pathToTry,
-                        });
-                        validationSuccess = true;
-                        break;
-                      }
-                    } catch {
-                      // Continue to next path
-                      continue;
-                    }
-                  }
-
-                  if (!validationSuccess) {
-                    storeLog.warn(
-                      'Tab file no longer exists at any expected path, removing from cache',
-                      {
-                        tabPath: tab.path,
-                        triedPaths: pathsToTry,
-                      }
-                    );
-                    invalidTabIds.push(tab.id);
-                  }
-                }
-              } catch (validationError) {
-                storeLog.warn('Tab validation failed', {
-                  tabPath: tab.path,
-                  error: (validationError as Error).message,
-                });
-                invalidTabIds.push(tab.id);
-              }
-            }
-
-            // Set only valid tabs
+            // Set tabs
             set({
-              currentPreviewFiles: validTabs,
+              currentPreviewFiles: tabs,
               currentNotebookId: notebookId,
             });
 
-            // Try to restore active tab if it's still valid
-            let activeTabRestored = false;
-            if (
-              tabState.activeTabId &&
-              tabState.activeTabId.startsWith(`${notebookId}::`) &&
-              !invalidTabIds.includes(tabState.activeTabId)
-            ) {
+            // Restore active tab
+            if (activeTabId) {
               try {
-                // Restore active tab if it exists
-                let activeFile = null;
-                if (tabState.activeTabId) {
-                  activeFile = await get().loadFileById(tabState.activeTabId);
-                }
+                const activeFile = await get().loadFileById(activeTabId);
                 if (activeFile) {
                   const activePreviewMode = getActivePreviewMode(activeFile.type as FileType);
                   set({
                     activeFile,
                     activePreviewMode,
+                    previewMode: 'file', // Force file mode when restoring active tab
                   });
-                  activeTabRestored = true;
-                  storeLog.info('Active tab restored successfully', {
-                    activeTabId: tabState.activeTabId,
-                  });
+                  storeLog.info('Active tab restored successfully', { activeTabId });
                 }
               } catch (error) {
-                storeLog.warn('Failed to restore active tab', {
-                  error,
-                  activeTabId: tabState.activeTabId,
-                });
+                storeLog.warn('Failed to restore active tab', { error, activeTabId });
               }
             }
-
-            // Update cache to remove invalid tabs
-            if (invalidTabIds.length > 0) {
-              try {
-                await persistenceService.tabs.saveTabState(
-                  notebookId,
-                  validTabs,
-                  activeTabRestored ? tabState.activeTabId || null : null
-                );
-                storeLog.info('Updated tab cache, removed invalid tabs', {
-                  removedCount: invalidTabIds.length,
-                  validCount: validTabs.length,
-                });
-              } catch (updateError) {
-                storeLog.error('Failed to update tab cache after validation', {
-                  error: updateError,
-                });
-              }
-            }
-
-            storeLog.info('Restored validated tabs for notebook', {
-              notebookId,
-              validCount: validTabs.length,
-              invalidCount: invalidTabIds.length,
-            });
             return;
           }
 

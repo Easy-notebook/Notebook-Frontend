@@ -1,6 +1,7 @@
 // moved to features/viewers/data-table
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx-js-style';
+import Papa from 'papaparse';
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,6 +12,8 @@ import {
   type SortingState,
   type ColumnFiltersState,
 } from '@tanstack/react-table';
+import { FixedSizeList as List } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import {
   Download,
   ChevronDown,
@@ -212,6 +215,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // ============== 解析 CSV/XLSX ==============
   useEffect(() => {
@@ -225,6 +229,8 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setStyleMap({});
       return;
     }
+
+    setIsLoading(true);
 
     try {
       let parsedData: CSVRow[] = [];
@@ -266,21 +272,6 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
             if (cell) {
               if (cell.w != null) val = String(cell.w);
               else if (cell.v != null) val = String(cell.v);
-
-              // 调试第一行几个单元格的信息
-              if (r < 2 && c < 5 && cell) {
-                console.log(`Cell ${addr}:`, {
-                  value: val,
-                  hasStyle: !!cell.s,
-                  styleKeys: cell.s ? Object.keys(cell.s) : [],
-                  font: cell.s?.font,
-                  alignment: cell.s?.alignment,
-                  fill: cell.s?.fill,
-                  fullStyle: cell.s,
-                  raw: cell.v,
-                  formatted: cell.w,
-                });
-              }
 
               // 样式 => CSS
               const s = cell.s;
@@ -449,31 +440,12 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                 // 只有当有实际样式时才添加到map
                 if (Object.keys(css).length > 0) {
                   nextStyleMap[`${r}:${c}`] = css;
-
-                  // 调试前几个有样式的单元格
-                  if (Object.keys(nextStyleMap).length <= 3) {
-                    console.log(`Adding styles for ${addr} (${r}:${c}):`, css);
-                    console.log(`Original style object for ${addr}:`, s);
-                  }
                 }
               }
             }
             row.push(val);
           }
           rows.push(row);
-        }
-
-        // 调试：打印样式信息
-        if (Object.keys(nextStyleMap).length > 0) {
-          console.log('Loaded styles:', nextStyleMap);
-          // 更详细的调试
-          Object.entries(nextStyleMap)
-            .slice(0, 5)
-            .forEach(([key, style]) => {
-              if (Object.keys(style).length > 0) {
-                console.log(`Cell ${key} has styles:`, style);
-              }
-            });
         }
 
         setStyleMap(nextStyleMap);
@@ -495,48 +467,88 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
             return obj;
           });
         }
+
+        // Process column infos for XLSX
+        const columnInfos: ColumnInfo[] = headers.map((h) => {
+          const values = parsedData.map((row) => row[h]);
+          const type = detectColumnType(values);
+          return {
+            key: h,
+            displayName: h,
+            width: columnWidths[h] || Math.max(100, Math.min(220, h.length * 10)),
+            type: type as any,
+          };
+        });
+
+        setColumns(columnInfos);
+        setData(parsedData);
+        setIsLoading(false);
       } else {
-        // CSV
-        const lines = content.split(/\r?\n/);
-        const rows = lines.map((line) => line.split(',').map((v) => v.trim()));
-        if (rows.length > 0) {
-          const maxCols = Math.max(0, ...rows.map((r) => r.length));
-          headers = Array.from({ length: maxCols }, (_, i) => getExcelColumnName(i));
-          parsedData = rows.map((values) => {
-            const obj: CSVRow = {};
-            headers.forEach((h, i) => {
-              obj[h] = values[i] ?? '';
-            });
-            return obj;
-          });
+        // CSV - Use PapaParse for better performance and robustness
+        if (!content || content.trim().length === 0) {
+          setData([]);
+          setColumns([]);
+          setIsLoading(false);
+          return;
         }
-        // CSV 无 merges/styles
-        setSheetMerges([]);
-        setStyleMap({});
+
+        Papa.parse(content, {
+          header: false, // We'll handle headers manually to ensure consistency
+          skipEmptyLines: true,
+          worker: true, // Offload to worker thread
+          complete: (results) => {
+            const rows = results.data as any[][];
+            if (rows.length > 0) {
+              const maxCols = Math.max(0, ...rows.map((r) => r.length));
+              headers = Array.from({ length: maxCols }, (_, i) => getExcelColumnName(i));
+              parsedData = rows.map((values) => {
+                const obj: CSVRow = {};
+                headers.forEach((h, i) => {
+                  obj[h] = values[i] ?? '';
+                });
+                return obj;
+              });
+            }
+            // CSV has no merges/styles
+            setSheetMerges([]);
+            setStyleMap({});
+
+            // Update state inside the callback
+            const columnInfos: ColumnInfo[] = headers.map((h) => {
+              const values = parsedData.map((row) => row[h]);
+              const type = detectColumnType(values);
+              return {
+                key: h,
+                displayName: h,
+                width: columnWidths[h] || Math.max(100, Math.min(220, h.length * 10)),
+                type: type as any,
+              };
+            });
+
+            setColumns(columnInfos);
+            setData(parsedData);
+            setIsLoading(false);
+          },
+          error: (error: any) => {
+            console.error('PapaParse error:', error);
+            setData([]);
+            setColumns([]);
+            setIsLoading(false);
+          },
+        });
+
+        // Return early since PapaParse is async/callback-based
+        return;
       }
-
-      // 列信息与类型
-      const columnInfos: ColumnInfo[] = headers.map((h) => {
-        const values = parsedData.map((row) => row[h]);
-        const type = detectColumnType(values);
-        return {
-          key: h,
-          displayName: h,
-          width: columnWidths[h] || Math.max(100, Math.min(220, h.length * 10)),
-          type: type as any,
-        };
-      });
-
-      setColumns(columnInfos);
-      setData(parsedData);
     } catch (err) {
       console.error('Failed to parse file:', err);
       setData([]);
       setColumns([]);
       setSheetMerges([]);
       setStyleMap({});
+      setIsLoading(false);
     }
-  }, [currentFile, typeOverride, columnWidths]);
+  }, [currentFile, typeOverride]); // Removed columnWidths from dependency array
 
   // ============== 合并单元格映射（关键新增） ==============
   // 使用数据区坐标（rowIndex/colIndex）
@@ -856,169 +868,208 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       )}
 
       {/* Grid */}
-      <div ref={tableContainerRef} className="flex-1 overflow-auto bg-white">
-        <table className="border-collapse" style={{ minWidth: '100%' }}>
-          <thead className="sticky top-0 z-10">
-            <tr>
-              <th className="sticky left-0 z-20 bg-[#f0f0f0] border border-gray-300 w-12 h-8 text-center text-xs text-gray-600" />
-              {table.getHeaderGroups()[0]?.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="bg-[#f0f0f0] border border-gray-300 h-8 px-1 text-left relative"
-                  style={{ width: header.getSize() }}
-                >
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.map((row, rowIndex) => (
-              <tr key={row.id}>
-                {/* Row number */}
-                <td className="sticky left-0 z-10 bg-[#f0f0f0] border border-gray-300 w-12 h-7 text-center text-xs text-gray-600">
-                  {rowIndex + 1}
-                </td>
-                {/* Data cells with merge support */}
-                {row.getVisibleCells().map((cell) => {
-                  const colId = cell.column.id;
-                  const colIndex = columns.findIndex((c) => c.key === colId);
-                  const dataKey = `${rowIndex}:${colIndex}`;
-
-                  if (coveredSet.has(dataKey)) return null;
-
-                  const span = spanMap[dataKey];
-
-                  // 从 styleMap 读取工作表样式（sheet 坐标 = 数据行 + headerOffset）
-                  const sheetKey = `${rowIndex + headerOffset}:${colIndex}`;
-                  const xlsCss = styleMap[sheetKey] || {};
-
-                  // 拆分成"单元格级样式（背景/对齐）"与"文本级样式（粗斜体/颜色）"
-                  const cellStyle: React.CSSProperties = {};
-                  const textStyle: React.CSSProperties = {};
-
-                  // 背景色 -> <td>
-                  if (xlsCss.backgroundColor) cellStyle.backgroundColor = xlsCss.backgroundColor;
-                  // 水平对齐 -> <td>
-                  if (xlsCss.textAlign) cellStyle.textAlign = xlsCss.textAlign as any;
-                  // 垂直对齐：Excel 的 center 映射为 HTML 的 middle
-                  if (xlsCss.verticalAlign) {
-                    const v = String(xlsCss.verticalAlign).toLowerCase();
-                    cellStyle.verticalAlign = (v === 'center' ? 'middle' : v) as any;
-                  } else {
-                    cellStyle.verticalAlign = 'middle';
-                  }
-
-                  // 文本样式 -> 内层 <div>/<span>
-                  if (xlsCss.fontWeight) textStyle.fontWeight = xlsCss.fontWeight;
-                  if (xlsCss.fontStyle) textStyle.fontStyle = xlsCss.fontStyle;
-                  if (xlsCss.color) textStyle.color = xlsCss.color;
-
-                  // 数字默认右对齐（若未指定）
-                  if (columns[colIndex]?.type === 'number' && !cellStyle.textAlign) {
-                    cellStyle.textAlign = 'right';
-                  }
-
-                  // 提取对齐信息用于 flex 布局
-                  const horiz = (xlsCss as any).__horiz as string | undefined;
-                  const vert = (xlsCss as any).__vert as string | undefined;
-
-                  const justifyContent =
-                    horiz === 'center'
-                      ? 'center'
-                      : horiz === 'right'
-                        ? 'flex-end'
-                        : // 数字列默认右对齐
-                          columns[colIndex]?.type === 'number' && !horiz
-                          ? 'flex-end'
-                          : 'flex-start';
-
-                  const alignItems =
-                    vert === 'center' ? 'center' : vert === 'bottom' ? 'flex-end' : 'flex-start';
-
-                  const isActive = !!(
-                    activeCell &&
-                    activeCell.row === rowIndex &&
-                    activeCell.col === colIndex
-                  );
-                  const inSelection = !!(
-                    selection &&
-                    rowIndex >= Math.min(selection.startRow, selection.endRow) &&
-                    rowIndex <= Math.max(selection.startRow, selection.endRow) &&
-                    colIndex >= Math.min(selection.startCol, selection.endCol) &&
-                    colIndex <= Math.max(selection.startCol, selection.endCol)
-                  );
-
-                  // 若单元格有背景色，则选区不再加蓝底，只加描边；否则才用蓝底
-                  const selectionBgClass =
-                    inSelection && !isActive && !cellStyle.backgroundColor ? 'bg-theme-50' : '';
-
-                  return (
-                    <td
-                      key={cell.id}
-                      className={`border border-gray-300 p-0 align-middle ${selectionBgClass} ${isActive ? 'ring-2 ring-theme-500 ring-inset' : ''}`}
-                      style={{ width: cell.column.getSize(), ...cellStyle }}
-                      rowSpan={span?.rowSpan}
-                      colSpan={span?.colSpan}
-                      onClick={() => {
-                        setActiveCell({ row: rowIndex, col: colIndex });
-                        setSelection(null);
-                      }}
-                      onDoubleClick={() => {
-                        setActiveCell({ row: rowIndex, col: colIndex });
-                        setEditingCell({ row: rowIndex, col: colIndex });
-                        setEditValue(String(data[rowIndex][columns[colIndex].key] ?? ''));
-                      }}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setActiveCell({ row: rowIndex, col: colIndex });
-                        setContextMenu({ x: e.clientX, y: e.clientY });
-                      }}
-                    >
-                      <div
-                        className="relative h-full min-h-[28px] flex px-2 text-sm"
-                        style={{
-                          ...textStyle,
-                          justifyContent,
-                          alignItems,
-                          width: '100%',
-                        }}
+      <div ref={tableContainerRef} className="flex-1 overflow-hidden bg-white relative">
+        {isLoading && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-8 border-4 border-theme-500 border-t-transparent rounded-full animate-spin" />
+              <div className="text-sm text-gray-600">Loading data...</div>
+            </div>
+          </div>
+        )}
+        <AutoSizer>
+          {({ height, width }: { height: number; width: number }) => (
+            <div style={{ height, width, overflow: 'auto' }}>
+              <table className="border-collapse" style={{ minWidth: '100%' }}>
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th className="sticky left-0 z-20 bg-[#f0f0f0] border border-gray-300 w-12 h-8 text-center text-xs text-gray-600" />
+                    {table.getHeaderGroups()[0]?.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className="bg-[#f0f0f0] border border-gray-300 h-8 px-1 text-left relative"
+                        style={{ width: header.getSize() }}
                       >
-                        {editingCell &&
-                        editingCell.row === rowIndex &&
-                        editingCell.col === colIndex ? (
-                          <input
-                            type="text"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={() => {
-                              const newData = [...data];
-                              newData[rowIndex][columns[colIndex].key] = editValue;
-                              setData(newData);
-                              setEditingCell(null);
-                              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
-                              else if (e.key === 'Escape') setEditingCell(null);
-                            }}
-                            className="absolute inset-0 w-full h-full px-2 border-2 border-theme-500 focus:outline-none"
-                            style={{ textAlign: cellStyle.textAlign || 'left' }}
-                            autoFocus
-                          />
-                        ) : (
-                          <span className="truncate" style={{ width: '100%' }}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <List
+                    height={height - 32} // Subtract header height
+                    itemCount={table.getRowModel().rows.length}
+                    itemSize={28} // Row height
+                    width={Math.max(width, table.getTotalSize() + 48)} // Ensure width covers all columns + row number col
+                    outerElementType="tbody"
+                  >
+                    {({ index, style }) => {
+                      const row = table.getRowModel().rows[index];
+                      return (
+                        <tr key={row.id} style={style} className="flex">
+                          {/* Row number */}
+                          <td className="sticky left-0 z-10 bg-[#f0f0f0] border border-gray-300 w-12 h-7 text-center text-xs text-gray-600 flex items-center justify-center">
+                            {index + 1}
+                          </td>
+                          {/* Data cells with merge support */}
+                          {row.getVisibleCells().map((cell) => {
+                            const colId = cell.column.id;
+                            const colIndex = columns.findIndex((c) => c.key === colId);
+                            const dataKey = `${index}:${colIndex}`;
+
+                            if (coveredSet.has(dataKey)) return null;
+
+                            const span = spanMap[dataKey];
+
+                            // 从 styleMap 读取工作表样式（sheet 坐标 = 数据行 + headerOffset）
+                            const sheetKey = `${index + headerOffset}:${colIndex}`;
+                            const xlsCss = styleMap[sheetKey] || {};
+
+                            // 拆分成"单元格级样式（背景/对齐）"与"文本级样式（粗斜体/颜色）"
+                            const cellStyle: React.CSSProperties = {};
+                            const textStyle: React.CSSProperties = {};
+
+                            // 背景色 -> <td>
+                            if (xlsCss.backgroundColor)
+                              cellStyle.backgroundColor = xlsCss.backgroundColor;
+                            // 水平对齐 -> <td>
+                            if (xlsCss.textAlign) cellStyle.textAlign = xlsCss.textAlign as any;
+                            // 垂直对齐：Excel 的 center 映射为 HTML 的 middle
+                            if (xlsCss.verticalAlign) {
+                              const v = String(xlsCss.verticalAlign).toLowerCase();
+                              cellStyle.verticalAlign = (v === 'center' ? 'middle' : v) as any;
+                            } else {
+                              cellStyle.verticalAlign = 'middle';
+                            }
+
+                            // 文本样式 -> 内层 <div>/<span>
+                            if (xlsCss.fontWeight) textStyle.fontWeight = xlsCss.fontWeight;
+                            if (xlsCss.fontStyle) textStyle.fontStyle = xlsCss.fontStyle;
+                            if (xlsCss.color) textStyle.color = xlsCss.color;
+
+                            // 数字默认右对齐（若未指定）
+                            if (columns[colIndex]?.type === 'number' && !cellStyle.textAlign) {
+                              cellStyle.textAlign = 'right';
+                            }
+
+                            // 提取对齐信息用于 flex 布局
+                            const horiz = (xlsCss as any).__horiz as string | undefined;
+                            const vert = (xlsCss as any).__vert as string | undefined;
+
+                            const justifyContent =
+                              horiz === 'center'
+                                ? 'center'
+                                : horiz === 'right'
+                                  ? 'flex-end'
+                                  : // 数字列默认右对齐
+                                    columns[colIndex]?.type === 'number' && !horiz
+                                    ? 'flex-end'
+                                    : 'flex-start';
+
+                            const alignItems =
+                              vert === 'center'
+                                ? 'center'
+                                : vert === 'bottom'
+                                  ? 'flex-end'
+                                  : 'flex-start';
+
+                            const isActive = !!(
+                              activeCell &&
+                              activeCell.row === index &&
+                              activeCell.col === colIndex
+                            );
+                            const inSelection = !!(
+                              selection &&
+                              index >= Math.min(selection.startRow, selection.endRow) &&
+                              index <= Math.max(selection.startRow, selection.endRow) &&
+                              colIndex >= Math.min(selection.startCol, selection.endCol) &&
+                              colIndex <= Math.max(selection.startCol, selection.endCol)
+                            );
+
+                            // 若单元格有背景色，则选区不再加蓝底，只加描边；否则才用蓝底
+                            const selectionBgClass =
+                              inSelection && !isActive && !cellStyle.backgroundColor
+                                ? 'bg-theme-50'
+                                : '';
+
+                            return (
+                              <td
+                                key={cell.id}
+                                className={`border border-gray-300 p-0 align-middle ${selectionBgClass} ${isActive ? 'ring-2 ring-theme-500 ring-inset' : ''}`}
+                                style={{
+                                  width: cell.column.getSize(),
+                                  ...cellStyle,
+                                  display: 'flex',
+                                  height: '100%',
+                                }}
+                                rowSpan={span?.rowSpan}
+                                colSpan={span?.colSpan}
+                                onClick={() => {
+                                  setActiveCell({ row: index, col: colIndex });
+                                  setSelection(null);
+                                }}
+                                onDoubleClick={() => {
+                                  setActiveCell({ row: index, col: colIndex });
+                                  setEditingCell({ row: index, col: colIndex });
+                                  setEditValue(String(data[index][columns[colIndex].key] ?? ''));
+                                }}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  setActiveCell({ row: index, col: colIndex });
+                                  setContextMenu({ x: e.clientX, y: e.clientY });
+                                }}
+                              >
+                                <div
+                                  className="relative h-full min-h-[28px] flex px-2 text-sm"
+                                  style={{
+                                    ...textStyle,
+                                    justifyContent,
+                                    alignItems,
+                                    width: '100%',
+                                  }}
+                                >
+                                  {editingCell &&
+                                  editingCell.row === index &&
+                                  editingCell.col === colIndex ? (
+                                    <input
+                                      type="text"
+                                      value={editValue}
+                                      onChange={(e) => setEditValue(e.target.value)}
+                                      onBlur={() => {
+                                        const newData = [...data];
+                                        newData[index][columns[colIndex].key] = editValue;
+                                        setData(newData);
+                                        setEditingCell(null);
+                                        if (setTabDirty && currentFile)
+                                          setTabDirty(currentFile.id, true);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter')
+                                          (e.currentTarget as HTMLInputElement).blur();
+                                        else if (e.key === 'Escape') setEditingCell(null);
+                                      }}
+                                      className="absolute inset-0 w-full h-full px-2 border-2 border-theme-500 focus:outline-none"
+                                      style={{ textAlign: cellStyle.textAlign || 'left' }}
+                                      autoFocus
+                                    />
+                                  ) : (
+                                    <span className="truncate" style={{ width: '100%' }}>
+                                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    }}
+                  </List>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </AutoSizer>
       </div>
 
       {/* Status Bar */}

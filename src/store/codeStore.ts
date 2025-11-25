@@ -90,13 +90,24 @@ const useCodeStore = create<CodeStore>((set, get) => ({
   initializeKernel: async (): Promise<string | false> => {
     if (get().isKernelReady) return useStore.getState().notebookId || false;
 
+    const existingId = useStore.getState().notebookId;
+
+    if (existingId) {
+      // If we have an existing ID, assume it's valid or at least we want to keep using it.
+      // Ideally we would check if the session is alive, but for now we trust the state
+      // to avoid creating a new notebook and clearing cells.
+      get().setKernelReady(true);
+      return existingId;
+    }
+
     try {
       get().setError(null);
       const result: KernelInitResult = await NotebookLifecycleService.initializeNotebook();
       if (result.status === 'ok') {
         get().setKernelReady(true);
         if (result.notebook_id) {
-          useStore.getState().setNotebookId(result.notebook_id);
+          // Use preserveContent to prevent clearing cells if we are recovering or initializing late
+          await useStore.getState().setNotebookId(result.notebook_id, { preserveContent: true });
         }
         return result.notebook_id || '';
       } else {

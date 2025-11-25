@@ -222,10 +222,14 @@ const GlobalTabList: React.FC = () => {
   );
 
   // 先计算所有的 Hook，然后再决定是否渲染
-  const activeKey = useMemo(
-    () => (previewMode === 'file' ? (activeFile?.id ?? 'current-notebook') : 'current-notebook'),
-    [previewMode, activeFile?.id]
-  );
+  const activeKey = useMemo(() => {
+    if (previewMode !== 'file' || !activeFile?.id) {
+      return 'current-notebook';
+    }
+    // Ensure the active file is actually in the current tabs list
+    const isActiveFileInTabs = tabs.some((t) => t.id === activeFile.id);
+    return isActiveFileInTabs ? activeFile.id : 'current-notebook';
+  }, [previewMode, activeFile?.id, tabs]);
 
   const items = useMemo(
     () =>
