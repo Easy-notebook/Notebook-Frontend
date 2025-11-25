@@ -308,9 +308,9 @@ export class NotebookApiService {
       return axiosResp.data;
     } catch (error) {
       apiLog.error('Failed to upload files', { error });
-      apiLog.error('Error details', { name: error.name });
-      apiLog.error('Error message', { message: error.message });
-      apiLog.error('Error stack', { stack: error.stack });
+      apiLog.error('Error details', { name: (error as any).name });
+      apiLog.error('Error message', { message: (error as any).message });
+      apiLog.error('Error stack', { stack: (error as any).stack });
       throw error;
     }
   }
