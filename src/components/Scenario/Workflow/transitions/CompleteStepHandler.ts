@@ -1,5 +1,6 @@
 /** COMPLETE_STEP Handler - BEHAVIOR_COMPLETED → STEP_COMPLETED */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { ClearEffectHistoryAction } from '../actions/reflecting/ClearEffectHistory';
 
 export class CompleteStepHandler extends BaseTransitionHandler {
   constructor() {
@@ -45,6 +46,9 @@ export class CompleteStepHandler extends BaseTransitionHandler {
         ns.state.effects.current = [];
       }
     }
+
+    // Clear effect history to prepare for the next step
+    ClearEffectHistoryAction.processState(ns);
 
     this.updateFSMState(ns, 'STEP_COMPLETED', 'COMPLETE_STEP');
     return ns;

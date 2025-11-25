@@ -139,7 +139,7 @@ const handleResponse = async <T = any>(response: Response): Promise<T> => {
       );
     }
 
-    throw new Error(`Invalid response from server: ${error.message || 'Unknown error'}`);
+    throw new Error(`Invalid response from server: ${(error as any).message || 'Unknown error'}`);
   }
 };
 

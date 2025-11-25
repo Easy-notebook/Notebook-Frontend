@@ -24,6 +24,7 @@ import { StateFactory } from '../states/StateFactory';
 import type { NotebookState, StateJSON } from '@Store/models';
 import { createInitialStateJSON } from '@Store/models';
 import { WorkflowEvent, WorkflowState } from '@Store/models';
+import { WORKFLOW_MAX_ITERATIONS } from '../../../../config/workflow';
 
 // ==============================================
 // TYPES & INTERFACES
@@ -232,7 +233,8 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
       // Continue workflow execution through the state chain
       // The AsyncStateMachineAdapter uses State objects to determine next steps.
       // Loop continues until we reach a terminal state or no transition occurs.
-      let maxIterations = 20; // Safety limit to prevent infinite loops
+
+      let maxIterations = WORKFLOW_MAX_ITERATIONS; // Safety limit to prevent infinite loops
       let iterations = 0;
 
       while (iterations < maxIterations) {
