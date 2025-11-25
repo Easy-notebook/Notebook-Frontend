@@ -215,16 +215,8 @@ const deserializeOutput = (output: any): any => {
   if (Array.isArray(output)) {
     return output.map(deserializeOutput);
   }
-  if (output.content && typeof output.content === 'string') {
-    try {
-      const parsed = JSON.parse(output.content);
-      if (typeof parsed === 'object') {
-        return { ...output, content: parsed };
-      }
-    } catch {
-      // 原样返回
-    }
-  }
+  // Remove the JSON parsing logic.
+  // We want to keep content as strings because OutputRenderer expects strings.
   return output;
 };
 
@@ -292,6 +284,8 @@ const useStore = create(
 
       isInitialized: false,
       isLoaded: false,
+      isLoading: false,
+      currentNotebook: null,
 
       // ================= 获取器 =================
       getCurrentCellId: () => get().currentCellId,
@@ -818,6 +812,11 @@ const useStore = create(
           produce((state: NotebookStoreState) => {
             const cell = state.cells.find((c) => c.id === cellId);
             if (cell) {
+              console.log('🔍 [notebookStore] updateCell', {
+                cellId,
+                outputsCount: cell.outputs?.length,
+                contentLength: newContent.length,
+              });
               const content =
                 typeof newContent === 'string' ? newContent : String(newContent ?? '');
               cell.content = content;
@@ -839,6 +838,10 @@ const useStore = create(
         ),
 
       updateCellOutputs: (cellId: string, outputs: OutputItem[]) => {
+        console.log('🔍 [notebookStore] updateCellOutputs', {
+          cellId,
+          outputsCount: outputs.length,
+        });
         const serializedOutputs = serializeOutput(outputs);
         updateCellOutputsHelper(set, get, cellId, serializedOutputs);
       },

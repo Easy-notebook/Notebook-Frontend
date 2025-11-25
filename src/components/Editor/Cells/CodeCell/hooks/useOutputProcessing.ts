@@ -11,6 +11,11 @@ export const useOutputProcessing = (cell: Cell, isExecuting: boolean, dslcMode: 
 
   // Process outputs
   const processedOutputs = useMemo(() => {
+    console.log('🔍 [useOutputProcessing] calculating', {
+      cellId: cell.id,
+      outputsCount: cell.outputs?.length,
+      outputs: cell.outputs,
+    });
     if (cell.outputs && Array.isArray(cell.outputs)) {
       return cell.outputs
         .map(processOutput)
@@ -21,7 +26,7 @@ export const useOutputProcessing = (cell: Cell, isExecuting: boolean, dslcMode: 
         }));
     }
     return [];
-  }, [cell.outputs]);
+  }, [cell.outputs, cell.id]);
 
   // Monitor output changes during execution
   useEffect(() => {

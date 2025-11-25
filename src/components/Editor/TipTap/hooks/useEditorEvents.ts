@@ -43,6 +43,34 @@ export function useEditorEvents({
     }
   };
 
+  // Helper to merge new cells with existing store cells to preserve outputs
+  const mergeCellsWithStore = (newCells: Cell[], currentCells: Cell[]) => {
+    return newCells.map((newCell, _index) => {
+      if (newCell.type === 'code') {
+        // For code cells always keep existing store data to preserve outputs
+        const existingCodeCell = currentCells.find(
+          (cell) => cell.type === 'code' && cell.id === newCell.id
+        );
+        if (existingCodeCell) {
+          return existingCodeCell;
+        }
+        return newCell;
+      } else if (newCell.type === 'markdown') {
+        // Reuse existing markdown cell id/metadata when possible
+        const existingMarkdownCell = currentCells.find(
+          (c) => c.id === newCell.id && c.type === 'markdown'
+        );
+        if (existingMarkdownCell) {
+          return { ...existingMarkdownCell, content: newCell.content };
+        }
+        return newCell;
+      }
+      // Keep other cell types as is
+      const existingSpecialCell = currentCells.find((cell) => cell.id === newCell.id);
+      return existingSpecialCell || newCell;
+    });
+  };
+
   const onDestroy = () => {
     try {
       // Force final sync when editor is destroyed
@@ -54,11 +82,22 @@ export function useEditorEvents({
       // Safely attempt to sync state one last time
       const editorInstance = editorRef.current;
       if (editorInstance && typeof convertEditorStateToCells === 'function') {
-        const newCells = convertEditorStateToCells(editorInstance);
-        if (newCells && setCells && typeof setCells === 'function' && cells) {
-          if (JSON.stringify(newCells) !== JSON.stringify(cells)) {
+        const newCellsRaw = convertEditorStateToCells(editorInstance);
+        if (newCellsRaw && setCells && typeof setCells === 'function' && cells) {
+          // Apply smart merge
+          let currentCells = cells;
+          try {
+            const storeState = useStore.getState();
+            if (storeState?.cells) currentCells = storeState.cells;
+          } catch {
+            /* ignore store access errors during unmount */
+          }
+
+          const mergedCells = mergeCellsWithStore(newCellsRaw, currentCells);
+
+          if (JSON.stringify(mergedCells) !== JSON.stringify(cells)) {
             console.log('📝 TipTap onDestroy: Final force sync for auto-save');
-            setCells(newCells);
+            setCells(mergedCells);
           }
         }
       }
@@ -167,36 +206,8 @@ export function useEditorEvents({
           } catch (storeError) {
             console.warn('Store access failed in merging cells:', storeError);
           }
-          const mergedCells: Cell[] = newCells.map((newCell, index) => {
-            if (newCell.type === 'code') {
-              // For code cells always keep existing store data
-              const existingCodeCell = currentCells.find(
-                (cell: Cell) => cell.type === 'code' && cell.id === newCell.id
-              );
-              if (existingCodeCell) {
-                if (DEBUG)
-                  console.log(`Code cell at ${index}: keep existing ${existingCodeCell.id}`);
-                return existingCodeCell; // Keep code cell intact
-              } else {
-                if (DEBUG) console.log(`Code cell at ${index}: new code cell ${newCell.id}`);
-                return newCell; // New code block
-              }
-            } else if (newCell.type === 'markdown') {
-              // Reuse existing markdown cell id/metadata when possible to keep store in sync
-              const existingMarkdownCell = currentCells[index];
-              if (existingMarkdownCell && existingMarkdownCell.type === 'markdown') {
-                return {
-                  ...existingMarkdownCell,
-                  content: newCell.content, // update content only
-                };
-              }
-              return newCell;
-            } else {
-              // Keep other cell types as is
-              const existingSpecialCell = currentCells.find((cell: Cell) => cell.id === newCell.id);
-              return existingSpecialCell || newCell;
-            }
-          });
+
+          const mergedCells = mergeCellsWithStore(newCells, currentCells);
 
           if (DEBUG) {
             console.log(
@@ -244,11 +255,23 @@ export function useEditorEvents({
       }
 
       // Immediately sync state to ensure auto-save triggers
-      const newCells = convertEditorStateToCells(editor);
-      if (JSON.stringify(newCells) !== JSON.stringify(cells)) {
+      const newCellsRaw = convertEditorStateToCells(editor);
+
+      // Apply smart merge
+      let currentCells = cells;
+      try {
+        const storeState = useStore.getState();
+        if (storeState?.cells) currentCells = storeState.cells;
+      } catch {
+        /* ignore store access errors during blur */
+      }
+
+      const mergedCells = mergeCellsWithStore(newCellsRaw, currentCells);
+
+      if (JSON.stringify(mergedCells) !== JSON.stringify(cells)) {
         console.log('📝 TipTap onBlur: Force syncing state for immediate auto-save');
         isInternalUpdate.current = true;
-        setCells(newCells);
+        setCells(mergedCells);
         setTimeout(() => {
           isInternalUpdate.current = false;
         }, FORCE_SYNC_DELAY);

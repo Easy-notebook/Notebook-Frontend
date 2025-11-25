@@ -99,6 +99,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
     // Calculate initial content once on mount
     const initialContent = useMemo(() => {
+      console.log('🔍 [TiptapNotebookEditor] calculating initialContent', {
+        cellsCount: cells.length,
+        hasOutputs: cells.some((c) => c.outputs && c.outputs.length > 0),
+      });
       return convertCellsToHtml(cells);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty deps - only calculate once
