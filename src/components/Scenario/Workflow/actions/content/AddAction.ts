@@ -48,7 +48,7 @@ export class AddAction extends ActionBase {
       if (lastCell && lastCell.type === 'markdown' && lastCell.content) {
         const trimmedContent = lastCell.content.trim();
         if (!trimmedContent.startsWith('#')) {
-          const newContent = lastCell.content + '\n\n' + content;
+          const newContent = lastCell.content + content;
           notebookStore.updateCell(lastCell.id, newContent);
           console.log(`[AddAction] ✅ Appended to existing cell: ${lastCell.id}`);
           return lastCell.id;

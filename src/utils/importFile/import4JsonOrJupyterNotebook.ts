@@ -152,6 +152,7 @@ const ImportNotebook4JsonOrJupyter = () => {
     },
     [
       clearCells,
+      setNotebookId,
       initializeNotebook,
       addCell,
       setCurrentPhase,
@@ -159,7 +160,7 @@ const ImportNotebook4JsonOrJupyter = () => {
       setViewMode,
       setCurrentRunningPhaseId,
       set,
-    ] // setNotebookId is a stable store setter
+    ]
   );
 
   // Import Jupyter Notebook format
@@ -251,6 +252,7 @@ const ImportNotebook4JsonOrJupyter = () => {
     },
     [
       clearCells,
+      setNotebookId,
       initializeNotebook,
       addCell,
       setCurrentPhase,
@@ -258,7 +260,7 @@ const ImportNotebook4JsonOrJupyter = () => {
       setViewMode,
       setCurrentRunningPhaseId,
       set,
-    ] // setNotebookId is a stable store setter
+    ]
   );
 
   // 处理文件导入

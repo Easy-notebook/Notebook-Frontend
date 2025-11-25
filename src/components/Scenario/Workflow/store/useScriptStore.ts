@@ -229,7 +229,6 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       }
 
       // Create action instance with scriptStore reference
-      // @ts-expect-error ActionClass is a concrete class, not abstract
       const action = new ActionClass(get());
 
       // Execute action

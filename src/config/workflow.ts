@@ -5,4 +5,4 @@
  */
 
 // Maximum number of auto-execution iterations to prevent infinite loops
-export const WORKFLOW_MAX_ITERATIONS = 150;
+export const WORKFLOW_MAX_ITERATIONS = 100;

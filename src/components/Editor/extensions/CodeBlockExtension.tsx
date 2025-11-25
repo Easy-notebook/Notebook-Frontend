@@ -59,14 +59,23 @@ export const CodeBlockExtension = Node.create({
         default: [],
         parseHTML: (element) => {
           const outputsAttr = element.getAttribute('data-outputs');
+          if (!outputsAttr) return [];
           try {
-            return outputsAttr ? JSON.parse(outputsAttr) : [];
+            // Try decoding first (for URL-encoded outputs from convertCellsToHtml)
+            const decoded = decodeURIComponent(outputsAttr);
+            return JSON.parse(decoded);
           } catch {
-            return [];
+            try {
+              // Fallback: try parsing directly (for non-encoded outputs)
+              return JSON.parse(outputsAttr);
+            } catch {
+              return [];
+            }
           }
         },
         renderHTML: (attributes) => ({
-          'data-outputs': JSON.stringify(attributes.outputs || []),
+          // Use encodeURIComponent to match convertCellsToHtml format
+          'data-outputs': encodeURIComponent(JSON.stringify(attributes.outputs || [])),
         }),
       },
       enableEdit: {
@@ -109,7 +118,7 @@ export const CodeBlockExtension = Node.create({
         'data-language': node.attrs.language,
         'data-code': node.attrs.code,
         'data-cell-id': node.attrs.cellId,
-        'data-outputs': JSON.stringify(node.attrs.outputs || []),
+        'data-outputs': encodeURIComponent(JSON.stringify(node.attrs.outputs || [])),
         'data-enable-edit': String(node.attrs.enableEdit),
         'data-is-generating': String(!!node.attrs.isGenerating),
       }),

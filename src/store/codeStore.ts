@@ -321,6 +321,9 @@ const useCodeStore = create<CodeStore>((set, get) => ({
 
       notebookState.updateCellOutputs(cellId, result.outputs || []);
 
+      // Trigger immediate auto-save after execution to ensure outputs are persisted
+      notebookState.triggerAutoSave();
+
       let hasError = false;
       let error: string | null = null;
       if (result.outputs) {

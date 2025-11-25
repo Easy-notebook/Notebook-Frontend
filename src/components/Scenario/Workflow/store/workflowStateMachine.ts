@@ -233,7 +233,6 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
       // Continue workflow execution through the state chain
       // The AsyncStateMachineAdapter uses State objects to determine next steps.
       // Loop continues until we reach a terminal state or no transition occurs.
-
       let maxIterations = WORKFLOW_MAX_ITERATIONS; // Safety limit to prevent infinite loops
       let iterations = 0;
 

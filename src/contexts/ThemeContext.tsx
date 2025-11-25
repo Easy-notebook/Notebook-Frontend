@@ -62,7 +62,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       isTransitioningRef.current = true;
 
-      // @ts-expect-error - View Transition API types not fully supported yet
       const transition = document.startViewTransition(() => {
         applyTheme();
       });
