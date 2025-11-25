@@ -26,7 +26,7 @@ import type { UploadFile, AICommandInputProps, VDSQuestion } from './types';
 import { FilePreviewList } from './FilePreviewList';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
-const ACCEPT = '.csv,.xlsx,.xls';
+const ACCEPT = '.csv,.xlsx,.xls,.pdf,.txt,.md,.jpg,.png,.jpeg,.doc,.docx,.ppt,.pptx';
 
 const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const { t, i18n } = useTranslation();
@@ -40,6 +40,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const [isFocused, setIsFocused] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isMultiline, setIsMultiline] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // -------- Biz state --------
   const [isVDSMode, setIsVDSMode] = useState<boolean>(false);
@@ -131,31 +132,26 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   }, [isVDSMode, files.length, defaultPresetQuestions]);
 
   // ---------- 上传逻辑 ----------
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      console.log('[DEBUG] AICommandInput - File upload initiated');
-      const selectedFiles = Array.from(e.target.files ?? []);
-      console.log('[DEBUG] AICommandInput - Selected files count:', selectedFiles.length);
+  const processFiles = useCallback(
+    async (selectedFiles: File[]) => {
+      console.log('[DEBUG] AICommandInput - Processing files count:', selectedFiles.length);
 
       if (!selectedFiles.length) {
         console.log('[DEBUG] AICommandInput - No files selected, returning');
         return;
       }
 
-      const csv = selectedFiles.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
-      console.log('[DEBUG] AICommandInput - CSV file found:', csv ? csv.name : 'none');
-
-      if (!csv) {
-        console.log('[DEBUG] AICommandInput - No valid CSV/Excel file found');
-        alert('Please select a CSV or Excel file');
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
-
-      console.log('[DEBUG] AICommandInput - File validation - name:', csv.name, 'size:', csv.size);
-      if (csv.size > MAX_SIZE) {
-        console.log('[DEBUG] AICommandInput - File too large:', csv.size, 'max:', MAX_SIZE);
-        alert(`File is too large. Maximum size allowed is ${MAX_SIZE / 1024 / 1024}MB`);
+      // Check file sizes
+      const oversizedFile = selectedFiles.find((f) => f.size > MAX_SIZE);
+      if (oversizedFile) {
+        console.log(
+          '[DEBUG] AICommandInput - File too large:',
+          oversizedFile.name,
+          oversizedFile.size
+        );
+        alert(
+          `File ${oversizedFile.name} is too large. Maximum size allowed is ${MAX_SIZE / 1024 / 1024}MB`
+        );
         if (fileInputRef.current) fileInputRef.current.value = '';
         return;
       }
@@ -187,30 +183,23 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       let currentNotebookId = notebookId;
       console.log('[DEBUG] AICommandInput - Current notebookId from store:', currentNotebookId);
 
-      // Remove explicit notebook initialization to avoid double creation
-      // The upload_file API will handle notebook creation if notebookId is empty
-
       console.log('[DEBUG] AICommandInput - Setting upload state to true');
       setIsUploading(true);
 
       try {
-        // Skip kernel initialization before upload as it might create a duplicate notebook
-        // We will initialize/verify kernel AFTER upload with the correct notebookId
-
         console.log('[DEBUG] AICommandInput - Starting file upload with:', {
           notebookId: currentNotebookId || 'NEW',
-          fileName: csv.name,
-          fileSize: csv.size,
+          fileCount: selectedFiles.length,
           config: uploadConfig,
         });
 
         let result;
         if (currentNotebookId) {
           // Existing notebook: use upload_file
-          result = await FileService.uploadFile(currentNotebookId, [csv], uploadConfig);
+          result = await FileService.uploadFile(currentNotebookId, selectedFiles, uploadConfig);
         } else {
           // No notebook: use create_notebook_with_files
-          result = await FileService.createNotebookWithFiles([csv], uploadConfig.targetDir);
+          result = await FileService.createNotebookWithFiles(selectedFiles, uploadConfig.targetDir);
         }
 
         console.log('[DEBUG] AICommandInput - Upload result:', result);
@@ -239,82 +228,110 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             );
           }
 
-          const newFiles: UploadFile[] = [
-            {
-              id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-              name: csv.name,
-              size: csv.size,
-              type: csv.type,
-              url: URL.createObjectURL(csv),
-              file: csv,
-            },
-          ];
+          const newFiles: UploadFile[] = selectedFiles.map((file) => ({
+            id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            url: URL.createObjectURL(file),
+            file: file,
+          }));
+
           console.log('[DEBUG] AICommandInput - Setting files state:', newFiles);
           setFiles(newFiles);
 
-          console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
-          await usePreStageStore.getState().setCurrentFile(csv);
-          const csvFilePath = `assets/${csv.name}`;
-          console.log('[DEBUG] AICommandInput - Setting CSV file path:', csvFilePath);
-          await usePreStageStore.getState().setCsvFilePath(csvFilePath);
+          // Check for CSV/Excel for VDS mode
+          const csv = selectedFiles.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
 
-          console.log('[DEBUG] AICommandInput - Enabling VDS mode');
+          // Enable VDS mode for ANY file
+          console.log('[DEBUG] AICommandInput - Enabling VDS mode for uploaded files');
           setIsVDSMode(true);
 
-          // 生成 VDS 预设问题（异步延时保持原逻辑）
-          console.log('[DEBUG] AICommandInput - Starting question generation timer');
-          setTimeout(async () => {
-            try {
-              console.log('[DEBUG] AICommandInput - Getting file columns and dataset info');
-              const cols = usePreStageStore.getState().getFileColumns();
-              const info = usePreStageStore.getState().getDatasetInfo();
-              console.log('[DEBUG] AICommandInput - File columns:', cols);
-              console.log('[DEBUG] AICommandInput - Dataset info:', info);
+          if (csv) {
+            console.log(
+              '[DEBUG] AICommandInput - CSV/Excel found, initializing VDS mode:',
+              csv.name
+            );
+            console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
+            await usePreStageStore.getState().setCurrentFile(csv);
+            const csvFilePath = `assets/${csv.name}`;
+            console.log('[DEBUG] AICommandInput - Setting CSV file path:', csvFilePath);
+            await usePreStageStore.getState().setCsvFilePath(csvFilePath);
 
-              console.log(
-                '[DEBUG] AICommandInput - Calling generalResponse for question generation'
-              );
-              const map = await generalResponse(
-                'generate_question_choice_map',
-                { column_info: cols, dataset_info: info },
-                i18n.language
-              );
-              console.log('[DEBUG] AICommandInput - Question generation result:', map);
+            // 生成 VDS 预设问题（异步延时保持原逻辑）
+            console.log('[DEBUG] AICommandInput - Starting question generation timer');
+            setTimeout(async () => {
+              try {
+                console.log('[DEBUG] AICommandInput - Getting file columns and dataset info');
+                const cols = usePreStageStore.getState().getFileColumns();
+                const info = usePreStageStore.getState().getDatasetInfo();
+                console.log('[DEBUG] AICommandInput - File columns:', cols);
+                console.log('[DEBUG] AICommandInput - Dataset info:', info);
 
-              if (map?.message) {
-                console.log('[DEBUG] AICommandInput - Updating choice map and preset questions');
-                usePreStageStore.getState().updateChoiceMap(map.message);
-                setPresetQuestions(map.message as VDSQuestion[]);
-                if (
-                  (map.message as VDSQuestion[]).length &&
-                  (map.message as VDSQuestion[])[0].problem_description
-                ) {
-                  console.log(
-                    '[DEBUG] AICommandInput - Setting input to first question:',
-                    (map.message as VDSQuestion[])[0].problem_description
-                  );
-                  setInput((map.message as VDSQuestion[])[0].problem_description);
-                }
-
-                // 生成预设问题后，自动跳转到 ProblemDefine 页面
                 console.log(
-                  '[DEBUG] AICommandInput - File uploaded and questions generated, navigating to ProblemDefine'
+                  '[DEBUG] AICommandInput - Calling generalResponse for question generation'
                 );
-                setTimeout(async () => {
-                  setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
-                  // Remove auto-navigation to pipeline to avoid conflict with user submission
-                  // The user will stay in empty state until they ask a question or click a suggestion
+                const map = await generalResponse(
+                  'generate_question_choice_map',
+                  { column_info: cols, dataset_info: info },
+                  i18n.language
+                );
+                console.log('[DEBUG] AICommandInput - Question generation result:', map);
+
+                if (map?.message) {
+                  console.log('[DEBUG] AICommandInput - Updating choice map and preset questions');
+                  usePreStageStore.getState().updateChoiceMap(map.message);
+                  setPresetQuestions(map.message as VDSQuestion[]);
+                  if (
+                    (map.message as VDSQuestion[]).length &&
+                    (map.message as VDSQuestion[])[0].problem_description
+                  ) {
+                    const firstQuestion = (map.message as VDSQuestion[])[0].problem_description;
+                    console.log(
+                      '[DEBUG] AICommandInput - Setting input to first question:',
+                      firstQuestion
+                    );
+                    setInput((prev) => (prev.trim() ? prev : firstQuestion));
+                  }
+
+                  // 生成预设问题后，自动跳转到 ProblemDefine 页面
                   console.log(
-                    '[DEBUG] AICommandInput - Questions generated, waiting for user input'
+                    '[DEBUG] AICommandInput - File uploaded and questions generated, navigating to ProblemDefine'
                   );
-                }, 500); // 给用户一点时间看到问题生成
-              } else {
-                console.log('[DEBUG] AICommandInput - No questions generated from response');
+                  setTimeout(async () => {
+                    setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+                    console.log(
+                      '[DEBUG] AICommandInput - Questions generated, waiting for user input'
+                    );
+                  }, 500);
+                } else {
+                  console.log('[DEBUG] AICommandInput - No questions generated from response');
+                }
+              } catch (genErr) {
+                console.error(
+                  '[DEBUG] AICommandInput - Error generating preset questions:',
+                  genErr
+                );
               }
-            } catch (genErr) {
-              console.error('[DEBUG] AICommandInput - Error generating preset questions:', genErr);
-            }
-          }, 1000);
+            }, 1000);
+          } else {
+            console.log(
+              '[DEBUG] AICommandInput - No CSV/Excel found, using first file for VDS context'
+            );
+            const firstFile = selectedFiles[0];
+            await usePreStageStore.getState().setCurrentFile(firstFile);
+            const filePath = `assets/${firstFile.name}`;
+            await usePreStageStore.getState().setCsvFilePath(filePath);
+
+            // Set default suggestion for non-CSV files
+            const defaultQuestion = 'Analyze this file';
+            setInput((prev) => (prev.trim() ? prev : defaultQuestion));
+
+            // Navigate to ProblemDefine
+            setTimeout(async () => {
+              setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+            }, 500);
+          }
         } else {
           console.error('[DEBUG] AICommandInput - Upload failed with result:', result);
           alert('Upload failed: ' + ((result as any)?.message || 'Unknown error'));
@@ -331,6 +348,41 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       }
     },
     [notebookId, i18n.language, t, setFiles, setPreStage]
+  );
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      console.log('[DEBUG] AICommandInput - File upload initiated');
+      const selectedFiles = Array.from(e.target.files ?? []);
+      await processFiles(selectedFiles);
+    },
+    [processFiles]
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      if (droppedFiles.length > 0) {
+        await processFiles(droppedFiles);
+      }
+    },
+    [processFiles]
   );
 
   const handleRemoveFile = useCallback(
@@ -359,13 +411,16 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
       try {
         // VDS：直接启动工作流
-        const hasCsv = files.length > 0 && /\.(csv|xlsx|xls)$/i.test(files[0].name);
-        if (hasCsv && isVDSMode && command.trim()) {
+        const csvFile = files.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
+        const hasFiles = files.length > 0;
+
+        if (hasFiles && isVDSMode && command.trim()) {
           console.log('[AICommandInput] VDS mode - Starting workflow directly');
 
           usePreStageStore.getState().setSelectedProblem('vds', command.trim(), 'VDS Analysis');
 
-          const currentFile = files[0];
+          // Use CSV file if available, otherwise use the first file
+          const currentFile = csvFile || files[0];
           const preStageState = usePreStageStore.getState();
 
           const planningRequest = {
@@ -528,13 +583,23 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       {/* 胶囊外框 */}
       <div
         className="ai-bar"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         style={{
           position: 'relative',
           borderRadius: 28,
-          border: `1px solid ${isFocused ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.1)'}`,
-          boxShadow: isFocused ? '0 4px 18px rgba(0,0,0,0.08)' : '0 1px 6px rgba(0,0,0,0.04)',
+          border: `1px solid ${
+            isDragOver
+              ? 'rgba(255,255,255,0.5)'
+              : isFocused
+                ? 'rgba(255,255,255,0.2)'
+                : 'rgba(255,255,255,0.1)'
+          }`,
+          boxShadow:
+            isDragOver || isFocused ? '0 4px 18px rgba(0,0,0,0.08)' : '0 1px 6px rgba(0,0,0,0.04)',
           transition: 'transform .18s, box-shadow .18s, border-color .18s',
-          transform: isFocused ? 'scale(1.01)' : 'none',
+          transform: isFocused || isDragOver ? 'scale(1.01)' : 'none',
           isolation: 'isolate',
           overflow: 'hidden',
         }}

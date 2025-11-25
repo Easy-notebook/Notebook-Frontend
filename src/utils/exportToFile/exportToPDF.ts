@@ -1,6 +1,6 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import Prism from 'prismjs';
-import type { Token } from 'prismjs';
+import { marked } from 'marked';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-java';
@@ -32,19 +32,23 @@ interface PDFStyle {
   fontSize?: number;
   color?: string;
   bold?: boolean;
+  italics?: boolean;
   lineHeight?: number;
   margin?: number[];
   fontWeight?: number;
   background?: string;
   preserveLeadingSpaces?: boolean;
   noWrap?: boolean;
+  alignment?: string;
+  decoration?: string;
 }
 
 interface PDFContent {
   text?: string | any[];
-  style?: string;
+  style?: string | string[];
   color?: string;
   bold?: boolean;
+  italics?: boolean;
   fontWeight?: number;
   alignment?: string;
   margin?: number[];
@@ -54,6 +58,10 @@ interface PDFContent {
   canvas?: any[];
   fillColor?: string;
   preserveLeadingSpaces?: boolean;
+  image?: string;
+  width?: number;
+  ul?: any[];
+  ol?: any[];
 }
 
 const mainColor = '#9F1239';
@@ -61,7 +69,7 @@ const paragraphColor = '#1f2937';
 const codeBlockBg = '#fef2f2';
 const inlineCodeBg = '#fff7ed';
 
-// 更新字重和字体加载部分
+// Font loading
 const loadFonts = async (): Promise<void> => {
   if (pdfMake.vfs && pdfMake.fonts) return;
 
@@ -73,9 +81,8 @@ const loadFonts = async (): Promise<void> => {
     const fontArrayBuffer: ArrayBuffer = await fontResponse.arrayBuffer();
     const fontBase64: string = arrayBufferToBase64(fontArrayBuffer);
 
-    // 为不同字重加载相同的字体文件
     const fontFileName = 'NotoSansSC.ttf';
-    const boldFontFileName = 'NotoSansSC-Bold.ttf'; // 虽然是同一个文件，但用不同名字注册
+    const boldFontFileName = 'NotoSansSC-Bold.ttf';
 
     pdfMake.vfs = {
       [fontFileName]: fontBase64,
@@ -85,7 +92,7 @@ const loadFonts = async (): Promise<void> => {
     pdfMake.fonts = {
       NotoSansSC: {
         normal: fontFileName,
-        bold: boldFontFileName, // 明确指定 bold 使用加粗版本
+        bold: boldFontFileName,
         italics: fontFileName,
         bolditalics: boldFontFileName,
       },
@@ -95,7 +102,7 @@ const loadFonts = async (): Promise<void> => {
     pdfMake.fonts = {
       NotoSansSC: {
         normal: 'Helvetica',
-        bold: 'Helvetica-Bold', // 使用 Helvetica 的 Bold 版本
+        bold: 'Helvetica-Bold',
         italics: 'Helvetica-Oblique',
         bolditalics: 'Helvetica-BoldOblique',
       },
@@ -106,35 +113,63 @@ const loadFonts = async (): Promise<void> => {
 const getStyles = (): Record<string, PDFStyle> => ({
   h1: {
     font: 'NotoSansSC',
-    fontSize: 14,
+    fontSize: 18,
     color: mainColor,
     bold: true,
     lineHeight: 1.2,
-    margin: [0, 0, 0, 3],
-    fontWeight: 700, // 添加 fontWeight 属性
+    margin: [0, 10, 0, 5],
+    fontWeight: 700,
   },
-  h2Text: {
+  h2: {
     font: 'NotoSansSC',
-    fontSize: 12,
-    color: '#FFFFFF',
+    fontSize: 15,
+    color: mainColor,
     bold: true,
     lineHeight: 1.2,
+    margin: [0, 8, 0, 4],
     fontWeight: 700,
   },
   h3: {
     font: 'NotoSansSC',
+    fontSize: 13,
+    color: mainColor,
+    bold: true,
+    lineHeight: 1.2,
+    margin: [0, 6, 0, 3],
+    fontWeight: 700,
+  },
+  h4: {
+    font: 'NotoSansSC',
     fontSize: 11,
     color: mainColor,
     bold: true,
-    lineHeight: 1.1,
-    margin: [0, 10, 0, 10],
+    lineHeight: 1.2,
+    margin: [0, 4, 0, 2],
+    fontWeight: 700,
+  },
+  h5: {
+    font: 'NotoSansSC',
+    fontSize: 10,
+    color: mainColor,
+    bold: true,
+    lineHeight: 1.2,
+    margin: [0, 4, 0, 2],
+    fontWeight: 700,
+  },
+  h6: {
+    font: 'NotoSansSC',
+    fontSize: 9,
+    color: mainColor,
+    bold: true,
+    lineHeight: 1.2,
+    margin: [0, 4, 0, 2],
     fontWeight: 700,
   },
   paragraph: {
     font: 'NotoSansSC',
-    fontSize: 9,
+    fontSize: 10,
     color: paragraphColor,
-    lineHeight: 1.2,
+    lineHeight: 1.5,
     margin: [0, 0, 0, 8],
   },
   codeBlock: {
@@ -148,8 +183,8 @@ const getStyles = (): Record<string, PDFStyle> => ({
     font: 'NotoSansSC',
     fontSize: 9,
     background: inlineCodeBg,
-    color: '#000000',
-    margin: [1, 0, 1, 0],
+    color: '#c2410c', // orange-700
+    margin: [0, 0, 0, 0],
   },
   output: {
     font: 'NotoSansSC',
@@ -160,67 +195,29 @@ const getStyles = (): Record<string, PDFStyle> => ({
   error: {
     font: 'NotoSansSC',
     fontSize: 9,
-    color: '#FF0000',
+    color: '#dc2626', // red-600
     lineHeight: 1.2,
+  },
+  blockquote: {
+    font: 'NotoSansSC',
+    fontSize: 10,
+    color: '#4b5563', // gray-600
+    italics: true,
+    margin: [0, 5, 0, 5],
+  },
+  list: {
+    font: 'NotoSansSC',
+    fontSize: 10,
+    color: paragraphColor,
+    lineHeight: 1.4,
+    margin: [0, 0, 0, 5],
+  },
+  link: {
+    color: '#2563eb', // blue-600
+    decoration: 'underline',
   },
 });
 
-// 创建标题相关函数的更新
-const createH1Block = (text: string): PDFContent[] => {
-  return [
-    {
-      text,
-      style: 'h1',
-      bold: true,
-      fontWeight: 700,
-    },
-    {
-      canvas: [
-        {
-          type: 'line',
-          x1: 0,
-          y1: 0,
-          x2: 400,
-          y2: 0,
-          lineWidth: 1,
-          lineColor: mainColor,
-        },
-      ],
-      margin: [0, 0, 0, 5],
-    },
-  ];
-};
-
-const createH2Block = (text: string): PDFContent => {
-  return {
-    table: {
-      widths: ['*'],
-      body: [
-        [
-          {
-            text,
-            style: 'h2Text',
-            alignment: 'left',
-            bold: true,
-            fontWeight: 700,
-          },
-        ],
-      ],
-    },
-    layout: {
-      fillColor: () => mainColor,
-      paddingLeft: () => 3,
-      paddingRight: () => 3,
-      paddingTop: () => 2,
-      paddingBottom: () => 2,
-      hLineWidth: () => 0,
-      vLineWidth: () => 0,
-    },
-    margin: [0, 24, 0, 10],
-  };
-};
-
-// 其他函数和实现保持不变...
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   let binary = '';
   const bytes: Uint8Array = new Uint8Array(buffer);
@@ -230,10 +227,174 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return window.btoa(binary);
 };
 
+// --- Markdown Processing with Marked ---
+
+const processTokens = (tokens: any[]): PDFContent[] => {
+  const content: PDFContent[] = [];
+
+  tokens.forEach((token) => {
+    switch (token.type) {
+      case 'heading':
+        content.push({
+          text: token.text,
+          style: `h${token.depth}`,
+        });
+        // Add a separator line for H1 and H2
+        if (token.depth <= 2) {
+          content.push({
+            canvas: [
+              {
+                type: 'line',
+                x1: 0,
+                y1: 0,
+                x2: 515, // Approx A4 width minus margins
+                y2: 0,
+                lineWidth: 1,
+                lineColor: '#e5e7eb', // gray-200
+              },
+            ],
+            margin: [0, 0, 0, 10],
+          });
+        }
+        break;
+
+      case 'paragraph':
+        content.push({
+          text: processInlineTokens(token.tokens),
+          style: 'paragraph',
+        });
+        break;
+
+      case 'list': {
+        const listType = token.ordered ? 'ol' : 'ul';
+        const listItems = token.items.map((item: any) => {
+          // Flatten items content if possible, or handle nested blocks
+          // For simplicity, we process the tokens of the item
+          return {
+            text: processInlineTokens(item.tokens),
+            style: 'list',
+          };
+        });
+        content.push({
+          [listType]: listItems,
+          margin: [0, 0, 0, 8],
+        });
+        break;
+      }
+
+      case 'code':
+        content.push(...createCodeBlock(token.text, [], token.lang || 'text'));
+        break;
+
+      case 'blockquote':
+        content.push({
+          stack: processTokens(token.tokens),
+          style: 'blockquote',
+          margin: [10, 5, 0, 5],
+          // Simulate blockquote border with a table or layout if needed
+          // For now, just indentation and italics
+        });
+        break;
+
+      case 'space':
+        // Ignore extra spaces
+        break;
+
+      case 'hr':
+        content.push({
+          canvas: [
+            {
+              type: 'line',
+              x1: 0,
+              y1: 0,
+              x2: 515,
+              y2: 0,
+              lineWidth: 1,
+              lineColor: '#d1d5db', // gray-300
+            },
+          ],
+          margin: [0, 10, 0, 10],
+        });
+        break;
+
+      default:
+        console.warn(`Unsupported markdown token type: ${token.type}`, token);
+        if (token.text) {
+          content.push({
+            text: token.text,
+            style: 'paragraph',
+          });
+        }
+        break;
+    }
+  });
+
+  return content;
+};
+
+const processInlineTokens = (tokens: any[]): any[] => {
+  if (!tokens) return [];
+  return tokens.map((token) => {
+    const style: any = {};
+    if (token.type === 'strong') style.bold = true;
+    if (token.type === 'em') style.italics = true;
+    if (token.type === 'codespan') {
+      return {
+        text: token.text,
+        style: 'inlineCode',
+      };
+    }
+    if (token.type === 'link') {
+      style.color = '#2563eb';
+      style.decoration = 'underline';
+      // pdfMake supports link: 'url'
+      return {
+        text: token.text,
+        link: token.href,
+        ...style,
+      };
+    }
+    if (token.type === 'text') {
+      // Handle nested formatting if marked provides it, otherwise just text
+      // Marked text tokens might have 'tokens' property if they contain other inline elements?
+      // Usually 'strong' contains 'tokens' etc.
+      // But 'text' is usually a leaf.
+      return {
+        text: token.text,
+        ...style,
+      };
+    }
+
+    // Recursive processing for inline containers
+    if (token.tokens) {
+      return {
+        text: processInlineTokens(token.tokens),
+        ...style,
+      };
+    }
+
+    return {
+      text: token.text || '',
+      ...style,
+    };
+  });
+};
+
+const convertMarkdownToPdf = (content: string): PDFContent[] => {
+  try {
+    const tokens = marked.lexer(content);
+    return processTokens(tokens);
+  } catch (e) {
+    console.error('Error parsing markdown:', e);
+    return [{ text: content, style: 'paragraph' }];
+  }
+};
+
+// --- Code Block Processing ---
+
 const parseCodeHighlight = (code: string, language = 'python'): PDFContent[] => {
   try {
     if (!Prism.languages[language]) {
-      console.warn(`Language ${language} not found, falling back to plain text`);
       return [
         {
           text: code,
@@ -276,6 +437,8 @@ const parseCodeHighlight = (code: string, language = 'python'): PDFContent[] => 
         else if (classes.includes('function')) color = '#795E26';
         else if (classes.includes('comment')) color = '#008000';
         else if (classes.includes('number')) color = '#098658';
+        else if (classes.includes('boolean')) color = '#0000FF';
+        else if (classes.includes('operator')) color = '#333333';
 
         if (node.textContent) {
           parts.push({
@@ -358,51 +521,36 @@ const createCodeBlock = (
     outputs.forEach((output: CellOutput) => {
       if (!output.content) return;
 
-      const outputLines: string[] = output.content.split('\n');
-      outputLines.forEach((line: string) => {
+      if (output.type === 'image') {
+        // Handle base64 images
+        // Ensure content is a valid base64 data URI or raw base64
+        let imageContent = output.content;
+        // If it doesn't start with data:image, assume it's raw base64 and prepend prefix (guess png)
+        // But usually output.content from backend might be just base64 or data uri.
+        // Let's assume standard data URI or try to detect.
+        if (!imageContent.startsWith('data:image')) {
+          imageContent = `data:image/png;base64,${imageContent}`;
+        }
+
         result.push({
-          text: line,
-          style: output.type === 'error' ? 'error' : 'output',
-          margin: [0, 1, 0, 1],
+          image: imageContent,
+          width: 400, // Limit width
+          margin: [0, 5, 0, 5],
         });
-      });
+      } else {
+        const outputLines: string[] = output.content.split('\n');
+        outputLines.forEach((line: string) => {
+          result.push({
+            text: line,
+            style: output.type === 'error' ? 'error' : 'output',
+            margin: [0, 1, 0, 1],
+          });
+        });
+      }
     });
   }
 
   return result;
-};
-
-const convertMarkdownToPdf = (content: string): PDFContent[] => {
-  const lines: string[] = content.split('\n');
-  const pdfContent: PDFContent[] = [];
-
-  lines.forEach((line: string) => {
-    const trimmed: string = line.trim();
-    if (!trimmed) {
-      pdfContent.push({ text: '', margin: [0, 0, 0, 8] });
-      return;
-    }
-
-    if (line.startsWith('# ')) {
-      pdfContent.push(...createH1Block(line.slice(2)));
-    } else if (line.startsWith('## ')) {
-      pdfContent.push(createH2Block(line.slice(3)));
-    } else if (line.startsWith('### ')) {
-      pdfContent.push({
-        text: line.slice(4),
-        style: 'h3',
-        bold: true,
-        fontWeight: 700,
-      });
-    } else {
-      pdfContent.push({
-        text: line,
-        style: 'paragraph',
-      });
-    }
-  });
-
-  return pdfContent;
 };
 
 export const exportToPdf = async (cells: Cell[]): Promise<void> => {
@@ -429,7 +577,7 @@ export const exportToPdf = async (cells: Cell[]): Promise<void> => {
       },
       styles: getStyles(),
       pageSize: 'A4',
-      pageMargins: [30, 30, 30, 30],
+      pageMargins: [40, 40, 40, 40],
     };
 
     pdfMake.createPdf(docDefinition).download('notebook.pdf');

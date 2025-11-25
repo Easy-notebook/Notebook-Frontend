@@ -107,12 +107,12 @@ export type PreviewStore = PreviewStoreState & PreviewStoreActions;
 // --- NotebookId-first small helpers (local, decoupled) ---
 const FILE_ID_SEP = '::';
 const makeFileId = (notebookId: string, filePath: string) =>
-  `${notebookId}${FILE_ID_SEP}${filePath} `;
+  `${notebookId}${FILE_ID_SEP}${filePath}`;
 const parseFileId = (fileId: string): { notebookId: string; filePath: string } | null => {
   const idx = fileId.indexOf(FILE_ID_SEP);
   if (idx === -1) return null;
   const notebookId = fileId.slice(0, idx);
-  const filePath = fileId.slice(idx + FILE_ID_SEP.length);
+  const filePath = fileId.slice(idx + FILE_ID_SEP.length).trim();
   if (!notebookId || !filePath) return null;
   return { notebookId, filePath };
 };

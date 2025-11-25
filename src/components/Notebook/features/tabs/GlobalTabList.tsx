@@ -135,15 +135,20 @@ const GlobalTabList: React.FC = () => {
         // 切换到notebook模式，但不直接清除活跃文件，而是使用switchToNotebook
         uiLog.debug('GlobalTabList: Before mode change', { previewMode });
 
-        if (currentNotebookId && typeof store.switchToNotebook === 'function') {
-          // 使用switchToNotebook来正确处理状态切换
-          store.switchToNotebook(currentNotebookId);
-        } else {
-          // 降级处理：手动切换模式
-          if (previewMode === 'file') {
-            store.changePreviewMode();
-          }
-          store.setActiveFile(null);
+        // 直接切换状态，避免重新加载导致的闪烁或状态丢失
+        uiLog.debug('GlobalTabList: Switching to notebook mode');
+        if (previewMode === 'file') {
+          store.changePreviewMode();
+        }
+        store.setActiveFile(null);
+
+        // Persist the state change so it survives refresh
+        if (currentNotebookId) {
+          store.saveTabState(currentNotebookId).catch((err) => {
+            uiLog.error('GlobalTabList: Failed to save tab state on notebook switch', {
+              error: err,
+            });
+          });
         }
 
         uiLog.debug('GlobalTabList: Switched to notebook mode');
@@ -190,19 +195,6 @@ const GlobalTabList: React.FC = () => {
       // 如果这是最后一个文件tab且是活跃tab，需要同时处理删除和模式切换
       if (isClosingActiveTab && remainingFileTabs.length === 0) {
         uiLog.info('GlobalTabList: Closing last active file tab, performing atomic operation');
-
-        // 先切换到notebook模式（在删除之前）
-        if (currentNotebookId && typeof store.switchToNotebook === 'function') {
-          uiLog.debug('GlobalTabList: Using switchToNotebook for atomic state change');
-          store.switchToNotebook(currentNotebookId);
-        } else {
-          // 降级处理：手动切换状态
-          uiLog.debug('GlobalTabList: Manual state change fallback');
-          if (store.previewMode === 'file') {
-            store.changePreviewMode();
-          }
-          store.setActiveFile(null);
-        }
 
         // 导航回workspace（确保显示notebook内容）
         if (currentNotebookId) {
