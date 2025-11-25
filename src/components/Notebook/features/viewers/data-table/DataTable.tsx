@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import usePreviewStore from '@Store/previewStore';
 import useStore from '@Store/notebookStore';
+// import { useTheme } from '@/contexts/ThemeContext'; // Unused
 
 // =====================================================
 // Types & Interfaces
@@ -130,47 +131,47 @@ const ContextMenu: React.FC<ContextMenuProps> = (props) => {
   return (
     <div
       ref={menuRef}
-      className="fixed bg-white border border-gray-200 rounded-md shadow-lg py-1 z-50"
+      className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 z-50"
       style={{ left: `${props.x}px`, top: `${props.y}px` }}
     >
       <button
         onClick={props.onCopy}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
       >
         <Copy className="w-4 h-4" />
         Copy
       </button>
       <button
         onClick={props.onPaste}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
       >
         <Clipboard className="w-4 h-4" />
         Paste
       </button>
-      <div className="border-t border-gray-200 my-1" />
+      <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
       <button
         onClick={props.onDelete}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
       >
         <Trash2 className="w-4 h-4" />
         Clear Contents
       </button>
-      <div className="border-t border-gray-200 my-1" />
+      <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
       <button
         onClick={props.onInsertRowAbove}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
       >
         Insert Row Above
       </button>
       <button
         onClick={props.onInsertRowBelow}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
       >
         Insert Row Below
       </button>
       <button
         onClick={props.onDeleteRow}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
       >
         Delete Row
       </button>
@@ -190,6 +191,8 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   typeOverride,
   showFormulaBar = true,
 }) => {
+  // const { resolvedTheme } = useTheme(); // Unused
+  // const isDark = resolvedTheme === 'dark'; // Unused
   const { activeFile, activeSplitFile, setTabDirty } = usePreviewStore();
   const { detachedCellId } = useStore();
 
@@ -610,9 +613,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
               e.stopPropagation();
               column.toggleSorting();
             }}
-            className="p-0.5 hover:bg-gray-200 rounded"
+            className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           >
-            <ChevronDown className="w-3 h-3 text-gray-400" />
+            <ChevronDown className="w-3 h-3 text-gray-400 dark:text-gray-500" />
           </button>
           <div
             className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-theme-500"
@@ -802,19 +805,19 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     (currentFile.type !== 'csv' && currentFile.type !== 'xlsx' && !typeOverride)
   ) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50">
+      <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <FileSpreadsheet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No spreadsheet file selected</p>
+          <FileSpreadsheet className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-gray-400">No spreadsheet file selected</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#f3f3f3]">
+    <div className="h-full flex flex-col bg-[#f3f3f3] dark:bg-gray-900">
       {/* Ribbon */}
-      <div className="bg-white border-b border-gray-300 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 shadow-sm">
         <div className="px-2 py-1 flex items-center gap-4">
           <div className="flex items-center gap-2">
             <button
@@ -826,24 +829,24 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
             </button>
             <button
               onClick={handleExport}
-              className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 flex items-center gap-1"
+              className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-1"
             >
               <Download className="w-4 h-4" />
               Export
             </button>
           </div>
-          <div className="h-6 w-px bg-gray-300" />
+          <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
           <div className="flex items-center gap-2 ml-auto">
-            <Home className="w-4 h-4 text-gray-500" />
-            <span className="text-sm text-gray-600">{currentFile.name}</span>
+            <Home className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-gray-300">{currentFile.name}</span>
           </div>
         </div>
       </div>
 
       {/* Formula Bar */}
       {showFormulaBar && activeCell && (
-        <div className="bg-white border-b border-gray-200 px-2 py-1 flex items-center gap-2">
-          <div className="px-2 py-0.5 bg-gray-100 text-sm font-mono text-gray-700 rounded">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-2 py-1 flex items-center gap-2">
+          <div className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-sm font-mono text-gray-700 dark:text-gray-200 rounded">
             {getCellAddress(activeCell.row, activeCell.col)}
           </div>
           <input
@@ -862,18 +865,21 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                 setEditValue(String(data[activeCell.row][columns[activeCell.col].key] ?? ''));
               }
             }}
-            className="flex-1 px-2 py-0.5 text-sm border border-gray-200 rounded focus:outline-none focus:border-theme-500"
+            className="flex-1 px-2 py-0.5 text-sm border border-gray-200 dark:border-gray-600 rounded focus:outline-none focus:border-theme-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
           />
         </div>
       )}
 
       {/* Grid */}
-      <div ref={tableContainerRef} className="flex-1 overflow-hidden bg-white relative">
+      <div
+        ref={tableContainerRef}
+        className="flex-1 overflow-hidden bg-white dark:bg-gray-900 relative"
+      >
         {isLoading && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-2">
               <div className="w-8 h-8 border-4 border-theme-500 border-t-transparent rounded-full animate-spin" />
-              <div className="text-sm text-gray-600">Loading data...</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">Loading data...</div>
             </div>
           </div>
         )}
@@ -883,11 +889,11 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
               <table className="border-collapse" style={{ minWidth: '100%' }}>
                 <thead className="sticky top-0 z-10">
                   <tr>
-                    <th className="sticky left-0 z-20 bg-[#f0f0f0] border border-gray-300 w-12 h-8 text-center text-xs text-gray-600" />
+                    <th className="sticky left-0 z-20 bg-[#f0f0f0] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 w-12 h-8 text-center text-xs text-gray-600 dark:text-gray-400" />
                     {table.getHeaderGroups()[0]?.headers.map((header) => (
                       <th
                         key={header.id}
-                        className="bg-[#f0f0f0] border border-gray-300 h-8 px-1 text-left relative"
+                        className="bg-[#f0f0f0] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 h-8 px-1 text-left relative text-gray-900 dark:text-gray-100"
                         style={{ width: header.getSize() }}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -908,7 +914,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                       return (
                         <tr key={row.id} style={style} className="flex">
                           {/* Row number */}
-                          <td className="sticky left-0 z-10 bg-[#f0f0f0] border border-gray-300 w-12 h-7 text-center text-xs text-gray-600 flex items-center justify-center">
+                          <td className="sticky left-0 z-10 bg-[#f0f0f0] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 w-12 h-7 text-center text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center">
                             {index + 1}
                           </td>
                           {/* Data cells with merge support */}
@@ -989,13 +995,13 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                             // 若单元格有背景色，则选区不再加蓝底，只加描边；否则才用蓝底
                             const selectionBgClass =
                               inSelection && !isActive && !cellStyle.backgroundColor
-                                ? 'bg-theme-50'
+                                ? 'bg-theme-50 dark:bg-theme-900/30'
                                 : '';
 
                             return (
                               <td
                                 key={cell.id}
-                                className={`border border-gray-300 p-0 align-middle ${selectionBgClass} ${isActive ? 'ring-2 ring-theme-500 ring-inset' : ''}`}
+                                className={`border border-gray-300 dark:border-gray-600 p-0 align-middle ${selectionBgClass} ${isActive ? 'ring-2 ring-theme-500 ring-inset' : ''} text-gray-900 dark:text-gray-100`}
                                 style={{
                                   width: cell.column.getSize(),
                                   ...cellStyle,
@@ -1048,7 +1054,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                                           (e.currentTarget as HTMLInputElement).blur();
                                         else if (e.key === 'Escape') setEditingCell(null);
                                       }}
-                                      className="absolute inset-0 w-full h-full px-2 border-2 border-theme-500 focus:outline-none"
+                                      className="absolute inset-0 w-full h-full px-2 border-2 border-theme-500 focus:outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                                       style={{ textAlign: cellStyle.textAlign || 'left' }}
                                       autoFocus
                                     />
@@ -1073,7 +1079,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       </div>
 
       {/* Status Bar */}
-      <div className="bg-[#f0f0f0] border-t border-gray-300 px-3 py-1 flex items-center justify-between text-xs text-gray-600">
+      <div className="bg-[#f0f0f0] dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 px-3 py-1 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
         <div className="flex items-center gap-4">
           <span>Ready</span>
           {selection && (

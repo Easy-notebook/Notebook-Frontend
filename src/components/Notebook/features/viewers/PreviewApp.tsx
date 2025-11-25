@@ -10,10 +10,13 @@ import CodeDisplay from './code/CodeDisplay';
 import HexDisplay from './hex/HexDisplay';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import IframeViewer from './web/IframeViewer';
-import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Monitor, Code } from 'lucide-react';
 
 const PreviewApp: React.FC = () => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   // Check if we're in split view mode (detached cell)
   const { detachedCellId } = useStore();
   const isInSplitView = !!detachedCellId;
@@ -177,18 +180,20 @@ const PreviewApp: React.FC = () => {
 
       case 'html':
         return (
-          <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="flex flex-col h-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
             {/* HTML controls */}
-            <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700">{currentFile.name}</h3>
-              <div className="flex items-center bg-gray-200 rounded p-1">
+            <div className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                {currentFile.name}
+              </h3>
+              <div className="flex items-center bg-gray-200 dark:bg-gray-700 rounded p-1">
                 <button
                   type="button"
                   onClick={() => setShowSource(false)}
                   className={`px-2 py-1 text-sm rounded transition-colors ${
                     !showSource
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                   title="Show preview"
                 >
@@ -199,8 +204,8 @@ const PreviewApp: React.FC = () => {
                   onClick={() => setShowSource(true)}
                   className={`px-2 py-1 text-sm rounded transition-colors ${
                     showSource
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                   }`}
                   title="Show source code"
                 >
@@ -211,18 +216,18 @@ const PreviewApp: React.FC = () => {
 
             <div className="flex-1 flex flex-col min-h-0">
               {showSource ? (
-                <div className="flex-1 relative bg-gray-800 rounded-b-lg overflow-hidden">
+                <div className="flex-1 relative bg-gray-800 dark:bg-gray-900 rounded-b-lg overflow-hidden">
                   <div className="h-full overflow-auto">
                     <SyntaxHighlighter
                       language="html"
-                      style={tomorrow}
+                      style={isDark ? tomorrow : prism}
                       customStyle={{
                         margin: 0,
                         padding: '16px',
                         fontSize: '14px',
                         lineHeight: '1.5',
                         height: '100%',
-                        background: '#2d3748',
+                        background: isDark ? '#1f2937' : '#ffffff', // gray-800 : white
                         borderRadius: '0 0 8px 8px',
                       }}
                       showLineNumbers
@@ -255,8 +260,8 @@ const PreviewApp: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 p-4 bg-white rounded-b-lg overflow-hidden">
-                  <div className="h-full w-full bg-white border border-gray-200 rounded overflow-hidden">
+                <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-b-lg overflow-hidden">
+                  <div className="h-full w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
                     {/* Centralized iframe rendering */}
                     <IframeViewer
                       notebookId={currentFile?.notebookId}

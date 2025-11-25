@@ -82,12 +82,12 @@ const HexDisplay: React.FC<HexDisplayProps> = ({ content, fileName, showControls
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 shadow-sm">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
       {showControls && (
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-100 border-b border-gray-200">
+        <div className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-4">
-            <h3 className="text-sm font-medium text-gray-700">{fileName}</h3>
-            <span className="text-xs text-gray-500">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200">{fileName}</h3>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
               {hexData.totalBytes.toLocaleString()} bytes
             </span>
           </div>
@@ -95,7 +95,7 @@ const HexDisplay: React.FC<HexDisplayProps> = ({ content, fileName, showControls
             <select
               value={bytesPerLine}
               onChange={(e) => setBytesPerLine(Number(e.target.value))}
-              className="text-xs px-2 py-1 border border-gray-300 rounded"
+              className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
             >
               <option value={8}>8 bytes/line</option>
               <option value={16}>16 bytes/line</option>
@@ -121,7 +121,7 @@ const HexDisplay: React.FC<HexDisplayProps> = ({ content, fileName, showControls
         </div>
       )}
 
-      <div className="flex-1 bg-gray-900 text-green-400 font-mono text-xs leading-relaxed p-4 overflow-auto rounded-b-lg">
+      <div className="flex-1 bg-gray-50 dark:bg-gray-950 text-gray-800 dark:text-green-400 font-mono text-xs leading-relaxed p-4 overflow-auto rounded-b-lg">
         <div className="whitespace-pre">{hexData.lines.join('\n')}</div>
       </div>
     </div>

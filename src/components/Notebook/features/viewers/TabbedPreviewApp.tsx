@@ -10,10 +10,13 @@ import HexDisplay from './hex/HexDisplay';
 import { Code, Monitor } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import IframeViewer from './web/IframeViewer';
-import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // ---------- Main ----------
 const TabbedPreviewApp: React.FC = () => {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   // UI-only state
   const [showSource, setShowSource] = useState(false);
 
@@ -168,21 +171,21 @@ const TabbedPreviewApp: React.FC = () => {
 
       case 'html':
         return (
-          <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="flex flex-col h-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
             <div className="flex-1 flex flex-col min-h-0">
               {showSource ? (
-                <div className="flex-1 relative bg-gray-800 rounded-b-lg overflow-hidden">
+                <div className="flex-1 relative bg-gray-800 dark:bg-gray-900 rounded-b-lg overflow-hidden">
                   <div className="h-full overflow-auto">
                     <SyntaxHighlighter
                       language="html"
-                      style={tomorrow}
+                      style={isDark ? tomorrow : prism}
                       customStyle={{
                         margin: 0,
                         padding: '16px',
                         fontSize: '14px',
                         lineHeight: '1.5',
                         height: '100%',
-                        background: '#2d3748',
+                        background: isDark ? '#1f2937' : '#ffffff',
                         borderRadius: '0 0 8px 8px',
                       }}
                       showLineNumbers
@@ -217,8 +220,8 @@ const TabbedPreviewApp: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 p-4 bg-white rounded-b-lg overflow-hidden">
-                  <div className="h-full w-full bg-white border border-gray-200 rounded overflow-hidden">
+                <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-b-lg overflow-hidden">
+                  <div className="h-full w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
                     {/* Centralized iframe rendering */}
                     <IframeViewer
                       notebookId={activeFile?.notebookId}
@@ -243,14 +246,14 @@ const TabbedPreviewApp: React.FC = () => {
   }, [activeFile, setTabDirty, showSource]);
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-50">
+    <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-900">
       {/* Tab controls */}
       {activeFile && (
         <div className="flex items-center">
           {/* HTML 预览/源码切换 */}
           {activeFile?.type === 'html' && (
             <div
-              className="flex items-center bg-gray-200 rounded p-1"
+              className="flex items-center bg-gray-200 dark:bg-gray-700 rounded p-1"
               role="tablist"
               aria-label="HTML view switch"
             >
@@ -259,8 +262,8 @@ const TabbedPreviewApp: React.FC = () => {
                 onClick={() => setShowSource(false)}
                 className={`px-2 py-1 text-sm rounded transition-colors ${
                   !showSource
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
                 title="Show preview"
                 aria-selected={!showSource}
@@ -272,8 +275,8 @@ const TabbedPreviewApp: React.FC = () => {
                 onClick={() => setShowSource(true)}
                 className={`px-2 py-1 text-sm rounded transition-colors ${
                   showSource
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
                 title="Show source code"
                 aria-selected={showSource}

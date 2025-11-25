@@ -112,9 +112,9 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
             }
 
             html = result.value;
-          } catch (error) {
+          } catch (error: any) {
             console.error('DocDisplay - Error fetching file from URL:', error);
-            throw new Error(`Failed to fetch document: ${error.message}`);
+            throw new Error(`Failed to fetch document: ${error.message || String(error)}`);
           }
         } else {
           // Handle data URLs or base64 strings
@@ -158,10 +158,10 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
             }
 
             html = result.value;
-          } catch (error) {
+          } catch (error: any) {
             console.error('DocDisplay - Error decoding base64 data:', error);
             throw new Error(
-              `Base64 decoding failed: ${error.message}. The content may not be properly base64 encoded.`
+              `Base64 decoding failed: ${error.message || String(error)}. The content may not be properly base64 encoded.`
             );
           }
         }
@@ -248,7 +248,7 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
 
       // Generate and download the DOCX file
       const buffer = await Packer.toBuffer(doc);
-      const blob = new Blob([buffer], {
+      const blob = new Blob([buffer as any], {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       });
 
@@ -311,13 +311,13 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
   }
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-white dark:bg-gray-900">
       {/* Controls */}
       {showControls && (
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-gray-600" />
-            <span className="font-medium text-gray-900 truncate">
+            <FileText className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
               {fileName}
               {isDirty && <span className="text-orange-500 ml-1">*</span>}
             </span>
@@ -329,8 +329,8 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
               onClick={toggleEditMode}
               className={`flex items-center gap-2 px-3 py-2 rounded transition-colors ${
                 isEditMode
-                  ? 'bg-theme-100 text-theme-700 hover:bg-theme-200'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  ? 'bg-theme-100 dark:bg-theme-900/30 text-theme-700 dark:text-theme-300 hover:bg-theme-200 dark:hover:bg-theme-900/50'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
               }`}
               title={isEditMode ? 'Switch to preview' : 'Switch to edit'}
             >
@@ -342,7 +342,7 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
             {isEditMode && isDirty && (
               <button
                 onClick={handleSave}
-                className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors"
                 title="Save changes (Ctrl+S)"
               >
                 <Save className="w-4 h-4" />
@@ -353,7 +353,7 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
             {/* Export button */}
             <button
               onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
               title="Export as DOCX"
             >
               <Download className="w-4 h-4" />
@@ -375,13 +375,13 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
               modules={quillModules}
               formats={quillFormats}
               style={{ height: '100%' }}
-              className="h-full [&_.ql-container]:h-[calc(100%-42px)] [&_.ql-editor]:min-h-full"
+              className="h-full [&_.ql-container]:h-[calc(100%-42px)] [&_.ql-editor]:min-h-full dark:[&_.ql-toolbar]:bg-gray-800 dark:[&_.ql-toolbar]:border-gray-700 dark:[&_.ql-container]:border-gray-700 dark:[&_.ql-editor]:text-gray-200 dark:[&_.ql-stroke]:stroke-gray-400 dark:[&_.ql-fill]:fill-gray-400 dark:[&_.ql-picker]:text-gray-400"
             />
           </div>
         ) : (
           <div className="p-6 max-w-4xl mx-auto">
             <div
-              className="prose prose-lg max-w-none"
+              className="prose dark:prose-invert prose-lg max-w-none"
               dangerouslySetInnerHTML={{ __html: htmlContent }}
             />
           </div>

@@ -28,10 +28,10 @@ interface ImageDisplayProps {
 
 const ImageControls: React.FC<ImageControlsProps> = ({ zoomIn, zoomOut, resetTransform }) => {
   return (
-    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-4 z-10 bg-white bg-opacity-20 backdrop-blur-lg rounded-full px-5 py-2.5 shadow-lg">
+    <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-4 z-10 bg-white/20 dark:bg-black/40 backdrop-blur-lg rounded-full px-5 py-2.5 shadow-lg border border-white/10">
       <button
         onClick={() => zoomOut()}
-        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 hover:bg-white hover:bg-opacity-25 transition-all duration-300"
+        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-white/25 dark:hover:bg-white/10 transition-all duration-300"
         aria-label="Zoom out"
       >
         {/* 缩小图标 */}
@@ -53,7 +53,7 @@ const ImageControls: React.FC<ImageControlsProps> = ({ zoomIn, zoomOut, resetTra
 
       <button
         onClick={() => resetTransform()}
-        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 hover:bg-white hover:bg-opacity-25 transition-all duration-300"
+        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-white/25 dark:hover:bg-white/10 transition-all duration-300"
         aria-label="Reset view"
       >
         {/* 重置图标 */}
@@ -75,7 +75,7 @@ const ImageControls: React.FC<ImageControlsProps> = ({ zoomIn, zoomOut, resetTra
 
       <button
         onClick={() => zoomIn()}
-        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 hover:bg-white hover:bg-opacity-25 transition-all duration-300"
+        className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-200 hover:bg-white/25 dark:hover:bg-white/10 transition-all duration-300"
         aria-label="Zoom in"
       >
         {/* 放大图标 */}
@@ -139,19 +139,21 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(
       return (
         <table className="w-auto">
           <tbody>
-            <tr className="z-100 bg-white bg-opacity-20 backdrop-blur-lg">
+            <tr className="z-100 bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-lg">
               <td className="pr-6 align-middle">
                 <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">
                   Filename
                 </span>
               </td>
-              <td className="pr-6 text-sm font-medium align-middle">{fileName}</td>
+              <td className="pr-6 text-sm font-medium align-middle text-gray-900 dark:text-gray-100">
+                {fileName}
+              </td>
               <td className="pr-6 align-middle">
                 <span className="inline-flex items-center rounded-md bg-theme-600 px-2 py-1 text-xs font-medium text-white">
                   Last edited
                 </span>
               </td>
-              <td className="pr-6 text-sm font-medium align-middle">
+              <td className="pr-6 text-sm font-medium align-middle text-gray-900 dark:text-gray-100">
                 {new Date(lastModified).toLocaleString()}
               </td>
             </tr>
@@ -164,7 +166,7 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(
     if (!imgSrc) {
       return (
         <div
-          className={`flex items-center justify-center bg-gray-50 backdrop-blur-sm rounded-xl ${className} h-screen`}
+          className={`flex items-center justify-center bg-gray-50 dark:bg-gray-900 backdrop-blur-sm rounded-xl ${className} h-screen`}
           style={{ width }}
         >
           <div className="text-center text-gray-400">
@@ -198,22 +200,22 @@ const ImageDisplay: React.FC<ImageDisplayProps> = memo(
         >
           {/* 加载动画 */}
           {status === 'loading' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 backdrop-blur-sm z-10">
-              <div className="w-8 h-8 rounded-full border-2 border-gray-300 border-t-theme-500 animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-10">
+              <div className="w-8 h-8 rounded-full border-2 border-gray-300 dark:border-gray-600 border-t-theme-500 animate-spin"></div>
             </div>
           )}
 
           {/* 文件详情 */}
           {showDetails && status === 'loaded' && (
-            <div className="absolute top-0 left-0 right-0 bg-white bg-opacity-80 backdrop-blur-md py-3 px-5 transition-all duration-300 ease-in-out">
+            <div className="absolute top-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md py-3 px-5 transition-all duration-300 ease-in-out border-b border-gray-200 dark:border-gray-700">
               {renderFileInfo()}
             </div>
           )}
 
           {/* 错误提示 */}
           {status === 'error' ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-95">
-              <div className="text-center text-gray-600 max-w-xs">
+            <div className="absolute inset-0 flex items-center justify-center bg-white/95 dark:bg-gray-900/95">
+              <div className="text-center text-gray-600 dark:text-gray-400 max-w-xs">
                 <svg
                   className="w-14 h-14 mx-auto text-gray-400"
                   xmlns="http://www.w3.org/2000/svg"
