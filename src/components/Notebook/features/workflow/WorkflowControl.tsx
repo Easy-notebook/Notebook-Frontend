@@ -277,7 +277,10 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
   if (currentView !== 'workspace') return null;
 
   // Check if in IDLE state (not executing, not paused, not terminal, no current step)
-  const isIdle = !isExecuting && !isPaused && !isTerminal && !currentStepInfo;
+  // Also show terminal button if workflow is COMPLETE (user request)
+  const isIdle =
+    (!isExecuting && !isPaused && !isTerminal && !currentStepInfo) ||
+    currentState === WorkflowState.COMPLETE;
 
   // Determine bottom position based on view mode (demo mode has navigation bar at bottom)
   const bottomPosition = fallbackViewMode === 'demo' ? 'bottom-28' : 'bottom-6';

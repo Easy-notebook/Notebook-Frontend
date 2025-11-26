@@ -416,14 +416,6 @@ const AIAgentSidebar = () => {
           </div>
         )}
 
-        {(activeView as any) === 'debug' && (
-          <div className="space-y-4">
-            <WorkflowTODOPanel />
-            <StateMachineDebugger />
-            <AIPlanningContextDebugger />
-          </div>
-        )}
-
         {activeView === 'workflow' && (
           <div className="py-4">
             <WorkflowVisualization />

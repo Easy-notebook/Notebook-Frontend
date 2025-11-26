@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAIAgentStore } from '@Store/AIAgentStore';
 import { TabSwitcherGeneric } from '@LeftSidebar/shared/components';
 
-type ViewTypeExtended = 'script' | 'qa' | 'workflow' | 'debug';
+type ViewTypeExtended = 'script' | 'qa' | 'workflow';
 
 // Rightbar tab switcher aligned with LeftSideBar's TabSwitcher style
 const ViewSwitcher: React.FC = () => {
@@ -14,8 +14,7 @@ const ViewSwitcher: React.FC = () => {
   const tabs: { id: ViewTypeExtended; label: string }[] = [
     { id: 'script', label: t('rightSideBar.history') },
     { id: 'qa', label: t('rightSideBar.chat') },
-    { id: 'workflow', label: 'Workflow' },
-    { id: 'debug', label: 'Debug' },
+    { id: 'workflow', label: t('rightSideBar.workflow') },
   ];
 
   return (

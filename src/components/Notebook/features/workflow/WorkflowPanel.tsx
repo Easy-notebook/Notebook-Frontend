@@ -10,7 +10,10 @@
 
 import React, { useMemo } from 'react';
 import { CheckCircle } from 'lucide-react';
-import { useWorkflowStateMachine } from '@/components/Scenario/Workflow/store/workflowStateMachine';
+import {
+  useWorkflowStateMachine,
+  WorkflowState,
+} from '@/components/Scenario/Workflow/store/workflowStateMachine';
 import { extractSectionTitle } from '@Notebook/utils/String';
 import WorkflowErrorBoundary from './WorkflowErrorBoundary';
 
@@ -88,7 +91,7 @@ const WorkflowNavigator: React.FC<WorkflowNavigatorProps> = ({
 };
 
 const WorkflowPanel: React.FC = () => {
-  const { stateJSON } = useWorkflowStateMachine(); // ✅ Use stateJSON as single source of truth
+  const { stateJSON, currentState } = useWorkflowStateMachine(); // ✅ Use stateJSON as single source of truth
 
   // ✅ Get current location from stateJSON
   const currentLocation = stateJSON.observation?.location?.current;
@@ -132,6 +135,11 @@ const WorkflowPanel: React.FC = () => {
       currentStepId,
     };
   }, [plannedStages, plannedSteps, currentStageId, currentStepId]);
+
+  // Hide panel if workflow is complete
+  if (currentState === WorkflowState.COMPLETE) {
+    return null;
+  }
 
   return (
     <WorkflowErrorBoundary>
