@@ -139,7 +139,6 @@ export async function executeAction(actionType: string, params?: any): Promise<a
   const scriptStore = useScriptStore.getState();
 
   // Create action instance
-  // @ts-expect-error ActionClass is a concrete class, not abstract
   const action = new ActionClass(scriptStore);
 
   // Convert params to ExecutionStep format if it's a simple value

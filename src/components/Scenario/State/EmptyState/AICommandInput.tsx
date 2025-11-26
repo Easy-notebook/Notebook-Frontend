@@ -421,14 +421,10 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
           // Use CSV file if available, otherwise use the first file
           const currentFile = csvFile || files[0];
-          const preStageState = usePreStageStore.getState();
 
           const planningRequest = {
-            problem_name: 'VDS Analysis',
-            user_goal: command.trim(),
-            problem_description: command.trim(),
-            context_description: preStageState.datasetInfo || 'No additional context provided',
-            csv_file_path: currentFile?.name ? `assets/${currentFile.name}` : '',
+            user_requirement: command.trim(),
+            file_path: currentFile?.name ? `assets/${currentFile.name}` : '',
           };
 
           // Add variables to AI planning context

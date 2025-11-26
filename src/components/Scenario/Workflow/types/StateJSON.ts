@@ -264,13 +264,13 @@ export function createInitialStateJSON(
           },
         },
         goals:
-          '用户提出了问题%user_problem%，上传了文件%user_submit_files%,需要对于用户的问题进行大目标拆分，以目标产物为导向，进行阶段拆分，每个阶段需要有明确的目标，并且需要有明确的目标产物',
+          '用户提出了问题%user_requirement%，上传了文件%file_path%,需要对于用户的问题进行大目标拆分，以目标产物为导向，进行阶段拆分，每个阶段需要有明确的目标，并且需要有明确的目标产物',
       },
     },
     state: {
       variables: {
-        user_problem: '',
-        user_submit_files: [],
+        user_requirement: '',
+        file_path: '',
         ...variables,
       },
       effects: {
