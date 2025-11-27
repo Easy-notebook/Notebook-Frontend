@@ -1,62 +1,38 @@
 // src/hooks/useRouteSync.ts
-// Hook to sync route changes with route store
+// Hook to sync route changes with session service
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import useRouteStore from '@Store/routeStore';
 import useNotebookStore from '@Store/notebookStore';
 import usePreviewStore from '@Store/previewStore';
+import { NotebookSessionService } from '@Services/session';
+import { StoreCleanupService } from '@Services/store';
 import { uiLog } from '@Utils/logger';
 
 export const useRouteSync = () => {
   const location = useLocation();
   const { setRoute, currentView, currentNotebookId } = useRouteStore();
-  // Keep this to maintain hook order, even though we don't use loadFromDatabase anymore
+  // Keep this to maintain hook order
   useNotebookStore();
-  const switchToNotebook = usePreviewStore((state) => state.switchToNotebook);
-  const persistedNotebookId = usePreviewStore((state) => state.currentNotebookId);
-  const skipAutoRestore = usePreviewStore((state) => state.skipAutoRestore);
 
-  // 追踪最后加载的 notebookId,避免重复加载
+  // Track last loaded notebookId to avoid duplicate loads
   const lastLoadedNotebookId = useRef<string | null>(null);
+  const sessionService = useRef(NotebookSessionService.getInstance());
+  const cleanupService = useRef(StoreCleanupService.getInstance());
 
-  // 处理 workspace 路由的 notebook 加载
-  const handleWorkspaceRoute = useCallback(
-    async (view: string, notebookId: string | null) => {
-      if (view === 'workspace' && notebookId) {
-        try {
-          console.log('🔍 [useRouteSync] handleWorkspaceRoute START', {
-            view,
-            notebookId,
-            timestamp: new Date().toISOString(),
-          });
-          uiLog.navigation('workspace', { notebookId });
+  // Track previous path to detect route changes
+  const prevPathRef = useRef<string>(location.pathname);
 
-          // ✅ FIX: Only call switchToNotebook once, which will load from database internally
-          // This prevents duplicate loading and potential data overwrites
-          console.log('🔍 [useRouteSync] Calling switchToNotebook (single load)', {
-            notebookId,
-          });
-          await switchToNotebook(notebookId);
-          console.log('🔍 [useRouteSync] switchToNotebook completed', { notebookId });
-
-          uiLog.info('Workspace loaded for notebook', { notebookId });
-          console.log('🔍 [useRouteSync] handleWorkspaceRoute END', { notebookId });
-        } catch (error) {
-          console.error('❌ [useRouteSync] Failed to load workspace', { notebookId, error });
-          uiLog.error('Failed to load workspace', { notebookId, error });
-        }
-      }
-    },
-    [switchToNotebook]
-  );
-
-  // 同步路由状态
+  // Sync route state
   useEffect(() => {
     const currentPath = location.pathname;
+    const previousPath = prevPathRef.current;
+    prevPathRef.current = currentPath;
+
     const routeStore = useRouteStore.getState();
 
-    // 只有当路由真正改变时才更新，避免初始化时不必要的重复设置
+    // Only update when route actually changes
     if (routeStore.currentRoute !== currentPath) {
       uiLog.navigation('route_change', {
         from: routeStore.currentRoute,
@@ -65,59 +41,108 @@ export const useRouteSync = () => {
       setRoute(currentPath);
     }
 
-    // 当路由切换到主页时，重置预览模式为notebook并清除activeFile
-    if (currentPath === '/') {
-      const previewStore = usePreviewStore.getState();
-      if (previewStore.previewMode === 'file' || previewStore.activeFile) {
-        uiLog.debug('Resetting preview state for home route');
-        previewStore.resetToNotebookMode();
-      }
+    // Handle home route: disconnect session, clear stores
+    // Only trigger cleanup when ENTERING home route (from a different route)
+    // This prevents double-cleanup during initial render or same-route updates
+    if (currentPath === '/' && previousPath !== '/') {
+      console.log('🔍 [useRouteSync] Navigated to home from', previousPath);
+      handleHomeRoute();
     }
   }, [location.pathname, setRoute]);
 
-  // 处理 workspace 路由的加载 - 统一的 useEffect
+  // Handle home route navigation
+  const handleHomeRoute = async () => {
+    const notebookStore = useNotebookStore.getState();
+
+    // Already disconnected and cleared
+    if (sessionService.current.isDisconnected() && !notebookStore.notebookId) {
+      console.log('🔍 [useRouteSync] Already disconnected, skipping');
+      return;
+    }
+
+    console.log('🔍 [useRouteSync] Navigating to / - disconnecting session', {
+      currentNotebookId: notebookStore.notebookId,
+    });
+
+    try {
+      // Disconnect session (saves and pauses auto-save)
+      await sessionService.current.disconnect();
+
+      // Clean all stores using the cleanup service
+      await cleanupService.current.cleanAll();
+
+      console.log('✅ [useRouteSync] Session disconnected, stores cleared');
+    } catch (error) {
+      console.error('❌ [useRouteSync] Failed to disconnect session', { error });
+      uiLog.error('Failed to disconnect session on home route', { error });
+    }
+  };
+
+  // Handle workspace route loading
   useEffect(() => {
-    // 只在 workspace 视图且有 notebookId 时处理
+    // Only handle workspace view with notebookId
     if (currentView === 'workspace' && currentNotebookId) {
-      // 避免重复加载同一个 notebook
+      // Avoid duplicate loads
       if (lastLoadedNotebookId.current !== currentNotebookId) {
-        console.log('🔍 [useRouteSync] Triggering workspace load for new notebook', {
+        console.log('🔍 [useRouteSync] Triggering workspace load', {
           currentNotebookId,
           lastLoadedNotebookId: lastLoadedNotebookId.current,
         });
         lastLoadedNotebookId.current = currentNotebookId;
-        handleWorkspaceRoute(currentView, currentNotebookId);
+        handleWorkspaceRoute(currentNotebookId);
       } else {
-        console.log('🔍 [useRouteSync] Skipping duplicate load for same notebook', {
-          currentNotebookId,
-        });
+        console.log('🔍 [useRouteSync] Skipping duplicate load', { currentNotebookId });
       }
     } else if (currentView !== 'workspace') {
-      // 当离开 workspace 时,重置追踪状态
+      // Reset tracking when leaving workspace
       lastLoadedNotebookId.current = null;
     }
-  }, [currentView, currentNotebookId, handleWorkspaceRoute]);
+  }, [currentView, currentNotebookId]);
 
-  // 在首页刷新时，若有持久化的当前notebookId，则自动恢复到工作区
-  useEffect(() => {
+  // Handle workspace route
+  const handleWorkspaceRoute = async (notebookId: string) => {
     try {
-      if (location.pathname === '/' && persistedNotebookId && !skipAutoRestore) {
-        const routeState = useRouteStore.getState();
-        // 仅当路由未指向该notebook时才导航，避免循环
-        if (
-          routeState.currentNotebookId !== persistedNotebookId ||
-          routeState.currentView !== 'workspace'
-        ) {
-          uiLog.info('Auto-restoring last notebook after refresh', {
-            notebookId: persistedNotebookId,
-          });
-          routeState.navigateToWorkspace(persistedNotebookId);
-        }
+      // Check if notebook is already loaded (e.g., just created)
+      const currentNotebookStore = useNotebookStore.getState();
+      const alreadyLoaded =
+        currentNotebookStore.notebookId === notebookId &&
+        currentNotebookStore.isLoaded &&
+        currentNotebookStore.isInitialized;
+
+      console.log('🔍 [useRouteSync] handleWorkspaceRoute START', {
+        notebookId,
+        alreadyLoaded,
+        storeNotebookId: currentNotebookStore.notebookId,
+        isLoaded: currentNotebookStore.isLoaded,
+        isInitialized: currentNotebookStore.isInitialized,
+        timestamp: new Date().toISOString(),
+      });
+      uiLog.navigation('workspace', { notebookId, alreadyLoaded });
+
+      if (alreadyLoaded) {
+        console.log('🔍 [useRouteSync] Notebook already loaded, skipping session connect', {
+          notebookId,
+        });
+        // Just switch preview store
+        const previewStore = usePreviewStore.getState();
+        await previewStore.switchToNotebook(notebookId);
+      } else {
+        console.log('🔍 [useRouteSync] Loading notebook via session connect', { notebookId });
+        // Connect session (loads notebook, resumes auto-save)
+        await sessionService.current.connect(notebookId);
+
+        // Switch preview store to this notebook
+        const previewStore = usePreviewStore.getState();
+        await previewStore.switchToNotebook(notebookId);
       }
+
+      uiLog.info('Workspace loaded for notebook', { notebookId });
+      console.log('🔍 [useRouteSync] handleWorkspaceRoute END', { notebookId });
     } catch (error) {
-      uiLog.warn('Auto-restore on refresh failed', { error });
+      console.error('❌ [useRouteSync] Failed to load workspace', { notebookId, error });
+      uiLog.error('Failed to load workspace', { notebookId, error });
     }
-  }, [location.pathname, persistedNotebookId, skipAutoRestore]);
+  };
 
   return {
     currentView,

@@ -49,7 +49,6 @@ const NotebookApp = () => {
 
   // Notebook store state
   const {
-    notebookId,
     cells,
     tasks,
     viewMode,
@@ -206,10 +205,6 @@ const NotebookApp = () => {
     isExecuting,
     currentPhaseId,
     handleNextPhase,
-    routeView,
-    notebookId,
-    cells,
-    navigateToWorkspace,
   });
 
   // Sidebar handlers

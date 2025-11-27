@@ -25,4 +25,22 @@ export default defineConfig({
       '@Hooks': resolve(__dirname, './src/hooks'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'ui-vendor': [
+            'antd',
+            '@fluentui/react-components',
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+          ],
+          'charts-vendor': ['recharts', 'react-google-charts'],
+          'editor-vendor': ['@tiptap/react', '@tiptap/starter-kit', 'react-quill'],
+          'utils-vendor': ['lodash-es', 'date-fns', 'axios'],
+        },
+      },
+    },
+  },
 });

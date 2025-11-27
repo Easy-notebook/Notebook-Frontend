@@ -53,14 +53,17 @@ export function useBeforeUnload({
                 const notebookId = storeState.notebookId;
                 const notebookTitle = storeState.notebookTitle;
                 const tasks = storeState.tasks;
-                import('@Services/notebookAutoSave').then(({ default: NotebookAutoSave }) => {
-                  NotebookAutoSave.saveNow({
-                    notebookId,
-                    notebookTitle: notebookTitle || 'Untitled',
-                    cells: finalCells,
-                    tasks: tasks || [],
-                    timestamp: Date.now(),
-                  }).catch(console.error);
+                import('@Services/autoSave').then(({ AutoSaveService }) => {
+                  const autoSave = AutoSaveService.getInstance();
+                  autoSave
+                    .saveNow({
+                      notebookId,
+                      notebookTitle: notebookTitle || 'Untitled',
+                      cells: finalCells,
+                      tasks: tasks || [],
+                      timestamp: Date.now(),
+                    })
+                    .catch(console.error);
                 });
               }
             } catch (storeError) {

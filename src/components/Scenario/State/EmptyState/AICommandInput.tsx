@@ -13,7 +13,8 @@ import {
 } from '@/components/Scenario/Workflow/store/usePipelineStore';
 import usePreStageStore from '@/components/Scenario/Workflow/store/preStageStore';
 import { generalResponse } from '@/components/Scenario/Workflow/api';
-import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
+import { EVENT_TYPES } from '@Store/models/agent';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';

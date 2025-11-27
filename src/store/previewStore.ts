@@ -41,7 +41,6 @@ export interface PreviewStoreState {
 
   // Current notebook tracking
   currentNotebookId: string | null; // Currently active notebook ID
-  skipAutoRestore: boolean; // Flag to prevent auto-restoring notebook after clearing
 
   // Split preview state - independent from tab system
   activeSplitFile: FileObject | null; // Currently active split preview file
@@ -138,7 +137,6 @@ const usePreviewStore = create<PreviewStore>()(
 
       // Current notebook tracking
       currentNotebookId: null, // Currently active notebook ID
-      skipAutoRestore: false, // Flag to prevent auto-restoring notebook after clearing
 
       // Split preview initial state
       activeSplitFile: null,
@@ -162,93 +160,16 @@ const usePreviewStore = create<PreviewStore>()(
         });
       },
 
-      // Initialize the store
+      // Initialize the store - just initialize persistence service
+      // Route/session service handles notebook loading, not init()
       init: async () => {
         try {
           await persistenceService.initialize();
 
-          // Clear any stale currentPreviewFiles from localStorage persistence
-          // These should be loaded fresh from TabCache or backend
+          // Clear any stale preview files on init - route will load correct ones
           set({ currentPreviewFiles: [], activeFile: null, activePreviewMode: null });
 
-          // If no current notebook is set, ensure no stale tabs from previous session are shown
-          const state = get();
-          if (!state.currentNotebookId) {
-            set({ currentPreviewFiles: [], activeFile: null, activePreviewMode: null });
-          } else {
-            // If we have a persisted notebook ID, try to restore its tabs
-            storeLog.info('Restoring tabs for persisted notebook', {
-              notebookId: state.currentNotebookId,
-            });
-            await get().loadTabState(state.currentNotebookId);
-          }
-
-          // Check if we should skip auto-restore (e.g., after clearing notebook state)
-          if (get().skipAutoRestore) {
-            storeLog.info('Skipping auto-restore: skipAutoRestore flag is set');
-            // Reset the flag for next time
-            set({ skipAutoRestore: false });
-            return;
-          }
-
-          // ========== 🔴 TEMPORARILY DISABLED: AUTO-RESTORE LOGIC ==========
-          // Commenting out to debug if this is causing old notebook data to reappear
-
-          storeLog.warn(
-            '⚠️ AUTO-RESTORE IS DISABLED - Notebooks will NOT be automatically restored'
-          );
-
-          /*
-          // Check if we have any notebooks in cache
-          const cachedNotebooks = await persistenceService.notebooks.getAllNotebooks();
-          if (cachedNotebooks.length > 0) {fo(`Restored notebooks from cache`, {
-            count: cachedNotebooks.length,
-            notebooks: cachedNotebooks,
-          });
-
-          // If there's only one cached notebook or a most recently accessed one,
-          // we could potentially restore it as the active notebook
-          if (cachedNotebooks.length > 0) {
-            // Sort by last accessed time to get the most recent
-            const mostRecentNotebook = cachedNotebooks.sort(
-              (a, b) => b.lastAccessedAt - a.lastAccessedAt
-            )[0];
-
-            storeLog.info('Most recent notebook found', {
-              id: mostRecentNotebook.id,
-              name: mostRecentNotebook.name,
-            });
-
-            // Import and update notebook store with the most recent notebook
-            const { default: useNotebookStore } = await import('@Store/notebookStore');
-            useNotebookStore.getState().setNotebookId(mostRecentNotebook.id);
-            useNotebookStore
-              .getState()
-              .setNotebookTitle(
-                mostRecentNotebook.name || `Notebook ${ mostRecentNotebook.id.slice(0, 8) } `
-              );
-
-            // Also set the current notebook ID in preview store
-            set({ currentNotebookId: mostRecentNotebook.id });
-
-            storeLog.info('Restored notebook context', { notebookId: mostRecentNotebook.id });
-
-            // Also restore cached files for this notebook
-            if (mostRecentNotebook) {
-              const cachedFiles = await persistenceService.files.getFilesForNotebook(mostRecentNotebook.id);
-              if (cachedFiles.length > 0) {fo('Restored cached files for notebook', {
-                notebookId: mostRecentNotebook.id,
-                count: cachedFiles.length,
-              });
-
-              // You can set these in preview state if needed
-              // set({ currentPreviewFiles: cachedFiles.map(file => ({...file})) });
-            } catch (fileError) {
-              storeLog.warn('Failed to restore cached files', { error: fileError });
-            }
-          }
-          */
-          // ========== END OF DISABLED AUTO-RESTORE LOGIC ==========
+          storeLog.info('PreviewStore initialized - waiting for route to determine notebook');
         } catch (error) {
           storeLog.error('Failed to initialize storage', { error });
           set({ error: 'Failed to initialize file cache database' });
@@ -1008,24 +929,16 @@ const usePreviewStore = create<PreviewStore>()(
       },
 
       // Switch to a different notebook and load its tabs
+      // Note: Notebook content loading is handled by NotebookSessionService.connect()
+      // This function only manages preview/tab state
       switchToNotebook: async (notebookId: string): Promise<void> => {
         try {
-          storeLog.info('Switching to notebook', { notebookId });
+          storeLog.info('Switching preview to notebook', { notebookId });
 
           // Save current notebook's tab state before switching
           const currentNotebookId = get().currentNotebookId;
           if (currentNotebookId && currentNotebookId !== notebookId) {
             await get().saveTabState(currentNotebookId);
-          }
-
-          // Update notebook store
-          const { default: useNotebookStore } = await import('@Store/notebookStore');
-          const notebookStore = useNotebookStore.getState();
-
-          // Load notebook content from database
-          const loaded = await notebookStore.loadFromDatabase(notebookId);
-          if (!loaded) {
-            storeLog.warn('Could not load notebook from database', { notebookId });
           }
 
           // Set current notebook ID and switch to notebook mode
@@ -1041,12 +954,12 @@ const usePreviewStore = create<PreviewStore>()(
           // Load tabs from saved state or from scratch
           await get().loadTabState(notebookId);
 
-          storeLog.info('Successfully switched to notebook', {
+          storeLog.info('Successfully switched preview to notebook', {
             notebookId,
             previewMode: 'notebook',
           });
         } catch (error) {
-          storeLog.error('Failed to switch to notebook', { notebookId, error });
+          storeLog.error('Failed to switch preview to notebook', { notebookId, error });
           set({ error: `Failed to switch notebook: ${error}` });
         }
       },
@@ -1330,21 +1243,26 @@ const usePreviewStore = create<PreviewStore>()(
           isSplitLoading: false,
           previewMode: 'notebook',
           error: null,
-          skipAutoRestore: true, // Prevent init() from auto-restoring old notebook
         });
-        storeLog.info('Set skipAutoRestore flag to prevent auto-restore on next init');
+        storeLog.info('Cleared notebook state in previewStore');
       },
     }),
     {
       name: 'preview-store',
+      version: 2, // Increment version to clear old persisted data
       partialize: (state) => ({
-        // Don't persist currentPreviewFiles - they should be loaded from TabCache or fresh
-        // currentPreviewFiles: state.currentPreviewFiles,
-        currentNotebookId: state.currentNotebookId,
-        previewMode: state.previewMode,
+        // Only persist minimal state - route determines currentNotebookId
         dirtyMap: state.dirtyMap,
-        skipAutoRestore: state.skipAutoRestore, // Persist flag to prevent auto-restore after page refresh
       }),
+      // Merge function to ignore old persisted fields we no longer want
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<PreviewStoreState> | undefined;
+        return {
+          ...currentState,
+          // Only restore dirtyMap from persistence, ignore everything else
+          dirtyMap: persisted?.dirtyMap || {},
+        };
+      },
     }
   )
 );

@@ -12,7 +12,7 @@ import {
   updateCellsPhaseId,
 } from '@Utils/markdownParser';
 import { showToast } from '@/components/UI/Toast';
-import notebookAutoSaveInstance, { NotebookAutoSave } from '@Services/notebookAutoSave';
+import { AutoSaveService } from '@Services/autoSave';
 import { notebookLog, storeLog } from '@Utils/logger';
 
 import useCodeStore from '@Store/codeStore';
@@ -30,7 +30,7 @@ export type { Cell, CellType, OutputItem, UploadMode } from '@Store/models';
 export type { Task, Phase, Step } from '@Store/models';
 
 /** 视图模式类型 */
-export type ViewMode = 'step' | 'demo' | 'create';
+export type ViewMode = 'step' | 'demo' | 'create' | 'complete' | 'dslc';
 
 /** 运行结果接口 */
 export interface RunResult {
@@ -326,113 +326,36 @@ const useStore = create(
         ),
       setNotebookId: async (id: string | null, options?: { preserveContent?: boolean }) => {
         const state = get();
+        const autoSaveService = AutoSaveService.getInstance();
 
-        // If setting to null, ensure current notebook is saved first, then clear the store
-        if (id === null && state.notebookId) {
-          try {
-            // Ensure current notebook is persisted before clearing
-            await notebookAutoSaveInstance.saveNow({
-              notebookId: state.notebookId,
-              notebookTitle: state.notebookTitle,
-              cells: state.cells,
-              tasks: state.tasks,
-              timestamp: Date.now(),
-            });
+        // =====================================================
+        // CASE 1: Setting to null
+        // Note: Route layer (useRouteSync.handleHomeRoute) handles pause()
+        // This is called after pause() completes
+        // =====================================================
+        if (id === null) {
+          console.log('🔍 [notebookStore] setNotebookId(null) - store already cleared by route');
+          return;
+        }
 
-            notebookLog.info('Notebook saved before clearing store', {
-              notebookId: state.notebookId,
-            });
-          } catch (error) {
-            notebookLog.error('Failed to save notebook before clearing', {
-              notebookId: state.notebookId,
-              error,
-            });
-            // Continue with clearing even if save fails to avoid blocking user
-          }
-
-          // Clear the store to initial state
-          set({
-            notebookId: null,
-            notebookTitle: '',
-            cells: [],
-            tasks: [],
-            currentPhaseId: null,
-            currentStepIndex: 0,
-            currentCellId: null,
-            currentRunningPhaseId: null,
-            lastAddedCellId: null,
-            error: null,
-            editingCellId: null,
-            whatPurposeOfThisNotebook: null,
-            whatHaveWeDone: null,
-            whatIsOurCurrentWork: null,
-            showButtons: {},
-            detachedCellId: null,
-            isDetachedCellFullscreen: false,
-            // Keep UI state (viewMode, isCollapsed, isRightSidebarCollapsed, etc.)
-          });
-
-          notebookLog.info('Store cleared after saving notebook');
-        } else if (id !== null && id !== state.notebookId) {
-          // If previous notebookId is null, this is the FIRST assignment for a fresh notebook.
-          // Do NOT clear existing cells/content created before kernel init.
+        // =====================================================
+        // CASE 2: Setting to a new ID
+        // Note: Route layer handles resume() before this
+        // =====================================================
+        if (id !== state.notebookId) {
+          // Sub-case 2a: First-time assignment (notebookId was null)
           if (state.notebookId === null) {
-            console.log(
-              '🔍 [notebookStore] First-time notebookId assignment, preserving existing cells',
-              {
-                newId: id,
-                existingCells: state.cells.length,
-              }
-            );
+            console.log('🔍 [notebookStore] First-time notebookId assignment', {
+              newId: id,
+              existingCells: state.cells.length,
+            });
             set({ notebookId: id });
 
-            // Proactively persist current content so a quick refresh won't lose pre-init edits
-            try {
-              await notebookAutoSaveInstance.initialize();
-              await notebookAutoSaveInstance.queueSave({
-                notebookId: id,
-                notebookTitle: state.notebookTitle,
-                cells: state.cells,
-                tasks: state.tasks,
-                timestamp: Date.now(),
-              });
-            } catch (e) {
-              notebookLog.warn('Initial save after notebookId assignment failed', { error: e });
-            }
-          } else {
-            // Real notebook switch: ensure old notebook is saved before clearing
-            if (state.notebookId) {
+            // Proactively persist current content if there are cells
+            if (state.cells.length > 0) {
               try {
-                console.log('🔍 [notebookStore] Saving old notebook before switch', {
-                  oldId: state.notebookId,
-                  cells: state.cells.length,
-                });
-                await notebookAutoSaveInstance.saveNow({
-                  notebookId: state.notebookId,
-                  notebookTitle: state.notebookTitle,
-                  cells: state.cells,
-                  tasks: state.tasks,
-                  timestamp: Date.now(),
-                });
-              } catch (e) {
-                notebookLog.error('Failed to save old notebook before switch', { error: e });
-              }
-            }
-
-            if (options?.preserveContent) {
-              console.log(
-                '🔍 [notebookStore] Switching notebookId with preserveContent - keeping cells',
-                {
-                  oldId: state.notebookId,
-                  newId: id,
-                  cellsCount: state.cells.length,
-                }
-              );
-              set({ notebookId: id });
-
-              // Trigger auto-save for new ID with existing content to ensure persistence
-              try {
-                await notebookAutoSaveInstance.queueSave({
+                await autoSaveService.initialize();
+                await autoSaveService.queueSave({
                   notebookId: id,
                   notebookTitle: state.notebookTitle,
                   cells: state.cells,
@@ -440,35 +363,47 @@ const useStore = create(
                   timestamp: Date.now(),
                 });
               } catch (e) {
-                notebookLog.warn('Save after preserveContent switch failed', { error: e });
+                notebookLog.warn('Initial save after notebookId assignment failed', { error: e });
               }
-            } else {
-              // Clear old content to avoid cross-notebook mixing
-              console.log('🔍 [notebookStore] Switching notebookId - clearing old cells', {
-                oldId: state.notebookId,
-                newId: id,
-                oldCellsCount: state.cells.length,
-              });
-
-              set({
-                notebookId: id,
-                notebookTitle: '',
-                cells: [],
-                tasks: [],
-                currentPhaseId: null,
-                currentStepIndex: 0,
-                currentCellId: null,
-                error: null,
-                isLoaded: false,
-              });
-
-              console.log('✅ [notebookStore] Cleared cells for new notebook', { newId: id });
             }
+            return;
           }
-        } else {
-          // Same ID: just set the ID (no clearing needed)
-          set({ notebookId: id });
+
+          // Sub-case 2b: Real notebook switch (should not happen often, route handles this)
+          console.log('🔍 [notebookStore] Switching notebooks directly', {
+            oldId: state.notebookId,
+            newId: id,
+          });
+
+          if (options?.preserveContent) {
+            set({ notebookId: id });
+            try {
+              await autoSaveService.queueSave({
+                notebookId: id,
+                notebookTitle: state.notebookTitle,
+                cells: state.cells,
+                tasks: state.tasks,
+                timestamp: Date.now(),
+              });
+            } catch (e) {
+              notebookLog.warn('Save after preserveContent switch failed', { error: e });
+            }
+          } else {
+            set({
+              notebookId: id,
+              notebookTitle: '',
+              cells: [],
+              tasks: [],
+              currentPhaseId: null,
+              currentStepIndex: 0,
+              currentCellId: null,
+              error: null,
+              isLoaded: false,
+              isInitialized: false,
+            });
+          }
         }
+        // CASE 3: Same ID - do nothing
       },
 
       setNotebookTitle: (title: string) =>
@@ -1421,7 +1356,8 @@ const useStore = create(
           return;
         }
 
-        notebookAutoSaveInstance
+        const autoSaveService = AutoSaveService.getInstance();
+        autoSaveService
           .queueSave({
             notebookId: state.notebookId,
             notebookTitle: state.notebookTitle,
@@ -1443,11 +1379,45 @@ const useStore = create(
           });
           notebookLog.lifecycleEvent('load', notebookId, { source: 'database' });
 
-          const result = await NotebookAutoSave.loadNotebook(notebookId);
+          const autoSaveService = AutoSaveService.getInstance();
+          const result = await autoSaveService.load(notebookId);
           if (!result) {
-            console.log('⚠️ [notebookStore] Notebook NOT found in database', { notebookId });
-            notebookLog.warn('Notebook not found in database', { notebookId });
-            return false;
+            // New notebook case: not in database yet, initialize with default state
+            console.log('🔍 [notebookStore] New notebook - initializing with default state', {
+              notebookId,
+            });
+            notebookLog.info('New notebook - initializing with default state', { notebookId });
+
+            const defaultCell: Cell = {
+              id: `title-${Date.now()}`,
+              type: 'markdown',
+              content: '# Untitled',
+              outputs: [],
+              enableEdit: true,
+              phaseId: null,
+              description: null,
+              metadata: { isDefaultTitle: true },
+            };
+
+            const parsedTasks = parseMarkdownCells([defaultCell] as any);
+            updateCellsPhaseId([defaultCell] as any, parsedTasks);
+
+            set({
+              notebookId,
+              notebookTitle: 'Untitled',
+              viewMode: 'create',
+              cells: [defaultCell],
+              tasks: parsedTasks,
+              isInitialized: true,
+              isLoaded: true,
+              currentRunningPhaseId: null,
+              currentPhaseId: parsedTasks[0]?.phases?.[0]?.id || null,
+              currentStepIndex: 0,
+              currentCellId: defaultCell.id,
+              error: null,
+            });
+
+            return true;
           }
 
           const { notebookTitle, cells, tasks } = result;
@@ -1576,7 +1546,8 @@ const useStore = create(
         if (!state.notebookId) return;
 
         try {
-          await notebookAutoSaveInstance.saveNow({
+          const autoSaveService = AutoSaveService.getInstance();
+          await autoSaveService.saveNow({
             notebookId: state.notebookId,
             notebookTitle: state.notebookTitle,
             cells: state.cells,
@@ -1601,11 +1572,25 @@ useStore.subscribe(
     notebookTitle: state.notebookTitle,
     cells: state.cells,
     tasks: state.tasks,
+    isInitialized: state.isInitialized,
   }),
   async (current, previous) => {
+    // Skip if no notebookId
     if (!current.notebookId) return;
+
+    // Skip if not initialized yet
+    if (!current.isInitialized) return;
+
+    // Skip if auto-save is paused (DISCONNECTED state)
+    const autoSaveService = AutoSaveService.getInstance();
+    if (autoSaveService.isPaused()) {
+      notebookLog.debug('Auto-save subscription skipped: service is paused (DISCONNECTED)');
+      return;
+    }
+
     // 初次绑定不触发
     if (!previous.notebookId && current.notebookId) return;
+
     // 🔧 FIX: When switching notebooks, don't trigger auto-save for the initial load
     if (previous.notebookId !== current.notebookId) return;
 
@@ -1628,8 +1613,8 @@ useStore.subscribe(
       }
 
       try {
-        await notebookAutoSaveInstance.initialize();
-        await notebookAutoSaveInstance.queueSave({
+        await autoSaveService.initialize();
+        await autoSaveService.queueSave({
           notebookId: current.notebookId,
           notebookTitle: current.notebookTitle,
           cells: current.cells,

@@ -1,7 +1,8 @@
 // moved to features/function-bar
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { useAIAgentStore, EVENT_TYPES } from '@Store/AIAgentStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
+import { EVENT_TYPES } from '@Store/models/agent';
 import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
 import { createUserAskQuestionAction } from '@Store/actionCreators';

@@ -78,8 +78,39 @@ export const useNotebooks = () => {
 
     setIsCreatingNotebook(true);
     try {
-      const newNotebookId = await NotebookLifecycleService.initializeNotebook();
-      useStore.getState().setNotebookId(newNotebookId);
+      const response = await NotebookLifecycleService.initializeNotebook();
+      const newNotebookId = response.notebook_id;
+
+      if (!newNotebookId) {
+        throw new Error('No notebook ID returned from server');
+      }
+
+      // Initialize store with new notebook state directly
+      // This ensures isLoaded is true before navigation
+      const defaultCell = {
+        id: `title-${Date.now()}`,
+        type: 'markdown' as const,
+        content: '# Untitled',
+        outputs: [],
+        enableEdit: true,
+        phaseId: null,
+        description: null,
+        metadata: { isDefaultTitle: true },
+      };
+
+      useStore.setState({
+        notebookId: newNotebookId,
+        notebookTitle: 'Untitled',
+        cells: [defaultCell],
+        tasks: [],
+        isInitialized: true,
+        isLoaded: true,
+        currentCellId: defaultCell.id,
+        currentPhaseId: null,
+        currentStepIndex: 0,
+        error: null,
+      });
+
       useCodeStore.getState().setKernelReady(true);
 
       // Navigate to the new notebook

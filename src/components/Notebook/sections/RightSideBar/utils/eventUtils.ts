@@ -1,5 +1,5 @@
 // moved to sections/RightSideBar/utils
-import { EVENT_TYPES, EventType } from '@Store/AIAgentStore';
+import { EVENT_TYPES, EventType } from '@Store/models/agent';
 
 export const getEventLabel = (type: EventType, t: any) => {
   const labelConfig = {

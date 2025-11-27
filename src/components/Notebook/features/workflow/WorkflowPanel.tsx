@@ -17,8 +17,35 @@ import {
 import { extractSectionTitle } from '@Notebook/utils/String';
 import WorkflowErrorBoundary from './WorkflowErrorBoundary';
 
+interface NavigatorStep {
+  id: string;
+  title: string;
+}
+
+interface NavigatorStage {
+  id: string;
+  title: string;
+  steps: NavigatorStep[];
+}
+
+interface PlannedStage {
+  stage_id: string;
+  title: string;
+  task: string;
+  acceptance: string;
+  planning_complete: boolean;
+}
+
+interface PlannedStep {
+  step_id: string;
+  title: string;
+  task: string;
+  acceptance: string;
+  planning_complete: boolean;
+}
+
 interface WorkflowNavigatorProps {
-  stages: any[];
+  stages: NavigatorStage[];
   currentStageId: string | null;
   currentStepId: string | null;
 }
@@ -46,7 +73,7 @@ const WorkflowNavigator: React.FC<WorkflowNavigatorProps> = ({
     () =>
       !currentStage?.steps || !Array.isArray(currentStage.steps) || !currentStepId
         ? -1
-        : currentStage.steps.findIndex((st: any) => st.id === currentStepId),
+        : currentStage.steps.findIndex((st: NavigatorStep) => st.id === currentStepId),
     [currentStage, currentStepId]
   );
 
@@ -64,7 +91,7 @@ const WorkflowNavigator: React.FC<WorkflowNavigatorProps> = ({
       </div>
       <div className="overflow-x-auto whitespace-nowrap">
         <div className="flex border-t">
-          {currentStage.steps.map((step: any, index: number) => {
+          {currentStage.steps.map((step: NavigatorStep, index: number) => {
             const isCompleted = index < currentStepIndex;
             const isActive = index === currentStepIndex;
             return (
@@ -120,10 +147,10 @@ const WorkflowPanel: React.FC = () => {
 
     // ✅ Convert stateJSON format to expected format
     // In new architecture, steps are stored separately, need to map them to stages
-    const stagesWithSteps = plannedStages.map((stage: any) => ({
+    const stagesWithSteps = plannedStages.map((stage: PlannedStage) => ({
       id: stage.stage_id,
       title: stage.title,
-      steps: plannedSteps.map((step: any) => ({
+      steps: plannedSteps.map((step: PlannedStep) => ({
         id: step.step_id,
         title: step.title,
       })),

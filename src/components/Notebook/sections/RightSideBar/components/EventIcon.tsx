@@ -1,5 +1,5 @@
 // moved to sections/RightSideBar/components
-import React from 'react';
+import React, { memo } from 'react';
 import {
   MessageSquare,
   UploadCloud,
@@ -16,7 +16,7 @@ import {
   ShieldCheck,
   Zap,
 } from 'lucide-react';
-import { EVENT_TYPES, EventType } from '@Store/AIAgentStore';
+import { EVENT_TYPES, EventType } from '@Store/models/agent';
 
 export interface EventIconProps {
   type: EventType;
@@ -24,25 +24,25 @@ export interface EventIconProps {
   onProcess?: boolean;
 }
 
-const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) => {
-  const iconConfig = {
-    [EVENT_TYPES.USER_ASK_QUESTION]: { Icon: MessageSquare, color: 'text-theme-600' },
-    [EVENT_TYPES.USER_NEW_INSTRUCTION]: { Icon: Code, color: 'text-green-600' },
-    [EVENT_TYPES.USER_FILE_UPLOAD]: { Icon: UploadCloud, color: 'text-purple-600' },
-    [EVENT_TYPES.AI_UNDERSTANDING]: { Icon: Eye, color: 'text-yellow-600' },
-    [EVENT_TYPES.AI_EXPLAINING_PROCESS]: { Icon: BookOpen, color: 'text-indigo-600' },
-    [EVENT_TYPES.AI_WRITING_CODE]: { Icon: Code, color: 'text-green-800' },
-    [EVENT_TYPES.AI_RUNNING_CODE]: { Icon: PlayCircle, color: 'text-pink-600' },
-    [EVENT_TYPES.AI_ANALYZING_RESULTS]: { Icon: BarChart2, color: 'text-teal-600' },
-    [EVENT_TYPES.AI_FIXING_BUGS]: { Icon: Bug, color: 'text-red-600' },
-    [EVENT_TYPES.AI_CRITICAL_THINKING]: { Icon: AlertTriangle, color: 'text-orange-600' },
-    [EVENT_TYPES.AI_REPLYING_QUESTION]: { Icon: MessageCircle, color: 'text-theme-800' },
-    [EVENT_TYPES.AI_FIXING_CODE]: { Icon: Wrench, color: 'text-gray-800' },
-    [EVENT_TYPES.SYSTEM_EVENT]: { Icon: Zap, color: 'text-blue-600' },
-    [EVENT_TYPES.AI_GENERATING_CODE]: { Icon: Edit, color: 'text-green-800' },
-    [EVENT_TYPES.AI_GENERATING_TEXT]: { Icon: Edit, color: 'text-indigo-800' },
-  } as Record<string, { Icon: any; color: string }>;
+const iconConfig = {
+  [EVENT_TYPES.USER_ASK_QUESTION]: { Icon: MessageSquare, color: 'text-theme-600' },
+  [EVENT_TYPES.USER_NEW_INSTRUCTION]: { Icon: Code, color: 'text-green-600' },
+  [EVENT_TYPES.USER_FILE_UPLOAD]: { Icon: UploadCloud, color: 'text-purple-600' },
+  [EVENT_TYPES.AI_UNDERSTANDING]: { Icon: Eye, color: 'text-yellow-600' },
+  [EVENT_TYPES.AI_EXPLAINING_PROCESS]: { Icon: BookOpen, color: 'text-indigo-600' },
+  [EVENT_TYPES.AI_WRITING_CODE]: { Icon: Code, color: 'text-green-800' },
+  [EVENT_TYPES.AI_RUNNING_CODE]: { Icon: PlayCircle, color: 'text-pink-600' },
+  [EVENT_TYPES.AI_ANALYZING_RESULTS]: { Icon: BarChart2, color: 'text-teal-600' },
+  [EVENT_TYPES.AI_FIXING_BUGS]: { Icon: Bug, color: 'text-red-600' },
+  [EVENT_TYPES.AI_CRITICAL_THINKING]: { Icon: AlertTriangle, color: 'text-orange-600' },
+  [EVENT_TYPES.AI_REPLYING_QUESTION]: { Icon: MessageCircle, color: 'text-theme-800' },
+  [EVENT_TYPES.AI_FIXING_CODE]: { Icon: Wrench, color: 'text-gray-800' },
+  [EVENT_TYPES.SYSTEM_EVENT]: { Icon: Zap, color: 'text-blue-600' },
+  [EVENT_TYPES.AI_GENERATING_CODE]: { Icon: Edit, color: 'text-green-800' },
+  [EVENT_TYPES.AI_GENERATING_TEXT]: { Icon: Edit, color: 'text-indigo-800' },
+} as Record<string, { Icon: any; color: string }>;
 
+const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) => {
   const { Icon = ShieldCheck, color = 'text-theme-800' } = iconConfig[type] || ({} as any);
   return (
     <div className="relative">
@@ -51,4 +51,4 @@ const EventIcon: React.FC<EventIconProps> = ({ type, className = 'w-5 h-5' }) =>
   );
 };
 
-export default EventIcon;
+export default memo(EventIcon);

@@ -1,5 +1,5 @@
 // moved to sections/RightSideBar/components
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -91,4 +91,4 @@ const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) =
   );
 };
 
-export default ExpandableText;
+export default memo(ExpandableText);

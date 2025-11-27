@@ -23,6 +23,24 @@ import useRouteStore from '@Store/routeStore';
 import './WorkflowErrorCollector';
 import { extractSectionTitle } from '@Notebook/utils/String';
 
+interface PlannedStage {
+  stage_id: string;
+  title: string;
+  task: string;
+  acceptance: string;
+  planning_complete: boolean;
+  focus?: string;
+  notes?: string;
+}
+
+interface PlannedStep {
+  step_id: string;
+  title: string;
+  task: string;
+  acceptance: string;
+  planning_complete: boolean;
+}
+
 const RUNNING_STATES: WorkflowState[] = [
   WorkflowState.STAGE_RUNNING,
   WorkflowState.STEP_RUNNING,
@@ -207,9 +225,11 @@ const WorkflowControl: React.FC<{ fallbackViewMode?: string }> = ({ fallbackView
     }
 
     // ✅ Find stage and step from stateJSON
-    const stage = plannedStages.find((s: any) => s.stage_id === currentStageId);
-    const step = plannedSteps.find((st: any) => st.step_id === currentStepId);
-    const completedStepsCount = plannedSteps.findIndex((st: any) => st.step_id === currentStepId);
+    const stage = plannedStages.find((s: PlannedStage) => s.stage_id === currentStageId);
+    const step = plannedSteps.find((st: PlannedStep) => st.step_id === currentStepId);
+    const completedStepsCount = plannedSteps.findIndex(
+      (st: PlannedStep) => st.step_id === currentStepId
+    );
     const totalSteps = plannedSteps.length;
 
     // If workflow is running, paused, or terminal, we should show step info even if we don't have it yet

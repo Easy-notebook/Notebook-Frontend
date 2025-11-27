@@ -52,5 +52,8 @@ export const updateAppHistory = (path: string) => {
     }
   } else {
     window.history.pushState(null, '', normalizedPath);
+    // Dispatch popstate event to trigger React Router's useLocation update
+    // pushState alone doesn't trigger this event, which causes useLocation to be out of sync
+    window.dispatchEvent(new PopStateEvent('popstate', { state: null }));
   }
 };

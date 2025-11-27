@@ -1,7 +1,7 @@
 // moved to sections/RightSideBar/components
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAIAgentStore } from '@Store/AIAgentStore';
+import { useAIAgentStore, ViewType } from '@Store/AIAgentStore';
 import { TabSwitcherGeneric } from '@LeftSidebar/shared/components';
 
 type ViewTypeExtended = 'script' | 'qa' | 'workflow';
@@ -22,7 +22,7 @@ const ViewSwitcher: React.FC = () => {
       <TabSwitcherGeneric
         items={tabs}
         activeId={activeView as ViewTypeExtended}
-        onChange={(id) => setActiveView(id as any)}
+        onChange={(id) => setActiveView(id as ViewType)}
       />
     </div>
   );
