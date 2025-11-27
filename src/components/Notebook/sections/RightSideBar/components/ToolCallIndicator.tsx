@@ -26,6 +26,10 @@ const getToolIcon = (toolType: string) => {
       return <Users className="w-4 h-4 text-teal-600" />;
     case 'remember':
       return <Settings className="w-4 h-4 text-gray-600" />;
+    case 'edit-notebook':
+    case 'add-text':
+    case 'add':
+      return <Code className="w-4 h-4 text-blue-600" />;
     default:
       return <Zap className="w-4 h-4 text-yellow-600" />;
   }
@@ -45,6 +49,9 @@ const getToolLabel = (toolType: string) => {
     'update-title': '📝 Update Title',
     'new-chapter': '📚 New Chapter',
     'new-section': '📄 New Section',
+    'edit-notebook': '📝 Editing Notebook',
+    'add-text': '📝 Editing Notebook',
+    add: '📝 Editing Notebook',
   };
   return labels[toolType] || `🔧 ${toolType}`;
 };

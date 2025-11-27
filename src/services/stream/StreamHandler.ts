@@ -56,10 +56,26 @@ export class StreamHandler {
 
     if (ActionClass) {
       try {
-        const action = new ActionClass();
+        // Cast to any to bypass abstract class check (registry only contains concrete classes)
+        const action = new (ActionClass as any)();
         await action.execute(context);
         agentLog.debug('Stream action executed successfully', { type: data.type });
-      } catch (error) {
+
+        // Record significant stream actions to AI Agent Store
+        // Filter out high-frequency events to avoid noise
+        if (data.type !== 'addContentToAnswer') {
+          const { useAIAgentStore } = await import('@Store/AIAgentStore');
+          useAIAgentStore.getState().addAction({
+            type: 'system_event',
+            content: `Stream Update: ${data.type}`,
+            result: JSON.stringify(payload, null, 2),
+            onProcess: false,
+            relatedQAIds: [],
+            cellId: null,
+            viewMode: 'script' as any, // Default to script view or cast to any
+          });
+        }
+      } catch (error: any) {
         agentLog.error('Stream action execution failed', { type: data.type, error });
         await showToast({
           message: `处理流式响应失败: ${error.message || error}`,

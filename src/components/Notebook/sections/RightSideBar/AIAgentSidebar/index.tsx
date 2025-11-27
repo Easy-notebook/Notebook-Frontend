@@ -1,7 +1,7 @@
 // moved to sections/RightSideBar
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Loader2, MessageCircle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 
 import useStore, { NotebookStore } from '@Store/notebookStore';
@@ -13,6 +13,7 @@ import WorkflowVisualization from '@Notebook/features/workflow/WorkflowVisualiza
 import ActionCard from './components/ActionCard';
 import QACard from './components/QACard';
 import { MergedAction } from './types';
+import ShinyText from '@/components/UI/magic/shiny-text';
 
 // ----------------------
 // Type Definitions
@@ -166,12 +167,12 @@ const AIAgentSidebar = () => {
 
       <div className="flex-1 px-2 sm:px-4 pb-5 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/30 scrollbar-track-transparent hover:scrollbar-thumb-white/50">
         <style>{`
-  .scrollbar - thin:: -webkit - scrollbar { width: 4px; }
-            .scrollbar - thin:: -webkit - scrollbar - track { background: transparent; }
-            .scrollbar - thin:: -webkit - scrollbar - thumb { background: rgba(255, 255, 255, 0.3); border - radius: 4px; }
-            .scrollbar - thin:: -webkit - scrollbar - thumb:hover { background: rgba(255, 255, 255, 0.5); }
-            .scrollbar - thin { scrollbar - width: thin; scrollbar - color: rgba(255, 255, 255, 0.3) transparent; }
-`}</style>
+          .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+          .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+          .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 4px; }
+          .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.5); }
+          .scrollbar-thin { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.3) transparent; }
+        `}</style>
 
         {activeView === 'script' && (
           <div className="space-y-3 py-3">
@@ -232,12 +233,16 @@ const AIAgentSidebar = () => {
         {isLoading && (
           <div
             className="
-                flex items-center justify-center gap-3 text-theme-700 dark:text-theme-300 p-4 my-4
-                ring-1 ring-theme-300 dark:ring-theme-700 rounded-lg animate-pulse transition-all duration-300
+                flex items-center justify-center gap-3 p-4 my-4
+                ring-1 ring-theme-300 dark:ring-theme-700 rounded-lg transition-all duration-300
               "
           >
-            <Loader2 className="animate-spin" size={24} />
-            <span className="font-medium">{t('rightSideBar.processing')}</span>
+            <ShinyText
+              text={t('rightSideBar.processing')}
+              disabled={false}
+              speed={3}
+              className="font-medium"
+            />
           </div>
         )}
       </div>

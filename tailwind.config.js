@@ -54,10 +54,15 @@ export default {
           '0%, 100%': { 'background-position': '0% 50%' },
           '50%': { 'background-position': '100% 50%' },
         },
+        shine: {
+          '0%': { 'background-position': '100%' },
+          '100%': { 'background-position': '-100%' },
+        },
       },
       animation: {
         // 无限循环的水平渐变动画
         'bg-gradient-x': 'gradient-x 8s ease infinite',
+        shine: 'shine 5s linear infinite',
       },
       boxShadow: {
         // Apple 风格柔和阴影
