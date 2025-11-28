@@ -110,8 +110,10 @@ import * as workflow from './workflow';
 import * as planning from './planning';
 import * as reflecting from './reflecting';
 
+import * as context from './context';
+
 // Export all action classes for direct access if needed
-export { content, code, thinking, workflow, planning, reflecting };
+export { content, code, thinking, workflow, planning, reflecting, context };
 
 // Log all registered actions (use imported reference)
 console.log('[Actions] All actions registered:', _getAllActionTypes());

@@ -40,6 +40,12 @@ export interface ExecutionStep {
   acceptance?: string; // For PlanStageAction and PlanStepAction
   step_id?: string; // For PlanStepAction
   total_stages?: number; // Added to support workflow planning total stages
+  behavior_id?: string; // For UpdateLocationAction
+  behavior_iteration?: number; // For UpdateLocationAction
+  type?: string; // For UpdateProgressAction
+  id?: string; // For UpdateProgressAction
+  status?: string; // For UpdateProgressAction
+  data?: any; // For UpdateProgressAction
 }
 
 // Pipeline template types
