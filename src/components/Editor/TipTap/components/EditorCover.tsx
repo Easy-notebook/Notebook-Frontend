@@ -149,7 +149,12 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ editor }) => {
       onMouseLeave={() => setIsHovered(false)}
     >
       {cover && (
-        <div className="relative w-full h-72">
+        <div
+          className="relative w-full h-72 overflow-hidden"
+          style={{
+            borderRadius: '18px 18px 0 0',
+          }}
+        >
           <img src={cover} alt="Cover" className="w-full h-full object-cover select-none" />
 
           {/* Cover Controls */}

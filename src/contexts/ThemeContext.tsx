@@ -12,17 +12,18 @@ interface ThemeContextType {
 const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = React.useState<Theme>('system');
+  const [theme, setThemeState] = React.useState<Theme>(() => {
+    // Initialize from localStorage to avoid flash of wrong theme and overwriting
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('theme') as Theme;
+      if (stored && ['light', 'dark', 'system'].includes(stored)) {
+        return stored;
+      }
+    }
+    return 'system';
+  });
   const [resolvedTheme, setResolvedTheme] = React.useState<'light' | 'dark'>('light');
   const isTransitioningRef = React.useRef(false);
-
-  React.useEffect(() => {
-    // Read theme setting from localStorage
-    const stored = localStorage.getItem('theme') as Theme;
-    if (stored && ['light', 'dark', 'system'].includes(stored)) {
-      setThemeState(stored);
-    }
-  }, []);
 
   React.useEffect(() => {
     const root = document.documentElement;

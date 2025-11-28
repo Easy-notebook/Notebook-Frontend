@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 import useStore from '@Store/notebookStore';
 import editorLogger from '@Utils/logger/editor_logger';
-import { Cell } from '../utils/types';
+import { Cell, ReactCodeMirrorRef } from '../utils/types';
 
 /**
  * Hook to handle cell navigation with arrow keys
  */
 export const useCellNavigation = (
   cell: Cell,
-  editorRef: React.MutableRefObject<unknown>,
+  editorRef: React.RefObject<ReactCodeMirrorRef>,
   isCurrentCell: boolean,
   dslcMode: boolean
 ) => {
@@ -91,12 +91,8 @@ export const useCellNavigation = (
           setTimeout(() => {
             if (targetCell.type === 'code') {
               setCurrentCell(targetCell.id);
-              if (
-                editorRef.current &&
-                typeof editorRef.current === 'object' &&
-                'focus' in editorRef.current
-              ) {
-                (editorRef.current as { focus: () => void }).focus();
+              if (editorRef.current?.view) {
+                editorRef.current.view.focus();
               }
             } else if (targetCell.type === 'markdown') {
               setCurrentCell(targetCell.id);
@@ -243,12 +239,6 @@ export const useCellNavigation = (
 
             lastNavigationDirection.current = null;
             editorLogger.logFocusChange(cell.id, 'code', true);
-          } else if (
-            editorRef.current &&
-            typeof editorRef.current === 'object' &&
-            'focus' in editorRef.current
-          ) {
-            (editorRef.current as { focus?: () => void }).focus?.();
           }
         } catch {
           // Ignore focus errors

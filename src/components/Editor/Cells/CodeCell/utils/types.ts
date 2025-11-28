@@ -1,5 +1,7 @@
 // Types for CodeCell and related components
 import type { Cell as StoreCell, OutputItem } from '@Store/models';
+import { EditorView } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
 
 // Re-export store types for compatibility
 export type Cell = StoreCell;
@@ -38,6 +40,12 @@ export interface CellToolbarProps {
   isDetachedCellFullscreen?: boolean;
 }
 
+export interface ReactCodeMirrorRef {
+  editor?: HTMLDivElement | null;
+  state?: EditorState;
+  view?: EditorView;
+}
+
 export interface CodeEditorProps {
   cell: Cell;
   isExecuting: boolean;
@@ -47,7 +55,7 @@ export interface CodeEditorProps {
   contentHeight: number;
   isExpanded: boolean;
   isHovering: boolean;
-  editorRef: React.MutableRefObject<unknown>;
+  editorRef: React.RefObject<ReactCodeMirrorRef>;
   codeBlockWrapperRef: React.RefObject<HTMLDivElement>;
   onHoverChange: (isHovering: boolean) => void;
   onExpand: () => void;

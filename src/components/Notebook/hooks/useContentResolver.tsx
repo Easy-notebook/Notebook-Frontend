@@ -171,7 +171,7 @@ export const useContentResolver = ({
         } else {
           return {
             type: 'loading',
-            component: <LoadingPage />,
+            component: <LoadingPage embedded={true} />,
           };
         }
       }

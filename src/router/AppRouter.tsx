@@ -2,7 +2,6 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, HashRouter, Routes, Route, useParams } from 'react-router-dom';
 import { isHashRoutingEnabled } from '@/utils/routerMode';
-import { Spin } from 'antd';
 
 // Lazy load NotebookApp
 const NotebookApp = lazy(() => import('../components/Notebook/NotebookApp'));
@@ -10,13 +9,7 @@ const NotebookApp = lazy(() => import('../components/Notebook/NotebookApp'));
 /**
  * Loading Fallback Component
  */
-const LoadingFallback = () => (
-  <div className="h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-    <Spin size="large" tip="Loading Notebook...">
-      <div className="p-12" />
-    </Spin>
-  </div>
-);
+import { LoadingPage } from '../components/Notebook/pages/LoadingPage';
 
 /**
  * App Component with Route-aware NotebookApp
@@ -34,7 +27,7 @@ const AppRouter: React.FC = () => {
 
   return (
     <RouterComponent>
-      <Suspense fallback={<LoadingFallback />}>
+      <Suspense fallback={<LoadingPage />}>
         <Routes>
           {/* 主页 - 显示 NotebookApp (EmptyState) */}
           <Route path="/" element={<RouteAwareNotebookApp />} />
