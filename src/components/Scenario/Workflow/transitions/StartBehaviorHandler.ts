@@ -8,11 +8,16 @@
  */
 
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class StartBehaviorHandler extends BaseTransitionHandler {
   constructor() {
-    super('STEP_RUNNING', 'BEHAVIOR_RUNNING', 'START_BEHAVIOR');
+    super(
+      WorkflowStateEnum.STEP_RUNNING,
+      WorkflowStateEnum.BEHAVIOR_RUNNING,
+      WorkflowEvent.START_BEHAVIOR
+    );
   }
 
   canHandle(apiResponse: any): boolean {
@@ -121,7 +126,7 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
     }
 
     // Update FSM state
-    this.updateFSMState(newState, 'BEHAVIOR_RUNNING', 'START_BEHAVIOR');
+    this.updateFSMState(newState, WorkflowStateEnum.BEHAVIOR_RUNNING, WorkflowEvent.START_BEHAVIOR);
 
     console.log(`[StartBehavior] Transition complete: behavior=${behaviorId}`);
 

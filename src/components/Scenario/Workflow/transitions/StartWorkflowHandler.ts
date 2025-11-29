@@ -5,11 +5,12 @@
  */
 
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class StartWorkflowHandler extends BaseTransitionHandler {
   constructor() {
-    super('IDLE', 'STAGE_RUNNING', 'START_WORKFLOW');
+    super(WorkflowStateEnum.IDLE, WorkflowStateEnum.STAGE_RUNNING, WorkflowEvent.START_WORKFLOW);
   }
 
   canHandle(apiResponse: any): boolean {
@@ -66,9 +67,13 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
       console.log(`[StartWorkflow] Found ${plannedStages.length} planned stages`);
 
       // Ensure FSM state is STAGE_RUNNING (should already be set by complete_workflow_planning)
-      if (newState.state.FSM.state !== 'STAGE_RUNNING') {
+      if (newState.state.FSM.state !== WorkflowStateEnum.STAGE_RUNNING) {
         console.warn('[StartWorkflow] FSM state is not STAGE_RUNNING, correcting...');
-        this.updateFSMState(newState, 'STAGE_RUNNING', 'START_WORKFLOW');
+        this.updateFSMState(
+          newState,
+          WorkflowStateEnum.STAGE_RUNNING,
+          WorkflowEvent.START_WORKFLOW
+        );
       }
 
       this.syncNotebookToState(newState);
@@ -111,7 +116,7 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
       behavior_id: 'clear',
     });
 
-    this.updateFSMState(newState, 'STAGE_RUNNING', 'START_WORKFLOW');
+    this.updateFSMState(newState, WorkflowStateEnum.STAGE_RUNNING, WorkflowEvent.START_WORKFLOW);
 
     // Update notebook metadata title (matches backend: line 108-112)
     console.log('[StartWorkflow] ========== EXECUTING ACTIONS ==========');

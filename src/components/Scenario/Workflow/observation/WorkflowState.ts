@@ -1,5 +1,6 @@
 import { Location, LocationData } from './location/Location';
 import { InternalState, InternalStateData } from './state/InternalState';
+import { WorkflowState as WorkflowStateEnum } from '@/store/models';
 
 /**
  * Observation - What the system observes
@@ -91,7 +92,7 @@ export function createInitialStateJSON(
         execution_count: 0,
       },
       FSM: {
-        state: 'IDLE',
+        state: WorkflowStateEnum.IDLE,
         last_transition: null,
         timestamp: new Date().toISOString(),
       },

@@ -1,10 +1,15 @@
 /** COMPLETE_STAGE Handler - STEP_COMPLETED → STAGE_COMPLETED */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteStageHandler extends BaseTransitionHandler {
   constructor() {
-    super('STEP_COMPLETED', 'STAGE_COMPLETED', 'COMPLETE_STAGE');
+    super(
+      WorkflowStateEnum.STEP_COMPLETED,
+      WorkflowStateEnum.STAGE_COMPLETED,
+      WorkflowEvent.COMPLETE_STAGE
+    );
   }
 
   canHandle(r: any): boolean {
@@ -22,7 +27,7 @@ export class CompleteStageHandler extends BaseTransitionHandler {
       p.setStageCompletionStatus('success');
     }
 
-    this.updateFSMState(ns, 'STAGE_COMPLETED', 'COMPLETE_STAGE');
+    this.updateFSMState(ns, WorkflowStateEnum.STAGE_COMPLETED, WorkflowEvent.COMPLETE_STAGE);
     return ns;
   }
 }

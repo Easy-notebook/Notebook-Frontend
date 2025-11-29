@@ -6,19 +6,24 @@
  */
 
 import type { TransitionHandlerContext } from '@Store/models';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export abstract class BaseTransitionHandler {
-  public readonly fromState: string;
-  public readonly toState: string;
-  public readonly transitionName: string;
+  public readonly fromState: WorkflowStateEnum;
+  public readonly toState: WorkflowStateEnum;
+  public readonly transitionName: WorkflowEvent;
 
   protected scriptStore?: any;
   protected apiClient?: any;
   protected notebookStore?: any;
   protected aiContextStore?: any;
 
-  constructor(fromState: string, toState: string, transitionName: string) {
+  constructor(
+    fromState: WorkflowStateEnum,
+    toState: WorkflowStateEnum,
+    transitionName: WorkflowEvent
+  ) {
     this.fromState = fromState;
     this.toState = toState;
     this.transitionName = transitionName;
@@ -76,7 +81,11 @@ export abstract class BaseTransitionHandler {
   /**
    * Update FSM state and transition.
    */
-  protected updateFSMState(state: WorkflowState, newState: string, transitionName: string): void {
+  protected updateFSMState(
+    state: WorkflowState,
+    newState: WorkflowStateEnum,
+    transitionName: WorkflowEvent
+  ): void {
     state.state.FSM.setState(newState);
     state.state.FSM.setLastTransition(transitionName);
     console.log(`[FSM] State transition: ${state.state.FSM.previousState} → ${newState}`);

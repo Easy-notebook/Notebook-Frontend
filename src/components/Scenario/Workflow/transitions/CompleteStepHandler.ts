@@ -1,11 +1,16 @@
 /** COMPLETE_STEP Handler - BEHAVIOR_COMPLETED → STEP_COMPLETED */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { ClearEffectHistoryAction } from '../actions/reflecting/ClearEffectHistory';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteStepHandler extends BaseTransitionHandler {
   constructor() {
-    super('BEHAVIOR_COMPLETED', 'STEP_COMPLETED', 'COMPLETE_STEP');
+    super(
+      WorkflowStateEnum.BEHAVIOR_COMPLETED,
+      WorkflowStateEnum.STEP_COMPLETED,
+      WorkflowEvent.COMPLETE_STEP
+    );
   }
 
   canHandle(r: any): boolean {
@@ -39,7 +44,7 @@ export class CompleteStepHandler extends BaseTransitionHandler {
     // Clear effect history to prepare for the next step
     ClearEffectHistoryAction.processState(ns);
 
-    this.updateFSMState(ns, 'STEP_COMPLETED', 'COMPLETE_STEP');
+    this.updateFSMState(ns, WorkflowStateEnum.STEP_COMPLETED, WorkflowEvent.COMPLETE_STEP);
     return ns;
   }
 }

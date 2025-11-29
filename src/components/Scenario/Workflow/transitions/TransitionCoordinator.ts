@@ -8,6 +8,7 @@
 
 import { BaseTransitionHandler } from './BaseTransitionHandler';
 import type { TransitionHandlerContext } from '@Store/models';
+import { WorkflowState as WorkflowStateEnum } from '@Store/models';
 import { StartWorkflowHandler } from './StartWorkflowHandler';
 import { StartStepHandler } from './StartStepHandler';
 import { StartBehaviorHandler } from './StartBehaviorHandler';
@@ -205,11 +206,11 @@ export class TransitionCoordinator {
     }
 
     // States that ALWAYS require API calls - never auto-trigger
-    const ALWAYS_API_DEPENDENT_STATES = [
-      'IDLE',
-      'STAGE_RUNNING',
-      'STEP_RUNNING',
-      'BEHAVIOR_RUNNING',
+    const ALWAYS_API_DEPENDENT_STATES: WorkflowStateEnum[] = [
+      WorkflowStateEnum.IDLE,
+      WorkflowStateEnum.STAGE_RUNNING,
+      WorkflowStateEnum.STEP_RUNNING,
+      WorkflowStateEnum.BEHAVIOR_RUNNING,
     ];
 
     if (ALWAYS_API_DEPENDENT_STATES.includes(currentStateName)) {
@@ -222,7 +223,7 @@ export class TransitionCoordinator {
     // Special handling for BEHAVIOR_COMPLETED:
     // Only auto-trigger if effect.current is not empty (forcing NEXT_BEHAVIOR)
     // Otherwise it needs to call Reflecting API or Planning API
-    if (currentStateName === 'BEHAVIOR_COMPLETED') {
+    if (currentStateName === WorkflowStateEnum.BEHAVIOR_COMPLETED) {
       const currentEffects = state.state.effects.current;
 
       if (currentEffects.length === 0) {
@@ -242,7 +243,11 @@ export class TransitionCoordinator {
     }
 
     // States that support auto-triggering
-    const AUTO_TRIGGER_ALLOWED_STATES = ['BEHAVIOR_COMPLETED', 'STEP_COMPLETED', 'STAGE_COMPLETED'];
+    const AUTO_TRIGGER_ALLOWED_STATES: WorkflowStateEnum[] = [
+      WorkflowStateEnum.BEHAVIOR_COMPLETED,
+      WorkflowStateEnum.STEP_COMPLETED,
+      WorkflowStateEnum.STAGE_COMPLETED,
+    ];
 
     if (!AUTO_TRIGGER_ALLOWED_STATES.includes(currentStateName)) {
       console.log(`[Auto-Trigger] State ${currentStateName} does not support auto-triggering`);

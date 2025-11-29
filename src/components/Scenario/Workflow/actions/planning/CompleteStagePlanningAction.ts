@@ -7,6 +7,7 @@
 
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
+import { WorkflowState } from '@Store/models';
 import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
 export class CompleteStagePlanningAction extends ActionBase {
@@ -62,7 +63,7 @@ export class CompleteStagePlanningAction extends ActionBase {
     }
 
     // If FSM is in STAGE_RUNNING, prepare to transition to first step
-    if (stateJSON.state.FSM.state === 'STAGE_RUNNING') {
+    if (stateJSON.state.FSM.state === WorkflowState.STAGE_RUNNING) {
       const plannedSteps = stateJSON.observation.location.progress.steps.planned || [];
 
       // ✅ VALIDATION: Verify we have fresh steps for the current stage
@@ -97,7 +98,7 @@ export class CompleteStagePlanningAction extends ActionBase {
       );
 
       // Transition to STEP_RUNNING
-      stateJSON.state.FSM.state = 'STEP_RUNNING';
+      stateJSON.state.FSM.state = WorkflowState.STEP_RUNNING;
 
       console.log(
         `[CompleteStagePlanningAction] ✅ Transitioned to STEP_RUNNING, current step: ${plannedSteps[0].step_id}`

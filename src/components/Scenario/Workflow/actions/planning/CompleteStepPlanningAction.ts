@@ -7,6 +7,7 @@
 
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
+import { WorkflowState } from '@Store/models';
 import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
 export class CompleteStepPlanningAction extends ActionBase {
@@ -42,8 +43,8 @@ export class CompleteStepPlanningAction extends ActionBase {
 
     // Transition to BEHAVIOR_RUNNING, ready to call /generating API
     // This follows the same pattern as CompleteWorkflowPlanningAction and CompleteStagePlanningAction
-    if (stateJSON.state.FSM.state === 'STEP_RUNNING') {
-      stateJSON.state.FSM.state = 'BEHAVIOR_RUNNING';
+    if (stateJSON.state.FSM.state === WorkflowState.STEP_RUNNING) {
+      stateJSON.state.FSM.state = WorkflowState.BEHAVIOR_RUNNING;
       console.log('[CompleteStepPlanningAction] ✅ Transitioned to BEHAVIOR_RUNNING');
     }
 

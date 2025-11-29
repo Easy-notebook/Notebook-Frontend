@@ -1,10 +1,15 @@
 /** START_STEP Handler - STAGE_RUNNING → STEP_RUNNING */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class StartStepHandler extends BaseTransitionHandler {
   constructor() {
-    super('STAGE_RUNNING', 'STEP_RUNNING', 'START_STEP');
+    super(
+      WorkflowStateEnum.STAGE_RUNNING,
+      WorkflowStateEnum.STEP_RUNNING,
+      WorkflowEvent.START_STEP
+    );
   }
 
   canHandle(r: any): boolean {
@@ -73,7 +78,7 @@ export class StartStepHandler extends BaseTransitionHandler {
     p.steps.current_outputs = this.initOutputsTracking(fs.verified_artifacts || {});
 
     this.updateLocationCurrent(ns, { step_id: fs.step_id, behavior_id: 'clear' });
-    this.updateFSMState(ns, 'STEP_RUNNING', 'START_STEP');
+    this.updateFSMState(ns, WorkflowStateEnum.STEP_RUNNING, WorkflowEvent.START_STEP);
     if (fs.title) await this.executeAction('new_step', fs.title);
 
     // Note: Steps data is already stored in ns.observation.location.progress.steps

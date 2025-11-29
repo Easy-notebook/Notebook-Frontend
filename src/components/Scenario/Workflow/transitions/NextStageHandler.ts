@@ -1,10 +1,15 @@
 /** NEXT_STAGE Handler - STAGE_COMPLETED → STAGE_RUNNING */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class NextStageHandler extends BaseTransitionHandler {
   constructor() {
-    super('STAGE_COMPLETED', 'STAGE_RUNNING', 'NEXT_STAGE');
+    super(
+      WorkflowStateEnum.STAGE_COMPLETED,
+      WorkflowStateEnum.STAGE_RUNNING,
+      WorkflowEvent.NEXT_STAGE
+    );
   }
 
   canHandle(apiResponse: any): boolean {
@@ -58,7 +63,7 @@ export class NextStageHandler extends BaseTransitionHandler {
 
     if (!planed.length) {
       console.log('[NextStageHandler] No planed stages found, completing workflow');
-      this.updateFSMState(ns, 'COMPLETE', 'NO_MORE_STAGES');
+      this.updateFSMState(ns, WorkflowStateEnum.COMPLETE, WorkflowEvent.COMPLETE_WORKFLOW);
       return ns;
     }
 
@@ -89,7 +94,7 @@ export class NextStageHandler extends BaseTransitionHandler {
 
     console.log(`[NextStageHandler] Cleared and initialized steps for new stage: ${next.stage_id}`);
 
-    this.updateFSMState(ns, 'STAGE_RUNNING', 'NEXT_STAGE');
+    this.updateFSMState(ns, WorkflowStateEnum.STAGE_RUNNING, WorkflowEvent.NEXT_STAGE);
     if (next.title) await this.executeAction('new_section', next.title);
     this.syncNotebookToState(ns);
     return ns;

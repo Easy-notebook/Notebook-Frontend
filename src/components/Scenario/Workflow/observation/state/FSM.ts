@@ -1,10 +1,12 @@
+import { WorkflowState, WorkflowEvent } from '@Store/models';
+
 /**
  * FSM State
  */
 export interface FSMState {
-  state: string; // 'IDLE', 'STAGE_RUNNING', 'STEP_RUNNING', etc.
-  last_transition: string | null;
-  previous_state?: string;
+  state: WorkflowState;
+  last_transition: WorkflowEvent | null;
+  previous_state?: WorkflowState;
   timestamp: string;
   transition_data?: Record<string, any>;
 }
@@ -16,15 +18,15 @@ export class FSM {
     this._data = data;
   }
 
-  public get state(): string {
+  public get state(): WorkflowState {
     return this._data.state;
   }
 
-  public get lastTransition(): string | null {
+  public get lastTransition(): WorkflowEvent | null {
     return this._data.last_transition;
   }
 
-  public get previousState(): string | undefined {
+  public get previousState(): WorkflowState | undefined {
     return this._data.previous_state;
   }
 
@@ -36,13 +38,13 @@ export class FSM {
     return this._data.transition_data;
   }
 
-  public setState(state: string): void {
+  public setState(state: WorkflowState): void {
     this._data.previous_state = this._data.state;
     this._data.state = state;
     this._data.timestamp = new Date().toISOString();
   }
 
-  public setLastTransition(transition: string | null): void {
+  public setLastTransition(transition: WorkflowEvent | null): void {
     this._data.last_transition = transition;
   }
 

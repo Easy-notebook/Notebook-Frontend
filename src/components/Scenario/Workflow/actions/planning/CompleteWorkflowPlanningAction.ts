@@ -1,5 +1,6 @@
 import { ActionBase, registerAction, executeAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
+import { WorkflowState } from '@Store/models';
 import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 
 export class CompleteWorkflowPlanningAction extends ActionBase {
@@ -27,7 +28,7 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
     stateJSON.state.FSM.workflow_planned = true;
 
     // If FSM is in IDLE state, transition to first planned stage
-    if (stateJSON.state.FSM.state === 'IDLE') {
+    if (stateJSON.state.FSM.state === WorkflowState.IDLE) {
       const plannedStages = observation.location.progress.stages.planned || [];
 
       if (plannedStages.length > 0) {
@@ -51,7 +52,7 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
         );
 
         // Transition to STAGE_RUNNING
-        stateJSON.state.FSM.state = 'STAGE_RUNNING';
+        stateJSON.state.FSM.state = WorkflowState.STAGE_RUNNING;
 
         console.log(
           `[CompleteWorkflowPlanningAction] ✅ Transitioned to STAGE_RUNNING, current stage: ${plannedStages[0].stage_id}`

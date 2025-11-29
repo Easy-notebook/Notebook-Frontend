@@ -1,11 +1,16 @@
 /** REFLECTING_AGAIN Handler - BEHAVIOR_COMPLETED → BEHAVIOR_COMPLETED */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { ClearEffectCurrentAction } from '../actions/reflecting/ClearEffectCurrent';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class ReflectingAgainHandler extends BaseTransitionHandler {
   constructor() {
-    super('BEHAVIOR_COMPLETED', 'BEHAVIOR_COMPLETED', 'REFLECTING_AGAIN');
+    super(
+      WorkflowStateEnum.BEHAVIOR_COMPLETED,
+      WorkflowStateEnum.BEHAVIOR_COMPLETED,
+      WorkflowEvent.REFLECTING_AGAIN
+    );
   }
 
   canHandle(_r: any): boolean {
@@ -24,7 +29,7 @@ export class ReflectingAgainHandler extends BaseTransitionHandler {
     ClearEffectCurrentAction.processState(ns);
 
     // Stay in BEHAVIOR_COMPLETED to trigger another reflection cycle
-    this.updateFSMState(ns, 'BEHAVIOR_COMPLETED', 'REFLECTING_AGAIN');
+    this.updateFSMState(ns, WorkflowStateEnum.BEHAVIOR_COMPLETED, WorkflowEvent.REFLECTING_AGAIN);
     return ns;
   }
 }

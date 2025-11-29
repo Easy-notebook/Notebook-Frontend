@@ -1,10 +1,15 @@
 /** NEXT_STEP Handler - STEP_COMPLETED → STEP_RUNNING */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class NextStepHandler extends BaseTransitionHandler {
   constructor() {
-    super('STEP_COMPLETED', 'STEP_RUNNING', 'NEXT_STEP');
+    super(
+      WorkflowStateEnum.STEP_COMPLETED,
+      WorkflowStateEnum.STEP_RUNNING,
+      WorkflowEvent.NEXT_STEP
+    );
   }
 
   canHandle(apiResponse: any): boolean {
@@ -33,7 +38,7 @@ export class NextStepHandler extends BaseTransitionHandler {
 
     if (!planed.length) {
       console.log('[NextStepHandler] No planed steps found, completing stage');
-      this.updateFSMState(ns, 'STAGE_COMPLETED', 'NO_MORE_STEPS');
+      this.updateFSMState(ns, WorkflowStateEnum.STAGE_COMPLETED, WorkflowEvent.COMPLETE_STAGE);
       return ns;
     }
 
@@ -49,7 +54,7 @@ export class NextStepHandler extends BaseTransitionHandler {
     sp.current_outputs = this.initOutputsTracking(next.verified_artifacts || {});
 
     this.updateLocationCurrent(ns, { step_id: next.step_id, behavior_id: 'clear' });
-    this.updateFSMState(ns, 'STEP_RUNNING', 'NEXT_STEP');
+    this.updateFSMState(ns, WorkflowStateEnum.STEP_RUNNING, WorkflowEvent.NEXT_STEP);
     console.log(`[NextStepHandler] scriptStore available: ${!!this.scriptStore}`);
     if (next.title) {
       console.log(`[NextStepHandler] Executing new_step action for: ${next.title}`);

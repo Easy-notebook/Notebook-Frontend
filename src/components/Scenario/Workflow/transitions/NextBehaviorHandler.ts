@@ -1,10 +1,15 @@
 /** NEXT_BEHAVIOR Handler - BEHAVIOR_COMPLETED → BEHAVIOR_RUNNING */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
 import { WorkflowState } from '../observation/WorkflowState';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 
 export class NextBehaviorHandler extends BaseTransitionHandler {
   constructor() {
-    super('BEHAVIOR_COMPLETED', 'BEHAVIOR_RUNNING', 'NEXT_BEHAVIOR');
+    super(
+      WorkflowStateEnum.BEHAVIOR_COMPLETED,
+      WorkflowStateEnum.BEHAVIOR_RUNNING,
+      WorkflowEvent.NEXT_BEHAVIOR
+    );
   }
 
   canHandle(r: any): boolean {
@@ -38,7 +43,7 @@ export class NextBehaviorHandler extends BaseTransitionHandler {
       ns.location.setGoals(continueAction.update_focus);
     }
 
-    this.updateFSMState(ns, 'BEHAVIOR_RUNNING', 'NEXT_BEHAVIOR');
+    this.updateFSMState(ns, WorkflowStateEnum.BEHAVIOR_RUNNING, WorkflowEvent.NEXT_BEHAVIOR);
     return ns;
   }
 }

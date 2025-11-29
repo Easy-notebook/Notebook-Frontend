@@ -244,9 +244,9 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
         // Stop if we reach terminal states (but allow BEHAVIOR_RUNNING to execute first)
         if (
-          currentState === 'FAILED' ||
-          currentState === 'COMPLETE' ||
-          currentState === 'CANCELED'
+          currentState === WorkflowState.FAILED ||
+          currentState === WorkflowState.COMPLETE ||
+          currentState === WorkflowState.CANCELED
         ) {
           console.log(`[FSM] Workflow auto-execution stopped at terminal state: ${currentState}`);
           break;
@@ -270,7 +270,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
         // After executing, check if we've completed behavior execution
         const newState = currentStateJSON.state.FSM.state;
-        if (newState === 'BEHAVIOR_COMPLETED') {
+        if (newState === WorkflowState.BEHAVIOR_COMPLETED) {
           console.log('[FSM] Reached BEHAVIOR_COMPLETED');
         }
 

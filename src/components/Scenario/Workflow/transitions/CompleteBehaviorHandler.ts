@@ -8,11 +8,16 @@
  */
 
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteBehaviorHandler extends BaseTransitionHandler {
   constructor() {
-    super('BEHAVIOR_RUNNING', 'BEHAVIOR_COMPLETED', 'COMPLETE_BEHAVIOR');
+    super(
+      WorkflowStateEnum.BEHAVIOR_RUNNING,
+      WorkflowStateEnum.BEHAVIOR_COMPLETED,
+      WorkflowEvent.COMPLETE_BEHAVIOR
+    );
   }
 
   canHandle(apiResponse: any): boolean {
@@ -93,15 +98,15 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
       `[CompleteBehavior] Note: Actions are executed in streaming mode by AsyncStateMachineAdapter`
     );
 
-    // Actions are already executed in streaming mode by AsyncStateMachineAdapter
-    // No need to execute them again here
-    // Just sync the notebook state to ensure it's up to date
-
     // Sync notebook state after executing actions
     this.syncNotebookToState(newState);
 
     // Update FSM state to BEHAVIOR_COMPLETED
-    this.updateFSMState(newState, 'BEHAVIOR_COMPLETED', 'COMPLETE_ACTION');
+    this.updateFSMState(
+      newState,
+      WorkflowStateEnum.BEHAVIOR_COMPLETED,
+      WorkflowEvent.COMPLETE_BEHAVIOR
+    );
 
     console.log('[CompleteBehavior] Transition complete');
 

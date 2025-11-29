@@ -1,13 +1,18 @@
 /**
  * COMPLETE_WORKFLOW Handler
- * Transition: STAGE_COMPLETED → COMPLETED
+ * Transition: STAGE_COMPLETED → COMPLETE
  */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState as WorkflowStateEnum, WorkflowEvent } from '@Store/models';
 import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteWorkflowHandler extends BaseTransitionHandler {
   constructor() {
-    super('STAGE_COMPLETED', 'COMPLETED', 'COMPLETE_WORKFLOW');
+    super(
+      WorkflowStateEnum.STAGE_COMPLETED,
+      WorkflowStateEnum.COMPLETE,
+      WorkflowEvent.COMPLETE_WORKFLOW
+    );
   }
 
   canHandle(apiResponse: any): boolean {
@@ -28,8 +33,8 @@ export class CompleteWorkflowHandler extends BaseTransitionHandler {
 
     const newState = this.deepCopyState(state);
 
-    // Update FSM state to COMPLETED
-    this.updateFSMState(newState, 'COMPLETED', 'COMPLETE_WORKFLOW');
+    // Update FSM state to COMPLETE
+    this.updateFSMState(newState, WorkflowStateEnum.COMPLETE, WorkflowEvent.COMPLETE_WORKFLOW);
 
     console.log('[CompleteWorkflow] Workflow completed successfully');
     return newState;
