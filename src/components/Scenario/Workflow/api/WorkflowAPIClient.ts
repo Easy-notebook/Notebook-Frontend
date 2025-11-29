@@ -14,6 +14,7 @@
 
 import { StateJSON } from '@Store/models';
 import type { WorkflowAPIClientConfig } from '@Store/models';
+import useSettingsStore from '@Store/settingsStore';
 
 /**
  * Workflow API Client Configuration
@@ -45,6 +46,15 @@ export class WorkflowAPIClient {
     this.timeout = config.timeout || DEFAULT_CONFIG.timeout!;
 
     console.log('[WorkflowAPIClient] Initialized with baseURL:', this.baseURL);
+  }
+
+  /**
+   * Get current UI language from settings
+   * Returns 'en' for English or 'zh' for Chinese (Simplified)
+   */
+  private getLanguage(): string {
+    const settings = useSettingsStore.getState().settings;
+    return settings.language || 'en';
   }
 
   /**
@@ -84,9 +94,11 @@ export class WorkflowAPIClient {
     console.log(payload);
 
     try {
-      console.log(`[WorkflowAPIClient] Sending request to: ${this.baseURL}/planning`);
+      const lang = this.getLanguage();
+      const url = `${this.baseURL}/planning?lang=${encodeURIComponent(lang)}`;
+      console.log(`[WorkflowAPIClient] Sending request to: ${url}`);
 
-      const response = await fetch(`${this.baseURL}/planning`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -211,7 +223,11 @@ export class WorkflowAPIClient {
     console.log(payload);
 
     try {
-      const response = await fetch(`${this.baseURL}/generating`, {
+      const lang = this.getLanguage();
+      const url = `${this.baseURL}/generating?lang=${encodeURIComponent(lang)}`;
+      console.log(`[WorkflowAPIClient] Sending request to: ${url}`);
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -333,9 +349,11 @@ export class WorkflowAPIClient {
     console.log(payload);
 
     try {
-      console.log(`[WorkflowAPIClient] Sending request to: ${this.baseURL}/reflecting`);
+      const lang = this.getLanguage();
+      const url = `${this.baseURL}/reflecting?lang=${encodeURIComponent(lang)}`;
+      console.log(`[WorkflowAPIClient] Sending request to: ${url}`);
 
-      const response = await fetch(`${this.baseURL}/reflecting`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
