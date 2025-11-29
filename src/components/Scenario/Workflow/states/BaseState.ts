@@ -15,6 +15,7 @@
 
 import { WorkflowEvent } from '@Store/models';
 import { PlanningAPIHandler, GeneratingAPIHandler, ReflectingAPIHandler } from '../api';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export enum APIResponseType {
   PLANNING = 'planning',
@@ -52,10 +53,7 @@ export abstract class BaseState {
    * @param apiResponse - Optional API response data
    * @returns WorkflowEvent to trigger, or null if no transition needed
    */
-  abstract determineNextTransition(
-    stateData: Record<string, any>,
-    apiResponse?: any
-  ): WorkflowEvent | null;
+  abstract determineNextTransition(state: WorkflowState, apiResponse?: any): WorkflowEvent | null;
 
   /**
    * Check if transition is allowed based on current state data.
@@ -66,7 +64,7 @@ export abstract class BaseState {
    * @param stateData - Current state JSON
    * @returns True if transition is allowed
    */
-  abstract canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean;
+  abstract canTransitionTo(event: WorkflowEvent, state: WorkflowState): boolean;
 
   /**
    * Get the API type required for this state.
@@ -101,9 +99,9 @@ export abstract class BaseState {
    * @param apiResponse - API response data
    * @returns Updated state JSON
    */
-  initializeFromResponse(stateData: Record<string, any>, _apiResponse: any): Record<string, any> {
+  initializeFromResponse(state: WorkflowState, _apiResponse: any): WorkflowState {
     // Default: no-op, just return state as-is
-    return stateData;
+    return state;
   }
 
   /**
@@ -146,7 +144,7 @@ export abstract class BaseState {
    * @param transitionName - Optional transition name to pass to API
    * @returns API response (parsed JSON or async iterator for streaming)
    */
-  async callAPI(stateData: Record<string, any>, transitionName?: string): Promise<any> {
+  async callAPI(state: WorkflowState, transitionName?: string): Promise<any> {
     // Check what API type this state requires
     const apiType = this.getRequiredAPIType();
     if (!apiType) {
@@ -166,12 +164,10 @@ export abstract class BaseState {
     }
 
     // Extract stage_id and step_id from state
-    const observation = stateData.observation || {};
-    const location = observation.location || {};
-    const current = location.current || {};
+    const current = state.location.current;
 
-    const stageId = current.stage_id || 'unknown';
-    const stepId = current.step_id || 'none';
+    const stageId = current.stageId || 'unknown';
+    const stepId = current.stepId || 'none';
 
     console.log(
       `[State.${this.stateName}] Calling ${apiType} API (stage=${stageId}, step=${stepId})`
@@ -179,11 +175,11 @@ export abstract class BaseState {
 
     // Route to appropriate API based on type
     if (apiType === APIResponseType.PLANNING) {
-      return await this.callPlanningAPI(stateData, stageId, stepId, transitionName);
+      return await this.callPlanningAPI(state, stageId, stepId, transitionName);
     } else if (apiType === APIResponseType.GENERATING) {
-      return this.callGeneratingAPI(stateData, stageId, stepId, transitionName);
+      return this.callGeneratingAPI(state, stageId, stepId, transitionName);
     } else if (apiType === APIResponseType.COMPLETE) {
-      return this.callReflectingAPI(stateData, stageId, stepId, transitionName);
+      return this.callReflectingAPI(state, stageId, stepId, transitionName);
     } else {
       throw new Error(`Unknown API type: ${apiType}`);
     }
@@ -193,7 +189,7 @@ export abstract class BaseState {
    * Call the Planning API.
    */
   protected async callPlanningAPI(
-    stateData: Record<string, any>,
+    state: WorkflowState,
     stageId: string,
     stepId: string,
     transitionName?: string
@@ -202,7 +198,7 @@ export abstract class BaseState {
       `[State.${this.stateName}] Calling Planning API via handler (transition=${transitionName})`
     );
 
-    return await this.planningHandler!.call(stateData, stageId, stepId, {
+    return await this.planningHandler!.call(state, stageId, stepId, {
       transition_name: transitionName,
     });
   }
@@ -211,7 +207,7 @@ export abstract class BaseState {
    * Call the Generating API (returns async iterator).
    */
   protected callGeneratingAPI(
-    stateData: Record<string, any>,
+    state: WorkflowState,
     stageId: string,
     stepId: string,
     transitionName?: string
@@ -220,7 +216,7 @@ export abstract class BaseState {
       `[State.${this.stateName}] Calling Generating API via handler (transition=${transitionName})`
     );
 
-    return this.generatingHandler!.call(stateData, stageId, stepId, {
+    return this.generatingHandler!.call(state, stageId, stepId, {
       stream: true,
       transition_name: transitionName,
     });
@@ -230,7 +226,7 @@ export abstract class BaseState {
    * Call the Reflecting API (returns async iterator).
    */
   protected callReflectingAPI(
-    stateData: Record<string, any>,
+    state: WorkflowState,
     stageId: string,
     stepId: string,
     transitionName?: string
@@ -239,17 +235,10 @@ export abstract class BaseState {
       `[State.${this.stateName}] Calling Reflecting API via handler (transition=${transitionName})`
     );
 
-    return this.reflectingHandler!.call(stateData, stageId, stepId, {
+    return this.reflectingHandler!.call(state, stageId, stepId, {
       stream: true,
       transition_name: transitionName,
     });
-  }
-
-  /**
-   * Helper to get progress from state data.
-   */
-  protected getProgress(stateData: Record<string, any>): Record<string, any> {
-    return stateData.observation?.location?.progress || {};
   }
 
   toString(): string {

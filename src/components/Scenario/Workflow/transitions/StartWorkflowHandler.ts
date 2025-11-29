@@ -5,6 +5,7 @@
  */
 
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class StartWorkflowHandler extends BaseTransitionHandler {
   constructor() {
@@ -43,7 +44,7 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
     return false;
   }
 
-  async apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, apiResponse: any): Promise<WorkflowState> {
     console.log('[StartWorkflow] ============================================');
     console.log('[StartWorkflow] APPLY METHOD CALLED');
     console.log('[StartWorkflow] ============================================');
@@ -58,13 +59,10 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
       // including complete_workflow_planning which set the state to STAGE_RUNNING
       console.log('[StartWorkflow] Using streaming format - actions already executed');
       console.log('[StartWorkflow] Current FSM state:', newState.state.FSM.state);
-      console.log(
-        '[StartWorkflow] Current stage_id:',
-        newState.observation.location.current.stage_id
-      );
+      console.log('[StartWorkflow] Current stage_id:', newState.location.current.stageId);
 
       // Verify the state was set correctly by complete_workflow_planning action
-      const plannedStages = newState.observation.location.progress.stages?.planned || [];
+      const plannedStages = newState.location.progress.stages.planned || [];
       console.log(`[StartWorkflow] Found ${plannedStages.length} planned stages`);
 
       // Ensure FSM state is STAGE_RUNNING (should already be set by complete_workflow_planning)
@@ -93,21 +91,19 @@ export class StartWorkflowHandler extends BaseTransitionHandler {
       return newState;
     }
 
-    const progress = this.getProgress(newState);
-    if (!progress.stages) progress.stages = {};
-    const stagesProgress = progress.stages;
+    const progress = newState.location.progress;
 
     const firstStage = stagesData[0];
-    stagesProgress.current = {
+    progress.updateStageCurrent({
       stage_id: firstStage.stage_id,
       title: firstStage.title || '',
       goal: firstStage.goal || '',
       verified_artifacts: firstStage.verified_artifacts || {},
-    };
-    stagesProgress.completed = [];
-    stagesProgress.focus = focus;
-    stagesProgress.planed = stagesData.slice(1);
-    stagesProgress.current_outputs = this.initOutputsTracking(firstStage.verified_artifacts || {});
+    });
+    progress.stages.completed = [];
+    progress.setStageFocus(focus);
+    progress.setPlannedStages(stagesData.slice(1));
+    progress.stages.current_outputs = this.initOutputsTracking(firstStage.verified_artifacts || {});
 
     this.updateLocationCurrent(newState, {
       stage_id: firstStage.stage_id,

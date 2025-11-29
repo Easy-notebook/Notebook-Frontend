@@ -13,6 +13,7 @@
 
 import { BaseState, APIResponseType } from './BaseState';
 import { WorkflowEvent } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class StageRunningState extends BaseState {
   constructor() {
@@ -28,7 +29,7 @@ export class StageRunningState extends BaseState {
     };
   }
 
-  determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
+  determineNextTransition(state: WorkflowState, apiResponse?: any): WorkflowEvent | null {
     // Check if we have a planning response with steps
     if (apiResponse && typeof apiResponse === 'object') {
       // Legacy format: steps array
@@ -55,9 +56,9 @@ export class StageRunningState extends BaseState {
     }
 
     // Check if stage is completed (no planed steps)
-    const progress = this.getProgress(stateData);
-    const stepsProgress = progress.steps || {};
-    const remainingSteps = stepsProgress.planed || [];
+    const progress = state.location.progress;
+    const stepsProgress = progress.steps;
+    const remainingSteps = stepsProgress.planned || [];
 
     if (remainingSteps.length === 0 && !stepsProgress.current) {
       console.log('[StageRunningState] No planed steps, stage completed');
@@ -69,7 +70,7 @@ export class StageRunningState extends BaseState {
     return null;
   }
 
-  canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
+  canTransitionTo(event: WorkflowEvent, state: WorkflowState): boolean {
     const validEvents = Object.values(this.getValidTransitions());
 
     if (!validEvents.includes(event)) {
@@ -79,9 +80,9 @@ export class StageRunningState extends BaseState {
     // Additional conditions for specific transitions
     if (event === WorkflowEvent.COMPLETE_STAGE) {
       // Can only complete if no steps planed
-      const progress = this.getProgress(stateData);
-      const stepsProgress = progress.steps || {};
-      const remainingSteps = stepsProgress.planed || [];
+      const progress = state.location.progress;
+      const stepsProgress = progress.steps;
+      const remainingSteps = stepsProgress.planned || [];
       return remainingSteps.length === 0;
     }
 

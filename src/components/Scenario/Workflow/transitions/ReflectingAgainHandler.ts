@@ -1,13 +1,14 @@
 /** REFLECTING_AGAIN Handler - BEHAVIOR_COMPLETED → BEHAVIOR_COMPLETED */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
 import { ClearEffectCurrentAction } from '../actions/reflecting/ClearEffectCurrent';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class ReflectingAgainHandler extends BaseTransitionHandler {
   constructor() {
     super('BEHAVIOR_COMPLETED', 'BEHAVIOR_COMPLETED', 'REFLECTING_AGAIN');
   }
 
-  canHandle(r: any): boolean {
+  canHandle(_r: any): boolean {
     // This handler is triggered when BehaviorCompletedState returns REFLECTING_AGAIN
     // The coordinator finds it by transition name match if auto-triggered,
     // or we can check response if needed.
@@ -15,7 +16,7 @@ export class ReflectingAgainHandler extends BaseTransitionHandler {
     return true;
   }
 
-  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, _r: any): Promise<WorkflowState> {
     const ns = this.deepCopyState(state);
 
     // Use the action's logic to clear effects

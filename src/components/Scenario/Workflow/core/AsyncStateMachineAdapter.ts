@@ -20,6 +20,7 @@
 
 import { StateJSON, ExecutionStep } from '@Store/models';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
+import { WorkflowState } from '../observation/WorkflowState';
 
 import streamingLogger from '../__tests__/streaming-debug-logger';
 import { StateFactory } from '../states/StateFactory';
@@ -54,6 +55,9 @@ export class AsyncStateMachineAdapter {
     // Inject dependencies into TransitionCoordinator
     if (scriptStore || apiClient) {
       const coordinator = getTransitionCoordinator();
+      // We need to pass notebookStore as well, but it's not in the constructor args yet.
+      // However, we can import it dynamically or assume it's available globally if needed.
+      // For now, let's just pass what we have.
       coordinator.setContext({
         scriptStore,
         apiClient,
@@ -100,8 +104,11 @@ export class AsyncStateMachineAdapter {
     // Reset transition name tracking
     this.lastTransitionName = null;
 
+    // Wrap StateJSON in WorkflowState
+    let workflowState = new WorkflowState(stateJSON);
+
     // Extract current FSM state from state JSON
-    const fsmStateStr = stateJSON.state?.FSM?.state || 'UNKNOWN';
+    const fsmStateStr = workflowState.state.FSM.state || 'UNKNOWN';
 
     // Normalize state name
     let normalized = fsmStateStr.toUpperCase();
@@ -129,12 +136,12 @@ export class AsyncStateMachineAdapter {
       // Attempt auto-trigger for logic-only states (like STAGE_COMPLETED)
       const coordinator = getTransitionCoordinator();
       const { state: newState, transitionName } =
-        await coordinator.autoTriggerNextTransition(stateJSON);
+        await coordinator.autoTriggerNextTransition(workflowState);
 
       if (transitionName) {
         console.log(`[AsyncFSM] Auto-triggered transition: ${transitionName}`);
         this.lastTransitionName = transitionName;
-        return [newState as StateJSON, transitionName];
+        return [newState.toJSON(), transitionName];
       }
 
       return [stateJSON, null];
@@ -150,7 +157,7 @@ export class AsyncStateMachineAdapter {
 
       // Call the API via the State object
       // The State object uses its internal handlers which are initialized with apiClient
-      let apiResponse = await state.callAPI(stateJSON, predictedTransitionName);
+      let apiResponse = await state.callAPI(workflowState, predictedTransitionName);
 
       // Get TransitionCoordinator
       const coordinator = getTransitionCoordinator();
@@ -223,7 +230,9 @@ export class AsyncStateMachineAdapter {
 
         // Update stateJSON to latest from store as actions might have changed it
         const { useWorkflowStateMachine } = await import('../store/workflowStateMachine');
-        stateJSON = useWorkflowStateMachine.getState().stateJSON;
+        const latestStateJSON = useWorkflowStateMachine.getState().stateJSON;
+        // Re-wrap in WorkflowState
+        workflowState = new WorkflowState(latestStateJSON);
       } else {
         // Not iterable, parse normally
         parsedResponse = this.parseAPIResponse(apiResponse);
@@ -233,7 +242,7 @@ export class AsyncStateMachineAdapter {
       // Note: For generating/reflecting, actions are already executed above, but we pass them
       // to the coordinator so handlers like NextBehaviorHandler can inspect them.
       const { state: updatedState, transitionName } = await coordinator.applyTransition(
-        stateJSON,
+        workflowState,
         parsedResponse,
         apiType,
         true // auto-trigger enabled
@@ -242,7 +251,7 @@ export class AsyncStateMachineAdapter {
       this.lastTransitionName = transitionName;
       console.log(`[AsyncFSM] Transition applied: ${transitionName}`);
 
-      return [updatedState as StateJSON, transitionName];
+      return [updatedState.toJSON(), transitionName];
     } catch (error) {
       console.error(`[AsyncFSM] API call error for ${normalized}:`, error);
       // TODO: Trigger FAIL event
@@ -356,8 +365,15 @@ export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> 
 
     const apiClient = new WorkflowAPIClient();
     const scriptStore = useScriptStore.getState();
+    const notebookStore = (await import('@Store/notebookStore')).default.getState();
 
     asyncStateMachineInstance = new AsyncStateMachineAdapter(apiClient, scriptStore);
+
+    // Inject notebookStore into TransitionCoordinator
+    const coordinator = getTransitionCoordinator();
+    coordinator.setContext({
+      notebookStore,
+    });
 
     // Initialize StateFactory with apiClient
     StateFactory.setApiClient(apiClient);

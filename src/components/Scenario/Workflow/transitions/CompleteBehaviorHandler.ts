@@ -8,6 +8,7 @@
  */
 
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteBehaviorHandler extends BaseTransitionHandler {
   constructor() {
@@ -81,7 +82,7 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
     return canHandle;
   }
 
-  async apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, apiResponse: any): Promise<WorkflowState> {
     const newState = this.deepCopyState(state);
 
     const actions = apiResponse.actions || [];
@@ -105,49 +106,5 @@ export class CompleteBehaviorHandler extends BaseTransitionHandler {
     console.log('[CompleteBehavior] Transition complete');
 
     return newState;
-  }
-
-  /**
-   * Execute all actions from the generating API.
-   */
-  private executeActions(actions: any[]): void {
-    for (let i = 0; i < actions.length; i++) {
-      const actionDict = actions[i];
-      if (typeof actionDict !== 'object' || actionDict === null) {
-        console.warn(`[CompleteBehavior] Action ${i} is not a dict, skipping`);
-        continue;
-      }
-
-      const actionType = actionDict.type || 'unknown';
-      const content = actionDict.content || '';
-
-      console.log(`[CompleteBehavior] Executing action ${i + 1}/${actions.length}: ${actionType}`);
-
-      try {
-        // Create ExecutionStep from action dict
-        const executionStep = {
-          action: actionType,
-          content,
-          storeId: actionDict.store_id || this.generateUUID(),
-          metadata: actionDict.metadata || {},
-          // Pass through any other fields from action_dict
-          ...Object.fromEntries(
-            Object.entries(actionDict).filter(
-              ([k]) => !['type', 'content', 'store_id', 'metadata'].includes(k)
-            )
-          ),
-        };
-
-        // Execute the action
-        this.scriptStore.execAction(executionStep);
-        console.log(`[CompleteBehavior] Action ${i + 1} executed successfully: ${actionType}`);
-      } catch (error) {
-        console.error(
-          `[CompleteBehavior] Failed to execute action ${i + 1} (${actionType}):`,
-          error
-        );
-        // Continue with planed actions even if one fails
-      }
-    }
   }
 }

@@ -1,5 +1,6 @@
 /** NEXT_STEP Handler - STEP_COMPLETED → STEP_RUNNING */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class NextStepHandler extends BaseTransitionHandler {
   constructor() {
@@ -10,10 +11,10 @@ export class NextStepHandler extends BaseTransitionHandler {
     return typeof apiResponse === 'object' && apiResponse._auto_trigger === 'NEXT_STEP';
   }
 
-  async apply(state: Record<string, any>, _apiResponse: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, _apiResponse: any): Promise<WorkflowState> {
     const ns = this.deepCopyState(state);
-    const p = this.getProgress(ns);
-    const sp = p.steps || {};
+    const p = ns.location.progress;
+    const sp = p.steps;
     const cur = sp.current;
 
     // Determine next step from planned list
@@ -44,13 +45,19 @@ export class NextStepHandler extends BaseTransitionHandler {
       verified_artifacts: {},
     };
 
-    sp.current = next;
-    // No need to update 'planed' array anymore
+    p.updateStepCurrent(next);
     sp.current_outputs = this.initOutputsTracking(next.verified_artifacts || {});
 
     this.updateLocationCurrent(ns, { step_id: next.step_id, behavior_id: 'clear' });
     this.updateFSMState(ns, 'STEP_RUNNING', 'NEXT_STEP');
-    if (next.title) await this.executeAction('new_step', next.title);
+    console.log(`[NextStepHandler] scriptStore available: ${!!this.scriptStore}`);
+    if (next.title) {
+      console.log(`[NextStepHandler] Executing new_step action for: ${next.title}`);
+      await this.executeAction('new_step', next.title);
+    } else {
+      console.warn('[NextStepHandler] Next step has no title, skipping new_step action');
+    }
+
     this.syncNotebookToState(ns);
     return ns;
   }

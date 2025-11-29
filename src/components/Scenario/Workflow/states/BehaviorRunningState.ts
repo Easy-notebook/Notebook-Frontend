@@ -12,6 +12,7 @@
 
 import { BaseState, APIResponseType } from './BaseState';
 import { WorkflowEvent } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class BehaviorRunningState extends BaseState {
   constructor() {
@@ -26,7 +27,7 @@ export class BehaviorRunningState extends BaseState {
     };
   }
 
-  determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
+  determineNextTransition(state: WorkflowState, apiResponse?: any): WorkflowEvent | null {
     // Check if we have a reflecting response indicating completion
     if (apiResponse && typeof apiResponse === 'object') {
       // Check for completion signal
@@ -55,8 +56,8 @@ export class BehaviorRunningState extends BaseState {
     }
 
     // Check behavior outputs
-    const progress = this.getProgress(stateData);
-    const behaviorsProgress = progress.behaviors || {};
+    const progress = state.location.progress;
+    const behaviorsProgress = progress.behaviors;
     const currentOutputs = behaviorsProgress.current_outputs || {};
 
     const expected = currentOutputs.expected || [];
@@ -72,7 +73,7 @@ export class BehaviorRunningState extends BaseState {
     return null;
   }
 
-  canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
+  canTransitionTo(event: WorkflowEvent, _state: WorkflowState): boolean {
     const validEvents = Object.values(this.getValidTransitions());
 
     if (!validEvents.includes(event)) {

@@ -1,5 +1,6 @@
 /** COMPLETE_STAGE Handler - STEP_COMPLETED → STAGE_COMPLETED */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteStageHandler extends BaseTransitionHandler {
   constructor() {
@@ -13,12 +14,12 @@ export class CompleteStageHandler extends BaseTransitionHandler {
     return acts.some((a: any) => a?.type === 'mark_stage_complete');
   }
 
-  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, _r: any): Promise<WorkflowState> {
     const ns = this.deepCopyState(state);
-    const p = this.getProgress(ns);
+    const p = ns.location.progress;
 
-    if (p.stages?.current) {
-      p.stages.current.completion_status = 'all_steps_completed';
+    if (p.stages.current) {
+      p.setStageCompletionStatus('success');
     }
 
     this.updateFSMState(ns, 'STAGE_COMPLETED', 'COMPLETE_STAGE');

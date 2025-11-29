@@ -15,19 +15,16 @@ export abstract class BaseAPIHandler {
   }
 
   abstract call(
-    stateData: Record<string, any>,
+    state: any, // Using any to avoid circular dependency, but should be WorkflowState
     stageId: string,
     stepId: string,
     kwargs?: Record<string, any>
   ): Promise<any> | AsyncIterableIterator<any>;
 
-  protected extractLocationInfo(stateData: Record<string, any>): [string, string] {
-    const observation = stateData.observation || {};
-    const location = observation.location || {};
-    const current = location.current || {};
-
-    const stageId = current.stage_id || 'unknown';
-    const stepId = current.step_id || 'none';
+  protected extractLocationInfo(state: any): [string, string] {
+    const current = state.location.current;
+    const stageId = current.stageId || 'unknown';
+    const stepId = current.stepId || 'none';
 
     return [stageId, stepId];
   }

@@ -6,6 +6,7 @@
  */
 
 import type { TransitionHandlerContext } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export abstract class BaseTransitionHandler {
   public readonly fromState: string;
@@ -31,7 +32,7 @@ export abstract class BaseTransitionHandler {
   /**
    * Apply the transition to the state.
    */
-  abstract apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>>;
+  abstract apply(state: WorkflowState, apiResponse: any): Promise<WorkflowState>;
 
   /**
    * Set the context (stores) for this handler.
@@ -47,18 +48,18 @@ export abstract class BaseTransitionHandler {
    * Apply the transition and log it.
    */
   async applyAndLog(
-    state: Record<string, any>,
+    state: WorkflowState,
     apiResponse: any,
     _apiType?: string
-  ): Promise<Record<string, any>> {
-    const fromState = state.state?.FSM?.state || 'UNKNOWN';
+  ): Promise<WorkflowState> {
+    const fromState = state.state.FSM.state || 'UNKNOWN';
 
     console.log(`[Transition] Applying: ${this.transitionName} (${fromState} → ${this.toState})`);
 
     // Apply the transition
     const updatedState = await this.apply(state, apiResponse);
 
-    const toState = updatedState.state?.FSM?.state || 'UNKNOWN';
+    const toState = updatedState.state.FSM.state || 'UNKNOWN';
 
     console.log(`[Transition] Completed: ${this.transitionName} (${fromState} → ${toState})`);
 
@@ -68,65 +69,24 @@ export abstract class BaseTransitionHandler {
   /**
    * Create a deep copy of the state.
    */
-  protected deepCopyState(state: Record<string, any>): Record<string, any> {
-    return JSON.parse(JSON.stringify(state));
-  }
-
-  /**
-   * Get observation structure from state.
-   */
-  protected getObservation(state: Record<string, any>): Record<string, any> {
-    return state.observation || {};
-  }
-
-  /**
-   * Get location structure from state.
-   */
-  protected getLocation(state: Record<string, any>): Record<string, any> {
-    return this.getObservation(state).location || {};
-  }
-
-  /**
-   * Get progress structure from state.
-   */
-  protected getProgress(state: Record<string, any>): Record<string, any> {
-    return this.getLocation(state).progress || {};
-  }
-
-  /**
-   * Get FSM structure from state.
-   */
-  protected getFSM(state: Record<string, any>): Record<string, any> {
-    if (!state.state) {
-      state.state = {};
-    }
-    if (!state.state.FSM) {
-      state.state.FSM = {};
-    }
-    return state.state.FSM;
+  protected deepCopyState(state: WorkflowState): WorkflowState {
+    return new WorkflowState(state.toJSON());
   }
 
   /**
    * Update FSM state and transition.
    */
-  protected updateFSMState(
-    state: Record<string, any>,
-    newState: string,
-    transitionName: string
-  ): void {
-    const fsm = this.getFSM(state);
-    const oldState = fsm.state || 'UNKNOWN';
-    fsm.previous_state = oldState;
-    fsm.state = newState;
-    fsm.last_transition = transitionName;
-    console.log(`[FSM] State transition: ${oldState} → ${newState}`);
+  protected updateFSMState(state: WorkflowState, newState: string, transitionName: string): void {
+    state.state.FSM.setState(newState);
+    state.state.FSM.setLastTransition(transitionName);
+    console.log(`[FSM] State transition: ${state.state.FSM.previousState} → ${newState}`);
   }
 
   /**
    * Update location.current fields.
    */
   protected updateLocationCurrent(
-    state: Record<string, any>,
+    state: WorkflowState,
     updates: {
       stage_id?: string | null;
       step_id?: string | null | 'clear';
@@ -134,23 +94,27 @@ export abstract class BaseTransitionHandler {
       behavior_iteration?: number;
     }
   ): void {
-    const location = this.getLocation(state);
-    if (!location.current) {
-      location.current = {};
-    }
-    const current = location.current;
+    const current = state.location.current;
 
     if (updates.stage_id !== undefined) {
-      current.stage_id = updates.stage_id;
+      current.setStageId(updates.stage_id);
     }
     if (updates.step_id !== undefined) {
-      current.step_id = updates.step_id === 'clear' ? null : updates.step_id;
+      if (updates.step_id === 'clear') {
+        current.clearStep();
+      } else {
+        current.setStepId(updates.step_id);
+      }
     }
     if (updates.behavior_id !== undefined) {
-      current.behavior_id = updates.behavior_id === 'clear' ? null : updates.behavior_id;
+      if (updates.behavior_id === 'clear') {
+        current.clearBehavior();
+      } else {
+        current.setBehaviorId(updates.behavior_id);
+      }
     }
     if (updates.behavior_iteration !== undefined) {
-      current.behavior_iteration = updates.behavior_iteration;
+      current.setBehaviorIteration(updates.behavior_iteration);
     }
   }
 
@@ -217,17 +181,31 @@ export abstract class BaseTransitionHandler {
   /**
    * Sync notebook data from stores to state.
    */
-  protected syncNotebookToState(state: Record<string, any>): void {
-    if (!this.scriptStore?.notebook_store) {
+  protected syncNotebookToState(state: WorkflowState): void {
+    if (!this.notebookStore) {
+      // Try to get it from global import if not injected (fallback)
+      // But better to rely on injection.
+      console.warn('[Sync] Skipping notebook sync: no notebookStore available');
       return;
     }
 
     try {
-      const notebookData = this.scriptStore.notebook_store.to_dict();
-      if (!state.state) {
-        state.state = {};
-      }
-      state.state.notebook = notebookData;
+      // useNotebookStore state structure might differ from what NotebookState expects.
+      // We need to map it.
+      // NotebookState expects: { notebook_id, title, cell_count, cells, ... }
+      // useNotebookStore has: { notebookId, title, cells, ... }
+
+      const storeState = this.notebookStore;
+
+      const notebookData = {
+        notebook_id: storeState.notebookId,
+        title: storeState.title,
+        cell_count: storeState.cells.length,
+        cells: storeState.cells,
+        // Map other fields if necessary
+      };
+
+      state.state.notebook.update(notebookData);
       console.debug(`[Sync] Updated notebook in state (cells: ${notebookData.cells?.length || 0})`);
     } catch (error) {
       console.error('[Sync] Failed to sync notebook:', error);

@@ -13,6 +13,7 @@
 
 import { BaseState, APIResponseType } from './BaseState';
 import { WorkflowEvent } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class StepRunningState extends BaseState {
   constructor() {
@@ -28,7 +29,7 @@ export class StepRunningState extends BaseState {
     };
   }
 
-  determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
+  determineNextTransition(state: WorkflowState, apiResponse?: any): WorkflowEvent | null {
     // Check if we have a planning response with behavior
     if (apiResponse && typeof apiResponse === 'object') {
       // Planning API can return either:
@@ -67,8 +68,8 @@ export class StepRunningState extends BaseState {
     }
 
     // Check if step is completed (all expected outputs produced)
-    const progress = this.getProgress(stateData);
-    const stepsProgress = progress.steps || {};
+    const progress = state.location.progress;
+    const stepsProgress = progress.steps;
     const currentOutputs = stepsProgress.current_outputs || {};
 
     const expected = currentOutputs.expected || [];
@@ -84,7 +85,7 @@ export class StepRunningState extends BaseState {
     return null;
   }
 
-  canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
+  canTransitionTo(event: WorkflowEvent, state: WorkflowState): boolean {
     const validEvents = Object.values(this.getValidTransitions());
 
     if (!validEvents.includes(event)) {
@@ -94,8 +95,8 @@ export class StepRunningState extends BaseState {
     // Additional conditions for specific transitions
     if (event === WorkflowEvent.COMPLETE_STEP) {
       // Check if outputs are satisfied
-      const progress = this.getProgress(stateData);
-      const stepsProgress = progress.steps || {};
+      const progress = state.location.progress;
+      const stepsProgress = progress.steps;
       const currentOutputs = stepsProgress.current_outputs || {};
 
       const expected = currentOutputs.expected || [];

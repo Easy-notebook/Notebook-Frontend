@@ -3,6 +3,7 @@
  * Transition: STAGE_COMPLETED → COMPLETED
  */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteWorkflowHandler extends BaseTransitionHandler {
   constructor() {
@@ -22,7 +23,7 @@ export class CompleteWorkflowHandler extends BaseTransitionHandler {
     return acts.some((a: any) => a?.type === 'complete_workflow');
   }
 
-  async apply(state: Record<string, any>, _apiResponse: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, _apiResponse: any): Promise<WorkflowState> {
     console.log('[CompleteWorkflow] Completing workflow...');
 
     const newState = this.deepCopyState(state);

@@ -13,6 +13,7 @@
 
 import { BaseState, APIResponseType } from './BaseState';
 import { WorkflowEvent } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class StageCompletedState extends BaseState {
   constructor() {
@@ -28,12 +29,9 @@ export class StageCompletedState extends BaseState {
     };
   }
 
-  determineNextTransition(
-    stateData: Record<string, any>,
-    _apiResponse?: any
-  ): WorkflowEvent | null {
+  determineNextTransition(state: WorkflowState, _apiResponse?: any): WorkflowEvent | null {
     // Check if there are planed stages
-    const remainingStages = this.getRemainingStagesFromPlanned(stateData);
+    const remainingStages = this.getRemainingStagesFromPlanned(state);
 
     if (remainingStages.length === 0) {
       console.log('[StageCompletedState] No planed stages, completing workflow');
@@ -45,14 +43,14 @@ export class StageCompletedState extends BaseState {
     return WorkflowEvent.NEXT_STAGE;
   }
 
-  canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
+  canTransitionTo(event: WorkflowEvent, state: WorkflowState): boolean {
     const validEvents = Object.values(this.getValidTransitions());
 
     if (!validEvents.includes(event)) {
       return false;
     }
 
-    const remainingStages = this.getRemainingStagesFromPlanned(stateData);
+    const remainingStages = this.getRemainingStagesFromPlanned(state);
 
     // COMPLETE_WORKFLOW requires no planed stages
     if (event === WorkflowEvent.COMPLETE_WORKFLOW) {
@@ -72,9 +70,9 @@ export class StageCompletedState extends BaseState {
    * Helper to get planed stages from planned list.
    * planed = planned - completed - current
    */
-  private getRemainingStagesFromPlanned(stateData: Record<string, any>): any[] {
-    const progress = this.getProgress(stateData);
-    const stagesProgress = progress.stages || {};
+  private getRemainingStagesFromPlanned(state: WorkflowState): any[] {
+    const progress = state.location.progress;
+    const stagesProgress = progress.stages;
     const planned = stagesProgress.planned || [];
 
     if (planned.length === 0) {

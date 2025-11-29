@@ -20,6 +20,7 @@ import { NextStageHandler } from './NextStageHandler';
 import { ReflectingAgainHandler } from './ReflectingAgainHandler';
 import { CompleteWorkflowHandler } from './CompleteWorkflowHandler';
 import { getStateFactory } from '../states/StateFactory';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class TransitionCoordinator {
   private handlers: BaseTransitionHandler[] = [];
@@ -65,11 +66,11 @@ export class TransitionCoordinator {
    * Apply state transition based on API response.
    */
   async applyTransition(
-    state: Record<string, unknown>,
+    state: WorkflowState,
     apiResponse: Record<string, unknown>,
     apiType?: string,
     autoTrigger = true
-  ): Promise<{ state: Record<string, unknown>; transitionName: string }> {
+  ): Promise<{ state: WorkflowState; transitionName: string }> {
     console.log(
       `[Coordinator] Applying transition (apiType=${apiType}, autoTrigger=${autoTrigger})`
     );
@@ -194,9 +195,9 @@ export class TransitionCoordinator {
    * These should be handled by AsyncStateMachineAdapter.step()
    */
   public async autoTriggerNextTransition(
-    state: Record<string, unknown>
-  ): Promise<{ state: Record<string, unknown>; transitionName: string | null }> {
-    const currentStateName = (state as any).state?.FSM?.state;
+    state: WorkflowState
+  ): Promise<{ state: WorkflowState; transitionName: string | null }> {
+    const currentStateName = state.state.FSM.state;
 
     if (!currentStateName) {
       console.log('[Auto-Trigger] No current state name found');
@@ -222,9 +223,7 @@ export class TransitionCoordinator {
     // Only auto-trigger if effect.current is not empty (forcing NEXT_BEHAVIOR)
     // Otherwise it needs to call Reflecting API or Planning API
     if (currentStateName === 'BEHAVIOR_COMPLETED') {
-      const context = (state as any).observation?.context || {};
-      const effects = context.effects || {};
-      const currentEffects = effects.current || [];
+      const currentEffects = state.state.effects.current;
 
       if (currentEffects.length === 0) {
         console.log(
@@ -233,10 +232,13 @@ export class TransitionCoordinator {
         return { state, transitionName: null };
       }
 
-      // effect.current is not empty, can auto-trigger NEXT_BEHAVIOR
+      // effect.current is not empty
+      // We should NOT auto-trigger here because we want to pass these effects to the Reflecting API
+      // If we auto-trigger, it defaults to REFLECTING_AGAIN which clears the effects!
       console.log(
-        `[Auto-Trigger] BEHAVIOR_COMPLETED with ${currentEffects.length} effects in effect.current - auto-triggering NEXT_BEHAVIOR`
+        `[Auto-Trigger] BEHAVIOR_COMPLETED with ${currentEffects.length} effects - stopping auto-trigger to allow Reflecting API call`
       );
+      return { state, transitionName: null };
     }
 
     // States that support auto-triggering

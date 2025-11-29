@@ -1,5 +1,6 @@
 /** NEXT_BEHAVIOR Handler - BEHAVIOR_COMPLETED → BEHAVIOR_RUNNING */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class NextBehaviorHandler extends BaseTransitionHandler {
   constructor() {
@@ -21,7 +22,7 @@ export class NextBehaviorHandler extends BaseTransitionHandler {
     return (cr && !msc) || cb;
   }
 
-  async apply(state: Record<string, any>, r: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, r: any): Promise<WorkflowState> {
     const ns = this.deepCopyState(state);
 
     // Check for update_focus in continue_behavior action
@@ -30,16 +31,11 @@ export class NextBehaviorHandler extends BaseTransitionHandler {
 
     if (continueAction && continueAction.update_focus) {
       console.log(`[NextBehaviorHandler] Updating focus: ${continueAction.update_focus}`);
-      const p = this.getProgress(ns);
-      if (p.behaviors) {
-        p.behaviors.focus = continueAction.update_focus;
-      }
+      const p = ns.location.progress;
+      p.setBehaviorFocus(continueAction.update_focus);
 
       // Also update location.goals if appropriate
-      const location = this.getLocation(ns);
-      if (location) {
-        location.goals = continueAction.update_focus;
-      }
+      ns.location.setGoals(continueAction.update_focus);
     }
 
     this.updateFSMState(ns, 'BEHAVIOR_RUNNING', 'NEXT_BEHAVIOR');

@@ -8,6 +8,7 @@
  */
 
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class StartBehaviorHandler extends BaseTransitionHandler {
   constructor() {
@@ -37,7 +38,7 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
     return false;
   }
 
-  async apply(state: Record<string, any>, apiResponse: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, apiResponse: any): Promise<WorkflowState> {
     const newState = this.deepCopyState(state);
     let data = apiResponse;
 
@@ -60,7 +61,7 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
 
     // Extract behavior fields
     const behaviorId = data.behavior_id || data.behaviorId;
-    const stepId = data.step_id || data.stepId || state.observation?.location?.current?.step_id;
+    const stepId = data.step_id || data.stepId || state.location.current.stepId;
     const agent = data.agent || 'default_agent';
     // Use task if available, otherwise use title, otherwise use focus
     const task = (data.task || data.title || data.focus || '').trim();
@@ -73,15 +74,10 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
     console.log(`[StartBehavior] Task/Title: ${task}`);
 
     // Get structures
-    const progress = this.getProgress(newState);
-    if (!progress.behaviors) {
-      progress.behaviors = {};
-    }
-    const behaviorsProgress = progress.behaviors;
-    const location = this.getLocation(newState);
+    const progress = newState.location.progress;
 
     // Build current behavior
-    const currentBehavior: Record<string, any> = {
+    const currentBehavior: any = {
       behavior_id: behaviorId,
       step_id: stepId,
       agent,
@@ -96,10 +92,10 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
     }
 
     // Update behaviors progress
-    behaviorsProgress.current = currentBehavior;
-    behaviorsProgress.completed = [];
-    behaviorsProgress.iteration = 1;
-    behaviorsProgress.focus = task;
+    progress.updateBehaviorCurrent(currentBehavior);
+    progress.behaviors.completed = [];
+    progress.setBehaviorIteration(1);
+    progress.setBehaviorFocus(task);
 
     // Initialize outputs tracking
     const expectedOutputs = Object.entries(outputs).map(([name, description]) => ({
@@ -107,7 +103,7 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
       description: String(description),
     }));
 
-    behaviorsProgress.current_outputs = {
+    progress.behaviors.current_outputs = {
       expected: expectedOutputs,
       produced: [],
       in_progress: [],
@@ -121,7 +117,7 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
 
     // Update location.goals
     if (task) {
-      location.goals = task;
+      newState.location.setGoals(task);
     }
 
     // Update FSM state

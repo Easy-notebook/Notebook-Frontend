@@ -12,6 +12,7 @@
 
 import { BaseState, APIResponseType } from './BaseState';
 import { WorkflowEvent } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class IdleState extends BaseState {
   constructor() {
@@ -25,7 +26,7 @@ export class IdleState extends BaseState {
     };
   }
 
-  determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
+  determineNextTransition(_state: WorkflowState, apiResponse?: any): WorkflowEvent | null {
     // Check if we have a planning response with stages
     if (apiResponse && typeof apiResponse === 'object') {
       // Legacy format: stages array
@@ -55,7 +56,7 @@ export class IdleState extends BaseState {
     return null;
   }
 
-  canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
+  canTransitionTo(event: WorkflowEvent, _state: WorkflowState): boolean {
     const validEvents = Object.values(this.getValidTransitions());
 
     if (!validEvents.includes(event)) {
@@ -79,8 +80,8 @@ export class IdleState extends BaseState {
     return 'START_WORKFLOW';
   }
 
-  initializeFromResponse(stateData: Record<string, any>, apiResponse: any): Record<string, any> {
+  initializeFromResponse(state: WorkflowState, _apiResponse: any): WorkflowState {
     // For IDLE, initialization is handled by StartWorkflowHandler
-    return stateData;
+    return state;
   }
 }

@@ -1,5 +1,6 @@
 /** NEXT_STAGE Handler - STAGE_COMPLETED → STAGE_RUNNING */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class NextStageHandler extends BaseTransitionHandler {
   constructor() {
@@ -10,10 +11,10 @@ export class NextStageHandler extends BaseTransitionHandler {
     return typeof apiResponse === 'object' && apiResponse._auto_trigger === 'NEXT_STAGE';
   }
 
-  async apply(state: Record<string, any>, _apiResponse: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, _apiResponse: any): Promise<WorkflowState> {
     const ns = this.deepCopyState(state);
-    const p = this.getProgress(ns);
-    const sp = p.stages || {};
+    const p = ns.location.progress;
+    const sp = p.stages;
     const cur = sp.current;
 
     // Determine next stage from planned list
@@ -30,13 +31,13 @@ export class NextStageHandler extends BaseTransitionHandler {
 
       // ✅ Preserve steps history from current stage for UI display and debugging
       const stepsHistory = {
-        planned: (p.steps?.planned || []).map((step: any) => ({
+        planned: (p.steps.planned || []).map((step: any) => ({
           step_id: step.step_id,
           title: step.title,
           task: step.task,
           acceptance: step.acceptance,
         })),
-        completed: (p.steps?.completed || []).map((step: any) => ({
+        completed: (p.steps.completed || []).map((step: any) => ({
           step_id: step.step_id,
           title: step.title,
           goal: step.goal,
@@ -70,7 +71,7 @@ export class NextStageHandler extends BaseTransitionHandler {
       verified_artifacts: {},
     };
 
-    sp.current = next;
+    p.updateStageCurrent(next);
     // No need to update 'planed' array anymore
     sp.current_outputs = this.initOutputsTracking(next.verified_artifacts || {});
 
@@ -82,11 +83,9 @@ export class NextStageHandler extends BaseTransitionHandler {
 
     // ✅ FIX: Properly initialize steps structure for new stage
     // Instead of just clearing with {}, initialize with proper structure
-    p.steps = {
-      planned: [],
-      current: null,
-      completed: [],
-    };
+    p.steps.planned = [];
+    p.steps.current = null;
+    p.steps.completed = [];
 
     console.log(`[NextStageHandler] Cleared and initialized steps for new stage: ${next.stage_id}`);
 

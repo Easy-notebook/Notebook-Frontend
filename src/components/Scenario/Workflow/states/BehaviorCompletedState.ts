@@ -14,6 +14,7 @@
 
 import { BaseState, APIResponseType } from './BaseState';
 import { WorkflowEvent } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class BehaviorCompletedState extends BaseState {
   constructor() {
@@ -30,7 +31,7 @@ export class BehaviorCompletedState extends BaseState {
     };
   }
 
-  determineNextTransition(stateData: Record<string, any>, apiResponse?: any): WorkflowEvent | null {
+  determineNextTransition(_state: WorkflowState, apiResponse?: any): WorkflowEvent | null {
     // Check API response for explicit completion signal
     if (apiResponse && typeof apiResponse === 'object') {
       const actions = apiResponse.actions || [];
@@ -55,7 +56,7 @@ export class BehaviorCompletedState extends BaseState {
     return WorkflowEvent.REFLECTING_AGAIN;
   }
 
-  canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
+  canTransitionTo(event: WorkflowEvent, _state: WorkflowState): boolean {
     const validEvents = Object.values(this.getValidTransitions());
 
     if (!validEvents.includes(event)) {

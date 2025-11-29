@@ -1,6 +1,7 @@
 /** COMPLETE_STEP Handler - BEHAVIOR_COMPLETED → STEP_COMPLETED */
 import { BaseTransitionHandler } from './BaseTransitionHandler';
 import { ClearEffectHistoryAction } from '../actions/reflecting/ClearEffectHistory';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class CompleteStepHandler extends BaseTransitionHandler {
   constructor() {
@@ -15,36 +16,24 @@ export class CompleteStepHandler extends BaseTransitionHandler {
     );
   }
 
-  async apply(state: Record<string, any>, _r: any): Promise<Record<string, any>> {
+  async apply(state: WorkflowState, _r: any): Promise<WorkflowState> {
     const ns = this.deepCopyState(state);
-    const p = this.getProgress(ns);
+    const p = ns.location.progress;
 
-    if (p.behaviors?.current) {
-      if (!p.behaviors.completed) p.behaviors.completed = [];
-      p.behaviors.completed.push({ ...p.behaviors.current, completion_status: 'success' });
-      p.behaviors.current = null;
+    if (p.behaviors.current) {
+      p.completeCurrentBehavior('success');
     }
 
-    if (p.steps?.current) {
-      p.steps.current.completion_status = 'all_acceptance_criteria_passed';
+    if (p.steps.current) {
+      p.setStepCompletionStatus('all_acceptance_criteria_passed');
     }
 
     // Clear effects.current and move to history
-    if (ns.state?.effects) {
-      if (ns.state.effects.current && ns.state.effects.current.length > 0) {
-        // Move current effects to history
-        if (!ns.state.effects.history) {
-          ns.state.effects.history = [];
-        }
-        ns.state.effects.history.push(...ns.state.effects.current);
+    if (ns.state.effects.current.length > 0) {
+      // Move current effects to history
+      ns.state.effects.moveCurrentToHistory();
 
-        console.log(
-          `[CompleteStepHandler] Moved ${ns.state.effects.current.length} effects to history`
-        );
-
-        // Clear current effects
-        ns.state.effects.current = [];
-      }
+      console.log(`[CompleteStepHandler] Moved effects to history`);
     }
 
     // Clear effect history to prepare for the next step

@@ -13,6 +13,7 @@
 
 import { BaseState, APIResponseType } from './BaseState';
 import { WorkflowEvent } from '@Store/models';
+import { WorkflowState } from '../observation/WorkflowState';
 
 export class StepCompletedState extends BaseState {
   constructor() {
@@ -28,12 +29,9 @@ export class StepCompletedState extends BaseState {
     };
   }
 
-  determineNextTransition(
-    stateData: Record<string, any>,
-    _apiResponse?: any
-  ): WorkflowEvent | null {
+  determineNextTransition(state: WorkflowState, _apiResponse?: any): WorkflowEvent | null {
     // Check if there are planed steps
-    const remainingSteps = this.getRemainingStepsFromPlanned(stateData);
+    const remainingSteps = this.getRemainingStepsFromPlanned(state);
 
     if (remainingSteps.length === 0) {
       console.log('[StepCompletedState] No planed steps, completing stage');
@@ -45,14 +43,14 @@ export class StepCompletedState extends BaseState {
     return WorkflowEvent.NEXT_STEP;
   }
 
-  canTransitionTo(event: WorkflowEvent, stateData: Record<string, any>): boolean {
+  canTransitionTo(event: WorkflowEvent, state: WorkflowState): boolean {
     const validEvents = Object.values(this.getValidTransitions());
 
     if (!validEvents.includes(event)) {
       return false;
     }
 
-    const remainingSteps = this.getRemainingStepsFromPlanned(stateData);
+    const remainingSteps = this.getRemainingStepsFromPlanned(state);
 
     // COMPLETE_STAGE requires no planed steps
     if (event === WorkflowEvent.COMPLETE_STAGE) {
@@ -72,9 +70,9 @@ export class StepCompletedState extends BaseState {
    * Helper to get planed steps from planned list.
    * planed = planned - completed - current
    */
-  private getRemainingStepsFromPlanned(stateData: Record<string, any>): any[] {
-    const progress = this.getProgress(stateData);
-    const stepsProgress = progress.steps || {};
+  private getRemainingStepsFromPlanned(state: WorkflowState): any[] {
+    const progress = state.location.progress;
+    const stepsProgress = progress.steps;
     const planned = stepsProgress.planned || [];
 
     if (planned.length === 0) {

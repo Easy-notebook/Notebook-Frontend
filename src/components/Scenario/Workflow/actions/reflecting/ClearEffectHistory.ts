@@ -8,6 +8,7 @@
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
 import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
+import { WorkflowState } from '../../observation/WorkflowState';
 
 export class ClearEffectHistoryAction extends ActionBase {
   /**
@@ -16,32 +17,25 @@ export class ClearEffectHistoryAction extends ActionBase {
   execute(step: ExecutionStep): void {
     const stateMachine = useWorkflowStateMachine.getState();
     const stateJSON = stateMachine.stateJSON;
+    const workflowState = new WorkflowState(stateJSON);
 
     // Use the static helper to perform the logic
-    ClearEffectHistoryAction.processState(stateJSON);
+    ClearEffectHistoryAction.processState(workflowState);
 
-    stateMachine.setState(stateJSON);
+    stateMachine.setState(workflowState.toJSON());
   }
 
   /**
    * Static helper to perform the logic on any state object
    * Useful for transition handlers that work on state copies
    */
-  static processState(state: any): void {
-    // Try to find effects in state.state.effects (Standard StateJSON)
-    let effectsContainer = state.state?.effects;
+  static processState(state: WorkflowState): void {
+    const effects = state.state.effects;
 
-    // Fallback: check observation.context.effects (Legacy/Alternative)
-    if (!effectsContainer && state.observation?.context?.effects) {
-      effectsContainer = state.observation.context.effects;
-    }
-
-    if (effectsContainer && effectsContainer.history) {
-      const historyCount = effectsContainer.history.length;
-      if (historyCount > 0) {
-        effectsContainer.history = [];
-        console.log(`[ClearEffectHistory] Cleared ${historyCount} effects from history`);
-      }
+    if (effects.history.length > 0) {
+      const historyCount = effects.history.length;
+      effects.clearHistory();
+      console.log(`[ClearEffectHistory] Cleared ${historyCount} effects from history`);
     }
   }
 }
