@@ -17,6 +17,7 @@
  *     │   └── CommentResultAction.ts
  *     ├── code/                # Code execution actions
  *     │   ├── ExecCodeAction.ts
+ *     │   ├── SendCodeOutputAction.ts
  *     │   └── SetEffectThinkingAction.ts
  *     ├── thinking/            # Thinking process visualization actions
  *     │   ├── IsThinkingAction.ts
@@ -65,6 +66,7 @@
  *
  * Code Actions:
  *     - exec: Executes code cells
+ *     - send_code_output: Sends code execution output for analysis
  *     - set_effect_as_thinking: Marks code as finished thinking
  *
  * Thinking Actions:
@@ -85,6 +87,9 @@
  *     - complete_step_planning: Complete step planning (STEP_RUNNING → BEHAVIOR_RUNNING)
  *
  * Reflecting Actions (Streaming Protocol):
+ *     - bug_analysis: Displays bug analysis, saves error version to metadata
+ *     - update_code: Updates code cell with fixed version
+ *     - exec_new_version: Executes the newly fixed code
  *     - complete_reflection: Marks reflection as complete (BEHAVIOR_COMPLETED → BEHAVIOR_RUNNING)
  */
 

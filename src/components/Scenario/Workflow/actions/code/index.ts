@@ -4,3 +4,4 @@
 
 export * from './ExecCodeAction';
 export * from './SetEffectThinkingAction';
+export * from './SendCodeOutputAction';

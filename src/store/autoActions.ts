@@ -1,15 +1,20 @@
 // src/store/autoActions.ts
+/**
+ * Auto Actions - Legacy module for backward compatibility
+ *
+ * These functions are being migrated to the new workflow action system.
+ * @see src/components/Scenario/Workflow/actions/code/
+ *
+ * @deprecated Use workflow actions instead:
+ * - sendCurrentCellExecuteCodeResult -> SendCodeOutputAction
+ * - sendCurrentCellExecuteCodeError_should_debug -> DebugCodeAction
+ */
+
 import useOperatorStore from '@Store/operatorStore';
 import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
 import type { Operation } from '@Store/models/operation';
-import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import { storeLog } from '@Utils/logger';
-
-/**
- * 操作类型定义
- */
-// Operation interface moved to @Store/models/operation
 
 /**
  * 代码输出操作载荷接口
@@ -34,6 +39,7 @@ export interface CodeErrorPayload {
 
 /**
  * 发送当前单元格执行代码结果
+ * @deprecated Use SendCodeOutputAction instead
  */
 export const sendCurrentCellExecuteCodeResult = (): void => {
   const currentCell = useStore.getState().getCurrentCell();
@@ -59,44 +65,6 @@ export const sendCurrentCellExecuteCodeResult = (): void => {
     return;
   }
 
-  // 准备Output Agent记忆上下文
-  const outputMemoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-    notebookId,
-    'output' as AgentType,
-    {
-      current_cell_id: currentCell.id,
-      execute_result: executeResult,
-      executed_code: currentCell.content,
-      cell_description: currentCell.description || '',
-      output_type: Array.isArray(executeResult) ? 'array' : typeof executeResult,
-    }
-  );
-
-  // 更新用户意图（用户想要分析输出结果）
-  AgentMemoryService.updateUserIntent(
-    notebookId,
-    'output' as AgentType,
-    ['analyze_output'], // 明确目标：分析输出
-    ['data_analysis', 'result_interpretation'], // 推断目标
-    `分析代码执行结果`, // 当前焦点
-    [] // 当前阻塞
-  );
-
-  // 记录输出分析交互启动
-  AgentMemoryService.recordOperationInteraction(
-    notebookId,
-    'output' as AgentType,
-    'output_analysis_started',
-    true,
-    {
-      cell_id: currentCell.id,
-      output_size: Array.isArray(executeResult) ? executeResult.length : 1,
-      code_length: currentCell.content.length,
-      has_description: !!currentCell.description,
-      start_time: new Date().toISOString(),
-    }
-  );
-
   const operation: Operation = {
     type: 'code_output',
     payload: {
@@ -104,8 +72,6 @@ export const sendCurrentCellExecuteCodeResult = (): void => {
       executeCode: currentCell.content,
       cellId: currentCell.id,
       description: currentCell.description,
-      // 添加记忆上下文
-      ...outputMemoryContext,
     } as CodeOutputPayload,
   };
 
@@ -114,6 +80,7 @@ export const sendCurrentCellExecuteCodeResult = (): void => {
 
 /**
  * 发送当前单元格执行代码错误(需要调试)
+ * @deprecated Use DebugCodeAction instead
  */
 export const sendCurrentCellExecuteCodeError_should_debug = (): void => {
   const currentCell = useStore.getState().getCurrentCell();
@@ -132,59 +99,6 @@ export const sendCurrentCellExecuteCodeError_should_debug = (): void => {
     return;
   }
 
-  // 准备Debug Agent记忆上下文
-  const debugMemoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-    notebookId,
-    'debug' as AgentType,
-    {
-      current_cell_id: currentCell.id,
-      error_context: currentCell.outputs,
-      current_code: currentCell.content,
-      history_code: historyCode,
-      cell_description: currentCell.description || '',
-    }
-  );
-
-  // 提取错误信息用于用户意图更新
-  const errorMessage =
-    Array.isArray(currentCell.outputs) && currentCell.outputs.length > 0
-      ? JSON.stringify(currentCell.outputs[0])
-      : 'unknown_error';
-
-  // 更新用户意图（用户想要修复错误）
-  AgentMemoryService.updateUserIntent(
-    notebookId,
-    'debug' as AgentType,
-    ['fix_code_error'], // 明确目标：修复代码错误
-    ['debug_issue', 'code_fixing'], // 推断目标
-    `修复代码错误: ${errorMessage.substring(0, 100)}`, // 当前焦点
-    [errorMessage] // 当前阻塞：具体错误
-  );
-
-  // 设置debug上下文状态为进行中
-  AgentMemoryService.updateCurrentContext(notebookId, 'debug' as AgentType, {
-    interaction_status: 'in_progress',
-    debug_start_time: new Date().toISOString(),
-    current_error: errorMessage,
-    fix_applied: false,
-  });
-
-  // 记录调试交互启动
-  AgentMemoryService.recordOperationInteraction(
-    notebookId,
-    'debug' as AgentType,
-    'debug_started',
-    true,
-    {
-      cell_id: currentCell.id,
-      error_type: typeof currentCell.outputs,
-      error_preview: errorMessage.substring(0, 200),
-      code_length: currentCell.content.length,
-      has_history: !!historyCode,
-      start_time: new Date().toISOString(),
-    }
-  );
-
   const operation: Operation = {
     type: 'code_error_should_debug',
     payload: {
@@ -193,8 +107,6 @@ export const sendCurrentCellExecuteCodeError_should_debug = (): void => {
       HistoryCode: historyCode,
       cellId: currentCell.id,
       description: currentCell.description ? currentCell.description : '',
-      // 添加记忆上下文
-      ...debugMemoryContext,
     } as CodeErrorPayload,
   };
 
