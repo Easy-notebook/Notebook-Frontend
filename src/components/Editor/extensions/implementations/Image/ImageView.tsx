@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BaseNodeView, BaseNodeViewProps } from '../../core/BaseNodeView';
+import { BaseNodeView } from '../../core/BaseNodeView';
 import { ImageModel, ImageContext } from './ImageModel';
 import useStore from '@Store/notebookStore';
 import { Upload, X, Edit3, Loader2, Eye, AlignCenter, AlignLeft } from 'lucide-react';
@@ -110,13 +110,13 @@ const ImageViewComponent = (props: any) => {
         setElapsedTime(elapsed);
       };
       updateElapsed();
-      interval = setInterval(updateElapsed, 1000);
+      interval = window.setInterval(updateElapsed, 1000);
     } else {
       setElapsedTime(0);
     }
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (interval) window.clearInterval(interval);
     };
   }, [shouldShowLoading, generationStartTime]);
 
