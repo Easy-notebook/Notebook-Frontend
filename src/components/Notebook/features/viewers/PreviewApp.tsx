@@ -28,18 +28,13 @@ const PreviewApp: React.FC = () => {
   // Use split file if in split view, otherwise use regular active file
   const currentFile = isInSplitView ? activeSplitFile : activeFile;
 
-  // Debug information
-  console.log(
-    `PreviewApp: isInSplitView=${isInSplitView}, currentFile=${currentFile?.name || 'null'}, activeSplitFile=${activeSplitFile?.name || 'null'}, activeFile=${activeFile?.name || 'null'}`
-  );
-
   // Local state for HTML source view
   const [showSource, setShowSource] = useState(false);
-  // Log debug info - only for main preview mode, not split view
+
+  // Auto-load first tab - only for main preview mode, not split view
   useEffect(() => {
     if (!isInSplitView && previewMode === 'file' && !activeFile && currentPreviewFiles.length > 0) {
       const firstId = currentPreviewFiles[0].id;
-      console.log('PreviewApp: auto-loading first tab', firstId);
       usePreviewStore.getState().loadFileById(firstId);
     }
   }, [isInSplitView, previewMode, activeFile, currentPreviewFiles]);
@@ -112,7 +107,7 @@ const PreviewApp: React.FC = () => {
       case 'csv':
       case 'xlsx':
         return (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden h-full">
             <CSVPreviewWrapper typeOverride={effectiveType === 'xlsx' ? 'xlsx' : 'csv'} />
           </div>
         );

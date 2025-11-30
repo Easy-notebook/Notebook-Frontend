@@ -131,47 +131,47 @@ const ContextMenu: React.FC<ContextMenuProps> = (props) => {
   return (
     <div
       ref={menuRef}
-      className="fixed bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 z-50"
+      className="fixed bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl py-1.5 z-50 min-w-[180px] animate-in fade-in zoom-in-95 duration-200"
       style={{ left: `${props.x}px`, top: `${props.y}px` }}
     >
       <button
         onClick={props.onCopy}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
       >
-        <Copy className="w-4 h-4" />
+        <Copy className="w-4 h-4 text-gray-500 dark:text-gray-400" />
         Copy
       </button>
       <button
         onClick={props.onPaste}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
       >
-        <Clipboard className="w-4 h-4" />
+        <Clipboard className="w-4 h-4 text-gray-500 dark:text-gray-400" />
         Paste
       </button>
-      <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+      <div className="border-t border-gray-200/50 dark:border-gray-700/50 my-1.5 mx-2" />
       <button
         onClick={props.onDelete}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
       >
-        <Trash2 className="w-4 h-4" />
+        <Trash2 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
         Clear Contents
       </button>
-      <div className="border-t border-gray-200 dark:border-gray-700 my-1" />
+      <div className="border-t border-gray-200/50 dark:border-gray-700/50 my-1.5 mx-2" />
       <button
         onClick={props.onInsertRowAbove}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
       >
         Insert Row Above
       </button>
       <button
         onClick={props.onInsertRowBelow}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
       >
         Insert Row Below
       </button>
       <button
         onClick={props.onDeleteRow}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-900/30 transition-colors"
       >
         Delete Row
       </button>
@@ -199,6 +199,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   // Check if we're in split view mode (detached cell)
   const isInSplitView = !!detachedCellId;
   const currentFile = isInSplitView ? activeSplitFile : activeFile;
+
   const [data, setData] = useState<CSVRow[]>([]);
   const [columns, setColumns] = useState<ColumnInfo[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -258,13 +259,6 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         const range = XLSX.utils.decode_range(ref);
         const rows: any[][] = [];
         const nextStyleMap: Record<string, React.CSSProperties> = {};
-
-        // 调试工作簿信息
-        console.log('Workbook info:', {
-          sheetNames: wb.SheetNames,
-          range: ref,
-          hasStyles: 'Yes', // xlsx-js-style always has styles
-        });
 
         for (let r = range.s.r; r <= range.e.r; r++) {
           const row: any[] = [];
@@ -498,7 +492,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         Papa.parse(content, {
           header: false, // We'll handle headers manually to ensure consistency
           skipEmptyLines: true,
-          worker: true, // Offload to worker thread
+          worker: false, // Disable worker to avoid potential environment issues
           complete: (results) => {
             const rows = results.data as any[][];
             if (rows.length > 0) {
@@ -805,48 +799,52 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     (currentFile.type !== 'csv' && currentFile.type !== 'xlsx' && !typeOverride)
   ) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <FileSpreadsheet className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">No spreadsheet file selected</p>
+      <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+        <div className="text-center p-8 rounded-2xl bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 shadow-lg">
+          <FileSpreadsheet className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400 font-medium">
+            No spreadsheet file selected
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#f3f3f3] dark:bg-gray-900">
-      {/* Ribbon */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-700 shadow-sm">
-        <div className="px-2 py-1 flex items-center gap-4">
+    <div className="h-full flex flex-col bg-gradient-to-br from-gray-50/80 to-gray-100/80 dark:from-gray-900/80 dark:to-gray-800/80">
+      {/* Toolbar */}
+      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50">
+        <div className="px-3 py-2 flex items-center gap-3">
           <div className="flex items-center gap-2">
             <button
               onClick={handleSave}
-              className="px-3 py-1.5 text-sm bg-theme-600 text-white rounded hover:bg-theme-700 flex items-center gap-1"
+              className="px-3 py-1.5 text-sm bg-gradient-to-r from-theme-500 to-theme-600 text-white rounded-lg hover:from-theme-600 hover:to-theme-700 flex items-center gap-1.5 shadow-sm transition-all duration-200 hover:shadow-md"
             >
               <Save className="w-4 h-4" />
               Save
             </button>
             <button
               onClick={handleExport}
-              className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center gap-1"
+              className="px-3 py-1.5 text-sm bg-white/80 dark:bg-gray-700/80 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-white dark:hover:bg-gray-600 flex items-center gap-1.5 border border-gray-200/50 dark:border-gray-600/50 shadow-sm transition-all duration-200"
             >
               <Download className="w-4 h-4" />
               Export
             </button>
           </div>
-          <div className="h-6 w-px bg-gray-300 dark:bg-gray-600" />
-          <div className="flex items-center gap-2 ml-auto">
-            <Home className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-            <span className="text-sm text-gray-600 dark:text-gray-300">{currentFile.name}</span>
+          <div className="h-5 w-px bg-gray-300/50 dark:bg-gray-600/50" />
+          <div className="flex items-center gap-2 ml-auto px-3 py-1 rounded-lg bg-gray-100/50 dark:bg-gray-700/50">
+            <FileSpreadsheet className="w-4 h-4 text-theme-500" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {currentFile.name}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Formula Bar */}
       {showFormulaBar && activeCell && (
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-2 py-1 flex items-center gap-2">
-          <div className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-sm font-mono text-gray-700 dark:text-gray-200 rounded">
+        <div className="bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm border-b border-gray-200/30 dark:border-gray-700/30 px-3 py-1.5 flex items-center gap-2">
+          <div className="px-2.5 py-1 bg-theme-100/80 dark:bg-theme-900/30 text-sm font-mono text-theme-700 dark:text-theme-300 rounded-md border border-theme-200/50 dark:border-theme-700/50">
             {getCellAddress(activeCell.row, activeCell.col)}
           </div>
           <input
@@ -865,7 +863,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                 setEditValue(String(data[activeCell.row][columns[activeCell.col].key] ?? ''));
               }
             }}
-            className="flex-1 px-2 py-0.5 text-sm border border-gray-200 dark:border-gray-600 rounded focus:outline-none focus:border-theme-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+            className="flex-1 px-3 py-1 text-sm border border-gray-200/50 dark:border-gray-600/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-500/30 focus:border-theme-500 bg-white/80 dark:bg-gray-900/80 text-gray-900 dark:text-gray-100 transition-all duration-200"
           />
         </div>
       )}
@@ -873,50 +871,67 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       {/* Grid */}
       <div
         ref={tableContainerRef}
-        className="flex-1 overflow-hidden bg-white dark:bg-gray-900 relative"
+        className="flex-1 h-full overflow-hidden bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm relative rounded-lg m-2 border border-gray-200/50 dark:border-gray-700/50 shadow-sm"
       >
         {isLoading && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
-            <div className="flex flex-col items-center gap-2">
-              <div className="w-8 h-8 border-4 border-theme-500 border-t-transparent rounded-full animate-spin" />
-              <div className="text-sm text-gray-600 dark:text-gray-300">Loading data...</div>
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 dark:bg-gray-900/70 backdrop-blur-md rounded-lg">
+            <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-white/80 dark:bg-gray-800/80 shadow-lg border border-gray-200/50 dark:border-gray-700/50">
+              <div className="w-10 h-10 border-3 border-theme-500 border-t-transparent rounded-full animate-spin" />
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                Loading data...
+              </div>
             </div>
           </div>
         )}
         <AutoSizer>
-          {({ height, width }: { height: number; width: number }) => (
-            <div style={{ height, width, overflow: 'auto' }}>
-              <table className="border-collapse" style={{ minWidth: '100%' }}>
-                <thead className="sticky top-0 z-10">
-                  <tr>
-                    <th className="sticky left-0 z-20 bg-[#f0f0f0] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 w-12 h-8 text-center text-xs text-gray-600 dark:text-gray-400" />
+          {({ height, width }: { height: number; width: number }) => {
+            if (height <= 32 || width === 0) {
+              return (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  Loading...
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ height, width, overflow: 'auto' }}>
+                <div
+                  style={{ minWidth: '100%', width: Math.max(width, table.getTotalSize() + 48) }}
+                >
+                  {/* Header */}
+                  <div className="sticky top-0 z-10 flex bg-gradient-to-b from-gray-100/95 to-gray-50/95 dark:from-gray-800/95 dark:to-gray-800/90 backdrop-blur-sm border-b border-gray-200/70 dark:border-gray-700/70">
+                    <div className="sticky left-0 z-20 bg-gradient-to-b from-gray-100/95 to-gray-50/95 dark:from-gray-800/95 dark:to-gray-800/90 backdrop-blur-sm border-r border-gray-200/70 dark:border-gray-700/70 w-12 h-9 flex-shrink-0" />
                     {table.getHeaderGroups()[0]?.headers.map((header) => (
-                      <th
+                      <div
                         key={header.id}
-                        className="bg-[#f0f0f0] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 h-8 px-1 text-left relative text-gray-900 dark:text-gray-100"
+                        className="bg-gradient-to-b from-gray-100/95 to-gray-50/95 dark:from-gray-800/95 dark:to-gray-800/90 backdrop-blur-sm border-r border-gray-200/70 dark:border-gray-700/70 h-9 px-2 text-left relative text-gray-700 dark:text-gray-200 flex-shrink-0 font-medium"
                         style={{ width: header.getSize() }}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
+                      </div>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </div>
+
+                  {/* Body */}
                   <List
                     height={height - 32} // Subtract header height
                     itemCount={table.getRowModel().rows.length}
                     itemSize={28} // Row height
                     width={Math.max(width, table.getTotalSize() + 48)} // Ensure width covers all columns + row number col
-                    outerElementType="tbody"
                   >
                     {({ index, style }) => {
                       const row = table.getRowModel().rows[index];
+                      const isEvenRow = index % 2 === 0;
                       return (
-                        <tr key={row.id} style={style} className="flex">
+                        <div
+                          key={row.id}
+                          style={style}
+                          className={`flex ${isEvenRow ? 'bg-white/50 dark:bg-gray-900/50' : 'bg-gray-50/50 dark:bg-gray-800/30'}`}
+                        >
                           {/* Row number */}
-                          <td className="sticky left-0 z-10 bg-[#f0f0f0] dark:bg-gray-800 border border-gray-300 dark:border-gray-600 w-12 h-7 text-center text-xs text-gray-600 dark:text-gray-400 flex items-center justify-center">
+                          <div className="sticky left-0 z-10 bg-gradient-to-r from-gray-100/95 to-gray-50/90 dark:from-gray-800/95 dark:to-gray-800/80 backdrop-blur-sm border-r border-b border-gray-200/50 dark:border-gray-700/50 w-12 h-full text-center text-xs text-gray-500 dark:text-gray-400 flex items-center justify-center flex-shrink-0 font-medium">
                             {index + 1}
-                          </td>
+                          </div>
                           {/* Data cells with merge support */}
                           {row.getVisibleCells().map((cell) => {
                             const colId = cell.column.id;
@@ -924,8 +939,6 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                             const dataKey = `${index}:${colIndex}`;
 
                             if (coveredSet.has(dataKey)) return null;
-
-                            const span = spanMap[dataKey];
 
                             // 从 styleMap 读取工作表样式（sheet 坐标 = 数据行 + headerOffset）
                             const sheetKey = `${index + headerOffset}:${colIndex}`;
@@ -999,17 +1012,17 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                                 : '';
 
                             return (
-                              <td
+                              <div
                                 key={cell.id}
-                                className={`border border-gray-300 dark:border-gray-600 p-0 align-middle ${selectionBgClass} ${isActive ? 'ring-2 ring-theme-500 ring-inset' : ''} text-gray-900 dark:text-gray-100`}
+                                className={`border-r border-b border-gray-200/60 dark:border-gray-700/60 p-0 align-middle ${selectionBgClass} ${isActive ? 'ring-2 ring-theme-500/70 ring-inset shadow-sm' : ''} text-gray-900 dark:text-gray-100 flex-shrink-0 transition-all duration-150 hover:bg-gray-50/50 dark:hover:bg-gray-800/50`}
                                 style={{
                                   width: cell.column.getSize(),
                                   ...cellStyle,
                                   display: 'flex',
                                   height: '100%',
+                                  // rowSpan/colSpan not supported in flex layout easily, but keeping logic for reference or future grid support
+                                  // For now, flex layout assumes no spans or handles them via width adjustments if implemented
                                 }}
-                                rowSpan={span?.rowSpan}
-                                colSpan={span?.colSpan}
                                 onClick={() => {
                                   setActiveCell({ row: index, col: colIndex });
                                   setSelection(null);
@@ -1054,7 +1067,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                                           (e.currentTarget as HTMLInputElement).blur();
                                         else if (e.key === 'Escape') setEditingCell(null);
                                       }}
-                                      className="absolute inset-0 w-full h-full px-2 border-2 border-theme-500 focus:outline-none bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                      className="absolute inset-0 w-full h-full px-2 border-2 border-theme-500/70 focus:outline-none focus:border-theme-500 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm text-gray-900 dark:text-gray-100 shadow-lg rounded-sm"
                                       style={{ textAlign: cellStyle.textAlign || 'left' }}
                                       autoFocus
                                     />
@@ -1064,34 +1077,43 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                                     </span>
                                   )}
                                 </div>
-                              </td>
+                              </div>
                             );
                           })}
-                        </tr>
+                        </div>
                       );
                     }}
                   </List>
-                </tbody>
-              </table>
-            </div>
-          )}
+                </div>
+              </div>
+            );
+          }}
         </AutoSizer>
       </div>
 
       {/* Status Bar */}
-      <div className="bg-[#f0f0f0] dark:bg-gray-800 border-t border-gray-300 dark:border-gray-700 px-3 py-1 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+      <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl border-t border-gray-200/50 dark:border-gray-700/50 px-4 py-1.5 flex items-center justify-between text-xs">
         <div className="flex items-center gap-4">
-          <span>Ready</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-green-500/80 animate-pulse" />
+            <span className="text-gray-600 dark:text-gray-400 font-medium">Ready</span>
+          </div>
           {selection && (
-            <span>
+            <span className="px-2 py-0.5 bg-theme-100/50 dark:bg-theme-900/30 text-theme-700 dark:text-theme-300 rounded-md">
               {Math.abs(selection.endRow - selection.startRow) + 1} ×{' '}
               {Math.abs(selection.endCol - selection.startCol) + 1} cells selected
             </span>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          <span>{data.length} rows</span>
-          <span>{columns.length} columns</span>
+        <div className="flex items-center gap-3">
+          <span className="text-gray-500 dark:text-gray-400">
+            <span className="font-medium text-gray-700 dark:text-gray-300">{data.length}</span> rows
+          </span>
+          <span className="text-gray-300 dark:text-gray-600">|</span>
+          <span className="text-gray-500 dark:text-gray-400">
+            <span className="font-medium text-gray-700 dark:text-gray-300">{columns.length}</span>{' '}
+            columns
+          </span>
         </div>
       </div>
 

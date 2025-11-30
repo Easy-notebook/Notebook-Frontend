@@ -103,7 +103,7 @@ const TabbedPreviewApp: React.FC = () => {
       case 'csv':
       case 'xlsx':
         return (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden h-full">
             <CSVPreviewWrapper typeOverride={effectiveType === 'xlsx' ? 'xlsx' : 'csv'} />
           </div>
         );
