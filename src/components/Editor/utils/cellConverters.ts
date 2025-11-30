@@ -197,6 +197,19 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
       return displayMode ? `$$${latex}$$` : `$${latex}$`;
     }
 
+    case 'markdownImage': {
+      // 处理行内图片节点，返回 markdown 格式的图片
+      const attrs = node.attrs || {};
+      const markdown = attrs.markdown || '';
+      if (markdown) {
+        return markdown;
+      }
+      // 如果没有 markdown 属性，从 src 和 alt 构造
+      const src = attrs.src || '';
+      const alt = attrs.alt || '';
+      return src ? `![${alt}](${src})` : '';
+    }
+
     default: {
       // 递归子节点
       if (node.content && Array.isArray(node.content)) {
