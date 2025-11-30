@@ -22,8 +22,8 @@ export class BugAnalysisAction extends StreamAction {
     const cells = notebookStore.cells;
     let targetCell = null;
 
-    if (payload.cellId) {
-      targetCell = cells.find((c) => c.id === payload.cellId);
+    if (payload.cellId || (payload as any).codecell_id) {
+      targetCell = cells.find((c) => c.id === (payload.cellId || (payload as any).codecell_id));
     } else {
       // Find last code cell
       for (let i = cells.length - 1; i >= 0; i--) {

@@ -97,7 +97,7 @@ export function convertMarkdownToHtml(
     if (blockLatexMatch) {
       const placeholder = `__LATEX_BLOCK_${latexCounter}__`;
       latexNodes[latexCounter] =
-        `<div data-type="latex-block" data-latex="${blockLatexMatch[1].trim()}" data-display-mode="true"></div>`;
+        `<span data-type="latex-block" data-latex="${blockLatexMatch[1].trim()}" data-display-mode="true"></span>`;
       if (DEBUG) console.log('提取独占行的块级LaTeX:', blockLatexMatch[1].trim());
       latexCounter++;
       return placeholder;
@@ -107,7 +107,7 @@ export function convertMarkdownToHtml(
     if (inlineBlockLatexMatch) {
       const placeholder = `__LATEX_BLOCK_${latexCounter}__`;
       latexNodes[latexCounter] =
-        `<div data-type="latex-block" data-latex="${inlineBlockLatexMatch[1].trim()}" data-display-mode="true"></div>`;
+        `<span data-type="latex-block" data-latex="${inlineBlockLatexMatch[1].trim()}" data-display-mode="true"></span>`;
       if (DEBUG)
         console.log('提取独占行的行内LaTeX（显示为块级）:', inlineBlockLatexMatch[1].trim());
       latexCounter++;
@@ -118,7 +118,7 @@ export function convertMarkdownToHtml(
     processedLine = processedLine.replace(/\$\$([^$]+)\$\$/g, (_match, formula) => {
       const placeholder = `__LATEX_INLINE_${latexCounter}__`;
       latexNodes[latexCounter] =
-        `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`;
+        `<span data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></span>`;
       if (DEBUG) console.log('提取行内的$$LaTeX:', formula.trim());
       latexCounter++;
       return placeholder;
@@ -128,7 +128,7 @@ export function convertMarkdownToHtml(
     processedLine = processedLine.replace(/\$([^$]+)\$/g, (_match, formula) => {
       const placeholder = `__LATEX_INLINE_${latexCounter}__`;
       latexNodes[latexCounter] =
-        `<div data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></div>`;
+        `<span data-type="latex-block" data-latex="${formula.trim()}" data-display-mode="false"></span>`;
       if (DEBUG) console.log('提取行内的$LaTeX:', formula.trim());
       latexCounter++;
       return placeholder;

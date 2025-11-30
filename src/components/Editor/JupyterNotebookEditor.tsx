@@ -8,12 +8,7 @@ import React, {
   MutableRefObject,
 } from 'react';
 import useStore from '@Store/notebookStore';
-import CodeCell from './Cells/CodeCell';
-import HybridCell from './Cells/HybridCell';
-import MarkdownCell from './Cells/MarkdownCell';
-import ImageCell from './Cells/ImageCell';
-import AIThinkingCell from './Cells/AIThinkingCell';
-import LinkCell from './Cells/LinkCell';
+import { CodeCell, MarkdownCell, HybridCell, ImageCell, AIThinkingCell, LinkCell } from './Cells';
 import DraggableCellList from './DragAndDrop/DraggableCellList';
 import ShortcutsHelp from './KeyboardShortcuts/ShortcutsHelp';
 import { handleFileUpload } from '@Utils/fileUtils';
@@ -521,7 +516,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
               cfg: unknown,
               _onProgress: (e: ProgressEvent) => void,
               signal: AbortSignal
-            ) => FileService.uploadFile(id, f, cfg, signal) as Promise<unknown>,
+            ) => FileService.uploadFile(id, f, cfg as any, _onProgress, signal) as Promise<unknown>,
             getFilePreviewUrl: async (id: string, filename: string) =>
               `${Backend_BASE_URL}/assets/${encodeURIComponent(id)}/${encodeURIComponent(filename)}`,
             getFileContent: async (id: string, filename: string) => {
@@ -541,7 +536,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
           await handleFileUpload({
             notebookId,
             files,
-            FileService: filesApi as any,
+            fileService: filesApi as any,
             uploadConfig,
             setUploading,
             setUploadProgress,

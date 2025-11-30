@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { DISPLAY_MODES } from '@Store/codeStore';
 import useStore from '@Store/notebookStore';
-import { sendCurrentCellExecuteCodeError_should_debug } from '@Store/autoActions';
 import { CellToolbarProps } from '../utils/types';
 import { ExecuteButton } from './ExecuteButton';
 import { DisplayModeButton } from './DisplayModeButton';
@@ -50,7 +49,6 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
   const handleAIDebug = () => {
     console.log('AI Debug clicked!');
     setCurrentCell(cell.id);
-    sendCurrentCellExecuteCodeError_should_debug();
   };
 
   return (

@@ -1,55 +1,20 @@
 // moved to features/function-bar
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { useAIAgentStore } from '@Store/AIAgentStore';
-import { EVENT_TYPES } from '@Store/models/agent';
 import useStore from '@Store/notebookStore';
-import useOperatorStore from '@Store/operatorStore';
-import { createUserAskQuestionAction } from '@Store/actionCreators';
 import { Command, Paperclip, X, FileText } from 'lucide-react';
-import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
-import useCodeStore from '@Store/codeStore';
-import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
-import { FileService } from '@Services/notebook/FileService';
-import { ActionCommandHandler } from '@Services/stream/commands';
 import { CommandHintComponent } from './CommandHint';
-
-// File upload types
-interface UploadFile {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-  file: File;
-}
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_EXTENSIONS = [
-  '.csv',
-  '.xlsx',
-  '.xls',
-  '.jpg',
-  '.png',
-  '.jpeg',
-  '.gif',
-  '.pdf',
-  '.doc',
-  '.docx',
-  '.txt',
-  '.md',
-];
+import { aiTerminalService } from '@Services/ai-terminal/AITerminalService';
+import { UploadFile } from '@Services/ai-terminal/types';
 
 const CommandInput: React.FC = () => {
   const {
     showCommandInput,
-    setShowCommandInput,
-    addAction,
+
     setIsLoading,
     setActiveView,
     actions,
     qaList,
-    addQA,
   } = useAIAgentStore();
 
   const {
@@ -174,73 +139,22 @@ const CommandInput: React.FC = () => {
   }, [input, adjustTextareaHeight]);
 
   // File upload handlers
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selectedFiles = Array.from(e.target.files ?? []);
-      if (!selectedFiles.length) return;
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files ?? []);
+    if (!selectedFiles.length) return;
 
-      setIsUploading(true);
-      try {
-        const validFiles: UploadFile[] = [];
-
-        for (const file of selectedFiles) {
-          // Validate file extension
-          const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-          if (!ALLOWED_EXTENSIONS.includes(ext)) {
-            alert(`File type not allowed: ${file.name}`);
-            continue;
-          }
-
-          // Validate file size
-          if (file.size > MAX_FILE_SIZE) {
-            alert(`File too large (max 10MB): ${file.name}`);
-            continue;
-          }
-
-          // Ensure notebookId exists
-          let currentNotebookId = notebookId;
-          if (!currentNotebookId) {
-            currentNotebookId = await NotebookLifecycleService.initializeNotebook();
-            useStore.getState().setNotebookId(currentNotebookId);
-            useCodeStore.getState().setKernelReady(true);
-          }
-
-          // Initialize kernel
-          await useCodeStore.getState().initializeKernel();
-
-          // Upload file
-          const uploadConfig = {
-            mode: 'unrestricted',
-            allowedTypes: ALLOWED_EXTENSIONS,
-            maxFileSize: MAX_FILE_SIZE,
-            targetDir: 'assets',
-          };
-
-          const result = await FileService.uploadFile(currentNotebookId!, [file], uploadConfig);
-
-          if (result && (result as any).status === 'ok') {
-            validFiles.push({
-              id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-              name: file.name,
-              size: file.size,
-              type: file.type,
-              url: URL.createObjectURL(file),
-              file,
-            });
-          }
-        }
-
-        setFiles((prev) => [...prev, ...validFiles]);
-      } catch (err: any) {
-        console.error('File upload error:', err);
-        alert('Upload failed: ' + err.message);
-      } finally {
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    },
-    [notebookId]
-  );
+    setIsUploading(true);
+    try {
+      const validFiles = await aiTerminalService.uploadFiles(selectedFiles);
+      setFiles((prev) => [...prev, ...validFiles]);
+    } catch (err: any) {
+      console.error('File upload error:', err);
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, []);
 
   const handleRemoveFile = useCallback((fileId: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== fileId));
@@ -277,178 +191,35 @@ const CommandInput: React.FC = () => {
   );
 
   const handleSubmit = useCallback(
-    async (command) => {
+    async (command: string) => {
       try {
         setIsLoading(true);
-        const timestamp = new Date().toLocaleTimeString();
 
-        if (command.startsWith('/')) {
-          // Try to handle as action command first
-          const showToast = async (options: {
-            message: string;
-            type: 'success' | 'error' | 'info';
-          }) => {
-            // Use the built-in toast system if available, otherwise console log
-            console.log(`[Toast ${options.type}]`, options.message);
-            // You can integrate with your actual toast system here
-            // For now, we'll just log to console
-          };
-
-          const isActionCommand = await ActionCommandHandler.handleCommand(command, showToast);
-
-          if (isActionCommand) {
-            // Command was handled by action system
-            console.log('[AITerminal] Command handled by action system:', command);
-            setIsLoading(false);
-            return;
-          }
-
-          // Not an action command, proceed with original command handling
-          setActiveView('script');
-          const commandId = `action-${Date.now()}`;
-          const actionData = {
-            id: commandId,
-            type: EVENT_TYPES.USER_NEW_INSTRUCTION,
-            timestamp,
-            content: command,
-            result: '',
-            relatedQAIds: [],
-            cellId: currentCellId,
-            viewMode,
-            onProcess: false,
-            attachedFiles: files,
-          };
-          addAction(actionData);
-
-          // 准备Command Agent记忆上下文
-          const commandMemoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-            notebookId,
-            'command' as AgentType,
-            {
-              current_cell_id: currentCellId ?? undefined,
-              related_cells: getCurrentViewCells(),
-              related_actions: actionsToShow.map((action) => action.id),
-              command_id: commandId,
-              command_content: command,
-            }
-          );
-
-          // 更新用户意图（从命令推断）
-          AgentMemoryService.updateUserIntent(
-            notebookId,
-            'command' as AgentType,
-            [command], // 用户明确表达的目标
-            [], // 从命令推断的目标 - removed per user edit
-            command, // 当前焦点
-            [] // 当前阻塞
-          );
-
-          // 记录命令交互启动
-          AgentMemoryService.recordOperationInteraction(
-            notebookId,
-            'command' as AgentType,
-            'command_started',
-            true,
-            {
-              command_id: commandId,
-              command: command,
-              start_time: new Date().toISOString(),
-              related_context: {
-                current_cell_id: currentCellId,
-                related_actions_count: actionsToShow.length,
-                view_mode: viewMode,
-              },
-            }
-          );
-
-          useOperatorStore.getState().sendOperation(notebookId, {
-            type: 'user_command',
-            payload: {
-              current_view_mode: viewMode,
-              current_phase_id: currentPhaseId,
-              current_step_index: currentStepIndex,
-              content: command,
-              commandId: commandId,
-              files,
-              // 添加记忆上下文
-              ...commandMemoryContext,
-            },
-          });
-        } else {
-          // Only open sidebar if it is currently closed
-          if (isRightSidebarCollapsed) {
-            setIsRightSidebarCollapsed(false);
-          }
-          setActiveView('qa');
-          const qaId = `qa-${uuidv4()}`;
-          const qaData = {
-            id: qaId,
-            type: 'user',
-            timestamp,
-            content: command,
-            resolved: false,
-            relatedActionId: null,
-            cellId: currentCellId,
-            viewMode,
-            onProcess: true,
-            attachedFiles: files,
-          };
-          addQA(qaData);
-          const action = createUserAskQuestionAction(command, qaId, currentCellId);
-          useAIAgentStore.getState().addAction(action);
-
-          // 准备Agent记忆上下文
-          console.log('AITerminal: 准备记忆上下文', { notebookId, command });
-          const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-            notebookId,
-            'general' as AgentType,
-            {
-              current_cell_id: currentCellId ?? undefined,
-              related_cells: getCurrentViewCells(),
-              related_qa_ids: qasToShow.map((qa) => qa.id),
-              current_qa_id: qaId,
-              question_content: command,
-            }
-          );
-          console.log('AITerminal: 记忆上下文准备完成', memoryContext);
-
-          // 记录QA交互启动
-          AgentMemoryService.recordOperationInteraction(
-            notebookId,
-            'general' as AgentType,
-            'qa_started',
-            true,
-            {
-              qa_id: qaId,
-              question: command,
-              start_time: new Date().toISOString(),
-              related_context: {
-                current_cell_id: currentCellId,
-                related_qa_count: qasToShow.length,
-                view_mode: viewMode,
-              },
-            }
-          );
-
-          const finalPayload = {
-            type: 'user_question',
-            payload: {
-              content: command,
-              QId: [qaId],
-              current_view_mode: viewMode,
-              current_phase_id: currentPhaseId,
-              current_step_index: currentStepIndex,
-              related_qas: qasToShow,
-              related_actions: actionsToShow,
-              related_cells: getCurrentViewCells(),
-              files,
-              // 添加记忆上下文
-              ...memoryContext,
-            },
-          };
-          console.log('AITerminal: 发送最终payload', finalPayload);
-          useOperatorStore.getState().sendOperation(notebookId, finalPayload);
+        // Only open sidebar if it is currently closed and not a command
+        if (!command.startsWith('/') && isRightSidebarCollapsed) {
+          setIsRightSidebarCollapsed(false);
         }
+
+        await aiTerminalService.processCommand(
+          command,
+          files,
+          {
+            notebookId: notebookId!,
+            currentCellId,
+            viewMode: viewMode!,
+            currentPhaseId,
+            currentStepIndex,
+            actionsToShow,
+            qasToShow,
+            currentViewCells: getCurrentViewCells(),
+          },
+          {
+            showToast: async (options) => {
+              console.log(`[Toast ${options.type}]`, options.message);
+            },
+            setActiveView: (view) => setActiveView(view as any),
+          }
+        );
 
         // Clear files after successful submit
         setFiles([]);
@@ -464,17 +235,17 @@ const CommandInput: React.FC = () => {
       currentPhaseId,
       currentStepIndex,
       currentCellId,
-      setShowCommandInput,
       setIsLoading,
       setActiveView,
-      addAction,
-      addQA,
-      qasToShow,
       actionsToShow,
+      qasToShow,
       getCurrentViewCells,
       files,
+      isRightSidebarCollapsed,
+      setIsRightSidebarCollapsed,
     ]
   );
+
   const handleKeyDown = useCallback(
     (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -622,7 +393,7 @@ const CommandInput: React.FC = () => {
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept={ALLOWED_EXTENSIONS.join(',')}
+              accept={aiTerminalService.ALLOWED_EXTENSIONS.join(',')}
               multiple
             />
           </div>

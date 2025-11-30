@@ -21,8 +21,8 @@ import { v4 as uuidv4 } from 'uuid';
 // External dependencies
 import useNotebookStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
-import { sendCurrentCellExecuteCodeError_should_debug } from '@Store/autoActions';
 import { useAIPlanningContextStore } from './aiPlanningContext';
+import { WorkflowState } from '../observation/WorkflowState';
 
 // ==============================================
 // Types
@@ -381,15 +381,12 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
           useAIPlanningContextStore.getState().addEffect(effectContent);
 
           // Update WorkflowStateMachine (New Architecture)
-          // NOTE: Ideally this should be handled by ExecCodeAction using WorkflowState
-          // But for now we keep the direct JSON manipulation as fallback or legacy support
-          // if ExecCodeAction doesn't handle it.
-          // However, since we are moving this to ExecCodeAction, we can remove this block
-          // or keep it as is (direct JSON manipulation) until ExecCodeAction is updated.
-          // Let's revert to direct JSON manipulation to match "previous state" before my last edit.
+          // Use WorkflowState class to ensure safe state updates
+          const workflowState = new WorkflowState(stateJSON);
+          const effects = workflowState.state.effects;
 
           if (effectType === 'error') {
-            stateJSON.state.effects.current.push({
+            effects.addCurrentEffect({
               type: 'error',
               error: {
                 name: 'ExecutionError',
@@ -399,22 +396,23 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
               cell_ref: codecellId,
             });
           } else if (effectType === 'image_url') {
-            stateJSON.state.effects.current.push({
+            effects.addCurrentEffect({
               type: 'image_url',
               image_url: effectContent,
               cell_ref: codecellId,
             });
           } else {
-            stateJSON.state.effects.current.push({
+            effects.addCurrentEffect({
               type: 'text',
               text: effectContent,
               cell_ref: codecellId,
             });
           }
+
+          // Sync state back to store using toJSON() to ensure clean state
+          stateMachine.setState(workflowState.toJSON());
         });
 
-        // Sync state back to store
-        stateMachine.setState(stateJSON);
         console.log(
           `[ScriptStore] Updated state.effects.current with ${outputs.length} outputs from ${codecellId} (success: ${result?.success})`
         );
@@ -423,7 +421,6 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       if (autoDebug && !result?.success) {
         setTimeout(() => {
           useNotebookStore.getState().setCurrentCell(codecellId);
-          sendCurrentCellExecuteCodeError_should_debug();
         }, 1000);
         return result.error;
       }

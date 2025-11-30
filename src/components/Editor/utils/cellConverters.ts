@@ -191,6 +191,12 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
     case 'text':
       return node.text || '';
 
+    case 'latexBlock': {
+      const latex = node.attrs?.latex || '';
+      const displayMode = node.attrs?.displayMode;
+      return displayMode ? `$$${latex}$$` : `$${latex}$`;
+    }
+
     default: {
       // 递归子节点
       if (node.content && Array.isArray(node.content)) {

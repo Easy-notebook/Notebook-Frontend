@@ -13,15 +13,17 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableRow from '@tiptap/extension-table-row';
 import Heading from '@tiptap/extension-heading';
 import { Extension as CoreExtension, InputRule } from '@tiptap/core';
-import { CodeBlockExtension } from '@Editor/extensions/CodeBlockExtension';
-import { ThinkingCellExtension } from '@Editor/extensions/ThinkingCellExtension';
-import SimpleTableExtension from '@Editor/extensions/TableExtension';
-import ImageExtension from '@Editor/extensions/ImageExtension';
-import LaTeXExtension from '@Editor/extensions/LaTeXExtension';
-import { RawCellExtension } from '@Editor/extensions/RawCellExtension';
-import { UploadDropExtension } from '@Editor/extensions/UploadDropExtension';
-import { FileAttachmentExtension } from '@Editor/extensions/FileAttachmentExtension';
-import { TitleExtension } from '@Editor/extensions/TitleExtension';
+import {
+  CodeBlockExtension,
+  ThinkingCellExtension,
+  TableExtension as SimpleTableExtension,
+  ImageExtension,
+  LaTeXExtension,
+  RawCellExtension,
+  UploadDropExtension,
+  FileAttachmentExtension,
+  TitleExtension,
+} from '@Editor/extensions';
 
 /**
  * WikiLink Input Rule Extension

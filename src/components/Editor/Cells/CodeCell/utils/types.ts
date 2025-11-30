@@ -48,6 +48,7 @@ export interface ReactCodeMirrorRef {
 
 export interface CodeEditorProps {
   cell: Cell;
+  content?: string;
   isExecuting: boolean;
   isCurrentCell: boolean;
   dslcMode: boolean;

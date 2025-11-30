@@ -11,6 +11,7 @@ import { EXPAND_THRESHOLD } from '../utils';
  */
 export const CodeEditor: React.FC<CodeEditorProps> = ({
   cell,
+  content,
   isExecuting,
   isCurrentCell,
   dslcMode,
@@ -78,7 +79,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           ref={codeBlockWrapperRef}
         >
           <CodeMirror
-            value={typeof cell.content === 'string' ? cell.content : String(cell.content || '')}
+            value={
+              content !== undefined
+                ? content
+                : typeof cell.content === 'string'
+                  ? cell.content
+                  : String(cell.content || '')
+            }
             height={isInDetachedView ? '100%' : 'auto'}
             extensions={[python()]}
             onChange={onChange}
