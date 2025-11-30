@@ -21,10 +21,11 @@
  */
 
 // Import all planning actions to trigger registration
-export { PlanStageAction } from './PlanStageAction';
-export { CompleteWorkflowPlanningAction } from './CompleteWorkflowPlanningAction';
-export { PlanStepAction } from './PlanStepAction';
-export { UpdateStageContextAction } from './UpdateStageContextAction';
-export { CompleteStagePlanningAction } from './CompleteStagePlanningAction';
-export { DelegateTaskAction } from './DelegateTaskAction';
-export { CompleteStepPlanningAction } from './CompleteStepPlanningAction';
+export * from './PlanStageAction';
+export * from './CompleteWorkflowPlanningAction';
+export * from './PlanStepAction';
+export * from './UpdateStageContextAction';
+export * from './CompleteStagePlanningAction';
+export * from './DelegateTaskAction';
+export * from './CompleteStepPlanningAction';
+export * from './CompleteBehaviorAction';

@@ -12,9 +12,10 @@ import {
 
 // Import components
 import { CellToolbar, CodeEditor, OutputDisplay, CompactModeView } from './CodeCell/components';
+import useStore from '@Store/notebookStore';
 
 // Import types
-import { CodeCellProps } from './CodeCell/utils/types';
+import { CodeCellProps, ReactCodeMirrorRef } from './CodeCell/utils/types';
 
 /**
  * Main CodeCell component - refactored for maintainability
@@ -32,12 +33,13 @@ const CodeCell: React.FC<CodeCellProps> = ({
   isDemoMode = false,
 }) => {
   // ========== Refs ==========
-  const editorRef = useRef<unknown>(null);
+  const editorRef = useRef<ReactCodeMirrorRef>(null);
   const codeContainerRef = useRef<HTMLDivElement | null>(null);
 
   // ========== State ==========
   const [showThinking, setShowThinking] = useState(true);
   const [showToolbar, setShowToolbar] = useState(false);
+  const showCellIds = useStore((state) => state.showCellIds);
 
   // ========== Custom Hooks ==========
 
@@ -169,6 +171,20 @@ const CodeCell: React.FC<CodeCellProps> = ({
                     ${isInDetachedView ? '' : 'hover:shadow-md'}
                 `}
       >
+        {/* Cell ID Overlay */}
+        {showCellIds && (
+          <div
+            className="absolute top-0 right-0 z-50 px-2 py-1 text-xs font-mono text-gray-500 bg-gray-100 dark:bg-gray-800 dark:text-gray-400 rounded-bl-lg opacity-80 cursor-pointer hover:opacity-100 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(cell.id);
+            }}
+            title="Click to copy Cell ID"
+          >
+            {cell.id}
+          </div>
+        )}
+
         {/* Toolbar */}
         {!shouldHideToolbar && (
           <CellToolbar

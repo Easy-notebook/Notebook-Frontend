@@ -266,6 +266,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
                     content: cell.content,
                     description: cell.description ?? undefined,
                     outputs: normalizeOutputsForRenderer(cell.outputs),
+                    metadata: cell.metadata,
                   } as any
                 }
               />

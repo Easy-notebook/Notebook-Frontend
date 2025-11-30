@@ -341,80 +341,82 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
 
       const result = await executeCell(codecellId);
 
-      if (result?.success && result.outputs) {
-        // Add outputs to effect context
-        const outputs: any = result.outputs;
-        const stateMachine = (
-          await import('./workflowStateMachine')
-        ).useWorkflowStateMachine.getState();
-        const stateJSON = stateMachine.stateJSON;
+      // Always update effects with execution results (success or failure)
+      // This ensures error outputs are available for debugging/reflecting
+      const stateMachine = (
+        await import('./workflowStateMachine')
+      ).useWorkflowStateMachine.getState();
+      const stateJSON = stateMachine.stateJSON;
 
-        // Ensure effects.current exists
-        if (!stateJSON.state.effects) {
-          stateJSON.state.effects = { current: [], history: [] };
-        }
-        if (!stateJSON.state.effects.current) {
-          stateJSON.state.effects.current = [];
-        }
+      // Ensure effects.current exists
+      if (!stateJSON.state.effects) {
+        stateJSON.state.effects = { current: [], history: [] };
+      }
+      if (!stateJSON.state.effects.current) {
+        stateJSON.state.effects.current = [];
+      }
 
-        if (Array.isArray(outputs)) {
-          outputs.forEach((item: any) => {
-            // Map ExecutionOutput to Effect
-            const outputType = item.type || 'text';
-            let effectType: 'text' | 'image_url' | 'error' = 'text';
-            let effectContent = item.content || item.text || item.toString();
+      // Get outputs from result or from notebookStore (for error cases)
+      let outputs: any[] = result?.outputs || [];
+      if (!outputs.length && !result?.success) {
+        // If no outputs in result but failed, get from notebookStore
+        const cell = useNotebookStore.getState().cells.find((c) => c.id === codecellId);
+        outputs = cell?.outputs || [];
+      }
 
-            if (outputType === 'image') {
-              effectType = 'image_url';
-              // If content is base64, we might need to handle it, but for now assume it's a URL or base64 string
-            } else if (outputType === 'error') {
-              effectType = 'error';
-            }
+      if (outputs.length > 0) {
+        outputs.forEach((item: any) => {
+          // Map ExecutionOutput to Effect
+          const outputType = item.type || 'text';
+          let effectType: 'text' | 'image_url' | 'error' = 'text';
+          let effectContent = item.content || item.text || item.toString();
 
-            // Update AIPlanningContext (Legacy)
-            useAIPlanningContextStore.getState().addEffect(effectContent);
+          if (outputType === 'image') {
+            effectType = 'image_url';
+          } else if (outputType === 'error') {
+            effectType = 'error';
+          }
 
-            // Update WorkflowStateMachine (New Architecture)
-            if (effectType === 'error') {
-              stateJSON.state.effects.current.push({
-                type: 'error',
-                error: {
-                  name: 'ExecutionError',
-                  message: effectContent,
-                  traceback: [],
-                },
-                cell_ref: codecellId,
-              });
-            } else if (effectType === 'image_url') {
-              stateJSON.state.effects.current.push({
-                type: 'image_url',
-                image_url: effectContent,
-                cell_ref: codecellId,
-              });
-            } else {
-              stateJSON.state.effects.current.push({
-                type: 'text',
-                text: effectContent,
-                cell_ref: codecellId,
-              });
-            }
-          });
-        } else {
-          // Handle single output (legacy/fallback)
-          const effectText = outputs.content || outputs.text || outputs.toString();
-          useAIPlanningContextStore.getState().addEffect(effectText);
+          // Update AIPlanningContext (Legacy)
+          useAIPlanningContextStore.getState().addEffect(effectContent);
 
-          stateJSON.state.effects.current.push({
-            type: 'text',
-            text: effectText,
-            cell_ref: codecellId,
-          });
-        }
+          // Update WorkflowStateMachine (New Architecture)
+          // NOTE: Ideally this should be handled by ExecCodeAction using WorkflowState
+          // But for now we keep the direct JSON manipulation as fallback or legacy support
+          // if ExecCodeAction doesn't handle it.
+          // However, since we are moving this to ExecCodeAction, we can remove this block
+          // or keep it as is (direct JSON manipulation) until ExecCodeAction is updated.
+          // Let's revert to direct JSON manipulation to match "previous state" before my last edit.
+
+          if (effectType === 'error') {
+            stateJSON.state.effects.current.push({
+              type: 'error',
+              error: {
+                name: 'ExecutionError',
+                message: effectContent,
+                traceback: [],
+              },
+              cell_ref: codecellId,
+            });
+          } else if (effectType === 'image_url') {
+            stateJSON.state.effects.current.push({
+              type: 'image_url',
+              image_url: effectContent,
+              cell_ref: codecellId,
+            });
+          } else {
+            stateJSON.state.effects.current.push({
+              type: 'text',
+              text: effectContent,
+              cell_ref: codecellId,
+            });
+          }
+        });
 
         // Sync state back to store
         stateMachine.setState(stateJSON);
         console.log(
-          `[ScriptStore] Updated state.effects.current with execution results from ${codecellId}`
+          `[ScriptStore] Updated state.effects.current with ${outputs.length} outputs from ${codecellId} (success: ${result?.success})`
         );
       }
 

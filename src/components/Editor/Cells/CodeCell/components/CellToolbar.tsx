@@ -182,31 +182,45 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
 
       {/* Right side: AI Debug / Tooltip */}
       <div className="flex items-center gap-2 relative">
-        {cell.description && (
-          <button className="peer p-2 text-black rounded-md hover:bg-theme-100">
-            <InfoIcon className="w-4 h-4" />
-          </button>
+        {(cell.description || cell.metadata?.debug?.bugAnalysis) && (
+          <>
+            <button className="peer p-2 text-black rounded-md hover:bg-theme-100">
+              <InfoIcon className="w-4 h-4" />
+            </button>
+            <div className="absolute top-full right-0 px-5 py-3 rounded-lg opacity-0 peer-hover:opacity-100 transition-opacity w-[320px] break-words invisible peer-hover:visible z-50">
+              <div className="absolute inset-0 rounded-lg shadow-lg">
+                <div className="absolute inset-0 bg-gradient-to-r from-theme-100/50 via-purple-100/50 to-pink-100/50 animate-gradient" />
+              </div>
+              <div className="relative z-10">
+                <ReactMarkdown className="text-[15px] leading-relaxed tracking-wide text-gray-800">
+                  {(
+                    cell.metadata?.debug?.bugAnalysis ||
+                    cell.description ||
+                    'no ai description'
+                  ).replace(/(?<!\n)\n(?!\n)/g, '  \n')}
+                </ReactMarkdown>
+                {cell.metadata?.debug?.debugStartTime && cell.metadata?.debug?.bugAnalysis && (
+                  <div className="mt-2 pt-2 border-t border-gray-200/50 text-xs text-gray-500">
+                    Analysis time: {new Date(cell.metadata.debug.debugStartTime).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
         )}
-        <div className="absolute top-full right-0 px-5 py-3 rounded-lg opacity-0 peer-hover:opacity-100 transition-opacity w-[320px] break-words invisible peer-hover:visible z-50">
-          <div className="absolute inset-0 rounded-lg shadow-lg">
-            <div className="absolute inset-0 bg-gradient-to-r from-theme-100/50 via-purple-100/50 to-pink-100/50 animate-gradient" />
-          </div>
-          <div className="relative z-10">
-            <ReactMarkdown className="text-[15px] leading-relaxed tracking-wide text-gray-800">
-              {(cell.description || 'no ai description').replace(/(?<!\n)\n(?!\n)/g, '  \n')}
-            </ReactMarkdown>
-          </div>
-        </div>
+
         {showAIdebug && (
-          <button
-            onClick={handleAIDebug}
-            className="px-2 py-1 bg-theme-600 text-white rounded-md relative transition-all duration-300 ease-in-out hover:bg-theme-700 hover:ring-2 hover:ring-theme-300 hover:ring-offset-2 focus:outline-none focus:ring-2 focus:ring-theme-400 shadow-lg"
-            title="AI Debug"
-          >
-            <span className="flex items-center gap-1">
-              <Sparkles size={14} /> Debug
-            </span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleAIDebug}
+              className="px-2 py-1 bg-theme-600 text-white rounded-md relative transition-all duration-300 ease-in-out hover:bg-theme-700 hover:ring-2 hover:ring-theme-300 hover:ring-offset-2 focus:outline-none focus:ring-2 focus:ring-theme-400 shadow-lg"
+              title="AI Debug"
+            >
+              <span className="flex items-center gap-1">
+                <Sparkles size={14} /> Debug
+              </span>
+            </button>
+          </div>
         )}
       </div>
     </div>

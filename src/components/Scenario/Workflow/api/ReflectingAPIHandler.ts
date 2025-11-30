@@ -20,10 +20,33 @@ export class ReflectingAPIHandler extends BaseAPIHandler {
     // Update state with latest notebook data
     state.state.notebook.update(latestNotebook);
 
+    // Log detailed notebook and effects info for debugging
     console.log('[ReflectingAPI] Injected latest notebook data:', {
       notebook_id: latestNotebook.notebook_id,
       cell_count: latestNotebook.cell_count,
       title: latestNotebook.title,
+    });
+
+    // Log cells with outputs for debugging
+    if (latestNotebook.cells) {
+      const codeCells = latestNotebook.cells.filter((c: any) => c.type === 'code');
+      console.log(
+        '[ReflectingAPI] Code cells with outputs:',
+        codeCells.map((c: any) => ({
+          id: c.id,
+          content_preview: c.content?.substring(0, 50),
+          outputs_count: c.outputs?.length || 0,
+          outputs: c.outputs,
+        }))
+      );
+    }
+
+    // Log effects
+    const effects = state.state.effects;
+    console.log('[ReflectingAPI] Current effects:', {
+      current_count: effects?.current?.length || 0,
+      history_count: effects?.history?.length || 0,
+      current: effects?.current,
     });
 
     const stream = kwargs?.stream ?? true;

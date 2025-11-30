@@ -13,6 +13,7 @@ export * from './SetCurrentCellAction';
 export * from './ClearOutputsAction';
 export * from './AddContentToCellAction';
 export * from './AddContentToDescriptionAction';
+export * from './ConvertToCodeCellAction';
 
 // Auto-import to trigger registration
 import './AddCellAction';
@@ -26,3 +27,4 @@ import './SetCurrentCellAction';
 import './ClearOutputsAction';
 import './AddContentToCellAction';
 import './AddContentToDescriptionAction';
+import './ConvertToCodeCellAction';

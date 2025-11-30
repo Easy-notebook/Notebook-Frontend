@@ -100,6 +100,11 @@ const CommandInput: React.FC = () => {
       const isCompleteMode = viewMode === 'complete' || viewMode === 'create';
       const isOtherMode = !isStepMode && !isCompleteMode; // dslc, etc.
 
+      // Always show system events (commands) for the current view mode
+      if (action.type === 'system_event' && action.viewMode === viewMode) {
+        return true;
+      }
+
       // Step mode: only show actions for current step
       if (
         isStepMode &&

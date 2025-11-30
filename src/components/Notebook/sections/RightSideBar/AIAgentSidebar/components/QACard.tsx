@@ -1,6 +1,7 @@
 import React, { memo, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QAItem } from '@Store/models/agent';
+import { Zap } from 'lucide-react';
 import SpotlightCard from '@/components/UI/card/SpotlightCard';
 import ExpandableText from '@RightSidebar/components/ExpandableText';
 import ToolCallIndicator from '@RightSidebar/components/ToolCallIndicator';
@@ -61,7 +62,14 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
             </div>
           </div>
           <div className="text-left break-words overflow-wrap-anywhere">
-            <ExpandableText text={qa.content} maxLines={5} />
+            {qa.content?.trim().startsWith('/') ? (
+              <div className="flex items-center gap-2 text-theme-600 dark:text-theme-400 font-mono">
+                <Zap className="w-4 h-4 shrink-0" />
+                <span>{qa.content}</span>
+              </div>
+            ) : (
+              <ExpandableText text={qa.content} maxLines={5} />
+            )}
           </div>
         </SpotlightCard>
       </div>

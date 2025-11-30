@@ -16,9 +16,21 @@ import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
 import useNotebookStore from '@Store/notebookStore';
 import type { DebugMetadata } from './BugAnalysisAction';
+import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
+import { WorkflowState } from '../../observation/WorkflowState';
+import { ClearEffectCurrentAction } from './ClearEffectCurrent';
 
 export class ExecNewVersionAction extends ActionBase {
   async execute(step: ExecutionStep): Promise<any> {
+    // Clear current effects before execution
+    const stateMachine = useWorkflowStateMachine.getState();
+    const stateJSON = stateMachine.stateJSON;
+    const workflowState = new WorkflowState(stateJSON);
+
+    ClearEffectCurrentAction.processState(workflowState);
+
+    stateMachine.setState(workflowState.toJSON());
+
     const notebookStore = useNotebookStore.getState();
     const cells = notebookStore.cells;
 

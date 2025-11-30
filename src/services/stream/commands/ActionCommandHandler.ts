@@ -7,6 +7,7 @@ import { ActionCommandParser } from './ActionCommandParser';
 import type { StreamActionContext } from '../types';
 import useStore from '@Store/notebookStore';
 import { getAllStreamActionTypes } from '../actions/base';
+import { useAIAgentStore } from '@Store/AIAgentStore';
 
 export class ActionCommandHandler {
   /**
@@ -33,10 +34,55 @@ export class ActionCommandHandler {
       currentStepIndex: state.currentStepIndex,
     };
 
+    // Log command to sidebar
+    const aiAgentStore = useAIAgentStore.getState();
+
+    // Open sidebar and switch to QA view
+    useStore.getState().setIsRightSidebarCollapsed(false);
+    aiAgentStore.setActiveView('qa');
+
+    // Add User Question (Command)
+    aiAgentStore.addQA({
+      type: 'user',
+      content: command,
+      viewMode: state.viewMode,
+      cellId: state.currentCellId,
+      resolved: true,
+    });
+
+    // Also log to history (optional, but good for tracking)
+    aiAgentStore.addAction({
+      type: 'system_event',
+      content: `Command: ${command}`,
+      result: '',
+      relatedQAIds: [],
+      cellId: state.currentCellId,
+      viewMode: state.viewMode,
+      onProcess: true,
+    });
+    const actionId = aiAgentStore.actions[0]?.id;
+
     // Execute the action command
     const result = await ActionCommandParser.executeActionCommand(command, context);
 
-    // Show result to user
+    // Update Action History
+    if (actionId) {
+      aiAgentStore.updateAction(actionId, {
+        onProcess: false,
+        result: result.success ? result.message : `Error: ${result.message}\n${result.error || ''}`,
+      });
+    }
+
+    // Add Assistant Answer (Result)
+    aiAgentStore.addQA({
+      type: 'assistant',
+      content: result.success ? result.message : `Error: ${result.message}\n${result.error || ''}`,
+      viewMode: state.viewMode,
+      cellId: state.currentCellId,
+      resolved: true,
+    });
+
+    // Show result to user via toast as well
     if (result.success) {
       // For help/list commands, show info toast
       const isInfoCommand =
@@ -45,13 +91,13 @@ export class ActionCommandHandler {
       await showToast({
         message: result.message,
         type: isInfoCommand ? 'info' : 'success',
-      });
+      } as any);
       console.log('[ActionCommand] Success:', result);
     } else {
       await showToast({
         message: `${result.message}${result.error ? `\n${result.error}` : ''}`,
         type: 'error',
-      });
+      } as any);
       console.error('[ActionCommand] Error:', result);
     }
 

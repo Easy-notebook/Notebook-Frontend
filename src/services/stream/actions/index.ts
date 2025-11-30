@@ -11,7 +11,8 @@
  *     ├── cell/                            # Cell management actions
  *     │   ├── AddCellAction.ts
  *     │   ├── UpdateCellAction.ts
- *     │   └── UpdateCellMetadataAction.ts
+ *     │   └──  update_view_mode: Actions.UpdateViewModeAction,
+  toggle_cell_ids: Actions.ToggleCellIdVisibilityAction,.ts
  *     ├── qa/                              # QA streaming actions
  *     │   ├── InitStreamingAnswerAction.ts
  *     │   ├── AddContentToAnswerAction.ts
@@ -78,6 +79,7 @@ import * as agent from './agent';
 import * as workflow from './workflow';
 import * as link from './link';
 import * as misc from './misc';
+import * as reflecting from './reflecting';
 
 // Export all action classes for direct access if needed
 export {
@@ -95,6 +97,7 @@ export {
   workflow,
   link,
   misc,
+  reflecting,
 };
 
 // Log all registered actions

@@ -65,6 +65,7 @@ export interface NotebookStoreState {
   allowedTypes: string[];
   maxFiles: number | null;
   isRightSidebarCollapsed: boolean;
+  showCellIds: boolean;
   editingCellId: string | null;
 
   whatPurposeOfThisNotebook: string | null;
@@ -100,6 +101,7 @@ export interface NotebookStoreActions {
   setAllowedTypes: (allowedTypes: string[]) => void;
   setMaxFiles: (maxFiles: number | null) => void;
   setIsRightSidebarCollapsed: (isRightSidebarCollapsed: boolean) => void;
+  setShowCellIds: (show: boolean) => void;
   setNotebookId: (id: string | null, options?: { preserveContent?: boolean }) => Promise<void>;
   setNotebookTitle: (title: string) => void;
   setCurrentPhase: (phaseId: string | null) => void;
@@ -271,6 +273,7 @@ const useStore = create(
       allowedTypes: [],
       maxFiles: null,
       isRightSidebarCollapsed: true,
+      showCellIds: false,
       editingCellId: null,
 
       whatPurposeOfThisNotebook: null,
@@ -324,6 +327,7 @@ const useStore = create(
             }
           })
         ),
+      setShowCellIds: (show: boolean) => set({ showCellIds: show }),
       setNotebookId: async (id: string | null, options?: { preserveContent?: boolean }) => {
         const state = get();
         const autoSaveService = AutoSaveService.getInstance();

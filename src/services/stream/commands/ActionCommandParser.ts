@@ -225,6 +225,63 @@ export class ActionCommandParser {
         if (args[0]) payload.error = args[0];
         break;
 
+      case 'bug_analysis':
+        // Support both positional arg and --flags for cellId
+        if (args[0]) payload.cellId = args[0];
+        if (flags.flags) payload.cellId = flags.flags;
+
+        // Handle content
+        if (flags.content) {
+          payload.content = flags.content;
+        } else if (flags.flags) {
+          // If flags provided, args[0] is content
+          payload.content = args[0] || 'No analysis content provided.';
+        } else {
+          // Positional: <id> <content>
+          if (args.length >= 2) {
+            payload.cellId = args[0];
+            payload.content = args[1];
+          } else {
+            payload.content = 'No analysis content provided.';
+          }
+        }
+        break;
+
+      case 'update_code':
+        // Support both positional arg and --flags for cellId
+        if (args[0]) payload.cellId = args[0];
+        if (flags.flags) payload.cellId = flags.flags;
+        if (flags.cellId) payload.cellId = flags.cellId;
+
+        // Handle content
+        if (flags.content) {
+          payload.content = flags.content;
+        } else if (flags.flags || flags.cellId) {
+          // If flags provided for ID, args[0] is content
+          payload.content = args[0];
+        } else {
+          // Positional: <id> <content>
+          if (args.length >= 2) {
+            payload.cellId = args[0];
+            payload.content = args[1];
+          } else {
+            // Fallback: maybe args[0] is content if ID is missing?
+            // But usually update_code requires an ID.
+            // Let's assume if only 1 arg, it might be content if ID is implicit (current cell),
+            // but UpdateCodeAction logic handles finding last code cell if ID is missing.
+            // So if 1 arg, treat as content.
+            payload.content = args[0];
+          }
+        }
+        break;
+
+      case 'exec_new_version':
+        // Support both positional arg and --flags for cellId
+        if (args[0]) payload.cellId = args[0];
+        if (flags.flags) payload.cellId = flags.flags;
+        if (flags.cellId) payload.cellId = flags.cellId;
+        break;
+
       default:
         // For unknown actions, use first arg as content if no flags provided
         if (args.length > 0 && Object.keys(flags).length === 0) {
@@ -484,8 +541,11 @@ Examples:
     let { actionType } = parsed;
     const normalizedType = this.normalizeActionName(actionType);
 
+    console.log('[ActionCommandParser] Executing:', { command, parsed, normalizedType });
+
     // Handle --help flag
     if (parsed.flags.help) {
+      console.log('[ActionCommandParser] Help flag detected:', parsed);
       return {
         success: true,
         message: this.getActionHelp(normalizedType),

@@ -36,6 +36,60 @@ export class ExecCodeAction extends ActionBase {
         step.auto_debug ?? false
       );
 
+      // Update Workflow State with Effects
+      // We do this here instead of in scriptStore to keep workflow logic separate
+      if (result) {
+        const { useWorkflowStateMachine } = await import('../../store/workflowStateMachine');
+        const { WorkflowState } = await import('../../observation/WorkflowState');
+
+        const stateMachine = useWorkflowStateMachine.getState();
+        const workflowState = new WorkflowState(stateMachine.stateJSON);
+
+        // Get outputs from result
+        let outputs: any[] = result.outputs || [];
+
+        // If no outputs in result but failed, try to get from notebookStore
+        if (!outputs.length && !result.success) {
+          const { default: useNotebookStore } = await import('@Store/notebookStore');
+          const cell = useNotebookStore.getState().cells.find((c) => c.id === targetId);
+          outputs = cell?.outputs || [];
+        }
+
+        if (outputs.length > 0) {
+          outputs.forEach((item: any) => {
+            const outputType = item.type || 'text';
+            let effectContent = item.content || item.text || item.toString();
+
+            if (outputType === 'error') {
+              workflowState.state.effects.addCurrentEffect({
+                type: 'error',
+                error: {
+                  name: 'ExecutionError',
+                  message: effectContent,
+                  traceback: [],
+                },
+                cell_ref: targetId,
+              });
+            } else if (outputType === 'image') {
+              workflowState.state.effects.addCurrentEffect({
+                type: 'image_url',
+                image_url: effectContent,
+                cell_ref: targetId,
+              });
+            } else {
+              workflowState.state.effects.addCurrentEffect({
+                type: 'text',
+                text: effectContent,
+                cell_ref: targetId,
+              });
+            }
+          });
+
+          stateMachine.setState(workflowState.toJSON());
+          console.log(`[ExecCodeAction] Recorded ${outputs.length} effects for cell ${targetId}`);
+        }
+      }
+
       // Hide execution indicator
       globalUpdateInterface.createAIRunningCode('Execution completed', '', [], targetId, false);
 

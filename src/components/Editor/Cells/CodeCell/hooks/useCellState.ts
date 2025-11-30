@@ -56,7 +56,7 @@ export const useCellState = (cell: Cell, isDemoMode = false) => {
 
   // Check if AI Debug button should be shown
   const showAIdebug = useMemo(() => {
-    return (
+    return !!(
       cell.outputs &&
       cell.outputs.length > 0 &&
       cell.outputs[0].content === '[error-message-for-debug]'
