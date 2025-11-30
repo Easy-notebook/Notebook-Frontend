@@ -588,14 +588,12 @@
 
 /* 代码块背景：Vue 绿淡色 */
 .markdown-cell pre {
-  background-color: rgba(65, 184, 131, 0.05);
-  padding: 1.25rem;
-  border-radius: 0.5rem;
+  /* padding: 1.25rem; */
+  /* border-radius: 0.5rem; */
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.875rem;
   overflow-x: auto;
   line-height: 1.6;
-  border: 1px solid rgba(65, 184, 131, 0.1);
 }
 
 .markdown-cell code {
@@ -963,83 +961,6 @@
   /* Ensure lists render without syntax tokens */
   list-style-position: inside;
 }
-
-/* 暗色模式 - 暂时注释掉，统一使用明亮模式 */
-/*
-@media (prefers-color-scheme: dark) {
-    .markdown-cell {
-        color: #d1d5db;
-    }
-
-    .markdown-cell h1 {
-        background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-        border-bottom-color: #6495ED;
-    }
-
-    .markdown-cell h2 {
-        background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-        color: #f3f4f6;
-    }
-
-    .markdown-cell h3,
-    .markdown-cell h4 {
-        background-image: linear-gradient(to right, #41B883, #3490DC, #6574CD);
-    }
-
-    .markdown-cell h5,
-    .markdown-cell h6,
-    .markdown-cell blockquote,
-    .markdown-cell strong,
-    .markdown-cell em {
-        color: #3490DC;
-    }
-
-    .markdown-cell a {
-        color: #41B883;
-        border-bottom-color: #41B883;
-    }
-
-    .markdown-cell a:hover {
-        color: #6574CD;
-        border-bottom-color: #6574CD;
-    }
-
-    .markdown-cell pre {
-        background-color: rgba(65, 184, 131, 0.1);
-        border-color: rgba(65, 184, 131, 0.2);
-    }
-
-    .markdown-cell code {
-        background-color: rgba(65, 184, 131, 0.1);
-        color: #3490DC;
-    }
-
-    .markdown-cell th {
-        background-color: rgba(65, 184, 131, 0.1);
-        color: #6574CD;
-    }
-
-    .markdown-cell tbody tr:nth-child(even) {
-        background-color: rgba(65, 184, 131, 0.05);
-    }
-
-    .markdown-cell tbody tr:hover {
-        background-color: rgba(65, 184, 131, 0.1);
-    }
-
-    ::-webkit-scrollbar-thumb {
-        background: rgba(65, 184, 131, 0.3);
-    }
-
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgba(65, 184, 131, 0.4);
-    }
-
-    * {
-        scrollbar-color: rgba(65, 184, 131, 0.3) #111827;
-    }
-}
-*/
 
 @keyframes cursorBlink {
   0%,
