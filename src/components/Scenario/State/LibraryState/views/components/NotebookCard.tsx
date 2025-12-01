@@ -253,23 +253,29 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
               )
               .filter((c) => c.content !== '');
 
-            // Find first H1 title
+            // Find title from first cell
             let foundTitle = '';
-            for (const cell of cells as Array<{
-              cell_type?: string;
-              cellType?: string;
-              source?: string | string[];
-              content?: string;
-            }>) {
-              const type = cell?.cell_type ?? cell?.cellType;
-              if (type === 'markdown') {
-                const source = cell?.source ?? cell?.content ?? '';
-                const content = Array.isArray(source) ? source.join('') : String(source ?? '');
-                const match = content.match(/^#\s+(.+)$/m);
-                if (match) {
-                  foundTitle = match[1].trim();
-                  break;
-                }
+            if (cells.length > 0) {
+              const firstCell = cells[0] as {
+                cell_type?: string;
+                cellType?: string;
+                source?: string | string[];
+                content?: string;
+              };
+
+              const source = firstCell?.source ?? firstCell?.content ?? '';
+              const content = Array.isArray(source) ? source.join('') : String(source ?? '');
+
+              // Try to match H1 first
+              const h1Match = content.match(/^#\s+(.+)$/m);
+              if (h1Match) {
+                foundTitle = h1Match[1].trim();
+              } else {
+                // Fallback to first line
+                foundTitle = content
+                  .split('\n')[0]
+                  .replace(/^#+\s*/, '')
+                  .trim();
               }
             }
 
@@ -462,13 +468,13 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
 
           {/* Star indicator */}
           {notebook.isStarred && (
-            <div className="absolute top-3 right-3">
+            <div className="absolute top-3 left-3">
               <Star className="w-5 h-5 text-yellow-500 fill-current drop-shadow-sm" />
             </div>
           )}
 
           {/* Last accessed time - Acrylic badge */}
-          <div className="absolute top-3 left-3 rounded-full px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-black/40 backdrop-blur-md border border-white/20 shadow-sm">
+          <div className="absolute top-3 right-3 rounded-full px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-black/40 backdrop-blur-md border border-white/20 shadow-sm">
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />
               {formatTime(notebook.lastAccessedAt)}
@@ -512,7 +518,7 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
             {/* Content */}
             <CardContent className={`${config.contentPadding} flex-1 flex flex-col`}>
               <div
-                className={`truncate ${config.titleSize} font-serif font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 dark:from-white dark:via-gray-200 dark:to-gray-400 mb-3 tracking-tight`}
+                className={`${config.titleSize} font-serif font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 dark:from-white dark:via-gray-200 dark:to-gray-400 mb-3 tracking-tight line-clamp-2`}
               >
                 {derivedTitle || notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
               </div>
@@ -610,7 +616,7 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-serif font-bold text-gray-900 dark:text-gray-100 truncate text-lg tracking-tight">
+                    <h3 className="font-serif font-bold text-gray-900 dark:text-gray-100 text-lg tracking-tight line-clamp-2">
                       {derivedTitle || notebook.name || `Notebook ${notebook.id.slice(0, 8)}`}
                     </h3>
                     {notebook.isStarred && (

@@ -749,7 +749,9 @@ const useStore = create(
       updateCell: (cellId: string, newContent: string) =>
         set(
           produce((state: NotebookStoreState) => {
-            const cell = state.cells.find((c) => c.id === cellId);
+            const cellIndex = state.cells.findIndex((c) => c.id === cellId);
+            const cell = state.cells[cellIndex];
+
             if (cell) {
               console.log('🔍 [notebookStore] updateCell', {
                 cellId,
@@ -760,12 +762,12 @@ const useStore = create(
                 typeof newContent === 'string' ? newContent : String(newContent ?? '');
               cell.content = content;
 
-              // 如果是默认标题 cell，同步更新 notebookTitle
-              if (cell.metadata?.isDefaultTitle) {
-                const titleMatch = content.match(/^#\s*(.*)$/);
+              // If it's the first cell, sync with notebookTitle
+              if (cellIndex === 0) {
+                const titleMatch = content.match(/^#\s*(.*)$/m);
                 const title = titleMatch
                   ? titleMatch[1].trim()
-                  : content.replace(/^#\s*/, '').trim();
+                  : content.split('\n')[0].replace(/^#\s*/, '').trim();
                 state.notebookTitle = title || 'Untitled';
               }
             }
