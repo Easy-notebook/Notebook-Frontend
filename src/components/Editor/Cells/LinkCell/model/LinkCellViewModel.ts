@@ -115,11 +115,7 @@ export class LinkCellViewModel extends BaseCellViewModel {
     }
 
     try {
-      const fileObj = {
-        name: filePath.split('/').pop() || filePath,
-        path: filePath,
-        type: 'file' as const,
-      };
+      const fileObj = new File([''], filePath.split('/').pop() || filePath);
       uiLog.info('LinkCell: Calling previewFileInSplit', {
         notebookId: this.notebookId,
         filePath,
@@ -136,7 +132,7 @@ export class LinkCellViewModel extends BaseCellViewModel {
         const baseName = (filePath || this.href).split('/').pop() || '';
         uiLog.info('LinkCell: Trying fallback with baseName', { baseName });
         if (baseName && baseName !== filePath) {
-          const fileObj2 = { name: baseName, path: baseName, type: 'file' as const };
+          const fileObj2 = new File([''], baseName);
           await usePreviewStore
             .getState()
             .previewFileInSplit(this.notebookId, baseName, { file: fileObj2 });

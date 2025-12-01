@@ -1,11 +1,13 @@
 // LibraryState/NotebookList.tsx
-// Notebook list component with sections for starred and recent notebooks
+// Notebook list component with Magic Bento and Masonry layout
 
-import React, { memo, useMemo, useState, useCallback } from 'react';
+import React, { memo, useMemo, useState, useCallback, useEffect } from 'react';
 import { Empty, Button, Card, Skeleton } from 'antd';
 import { Star, Calendar, Plus } from 'lucide-react';
 import NotebookCard from './NotebookCard';
-import type { NotebookListProps } from '../../types';
+import { MasonryGrid, BentoItem, calculateBentoSize } from './MasonryGrid';
+import type { NotebookListProps, CachedNotebook, BentoSize } from '../../types';
+import { useInView } from '@/hooks/useInView';
 
 const NotebookList: React.FC<
   NotebookListProps & {
@@ -26,6 +28,24 @@ const NotebookList: React.FC<
     onExportNotebook,
   }) => {
     const [isCreatingNotebook, setIsCreatingNotebook] = useState(false);
+    const [visibleCount, setVisibleCount] = useState(20);
+
+    // Sentinel for infinite scroll
+    const [sentinelRef, isSentinelInView] = useInView({
+      rootMargin: '1200px', // Load more before reaching the absolute bottom
+    });
+
+    // Load more when sentinel comes into view
+    useEffect(() => {
+      if (isSentinelInView) {
+        setVisibleCount((prev) => prev + 20);
+      }
+    }, [isSentinelInView]);
+
+    // Reset visible count when search query changes
+    useEffect(() => {
+      setVisibleCount(20);
+    }, [searchQuery]);
 
     // Separate starred and regular notebooks
     const { starredNotebooks, regularNotebooks } = useMemo(() => {
@@ -45,20 +65,41 @@ const NotebookList: React.FC<
       }
     }, [isCreatingNotebook, onCreateNotebook]);
 
-    const gridClassName =
-      viewMode === 'grid'
-        ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
-        : 'space-y-0';
+    // Calculate bento sizes for all notebooks
+    const notebooksWithSizes = useMemo(() => {
+      const allNotebooks = [...starredNotebooks, ...regularNotebooks];
+      return allNotebooks.map((notebook, index) => ({
+        notebook,
+        bentoSize: calculateBentoSize(notebook, index, allNotebooks.length),
+      }));
+    }, [starredNotebooks, regularNotebooks]);
+
+    // Get starred notebooks with sizes
+    const starredWithSizes = useMemo(() => {
+      return notebooksWithSizes.filter(({ notebook }) => notebook.isStarred);
+    }, [notebooksWithSizes]);
+
+    // Get regular notebooks with sizes - Apply pagination here
+    const regularWithSizes = useMemo(() => {
+      const regular = notebooksWithSizes.filter(({ notebook }) => !notebook.isStarred);
+      return regular.slice(0, visibleCount);
+    }, [notebooksWithSizes, visibleCount]);
+
+    const hasMore = regularNotebooks.length > visibleCount;
+
+    const listClassName = 'space-y-0';
 
     if (loading) {
       return (
-        <div className={gridClassName}>
+        <MasonryGrid>
           {[...Array(8)].map((_, i) => (
-            <Card key={i} loading>
-              <Skeleton active />
-            </Card>
+            <BentoItem key={i} size={i === 0 ? 'featured' : i % 3 === 0 ? 'large' : 'small'}>
+              <Card loading className="h-full">
+                <Skeleton active />
+              </Card>
+            </BentoItem>
           ))}
-        </div>
+        </MasonryGrid>
       );
     }
 
@@ -84,51 +125,108 @@ const NotebookList: React.FC<
       );
     }
 
+    // Render notebook card with bento size
+    const renderNotebookCard = (notebook: CachedNotebook, bentoSize: BentoSize) => (
+      <BentoItem key={notebook.id} size={viewMode === 'grid' ? bentoSize : 'small'}>
+        <NotebookCard
+          notebook={notebook}
+          viewMode={viewMode}
+          bentoSize={viewMode === 'grid' ? bentoSize : 'small'}
+          onSelect={onSelectNotebook}
+          onToggleStar={onToggleStar}
+          onDelete={onDeleteNotebook}
+          onExport={onExportNotebook}
+        />
+      </BentoItem>
+    );
+
+    // List view uses simple layout
+    if (viewMode === 'list') {
+      return (
+        <>
+          {/* Starred Section */}
+          {starredNotebooks.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Star className="w-5 h-5 text-yellow-500" />
+                Starred ({starredNotebooks.length})
+              </h2>
+              <div className={listClassName}>
+                {starredNotebooks.map((notebook) => (
+                  <NotebookCard
+                    key={notebook.id}
+                    notebook={notebook}
+                    viewMode={viewMode}
+                    onSelect={onSelectNotebook}
+                    onToggleStar={onToggleStar}
+                    onDelete={onDeleteNotebook}
+                    onExport={onExportNotebook}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Section */}
+          {regularNotebooks.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-green-500 dark:text-green-400" />
+                {starredNotebooks.length > 0 ? 'Recent' : 'All'} ({regularNotebooks.length})
+              </h2>
+              <div className={listClassName}>
+                {regularNotebooks.slice(0, visibleCount).map((notebook) => (
+                  <NotebookCard
+                    key={notebook.id}
+                    notebook={notebook}
+                    viewMode={viewMode}
+                    onSelect={onSelectNotebook}
+                    onToggleStar={onToggleStar}
+                    onDelete={onDeleteNotebook}
+                    onExport={onExportNotebook}
+                  />
+                ))}
+              </div>
+              {/* Sentinel for infinite scroll */}
+              {hasMore && <div ref={sentinelRef} className="h-20 w-full" />}
+            </div>
+          )}
+        </>
+      );
+    }
+
+    // Grid view uses Magic Bento + Masonry layout
     return (
       <>
-        {/* Starred Section */}
-        {starredNotebooks.length > 0 && (
+        {/* Starred Section with Bento Layout */}
+        {starredWithSizes.length > 0 && (
           <div className="mb-8">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Star className="w-5 h-5 text-yellow-500" />
-              Starred ({starredNotebooks.length})
+              Starred ({starredWithSizes.length})
             </h2>
-            <div className={gridClassName}>
-              {starredNotebooks.map((notebook) => (
-                <NotebookCard
-                  key={notebook.id}
-                  notebook={notebook}
-                  viewMode={viewMode}
-                  onSelect={onSelectNotebook}
-                  onToggleStar={onToggleStar}
-                  onDelete={onDeleteNotebook}
-                  onExport={onExportNotebook}
-                />
-              ))}
-            </div>
+            <MasonryGrid>
+              {starredWithSizes.map(({ notebook, bentoSize }) =>
+                renderNotebookCard(notebook, bentoSize)
+              )}
+            </MasonryGrid>
           </div>
         )}
 
-        {/* Recent Section */}
-        {regularNotebooks.length > 0 && (
+        {/* Recent Section with Bento Layout */}
+        {regularWithSizes.length > 0 && (
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-green-500 dark:text-green-400" />
-              {starredNotebooks.length > 0 ? 'Recent' : 'All'} ({regularNotebooks.length})
+              {starredWithSizes.length > 0 ? 'Recent' : 'All'} ({regularNotebooks.length})
             </h2>
-            <div className={gridClassName}>
-              {regularNotebooks.map((notebook) => (
-                <NotebookCard
-                  key={notebook.id}
-                  notebook={notebook}
-                  viewMode={viewMode}
-                  onSelect={onSelectNotebook}
-                  onToggleStar={onToggleStar}
-                  onDelete={onDeleteNotebook}
-                  onExport={onExportNotebook}
-                />
-              ))}
-            </div>
+            <MasonryGrid>
+              {regularWithSizes.map(({ notebook, bentoSize }) =>
+                renderNotebookCard(notebook, bentoSize)
+              )}
+            </MasonryGrid>
+            {/* Sentinel for infinite scroll */}
+            {hasMore && <div ref={sentinelRef} className="h-20 w-full" />}
           </div>
         )}
       </>

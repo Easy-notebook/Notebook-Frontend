@@ -13,10 +13,12 @@ export interface CachedNotebook extends NotebookEntity {
 
 export type ViewMode = 'grid' | 'list';
 export type SortBy = 'recent' | 'name' | 'size' | 'files';
+export type BentoSize = 'small' | 'medium' | 'large' | 'featured';
 
 export interface NotebookCardProps {
   notebook: CachedNotebook;
   viewMode: ViewMode;
+  bentoSize?: BentoSize;
   onSelect: (notebookId: string) => void;
   onToggleStar: (notebookId: string, e: React.MouseEvent) => void;
   onDelete: (notebookId: string) => void;
