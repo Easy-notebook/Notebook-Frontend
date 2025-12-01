@@ -53,7 +53,6 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
   outputs,
   isExecuting,
   elapsedTime,
-  outputVisible,
   outputUpdateKey,
   cellMode,
   isInDetachedView,
@@ -82,9 +81,7 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
         ) : (
           outputs.length > 0 && (
             <div
-              className={`p-4 rounded-b-lg space-y-4 output-container relative transition-all duration-300 ease-in-out ${
-                outputVisible ? 'opacity-100' : 'opacity-0'
-              }`}
+              className="p-4 rounded-b-lg space-y-4 output-container relative"
               key={`output-${outputs.length}-${outputUpdateKey}`}
             >
               <div className="relative">
@@ -95,16 +92,8 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
                   </div>
                 )}
 
-                {outputs.map((output, index) => (
-                  <div
-                    key={`${output.key}-${outputUpdateKey}`}
-                    className="transition-all duration-300"
-                    style={{
-                      opacity: outputVisible ? 1 : 0,
-                      transform: outputVisible ? 'translateY(0)' : 'translateY(8px)',
-                      transition: `opacity 300ms ease-out ${index * 50}ms, transform 300ms ease-out ${index * 50}ms`,
-                    }}
-                  >
+                {outputs.map((output) => (
+                  <div key={`${output.key}-${outputUpdateKey}`}>
                     <OutputRenderer output={output} />
                   </div>
                 ))}
