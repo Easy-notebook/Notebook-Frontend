@@ -21,10 +21,29 @@ import {
   Clipboard,
   Trash2,
   Save,
-  Home,
   FileSpreadsheet,
   SortAsc,
   SortDesc,
+  Undo2,
+  Redo2,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Palette,
+  PaintBucket,
+  Search,
+  Replace,
+  Plus,
+  Minus,
+  EyeOff,
+  Eye,
+  Lock,
+  Unlock,
+  X,
+  ChevronRight,
 } from 'lucide-react';
 import usePreviewStore from '@Store/previewStore';
 import useStore from '@Store/notebookStore';
@@ -49,6 +68,34 @@ interface ColumnInfo {
   displayName: string;
   width: number;
   type: 'string' | 'number' | 'date' | 'boolean' | 'mixed';
+}
+
+// Cell formatting style
+interface CellFormat {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  textAlign?: 'left' | 'center' | 'right';
+  color?: string;
+  backgroundColor?: string;
+}
+
+// History state for undo/redo
+interface HistoryState {
+  data: CSVRow[];
+  columns: ColumnInfo[];
+  cellFormats: Record<string, CellFormat>;
+}
+
+// Find & Replace state
+interface FindReplaceState {
+  isOpen: boolean;
+  findText: string;
+  replaceText: string;
+  matchCase: boolean;
+  matchWholeCell: boolean;
+  currentMatchIndex: number;
+  matches: Array<{ row: number; col: number }>;
 }
 
 // =====================================================
@@ -106,80 +153,6 @@ const detectColumnType = (values: any[]): string => {
 };
 
 // =====================================================
-// Context Menu Component（原样保留，略）
-// =====================================================
-interface ContextMenuProps {
-  x: number;
-  y: number;
-  onClose: () => void;
-  onCopy: () => void;
-  onPaste: () => void;
-  onDelete: () => void;
-  onInsertRowAbove: () => void;
-  onInsertRowBelow: () => void;
-  onDeleteRow: () => void;
-}
-const ContextMenu: React.FC<ContextMenuProps> = (props) => {
-  const menuRef = React.useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handle = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) props.onClose();
-    };
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [props]);
-  return (
-    <div
-      ref={menuRef}
-      className="fixed bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl py-1.5 z-50 min-w-[180px] animate-in fade-in zoom-in-95 duration-200"
-      style={{ left: `${props.x}px`, top: `${props.y}px` }}
-    >
-      <button
-        onClick={props.onCopy}
-        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
-      >
-        <Copy className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-        Copy
-      </button>
-      <button
-        onClick={props.onPaste}
-        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
-      >
-        <Clipboard className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-        Paste
-      </button>
-      <div className="border-t border-gray-200/50 dark:border-gray-700/50 my-1.5 mx-2" />
-      <button
-        onClick={props.onDelete}
-        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
-      >
-        <Trash2 className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-        Clear Contents
-      </button>
-      <div className="border-t border-gray-200/50 dark:border-gray-700/50 my-1.5 mx-2" />
-      <button
-        onClick={props.onInsertRowAbove}
-        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
-      >
-        Insert Row Above
-      </button>
-      <button
-        onClick={props.onInsertRowBelow}
-        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
-      >
-        Insert Row Below
-      </button>
-      <button
-        onClick={props.onDeleteRow}
-        className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-900/30 transition-colors"
-      >
-        Delete Row
-      </button>
-    </div>
-  );
-};
-
-// =====================================================
 // Main Component
 // =====================================================
 interface OfficeStyleCSVPreviewProps {
@@ -220,6 +193,33 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // ============== Undo/Redo History ==============
+  const [history, setHistory] = useState<HistoryState[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const isUndoRedoAction = useRef(false);
+
+  // ============== Cell Formatting ==============
+  const [cellFormats, setCellFormats] = useState<Record<string, CellFormat>>({});
+
+  // ============== Column Visibility & Freeze ==============
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
+  const [frozenColumns, setFrozenColumns] = useState<number>(0); // Number of frozen columns from left
+
+  // ============== Find & Replace ==============
+  const [findReplace, setFindReplace] = useState<FindReplaceState>({
+    isOpen: false,
+    findText: '',
+    replaceText: '',
+    matchCase: false,
+    matchWholeCell: false,
+    currentMatchIndex: -1,
+    matches: [],
+  });
+
+  // ============== Color Picker ==============
+  const [showColorPicker, setShowColorPicker] = useState<'text' | 'background' | null>(null);
+  const [selectedColor, setSelectedColor] = useState('#000000');
 
   // ============== 解析 CSV/XLSX ==============
   useEffect(() => {
@@ -547,6 +547,311 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     }
   }, [currentFile, typeOverride]); // Removed columnWidths from dependency array
 
+  // ============== Save to History (for Undo/Redo) ==============
+  const saveToHistory = useCallback(() => {
+    if (isUndoRedoAction.current) {
+      isUndoRedoAction.current = false;
+      return;
+    }
+    const newState: HistoryState = {
+      data: JSON.parse(JSON.stringify(data)),
+      columns: JSON.parse(JSON.stringify(columns)),
+      cellFormats: JSON.parse(JSON.stringify(cellFormats)),
+    };
+    setHistory((prev) => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(newState);
+      // Keep only last 50 states
+      if (newHistory.length > 50) newHistory.shift();
+      return newHistory;
+    });
+    setHistoryIndex((prev) => Math.min(prev + 1, 49));
+  }, [data, columns, cellFormats, historyIndex]);
+
+  // Initialize history when data first loads
+  useEffect(() => {
+    if (data.length > 0 && history.length === 0) {
+      const initialState: HistoryState = {
+        data: JSON.parse(JSON.stringify(data)),
+        columns: JSON.parse(JSON.stringify(columns)),
+        cellFormats: {},
+      };
+      setHistory([initialState]);
+      setHistoryIndex(0);
+    }
+  }, [data, columns, history.length]);
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      isUndoRedoAction.current = true;
+      const prevState = history[historyIndex - 1];
+      setData(JSON.parse(JSON.stringify(prevState.data)));
+      setColumns(JSON.parse(JSON.stringify(prevState.columns)));
+      setCellFormats(JSON.parse(JSON.stringify(prevState.cellFormats)));
+      setHistoryIndex((prev) => prev - 1);
+      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+    }
+  }, [historyIndex, history, setTabDirty, currentFile]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      isUndoRedoAction.current = true;
+      const nextState = history[historyIndex + 1];
+      setData(JSON.parse(JSON.stringify(nextState.data)));
+      setColumns(JSON.parse(JSON.stringify(nextState.columns)));
+      setCellFormats(JSON.parse(JSON.stringify(nextState.cellFormats)));
+      setHistoryIndex((prev) => prev + 1);
+      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+    }
+  }, [historyIndex, history, setTabDirty, currentFile]);
+
+  // ============== Cell Formatting Functions ==============
+  const getCellFormatKey = (row: number, col: number) => `${row}:${col}`;
+
+  const applyFormatToSelection = useCallback(
+    (format: Partial<CellFormat>) => {
+      saveToHistory();
+      const newFormats = { ...cellFormats };
+      if (selection) {
+        const sr = Math.min(selection.startRow, selection.endRow);
+        const er = Math.max(selection.startRow, selection.endRow);
+        const sc = Math.min(selection.startCol, selection.endCol);
+        const ec = Math.max(selection.startCol, selection.endCol);
+        for (let r = sr; r <= er; r++) {
+          for (let c = sc; c <= ec; c++) {
+            const key = getCellFormatKey(r, c);
+            newFormats[key] = { ...newFormats[key], ...format };
+          }
+        }
+      } else if (activeCell) {
+        const key = getCellFormatKey(activeCell.row, activeCell.col);
+        newFormats[key] = { ...newFormats[key], ...format };
+      }
+      setCellFormats(newFormats);
+      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+    },
+    [selection, activeCell, cellFormats, saveToHistory, setTabDirty, currentFile]
+  );
+
+  const toggleBold = useCallback(() => {
+    const currentFormat =
+      activeCell && cellFormats[getCellFormatKey(activeCell.row, activeCell.col)];
+    applyFormatToSelection({ bold: !currentFormat?.bold });
+  }, [activeCell, cellFormats, applyFormatToSelection]);
+
+  const toggleItalic = useCallback(() => {
+    const currentFormat =
+      activeCell && cellFormats[getCellFormatKey(activeCell.row, activeCell.col)];
+    applyFormatToSelection({ italic: !currentFormat?.italic });
+  }, [activeCell, cellFormats, applyFormatToSelection]);
+
+  const toggleUnderline = useCallback(() => {
+    const currentFormat =
+      activeCell && cellFormats[getCellFormatKey(activeCell.row, activeCell.col)];
+    applyFormatToSelection({ underline: !currentFormat?.underline });
+  }, [activeCell, cellFormats, applyFormatToSelection]);
+
+  const setTextAlign = useCallback(
+    (align: 'left' | 'center' | 'right') => {
+      applyFormatToSelection({ textAlign: align });
+    },
+    [applyFormatToSelection]
+  );
+
+  const setTextColor = useCallback(
+    (color: string) => {
+      applyFormatToSelection({ color });
+      setShowColorPicker(null);
+    },
+    [applyFormatToSelection]
+  );
+
+  const setBackgroundColor = useCallback(
+    (color: string) => {
+      applyFormatToSelection({ backgroundColor: color });
+      setShowColorPicker(null);
+    },
+    [applyFormatToSelection]
+  );
+
+  // ============== Column Operations ==============
+  const insertColumn = useCallback(
+    (position: 'left' | 'right') => {
+      if (!activeCell) return;
+      saveToHistory();
+      const insertIndex = position === 'left' ? activeCell.col : activeCell.col + 1;
+      const newColKey = getExcelColumnName(columns.length);
+      const newColumn: ColumnInfo = {
+        key: newColKey,
+        displayName: newColKey,
+        width: 100,
+        type: 'string',
+      };
+      const newColumns = [...columns];
+      newColumns.splice(insertIndex, 0, newColumn);
+      // Rename all column keys to maintain Excel-like naming
+      const renamedColumns = newColumns.map((col, i) => ({
+        ...col,
+        key: getExcelColumnName(i),
+        displayName: getExcelColumnName(i),
+      }));
+      // Update data with new column
+      const newData = data.map((row) => {
+        const newRow: CSVRow = {};
+        renamedColumns.forEach((col, i) => {
+          if (i < insertIndex) {
+            newRow[col.key] = row[columns[i]?.key] ?? '';
+          } else if (i === insertIndex) {
+            newRow[col.key] = '';
+          } else {
+            newRow[col.key] = row[columns[i - 1]?.key] ?? '';
+          }
+        });
+        return newRow;
+      });
+      setColumns(renamedColumns);
+      setData(newData);
+      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+    },
+    [activeCell, columns, data, saveToHistory, setTabDirty, currentFile]
+  );
+
+  const deleteColumn = useCallback(() => {
+    if (!activeCell || columns.length <= 1) return;
+    saveToHistory();
+    const deleteIndex = activeCell.col;
+    const newColumns = columns.filter((_, i) => i !== deleteIndex);
+    // Rename columns
+    const renamedColumns = newColumns.map((col, i) => ({
+      ...col,
+      key: getExcelColumnName(i),
+      displayName: getExcelColumnName(i),
+    }));
+    // Update data
+    const newData = data.map((row) => {
+      const newRow: CSVRow = {};
+      renamedColumns.forEach((col, i) => {
+        const oldIndex = i >= deleteIndex ? i + 1 : i;
+        newRow[col.key] = row[columns[oldIndex]?.key] ?? '';
+      });
+      return newRow;
+    });
+    setColumns(renamedColumns);
+    setData(newData);
+    setActiveCell(null);
+    if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+  }, [activeCell, columns, data, saveToHistory, setTabDirty, currentFile]);
+
+  const toggleColumnVisibility = useCallback((colKey: string) => {
+    setHiddenColumns((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(colKey)) {
+        newSet.delete(colKey);
+      } else {
+        newSet.add(colKey);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const toggleFreezeColumns = useCallback(() => {
+    if (!activeCell) return;
+    setFrozenColumns((prev) => (prev === activeCell.col + 1 ? 0 : activeCell.col + 1));
+  }, [activeCell]);
+
+  // ============== Find & Replace Functions ==============
+  const performFind = useCallback(() => {
+    if (!findReplace.findText) {
+      setFindReplace((prev) => ({ ...prev, matches: [], currentMatchIndex: -1 }));
+      return;
+    }
+    const matches: Array<{ row: number; col: number }> = [];
+    const searchText = findReplace.matchCase
+      ? findReplace.findText
+      : findReplace.findText.toLowerCase();
+    data.forEach((row, rowIndex) => {
+      columns.forEach((col, colIndex) => {
+        let cellValue = String(row[col.key] ?? '');
+        if (!findReplace.matchCase) cellValue = cellValue.toLowerCase();
+        const isMatch = findReplace.matchWholeCell
+          ? cellValue === searchText
+          : cellValue.includes(searchText);
+        if (isMatch) {
+          matches.push({ row: rowIndex, col: colIndex });
+        }
+      });
+    });
+    setFindReplace((prev) => ({
+      ...prev,
+      matches,
+      currentMatchIndex: matches.length > 0 ? 0 : -1,
+    }));
+    if (matches.length > 0) {
+      setActiveCell(matches[0]);
+    }
+  }, [findReplace.findText, findReplace.matchCase, findReplace.matchWholeCell, data, columns]);
+
+  const findNext = useCallback(() => {
+    if (findReplace.matches.length === 0) return;
+    const nextIndex = (findReplace.currentMatchIndex + 1) % findReplace.matches.length;
+    setFindReplace((prev) => ({ ...prev, currentMatchIndex: nextIndex }));
+    setActiveCell(findReplace.matches[nextIndex]);
+  }, [findReplace.matches, findReplace.currentMatchIndex]);
+
+  const findPrevious = useCallback(() => {
+    if (findReplace.matches.length === 0) return;
+    const prevIndex =
+      (findReplace.currentMatchIndex - 1 + findReplace.matches.length) % findReplace.matches.length;
+    setFindReplace((prev) => ({ ...prev, currentMatchIndex: prevIndex }));
+    setActiveCell(findReplace.matches[prevIndex]);
+  }, [findReplace.matches, findReplace.currentMatchIndex]);
+
+  const replaceOne = useCallback(() => {
+    if (findReplace.currentMatchIndex < 0 || findReplace.matches.length === 0) return;
+    saveToHistory();
+    const match = findReplace.matches[findReplace.currentMatchIndex];
+    const newData = [...data];
+    const colKey = columns[match.col].key;
+    let cellValue = String(newData[match.row][colKey] ?? '');
+    if (findReplace.matchWholeCell) {
+      cellValue = findReplace.replaceText;
+    } else {
+      const regex = new RegExp(
+        findReplace.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        findReplace.matchCase ? 'g' : 'gi'
+      );
+      cellValue = cellValue.replace(regex, findReplace.replaceText);
+    }
+    newData[match.row][colKey] = cellValue;
+    setData(newData);
+    if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+    // Re-run find
+    setTimeout(performFind, 0);
+  }, [findReplace, data, columns, saveToHistory, setTabDirty, currentFile, performFind]);
+
+  const replaceAll = useCallback(() => {
+    if (findReplace.matches.length === 0) return;
+    saveToHistory();
+    const newData = [...data];
+    const regex = new RegExp(
+      findReplace.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      findReplace.matchCase ? 'g' : 'gi'
+    );
+    findReplace.matches.forEach((match) => {
+      const colKey = columns[match.col].key;
+      let cellValue = String(newData[match.row][colKey] ?? '');
+      if (findReplace.matchWholeCell) {
+        cellValue = findReplace.replaceText;
+      } else {
+        cellValue = cellValue.replace(regex, findReplace.replaceText);
+      }
+      newData[match.row][colKey] = cellValue;
+    });
+    setData(newData);
+    if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+    setFindReplace((prev) => ({ ...prev, matches: [], currentMatchIndex: -1 }));
+  }, [findReplace, data, columns, saveToHistory, setTabDirty, currentFile]);
+
   // ============== 合并单元格映射（关键新增） ==============
   // 使用数据区坐标（rowIndex/colIndex）
   const headerOffset = 0;
@@ -665,10 +970,47 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     };
   }, []);
 
-  // ============== 键盘导航（原样保留） ==============
+  // ============== 键盘导航 & 快捷键 ==============
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isMeta = e.metaKey || e.ctrlKey;
+
+      // Global shortcuts (work even without active cell)
+      if (isMeta && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+      if (isMeta && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+      if (isMeta && e.key === 'f') {
+        e.preventDefault();
+        setFindReplace((prev) => ({ ...prev, isOpen: true }));
+        return;
+      }
+
       if (!activeCell || editingCell) return;
+
+      // Formatting shortcuts
+      if (isMeta && e.key === 'b') {
+        e.preventDefault();
+        toggleBold();
+        return;
+      }
+      if (isMeta && e.key === 'i') {
+        e.preventDefault();
+        toggleItalic();
+        return;
+      }
+      if (isMeta && e.key === 'u') {
+        e.preventDefault();
+        toggleUnderline();
+        return;
+      }
+
       const { row, col } = activeCell;
       let newRow = row,
         newCol = col;
@@ -690,17 +1032,26 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
           setEditValue(String(data[row][columns[col].key] ?? ''));
           return;
         case 'Delete': {
+          saveToHistory();
           const newData = [...data];
           newData[row][columns[col].key] = '';
           setData(newData);
           if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
           return;
         }
+        case 'Tab':
+          e.preventDefault();
+          if (e.shiftKey) {
+            newCol = Math.max(0, col - 1);
+          } else {
+            newCol = Math.min(columns.length - 1, col + 1);
+          }
+          break;
       }
       if (newRow !== row || newCol !== col) {
         e.preventDefault();
         setActiveCell({ row: newRow, col: newCol });
-        if (e.shiftKey) {
+        if (e.shiftKey && e.key !== 'Tab') {
           if (!selection)
             setSelection({ startRow: row, startCol: col, endRow: newRow, endCol: newCol });
           else setSelection({ ...selection, endRow: newRow, endCol: newCol });
@@ -709,7 +1060,21 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [activeCell, editingCell, data, columns, selection, setTabDirty, currentFile]);
+  }, [
+    activeCell,
+    editingCell,
+    data,
+    columns,
+    selection,
+    setTabDirty,
+    currentFile,
+    handleUndo,
+    handleRedo,
+    toggleBold,
+    toggleItalic,
+    toggleUnderline,
+    saveToHistory,
+  ]);
 
   // ============== 复制/粘贴（原样保留） ==============
   const handleCopy = useCallback(() => {
@@ -814,24 +1179,249 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-50/80 to-gray-100/80 dark:from-gray-900/80 dark:to-gray-800/80">
       {/* Toolbar */}
       <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50">
-        <div className="px-3 py-2 flex items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="px-3 py-2 flex items-center gap-2 flex-wrap">
+          {/* File Operations */}
+          <div className="flex items-center gap-1">
             <button
               onClick={handleSave}
-              className="px-3 py-1.5 text-sm bg-gradient-to-r from-theme-500 to-theme-600 text-white rounded-lg hover:from-theme-600 hover:to-theme-700 flex items-center gap-1.5 shadow-sm transition-all duration-200 hover:shadow-md"
+              className="px-2.5 py-1.5 text-sm bg-gradient-to-r from-theme-500 to-theme-600 text-white rounded-lg hover:from-theme-600 hover:to-theme-700 flex items-center gap-1.5 shadow-sm transition-all duration-200 hover:shadow-md"
+              title="Save (Ctrl+S)"
             >
               <Save className="w-4 h-4" />
               Save
             </button>
             <button
               onClick={handleExport}
-              className="px-3 py-1.5 text-sm bg-white/80 dark:bg-gray-700/80 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-white dark:hover:bg-gray-600 flex items-center gap-1.5 border border-gray-200/50 dark:border-gray-600/50 shadow-sm transition-all duration-200"
+              className="px-2.5 py-1.5 text-sm bg-white/80 dark:bg-gray-700/80 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-white dark:hover:bg-gray-600 flex items-center gap-1.5 border border-gray-200/50 dark:border-gray-600/50 shadow-sm transition-all duration-200"
+              title="Export CSV"
             >
               <Download className="w-4 h-4" />
-              Export
             </button>
           </div>
+
           <div className="h-5 w-px bg-gray-300/50 dark:bg-gray-600/50" />
+
+          {/* Undo/Redo */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleUndo}
+              disabled={historyIndex <= 0}
+              className="p-1.5 rounded-lg hover:bg-gray-100/70 dark:hover:bg-gray-700/70 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            </button>
+            <button
+              onClick={handleRedo}
+              disabled={historyIndex >= history.length - 1}
+              className="p-1.5 rounded-lg hover:bg-gray-100/70 dark:hover:bg-gray-700/70 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            </button>
+          </div>
+
+          <div className="h-5 w-px bg-gray-300/50 dark:bg-gray-600/50" />
+
+          {/* Text Formatting */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleBold}
+              className={`p-1.5 rounded-lg transition-colors ${
+                activeCell && cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]?.bold
+                  ? 'bg-theme-100 dark:bg-theme-900/50 text-theme-600 dark:text-theme-400'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+              }`}
+              title="Bold (Ctrl+B)"
+            >
+              <Bold className="w-4 h-4" />
+            </button>
+            <button
+              onClick={toggleItalic}
+              className={`p-1.5 rounded-lg transition-colors ${
+                activeCell && cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]?.italic
+                  ? 'bg-theme-100 dark:bg-theme-900/50 text-theme-600 dark:text-theme-400'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+              }`}
+              title="Italic (Ctrl+I)"
+            >
+              <Italic className="w-4 h-4" />
+            </button>
+            <button
+              onClick={toggleUnderline}
+              className={`p-1.5 rounded-lg transition-colors ${
+                activeCell &&
+                cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]?.underline
+                  ? 'bg-theme-100 dark:bg-theme-900/50 text-theme-600 dark:text-theme-400'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+              }`}
+              title="Underline (Ctrl+U)"
+            >
+              <Underline className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="h-5 w-px bg-gray-300/50 dark:bg-gray-600/50" />
+
+          {/* Alignment */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTextAlign('left')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                activeCell &&
+                cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]?.textAlign === 'left'
+                  ? 'bg-theme-100 dark:bg-theme-900/50 text-theme-600 dark:text-theme-400'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+              }`}
+              title="Align Left"
+            >
+              <AlignLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setTextAlign('center')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                activeCell &&
+                cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]?.textAlign ===
+                  'center'
+                  ? 'bg-theme-100 dark:bg-theme-900/50 text-theme-600 dark:text-theme-400'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+              }`}
+              title="Align Center"
+            >
+              <AlignCenter className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setTextAlign('right')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                activeCell &&
+                cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]?.textAlign === 'right'
+                  ? 'bg-theme-100 dark:bg-theme-900/50 text-theme-600 dark:text-theme-400'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+              }`}
+              title="Align Right"
+            >
+              <AlignRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="h-5 w-px bg-gray-300/50 dark:bg-gray-600/50" />
+
+          {/* Colors */}
+          <div className="flex items-center gap-1 relative">
+            <button
+              onClick={() => setShowColorPicker(showColorPicker === 'text' ? null : 'text')}
+              className="p-1.5 rounded-lg hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors relative"
+              title="Text Color"
+            >
+              <Palette className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              <div
+                className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-3 h-0.5 rounded-full"
+                style={{
+                  backgroundColor:
+                    (activeCell &&
+                      cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]?.color) ||
+                    '#000000',
+                }}
+              />
+            </button>
+            <button
+              onClick={() =>
+                setShowColorPicker(showColorPicker === 'background' ? null : 'background')
+              }
+              className="p-1.5 rounded-lg hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors relative"
+              title="Background Color"
+            >
+              <PaintBucket className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              <div
+                className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-3 h-0.5 rounded-full"
+                style={{
+                  backgroundColor:
+                    (activeCell &&
+                      cellFormats[getCellFormatKey(activeCell.row, activeCell.col)]
+                        ?.backgroundColor) ||
+                    '#ffffff',
+                }}
+              />
+            </button>
+            {/* Color Picker Dropdown */}
+            {showColorPicker && (
+              <div className="absolute top-full left-0 mt-1 p-2 bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl rounded-lg shadow-xl border border-gray-200/50 dark:border-gray-700/50 z-50">
+                <div className="grid grid-cols-8 gap-1">
+                  {[
+                    '#000000',
+                    '#434343',
+                    '#666666',
+                    '#999999',
+                    '#b7b7b7',
+                    '#cccccc',
+                    '#d9d9d9',
+                    '#ffffff',
+                    '#980000',
+                    '#ff0000',
+                    '#ff9900',
+                    '#ffff00',
+                    '#00ff00',
+                    '#00ffff',
+                    '#4a86e8',
+                    '#0000ff',
+                    '#9900ff',
+                    '#ff00ff',
+                    '#e6b8af',
+                    '#f4cccc',
+                    '#fce5cd',
+                    '#fff2cc',
+                    '#d9ead3',
+                    '#d0e0e3',
+                    '#c9daf8',
+                    '#cfe2f3',
+                    '#d9d2e9',
+                    '#ead1dc',
+                    '#dd7e6b',
+                    '#ea9999',
+                    '#f9cb9c',
+                    '#ffe599',
+                  ].map((color) => (
+                    <button
+                      key={color}
+                      className="w-5 h-5 rounded border border-gray-300/50 dark:border-gray-600/50 hover:scale-110 transition-transform"
+                      style={{ backgroundColor: color }}
+                      onClick={() =>
+                        showColorPicker === 'text' ? setTextColor(color) : setBackgroundColor(color)
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="h-5 w-px bg-gray-300/50 dark:bg-gray-600/50" />
+
+          {/* Find & Replace */}
+          <button
+            onClick={() => setFindReplace((prev) => ({ ...prev, isOpen: true }))}
+            className="p-1.5 rounded-lg hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+            title="Find & Replace (Ctrl+F)"
+          >
+            <Search className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+          </button>
+
+          {/* Freeze Columns */}
+          {activeCell && (
+            <button
+              onClick={toggleFreezeColumns}
+              className={`p-1.5 rounded-lg transition-colors ${
+                frozenColumns > 0
+                  ? 'bg-theme-100 dark:bg-theme-900/50 text-theme-600 dark:text-theme-400'
+                  : 'hover:bg-gray-100/70 dark:hover:bg-gray-700/70 text-gray-600 dark:text-gray-300'
+              }`}
+              title={frozenColumns > 0 ? 'Unfreeze Columns' : 'Freeze Columns'}
+            >
+              {frozenColumns > 0 ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            </button>
+          )}
+
+          {/* File Name */}
           <div className="flex items-center gap-2 ml-auto px-3 py-1 rounded-lg bg-gray-100/50 dark:bg-gray-700/50">
             <FileSpreadsheet className="w-4 h-4 text-theme-500" />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -948,11 +1538,21 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                             const cellStyle: React.CSSProperties = {};
                             const textStyle: React.CSSProperties = {};
 
-                            // 背景色 -> <td>
-                            if (xlsCss.backgroundColor)
+                            // Get custom cell format
+                            const customFormat = cellFormats[getCellFormatKey(index, colIndex)];
+
+                            // 背景色 -> <td> (custom format takes priority)
+                            if (customFormat?.backgroundColor) {
+                              cellStyle.backgroundColor = customFormat.backgroundColor;
+                            } else if (xlsCss.backgroundColor) {
                               cellStyle.backgroundColor = xlsCss.backgroundColor;
-                            // 水平对齐 -> <td>
-                            if (xlsCss.textAlign) cellStyle.textAlign = xlsCss.textAlign as any;
+                            }
+                            // 水平对齐 -> <td> (custom format takes priority)
+                            if (customFormat?.textAlign) {
+                              cellStyle.textAlign = customFormat.textAlign;
+                            } else if (xlsCss.textAlign) {
+                              cellStyle.textAlign = xlsCss.textAlign as any;
+                            }
                             // 垂直对齐：Excel 的 center 映射为 HTML 的 middle
                             if (xlsCss.verticalAlign) {
                               const v = String(xlsCss.verticalAlign).toLowerCase();
@@ -961,10 +1561,23 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                               cellStyle.verticalAlign = 'middle';
                             }
 
-                            // 文本样式 -> 内层 <div>/<span>
-                            if (xlsCss.fontWeight) textStyle.fontWeight = xlsCss.fontWeight;
-                            if (xlsCss.fontStyle) textStyle.fontStyle = xlsCss.fontStyle;
-                            if (xlsCss.color) textStyle.color = xlsCss.color;
+                            // 文本样式 -> 内层 <div>/<span> (merge xlsCss and custom format)
+                            if (customFormat?.bold || xlsCss.fontWeight) {
+                              textStyle.fontWeight = customFormat?.bold ? 700 : xlsCss.fontWeight;
+                            }
+                            if (customFormat?.italic || xlsCss.fontStyle) {
+                              textStyle.fontStyle = customFormat?.italic
+                                ? 'italic'
+                                : xlsCss.fontStyle;
+                            }
+                            if (customFormat?.underline) {
+                              textStyle.textDecoration = 'underline';
+                            }
+                            if (customFormat?.color) {
+                              textStyle.color = customFormat.color;
+                            } else if (xlsCss.color) {
+                              textStyle.color = xlsCss.color;
+                            }
 
                             // 数字默认右对齐（若未指定）
                             if (columns[colIndex]?.type === 'number' && !cellStyle.textAlign) {
@@ -1119,63 +1732,328 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
 
       {/* Context Menu */}
       {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
-          onCopy={() => {
-            handleCopy();
-            setContextMenu(null);
-          }}
-          onPaste={() => {
-            handlePaste();
-            setContextMenu(null);
-          }}
-          onDelete={() => {
-            if (activeCell) {
-              const newData = [...data];
-              newData[activeCell.row][columns[activeCell.col].key] = '';
-              setData(newData);
-              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+        <div
+          ref={(ref) => {
+            if (ref) {
+              const handleClickOutside = (e: MouseEvent) => {
+                if (!ref.contains(e.target as Node)) setContextMenu(null);
+              };
+              document.addEventListener('mousedown', handleClickOutside);
+              return () => document.removeEventListener('mousedown', handleClickOutside);
             }
-            setContextMenu(null);
           }}
-          onInsertRowAbove={() => {
-            if (activeCell) {
-              const newData = [...data];
-              const newRow: CSVRow = {};
-              columns.forEach((col) => {
-                newRow[col.key] = '';
-              });
-              newData.splice(activeCell.row, 0, newRow);
-              setData(newData);
-              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-            }
-            setContextMenu(null);
-          }}
-          onInsertRowBelow={() => {
-            if (activeCell) {
-              const newData = [...data];
-              const newRow: CSVRow = {};
-              columns.forEach((col) => {
-                newRow[col.key] = '';
-              });
-              newData.splice(activeCell.row + 1, 0, newRow);
-              setData(newData);
-              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-            }
-            setContextMenu(null);
-          }}
-          onDeleteRow={() => {
-            if (activeCell && data.length > 1) {
-              const newData = [...data];
-              newData.splice(activeCell.row, 1);
-              setData(newData);
-              if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-            }
-            setContextMenu(null);
-          }}
-        />
+          className="fixed bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl py-1.5 z-50 min-w-[200px]"
+          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+        >
+          {/* Clipboard Operations */}
+          <button
+            onClick={() => {
+              handleCopy();
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Copy className="w-4 h-4 text-gray-500" /> Copy
+            <span className="ml-auto text-xs text-gray-400">⌘C</span>
+          </button>
+          <button
+            onClick={() => {
+              handlePaste();
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Clipboard className="w-4 h-4 text-gray-500" /> Paste
+            <span className="ml-auto text-xs text-gray-400">⌘V</span>
+          </button>
+          <button
+            onClick={() => {
+              if (activeCell) {
+                saveToHistory();
+                const newData = [...data];
+                newData[activeCell.row][columns[activeCell.col].key] = '';
+                setData(newData);
+                if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+              }
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Trash2 className="w-4 h-4 text-gray-500" /> Clear Contents
+            <span className="ml-auto text-xs text-gray-400">Del</span>
+          </button>
+
+          <div className="border-t border-gray-200/50 dark:border-gray-700/50 my-1.5 mx-2" />
+
+          {/* Row Operations */}
+          <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase">
+            Rows
+          </div>
+          <button
+            onClick={() => {
+              if (activeCell) {
+                saveToHistory();
+                const newData = [...data];
+                const newRow: CSVRow = {};
+                columns.forEach((col) => {
+                  newRow[col.key] = '';
+                });
+                newData.splice(activeCell.row, 0, newRow);
+                setData(newData);
+                if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+              }
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Plus className="w-4 h-4 text-gray-500" /> Insert Row Above
+          </button>
+          <button
+            onClick={() => {
+              if (activeCell) {
+                saveToHistory();
+                const newData = [...data];
+                const newRow: CSVRow = {};
+                columns.forEach((col) => {
+                  newRow[col.key] = '';
+                });
+                newData.splice(activeCell.row + 1, 0, newRow);
+                setData(newData);
+                if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+              }
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Plus className="w-4 h-4 text-gray-500" /> Insert Row Below
+          </button>
+          <button
+            onClick={() => {
+              if (activeCell && data.length > 1) {
+                saveToHistory();
+                const newData = [...data];
+                newData.splice(activeCell.row, 1);
+                setData(newData);
+                if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+              }
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-900/30 transition-colors"
+          >
+            <Minus className="w-4 h-4" /> Delete Row
+          </button>
+
+          <div className="border-t border-gray-200/50 dark:border-gray-700/50 my-1.5 mx-2" />
+
+          {/* Column Operations */}
+          <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase">
+            Columns
+          </div>
+          <button
+            onClick={() => {
+              insertColumn('left');
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Plus className="w-4 h-4 text-gray-500" /> Insert Column Left
+          </button>
+          <button
+            onClick={() => {
+              insertColumn('right');
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Plus className="w-4 h-4 text-gray-500" /> Insert Column Right
+          </button>
+          <button
+            onClick={() => {
+              deleteColumn();
+              setContextMenu(null);
+            }}
+            disabled={columns.length <= 1}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-900/30 transition-colors disabled:opacity-40"
+          >
+            <Minus className="w-4 h-4" /> Delete Column
+          </button>
+          {activeCell && (
+            <button
+              onClick={() => {
+                toggleColumnVisibility(columns[activeCell.col].key);
+                setContextMenu(null);
+              }}
+              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+            >
+              <EyeOff className="w-4 h-4 text-gray-500" /> Hide Column
+            </button>
+          )}
+
+          <div className="border-t border-gray-200/50 dark:border-gray-700/50 my-1.5 mx-2" />
+
+          {/* Formatting */}
+          <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500 uppercase">
+            Format
+          </div>
+          <button
+            onClick={() => {
+              toggleBold();
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Bold className="w-4 h-4 text-gray-500" /> Bold
+            <span className="ml-auto text-xs text-gray-400">⌘B</span>
+          </button>
+          <button
+            onClick={() => {
+              toggleItalic();
+              setContextMenu(null);
+            }}
+            className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
+          >
+            <Italic className="w-4 h-4 text-gray-500" /> Italic
+            <span className="ml-auto text-xs text-gray-400">⌘I</span>
+          </button>
+        </div>
+      )}
+
+      {/* Find & Replace Dialog */}
+      {findReplace.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 bg-black/20 backdrop-blur-sm">
+          <div className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200/50 dark:border-gray-700/50 w-[400px] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200/50 dark:border-gray-700/50">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <Search className="w-4 h-4" />
+                Find & Replace
+              </h3>
+              <button
+                onClick={() => setFindReplace((prev) => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-4 space-y-3">
+              {/* Find Input */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">Find</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={findReplace.findText}
+                    onChange={(e) =>
+                      setFindReplace((prev) => ({ ...prev, findText: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') performFind();
+                    }}
+                    placeholder="Search text..."
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-500/30 focus:border-theme-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                    autoFocus
+                  />
+                  <button
+                    onClick={performFind}
+                    className="px-3 py-2 text-sm bg-theme-500 text-white rounded-lg hover:bg-theme-600 transition-colors"
+                  >
+                    Find
+                  </button>
+                </div>
+              </div>
+
+              {/* Replace Input */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  Replace with
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={findReplace.replaceText}
+                    onChange={(e) =>
+                      setFindReplace((prev) => ({ ...prev, replaceText: e.target.value }))
+                    }
+                    placeholder="Replace text..."
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-500/30 focus:border-theme-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                  />
+                  <button
+                    onClick={replaceOne}
+                    disabled={findReplace.matches.length === 0}
+                    className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-40"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    onClick={replaceAll}
+                    disabled={findReplace.matches.length === 0}
+                    className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-40"
+                  >
+                    All
+                  </button>
+                </div>
+              </div>
+
+              {/* Options */}
+              <div className="flex items-center gap-4 pt-2">
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={findReplace.matchCase}
+                    onChange={(e) =>
+                      setFindReplace((prev) => ({ ...prev, matchCase: e.target.checked }))
+                    }
+                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-theme-500 focus:ring-theme-500"
+                  />
+                  Match case
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={findReplace.matchWholeCell}
+                    onChange={(e) =>
+                      setFindReplace((prev) => ({ ...prev, matchWholeCell: e.target.checked }))
+                    }
+                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-theme-500 focus:ring-theme-500"
+                  />
+                  Whole cell
+                </label>
+              </div>
+
+              {/* Results */}
+              {findReplace.matches.length > 0 && (
+                <div className="flex items-center justify-between pt-2 text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {findReplace.currentMatchIndex + 1} of {findReplace.matches.length} matches
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={findPrevious}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      title="Previous"
+                    >
+                      <ChevronRight className="w-4 h-4 text-gray-500 rotate-180" />
+                    </button>
+                    <button
+                      onClick={findNext}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                      title="Next"
+                    >
+                      <ChevronRight className="w-4 h-4 text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              {findReplace.findText && findReplace.matches.length === 0 && (
+                <div className="text-sm text-gray-500 dark:text-gray-400 pt-2">
+                  No matches found
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
