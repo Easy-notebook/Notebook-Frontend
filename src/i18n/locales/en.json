@@ -5,6 +5,9 @@
     "demoMode": "Demo Mode",
     "wysiwygMode": "WYSIWYG Mode"
   },
+  "common": {
+    "untitled": "Untitled"
+  },
   "cell": {
     "addCodeCell": "Add Code Cell",
     "addTextCell": "Add Text Cell",

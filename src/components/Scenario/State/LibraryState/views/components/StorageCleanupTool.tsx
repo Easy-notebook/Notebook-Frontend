@@ -2,17 +2,10 @@
 // Debug tool for cleaning up old cell files and testing storage
 
 import React, { useEffect, useState } from 'react';
-import { Button, Card, Progress, Statistic, Alert, Space, Typography, Spin, Row, Col } from 'antd';
-import {
-  DeleteOutlined,
-  ReloadOutlined,
-  InfoCircleOutlined,
-  WarningOutlined,
-} from '@ant-design/icons';
+import { Button, Card, Statistic, Alert, Space, Spin, Row, Col } from 'antd';
+import { DeleteOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import StorageCleanup from '@Services/storageCleanup';
-import { usePersistence } from '../../../../services/persistence/PersistenceContext';
-
-const { Title, Text, Paragraph } = Typography;
+import { usePersistence } from '../../../../../../services/persistence/PersistenceContext';
 
 export const StorageCleanupTool: React.FC<{ visible: boolean }> = ({ visible }) => {
   const [stats, setStats] = useState<{
@@ -45,6 +38,7 @@ export const StorageCleanupTool: React.FC<{ visible: boolean }> = ({ visible }) 
     if (visible) {
       loadStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, persistence]);
 
   const runCleanup = async () => {
@@ -62,12 +56,6 @@ export const StorageCleanupTool: React.FC<{ visible: boolean }> = ({ visible }) 
       setCleaning(false);
     }
   };
-
-  useEffect(() => {
-    if (visible) {
-      loadStats();
-    }
-  }, [visible]);
 
   if (!visible) return null;
 
@@ -154,10 +142,10 @@ export const StorageCleanupTool: React.FC<{ visible: boolean }> = ({ visible }) 
           </Button>
         </Space>
 
-        <Paragraph style={{ fontSize: '12px', color: '#666', marginBottom: 0 }}>
+        <p style={{ fontSize: '12px', color: '#666', marginBottom: 0 }}>
           <strong>Note:</strong> This cleanup is safe and only removes old cell fragment files. Your
           notebook content is preserved in the main .easynb files.
-        </Paragraph>
+        </p>
       </Space>
     </Card>
   );

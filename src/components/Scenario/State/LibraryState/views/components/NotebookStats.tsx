@@ -2,8 +2,8 @@
 // Notebook statistics display component
 
 import React, { memo } from 'react';
-import { formatSize } from './utils';
-import type { NotebookStatsProps } from './types';
+import { formatSize } from '../../utils';
+import type { NotebookStatsProps } from '../../types';
 
 const NotebookStats: React.FC<NotebookStatsProps> = memo(
   ({ fileCount = 0, accessCount = 0, totalSize }) => (

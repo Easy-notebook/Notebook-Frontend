@@ -3,7 +3,7 @@
 
 import React, { memo } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import { CONSTANTS } from './types';
+import { CONSTANTS } from '../../types';
 
 interface SwipeIndicatorProps {
   swipeDistance: number;

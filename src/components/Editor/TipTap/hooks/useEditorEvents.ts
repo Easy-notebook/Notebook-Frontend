@@ -4,9 +4,12 @@
  */
 
 import { Editor, EditorEvents } from '@tiptap/react';
+import React from 'react';
 import type { Cell } from '@Store/models';
 import { convertEditorStateToCells } from '@Editor/utils/cellConverters';
 import useStore from '@Store/notebookStore';
+import enLocale from '../../../../i18n/locales/en.json';
+import zhLocale from '../../../../i18n/locales/zh.json';
 
 const DEBUG = true;
 const DEBOUNCE_TIME = 50;
@@ -21,6 +24,7 @@ interface UseEditorEventsProps {
   lastInsertedCodeCellIdRef: React.MutableRefObject<string | null>;
   setCurrentEditor: (editor: Editor | null) => void;
   editorRef: React.MutableRefObject<Editor | null>;
+  defaultTitle: string;
 }
 
 export function useEditorEvents({
@@ -31,6 +35,7 @@ export function useEditorEvents({
   lastInsertedCodeCellIdRef,
   setCurrentEditor,
   editorRef,
+  defaultTitle,
 }: UseEditorEventsProps) {
   const onCreate = ({ editor }: EditorEvents['create']) => {
     try {
@@ -106,6 +111,38 @@ export function useEditorEvents({
     }
   };
 
+  // Use ref for defaultTitle to ensure fresh value in callbacks
+  const defaultTitleRef = React.useRef(defaultTitle);
+
+  // Handle dynamic title translation when language changes
+  React.useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || editor.isDestroyed) return;
+
+    const firstNode = editor.state.doc.firstChild;
+    if (firstNode && firstNode.type.name === 'title') {
+      const currentContent = firstNode.textContent;
+      const knownDefaults = [
+        enLocale.common.untitled,
+        zhLocale.common.untitled,
+        'Untitled', // Fallback
+        '未命名', // Fallback
+      ];
+
+      // If current title is one of the known defaults (e.g. "Untitled")
+      // and it doesn't match the NEW default title (e.g. "未命名"), update it.
+      if (knownDefaults.includes(currentContent) && currentContent !== defaultTitle) {
+        // Use command to update title
+        editor.commands.command(({ tr }) => {
+          tr.insertText(defaultTitle, 1, firstNode.nodeSize - 1);
+          return true;
+        });
+      }
+    }
+
+    defaultTitleRef.current = defaultTitle;
+  }, [defaultTitle]);
+
   const onTransaction = ({ editor, transaction }: EditorEvents['transaction']) => {
     try {
       if (!editor || !transaction) return;
@@ -137,14 +174,92 @@ export function useEditorEvents({
           }
         }, 60);
       }
+
+      // Handle default title focus behavior: Cursor to start if content matches default title
+      const { selection } = transaction;
+      const { doc } = transaction;
+      const firstNode = doc.firstChild;
+
+      // Check if we are selecting the title
+      if (
+        firstNode &&
+        firstNode.type.name === 'title' &&
+        firstNode.textContent === defaultTitleRef.current
+      ) {
+        // If cursor is NOT at start (pos 1), force it to start
+        // We allow pos 0? No, pos 1 is start of content.
+        // If selection is range, we also force collapse to start.
+        if (selection.from !== 1 || selection.to !== 1) {
+          // We can't modify the transaction here easily without side effects or loops.
+          // Better to use a microtask to dispatch a new selection command.
+          Promise.resolve().then(() => {
+            if (editor.isDestroyed) return;
+            // Cursor to start
+            editor.commands.setTextSelection(1);
+          });
+        }
+      }
     } catch (error) {
       console.warn('TipTap onTransaction error:', error);
     }
   };
 
+  // Track previous title to detect input into default title
+  const prevTitleRef = React.useRef<string>('');
+
   const onUpdate = ({ editor }: EditorEvents['update']) => {
     try {
       if (!editor || isInternalUpdate.current) return;
+
+      const firstNode = editor.state.doc.firstChild;
+      const currentTitle =
+        firstNode && firstNode.type.name === 'title' ? firstNode.textContent : '';
+
+      // Check if title is empty and revert to default if so
+      if (firstNode && firstNode.type.name === 'title' && firstNode.textContent.length === 0) {
+        // Use a microtask to avoid updating during render/update cycle
+        Promise.resolve().then(() => {
+          if (editor.isDestroyed) return;
+
+          // Only update if it's still empty (double check)
+          const currentFirstNode = editor.state.doc.firstChild;
+          if (
+            currentFirstNode &&
+            currentFirstNode.type.name === 'title' &&
+            currentFirstNode.textContent.length === 0
+          ) {
+            editor.commands.command(({ tr }) => {
+              tr.insertText(defaultTitleRef.current, 1);
+              return true;
+            });
+          }
+        });
+      } else if (
+        firstNode &&
+        firstNode.type.name === 'title' &&
+        prevTitleRef.current === defaultTitleRef.current &&
+        currentTitle !== defaultTitleRef.current &&
+        currentTitle.includes(defaultTitleRef.current)
+      ) {
+        // User typed into default title -> remove default title part
+        // Example: "AUntitled" -> "A"
+        const newTitle = currentTitle.replace(defaultTitleRef.current, '');
+
+        // Apply change
+        Promise.resolve().then(() => {
+          if (editor.isDestroyed) return;
+          editor.commands.command(({ tr }) => {
+            // Replace the whole title content
+            // Title node is at pos 0. Content starts at 1.
+            // We want to replace from 1 to nodeSize-1
+            tr.insertText(newTitle, 1, firstNode.nodeSize - 1);
+            return true;
+          });
+        });
+      }
+
+      // Update prev title ref
+      prevTitleRef.current = currentTitle;
 
       // Reduce debounce time, improve real-time save responsiveness
       const debounceTime = DEBOUNCE_TIME;

@@ -8,6 +8,20 @@
   pointer-events: none;
 }
 
+/* Title Placeholder Styles */
+.tiptap-notebook-editor .group.is-empty::before {
+  color: #d1d5db; /* gray-300 */
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.2;
+  position: absolute;
+  z-index: 1;
+}
+
 /* 可执行代码块样式 */
 .executable-code-block-wrapper {
   margin: 1.5em 0;

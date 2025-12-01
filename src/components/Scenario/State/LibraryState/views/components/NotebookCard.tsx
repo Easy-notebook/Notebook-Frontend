@@ -19,8 +19,8 @@ import ImageCell from '@Editor/Cells/ImageCell';
 import LinkCell from '@Editor/Cells/LinkCell';
 import FileTags from './FileTags';
 import NotebookStats from './NotebookStats';
-import { formatTime, formatSize } from './utils';
-import type { NotebookCardProps } from './types';
+import { formatTime, formatSize } from '../../utils';
+import type { NotebookCardProps } from '../../types';
 import { Card, CardContent } from '@/components/UI/card';
 
 interface PreviewCell {
@@ -37,7 +37,6 @@ const looksLikeBase64 = (s: string): boolean =>
 export const NotebookCard: React.FC<NotebookCardProps> = memo(
   ({ notebook, viewMode, onSelect, onToggleStar, onDelete, onExport }) => {
     const [previewCells, setPreviewCells] = useState<PreviewCell[]>([]);
-    const [loading, setLoading] = useState(false);
     const persistence = usePersistence();
 
     // Load notebook cells for preview
@@ -46,20 +45,18 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
 
       const loadCells = async () => {
         try {
-          setLoading(true);
           const main = await persistence.files.getFile(notebook.id, `notebook_${notebook.id}.json`);
           const raw = main?.content;
 
           if (!raw) {
             if (!cancelled) setPreviewCells([]);
-            setLoading(false);
             return;
           }
 
           let text = '';
           if (typeof raw === 'string') {
             text = raw;
-          } else if (raw && typeof (raw as any).text === 'function') {
+          } else if (raw && typeof (raw as Blob).text === 'function') {
             text = await (raw as Blob).text();
           } else {
             if (!cancelled) setPreviewCells([]);
@@ -83,23 +80,35 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
             }
           }
 
-          const cells: unknown = (data as any)?.cells;
+          const cells: unknown = (data as { cells?: unknown })?.cells;
           if (Array.isArray(cells) && cells.length > 0) {
             const previewData: PreviewCell[] = cells
               .slice(0, 5)
-              .map((cell: any, index: number) => {
-                const source = cell?.source ?? cell?.content ?? '';
-                const content = Array.isArray(source) ? source.join('') : String(source ?? '');
-                const trimmed = content.trim();
+              .map(
+                (
+                  cell: {
+                    source?: string | string[];
+                    content?: string;
+                    cell_type?: string;
+                    cellType?: string;
+                    outputs?: unknown[];
+                    metadata?: Record<string, unknown>;
+                  },
+                  index: number
+                ) => {
+                  const source = cell?.source ?? cell?.content ?? '';
+                  const content = Array.isArray(source) ? source.join('') : String(source ?? '');
+                  const trimmed = content.trim();
 
-                return {
-                  id: `preview-${notebook.id}-${index}`,
-                  type: (cell?.cell_type ?? cell?.cellType ?? 'markdown') as PreviewCell['type'],
-                  content: trimmed,
-                  outputs: Array.isArray(cell?.outputs) ? cell.outputs : [],
-                  metadata: cell?.metadata ?? {},
-                };
-              })
+                  return {
+                    id: `preview-${notebook.id}-${index}`,
+                    type: (cell?.cell_type ?? cell?.cellType ?? 'markdown') as PreviewCell['type'],
+                    content: trimmed,
+                    outputs: Array.isArray(cell?.outputs) ? cell.outputs : [],
+                    metadata: cell?.metadata ?? {},
+                  };
+                }
+              )
               .filter((c) => c.content !== '');
             if (!cancelled) setPreviewCells(previewData);
           } else {
@@ -115,7 +124,7 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
       return () => {
         cancelled = true;
       };
-    }, [notebook.id]);
+    }, [notebook.id, persistence.files]);
 
     // Render read-only preview cell
     const renderCellPreview = useCallback((cell: PreviewCell) => {
@@ -138,18 +147,24 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
 
       switch (cell.type) {
         case 'code':
-          return <CodeCell key={cell.id} {...(commonProps as any)} />;
+          return <CodeCell key={cell.id} {...(commonProps as Parameters<typeof CodeCell>[0])} />;
         case 'markdown':
-          return <MarkdownCell key={cell.id} {...(commonProps as any)} />;
+          return (
+            <MarkdownCell key={cell.id} {...(commonProps as Parameters<typeof MarkdownCell>[0])} />
+          );
         case 'hybrid':
         case 'Hybrid':
-          return <HybridCell key={cell.id} {...(commonProps as any)} />;
+          return (
+            <HybridCell key={cell.id} {...(commonProps as Parameters<typeof HybridCell>[0])} />
+          );
         case 'image':
-          return <ImageCell key={cell.id} {...(commonProps as any)} />;
+          return <ImageCell key={cell.id} {...(commonProps as Parameters<typeof ImageCell>[0])} />;
         case 'link':
-          return <LinkCell key={cell.id} {...(commonProps as any)} />;
+          return <LinkCell key={cell.id} {...(commonProps as Parameters<typeof LinkCell>[0])} />;
         default:
-          return <MarkdownCell key={cell.id} {...(commonProps as any)} />;
+          return (
+            <MarkdownCell key={cell.id} {...(commonProps as Parameters<typeof MarkdownCell>[0])} />
+          );
       }
     }, []);
 
@@ -279,7 +294,7 @@ export const NotebookCard: React.FC<NotebookCardProps> = memo(
                   <StarOff className="w-4 h-4" />
                 )
               }
-              onClick={handleStarClick as any}
+              onClick={handleStarClick as React.MouseEventHandler<HTMLButtonElement>}
             />
             <Button type="text" icon={<FileText className="w-4 h-4" />} />
             <Dropdown menu={{ items: menuItems }} trigger={['click']}>

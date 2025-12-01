@@ -14,22 +14,24 @@ import WorkflowControl from '../features/workflow/WorkflowControl';
 import WorkflowPanel from '../features/workflow/WorkflowPanel';
 import DetachedCellView from '../features/workflow/DetachedCellView';
 import useStore from '@Store/notebookStore';
+import type { Cell } from '@Store/models';
+import type { Task } from '@Store/models';
 
 interface MainContentAreaProps {
   routeView?: string; // Current route view: 'workspace', 'empty', 'library'
   viewMode: string;
   isCollapsed: boolean;
-  cells: any[];
+  cells: Cell[];
   isExecuting: boolean;
   isRightSidebarCollapsed: boolean;
   error: string | null;
   children: React.ReactNode;
-  tasks: any[];
+  tasks: Task[];
   currentPhaseId: string | null;
   currentStepId: string | null;
   currentStepIndex: number;
   activeSidebarItem: 'workspace' | 'knowledge-forest' | 'easynet' | 'new-notebook' | 'settings';
-  onModeChange: (mode: any) => void;
+  onModeChange: (mode: string) => void;
   onRunAll: () => Promise<void>;
   onExportJson: () => Promise<void>;
   onExportDocx: () => void;
@@ -101,13 +103,6 @@ export const MainContentArea = ({
         return null;
       case 'new-notebook':
         return <EmptySidebar />;
-      case 'settings':
-        return (
-          <div className="p-4">
-            <h3 className="text-lg font-medium mb-2">Settings</h3>
-            <p className="text-gray-500">Settings panel...</p>
-          </div>
-        );
       default:
         return null;
     }

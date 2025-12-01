@@ -130,7 +130,16 @@ export function getTipTapExtensions(placeholder: string) {
     UploadDropExtension,
 
     // Placeholder
-    Placeholder.configure({ placeholder, emptyEditorClass: 'is-editor-empty' }),
+    Placeholder.configure({
+      placeholder: ({ node }) => {
+        if (node.type.name === 'title') {
+          return placeholder;
+        }
+        return 'Type / for commands...';
+      },
+      emptyEditorClass: 'is-editor-empty',
+      emptyNodeClass: 'is-empty',
+    }),
 
     // Table support
     Table.configure({ resizable: true }),

@@ -2,11 +2,13 @@ import { useTranslation } from 'react-i18next';
 import { Play, Upload, BarChartHorizontalBig } from 'lucide-react';
 import ModeToggle from './ModeToggle';
 import ExportToFile from '../../../features/function-bar/ExportToFile';
+import NotificationCenter from './NotificationCenter';
+import type { Cell } from '@Store/models';
 
 interface HeaderProps {
   viewMode: string;
   isCollapsed: boolean;
-  cells: any[];
+  cells: Cell[];
   isExecuting: boolean;
   isRightSidebarCollapsed: boolean;
   onModeChange: (mode: string) => void;
@@ -92,6 +94,7 @@ const Header: React.FC<HeaderProps> = ({
           >
             <BarChartHorizontalBig size={18} />
           </button>
+          <NotificationCenter />
         </div>
       </div>
     </div>

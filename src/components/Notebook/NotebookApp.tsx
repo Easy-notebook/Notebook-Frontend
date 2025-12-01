@@ -26,7 +26,7 @@ import {
 
 // UI Components
 import { MainContentArea } from './components';
-import { WorkspaceHeader, EmptyStateHeader } from './ui/layout/headers';
+import { WorkspaceHeader, EmptyStateHeader, LibraryStateHeader } from './ui/layout/headers';
 import { useRef } from 'react';
 
 // Main NotebookApp component
@@ -215,7 +215,7 @@ const NotebookApp = () => {
 
   const handleSidebarItemChange = useCallback(
     (itemId: string) => {
-      setActiveSidebarItem(itemId as any);
+      setActiveSidebarItem(itemId as typeof activeSidebarItem);
       if (isCollapsed) {
         setIsCollapsed(false);
       }
@@ -261,7 +261,7 @@ const NotebookApp = () => {
           />
         );
       case 'library':
-        return null;
+        return <LibraryStateHeader onToggleRightSidebar={handleRightSidebarToggle} />;
       case 'workspace':
       default:
         return (

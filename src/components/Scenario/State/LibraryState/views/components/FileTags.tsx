@@ -4,8 +4,8 @@
 import React, { memo, useMemo } from 'react';
 import { Tag } from 'antd';
 import { FileText, Image, Code, Database, Archive, FileCheck } from 'lucide-react';
-import { CONSTANTS } from './types';
-import type { FileTagsProps } from './types';
+import { CONSTANTS } from '../../types';
+import type { FileTagsProps } from '../../types';
 
 // Modern color palette for file types
 const FILE_TYPE_COLORS = {

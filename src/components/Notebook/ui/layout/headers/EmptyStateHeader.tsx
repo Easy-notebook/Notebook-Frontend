@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { Upload, BarChartHorizontalBig } from 'lucide-react';
+import NotificationCenter from './NotificationCenter';
 
 interface EmptyStateHeaderProps {
   onTriggerFileInput?: () => void;
@@ -39,6 +40,7 @@ const EmptyStateHeader: React.FC<EmptyStateHeaderProps> = ({
             style={{ display: 'none' }}
             onChange={onHandleImport}
           />
+          <NotificationCenter />
           <button
             onClick={onToggleRightSidebar}
             className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:scale-105 text-primary bg-primary/10 hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20"

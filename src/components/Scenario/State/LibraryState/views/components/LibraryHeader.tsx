@@ -4,8 +4,8 @@
 import React, { memo } from 'react';
 import { Button, Input, Space } from 'antd';
 import { RefreshCw, Grid, List, Search as SearchIcon, TreePine } from 'lucide-react';
-import { formatSize } from './utils';
-import type { LibraryHeaderProps } from './types';
+import { formatSize } from '../../utils';
+import type { LibraryHeaderProps } from '../../types';
 
 const { Search: AntSearch } = Input;
 

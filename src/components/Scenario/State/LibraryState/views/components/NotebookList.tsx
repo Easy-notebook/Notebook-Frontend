@@ -5,15 +5,13 @@ import React, { memo, useMemo, useState, useCallback } from 'react';
 import { Empty, Button, Card, Skeleton } from 'antd';
 import { Star, Calendar, Plus } from 'lucide-react';
 import NotebookCard from './NotebookCard';
-import useStore from '@Store/notebookStore';
-import useCodeStore from '@Store/codeStore';
-import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
-import type { NotebookListProps } from './types';
+import type { NotebookListProps } from '../../types';
 
 const NotebookList: React.FC<
   NotebookListProps & {
     loading?: boolean;
     searchQuery?: string;
+    onCreateNotebook?: () => void;
   }
 > = memo(
   ({
@@ -22,6 +20,7 @@ const NotebookList: React.FC<
     loading = false,
     searchQuery = '',
     onSelectNotebook,
+    onCreateNotebook,
     onToggleStar,
     onDeleteNotebook,
     onExportNotebook,
@@ -36,27 +35,15 @@ const NotebookList: React.FC<
       };
     }, [notebooks]);
 
-    const createNewNotebook = useCallback(async () => {
-      if (isCreatingNotebook) return;
+    const handleCreateNotebook = useCallback(async () => {
+      if (isCreatingNotebook || !onCreateNotebook) return;
       setIsCreatingNotebook(true);
       try {
-        console.log('🚀 Creating new notebook from LibraryState...');
-        const newNotebookId = await NotebookLifecycleService.initializeNotebook();
-        useStore.getState().setNotebookId(newNotebookId);
-        useCodeStore.getState().setKernelReady(true);
-        console.log('✅ Created notebook:', newNotebookId);
-
-        // Navigate to the new notebook
-        if (onSelectNotebook) {
-          onSelectNotebook(newNotebookId);
-        }
-      } catch (error) {
-        console.error('❌ Failed to create new notebook:', error);
-        alert('Failed to create new notebook. Please try again.');
+        await onCreateNotebook();
       } finally {
         setIsCreatingNotebook(false);
       }
-    }, [isCreatingNotebook, onSelectNotebook]);
+    }, [isCreatingNotebook, onCreateNotebook]);
 
     const gridClassName =
       viewMode === 'grid'
@@ -77,21 +64,23 @@ const NotebookList: React.FC<
 
     if (notebooks.length === 0) {
       return (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={searchQuery ? 'No matching Notebook' : 'No Notebook'}
-        >
-          {!searchQuery && (
-            <Button
-              type="primary"
-              icon={<Plus className="w-4 h-4" />}
-              loading={isCreatingNotebook}
-              onClick={createNewNotebook}
-            >
-              {isCreatingNotebook ? 'Creating...' : 'New Notebook'}
-            </Button>
-          )}
-        </Empty>
+        <div className="h-full flex flex-col items-center justify-center">
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={searchQuery ? 'No matching Notebook' : 'No Notebook'}
+          >
+            {!searchQuery && onCreateNotebook && (
+              <Button
+                type="primary"
+                icon={<Plus className="w-4 h-4" />}
+                loading={isCreatingNotebook}
+                onClick={handleCreateNotebook}
+              >
+                {isCreatingNotebook ? 'Creating...' : 'New Notebook'}
+              </Button>
+            )}
+          </Empty>
+        </div>
       );
     }
 

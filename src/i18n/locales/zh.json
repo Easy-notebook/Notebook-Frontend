@@ -5,6 +5,9 @@
     "demoMode": "演示模式",
     "wysiwygMode": "所见即所得模式"
   },
+  "common": {
+    "untitled": "未命名"
+  },
   "cell": {
     "addCodeCell": "添加代码单元格",
     "addTextCell": "添加文本单元格",

@@ -152,7 +152,6 @@ const ImportNotebook4JsonOrJupyter = () => {
     },
     [
       clearCells,
-      setNotebookId,
       initializeNotebook,
       addCell,
       setCurrentPhase,
@@ -218,10 +217,12 @@ const ImportNotebook4JsonOrJupyter = () => {
             type: 'code',
             content: Array.isArray(cell.source) ? cell.source.join('') : cell.source,
             outputs: Array.isArray(cell.outputs)
-              ? cell.outputs.map((output: any) => ({
-                  type: output.output_type || 'text',
-                  content: JSON.stringify(output.data || output.text || ''),
-                }))
+              ? cell.outputs.map(
+                  (output: { output_type?: string; data?: unknown; text?: string }) => ({
+                    type: output.output_type || 'text',
+                    content: JSON.stringify(output.data || output.text || ''),
+                  })
+                )
               : [],
             phaseId: null, // 设置 phaseId 如果需要
           };
@@ -233,10 +234,12 @@ const ImportNotebook4JsonOrJupyter = () => {
             type: cell.cell_type as CellType,
             content: Array.isArray(cell.source) ? cell.source.join('') : cell.source,
             outputs: Array.isArray(cell.outputs)
-              ? cell.outputs.map((output: any) => ({
-                  type: output.output_type || 'text',
-                  content: JSON.stringify(output.data || output.text || ''),
-                }))
+              ? cell.outputs.map(
+                  (output: { output_type?: string; data?: unknown; text?: string }) => ({
+                    type: output.output_type || 'text',
+                    content: JSON.stringify(output.data || output.text || ''),
+                  })
+                )
               : [],
             phaseId: null,
           };

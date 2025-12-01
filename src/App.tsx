@@ -1,19 +1,12 @@
 // src/App.tsx
-import { ConfigProvider, message } from 'antd';
+import { ConfigProvider } from 'antd';
 import { useEffect } from 'react';
 import AppRouter from './router/AppRouter';
 import { getAntdTheme } from './theme/antdTheme';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { initializeWorkflowSystem } from './components/Scenario/Workflow/utils/workflowInitializer';
 import { PersistenceProvider } from './services/persistence/PersistenceContext';
-
-// 配置全局 message 样式和位置
-message.config({
-  top: 24,
-  duration: 3,
-  maxCount: 3,
-  prefixCls: 'custom-message',
-});
+import { Toaster } from '@/components/UI/sonner';
 
 function BackgroundLayers() {
   return (
@@ -192,110 +185,8 @@ function AppContent(): JSX.Element {
       console.error('[App] Failed to initialize workflow system:', error);
     }
 
-    // 添加自定义 message 样式
-    const style = document.createElement('style');
-    style.textContent = `
-      /* 将 message 容器移到右上角 */
-      .ant-message {
-        top: 24px !important;
-        right: 24px !important;
-        left: auto !important;
-        transform: none !important;
-      }
-
-      /* message 项样式 - glassmorphism 风格 */
-      .ant-message-notice {
-        position: relative;
-        padding: 0;
-        margin-bottom: 12px;
-      }
-
-      .ant-message-notice-content {
-        position: relative;
-        padding: 12px 20px;
-        border-radius: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-        backdrop-filter: blur(30px) saturate(180%);
-        -webkit-backdrop-filter: blur(30px) saturate(180%);
-        isolation: isolate;
-        min-width: 280px;
-      }
-
-      /* 亮色模式 */
-      .ant-message-notice-content {
-        background: rgba(255, 255, 255, 0.85);
-      }
-
-      /* 暗色模式 */
-      [data-theme="dark"] .ant-message-notice-content,
-      .dark .ant-message-notice-content {
-        background: rgba(var(--acrylic-tint), 0.7);
-        border-color: rgba(255, 255, 255, 0.12);
-      }
-
-      /* 成功消息 */
-      .ant-message-success .anticon {
-        color: #52c896;
-      }
-
-      /* 错误消息 */
-      .ant-message-error .anticon {
-        color: #ef4444;
-      }
-
-      /* 警告消息 */
-      .ant-message-warning .anticon {
-        color: #f59e0b;
-      }
-
-      /* 信息消息 */
-      .ant-message-info .anticon {
-        color: #3b82f6;
-      }
-
-      /* 消息文本 */
-      .ant-message-notice-content > span {
-        color: #374151;
-      }
-
-      .dark .ant-message-notice-content > span {
-        color: #e5e7eb;
-      }
-
-      /* 添加微妙的噪点纹理 */
-      .ant-message-notice-content::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: 16px;
-        opacity: 0.06;
-        pointer-events: none;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='4.2' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-        background-size: 180px 180px;
-        mix-blend-mode: soft-light;
-      }
-
-      .dark .ant-message-notice-content::before {
-        opacity: 0.08;
-      }
-
-      /* 添加微妙的光泽效果 */
-      .ant-message-notice-content::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: 16px;
-        opacity: 0.3;
-        pointer-events: none;
-        background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
-        mix-blend-mode: overlay;
-      }
-    `;
-    document.head.appendChild(style);
-
     return () => {
-      document.head.removeChild(style);
+      // Cleanup if needed
     };
   }, []);
 
@@ -303,6 +194,7 @@ function AppContent(): JSX.Element {
     <ConfigProvider theme={antdTheme}>
       <BackgroundLayers />
       <AppRouter />
+      <Toaster position="top-right" />
     </ConfigProvider>
   );
 }

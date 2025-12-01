@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { NodeViewWrapper, NodeViewContent, NodeViewProps } from '@tiptap/react';
 import { Image as ImageIcon } from 'lucide-react';
 import useStore from '@Store/notebookStore';
+import { useTranslation } from 'react-i18next';
 
 const RANDOM_COVERS = [
   'https://images.unsplash.com/photo-1506744038136-46273834b3fb?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80', // Landscape
@@ -78,6 +79,9 @@ export const TitleNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes,
     updateAttributes({ icon: randomEmoji });
   };
 
+  const { t } = useTranslation();
+  const isDefaultTitle = node.textContent.trim() === t('common.untitled');
+
   return (
     <NodeViewWrapper
       className="group relative"
@@ -123,8 +127,7 @@ export const TitleNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes,
       {/* Title Content */}
       <NodeViewContent
         as="h1"
-        className={`node-title-content !text-[40px] !font-bold !leading-[1.2] outline-none placeholder:text-gray-300 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-300 empty:before:float-left empty:before:h-0 empty:before:pointer-events-none`}
-        data-placeholder="Untitled"
+        className={`node-title-content !text-[40px] !font-bold !leading-[1.2] outline-none ${isDefaultTitle ? '!text-gray-400 dark:!text-gray-500' : ''}`}
       />
     </NodeViewWrapper>
   );

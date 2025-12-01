@@ -435,7 +435,7 @@ const useStore = create(
         const titleCell: Cell = {
           id: uuidv4(),
           type: 'markdown',
-          content: '# Untitled',
+          content: '# ',
           outputs: [],
           enableEdit: true,
           phaseId: null,
@@ -504,7 +504,7 @@ const useStore = create(
           const titleCell: Cell = {
             id: uuidv4(),
             type: 'markdown',
-            content: '# Untitled',
+            content: '# ',
             outputs: [],
             enableEdit: true,
             phaseId: null,
@@ -566,7 +566,7 @@ const useStore = create(
               const titleCell: Cell = {
                 id: uuidv4(),
                 type: 'markdown',
-                content: '# Untitled',
+                content: '# ',
                 outputs: [],
                 enableEdit: true,
                 phaseId: null,

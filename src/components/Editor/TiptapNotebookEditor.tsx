@@ -17,6 +17,7 @@ import { useEditorSync } from './TipTap/hooks/useEditorSync';
 import { useKeyboardHandlers } from './TipTap/hooks/useKeyboardHandlers';
 import { useLinkHandler } from './TipTap/hooks/useLinkHandler';
 import { useBeforeUnload } from './TipTap/hooks/useBeforeUnload';
+import { useTranslation } from 'react-i18next';
 
 // Config
 import { getTipTapExtensions } from './TipTap/config/extensions';
@@ -70,7 +71,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
   (
     {
       className = 'text-2xl font-bold leading-relaxed',
-      placeholder = 'Untitled',
+      placeholder: _placeholder = 'Untitled',
       readOnly = false,
     },
     ref
@@ -107,15 +108,19 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty deps - only calculate once
 
+    // Get localized placeholder
+    const { t } = useTranslation();
+    const localizedPlaceholder = t('common.untitled');
+
     // Get extensions configuration
     const extensions = useMemo(
       () => [
-        ...getTipTapExtensions(placeholder),
+        ...getTipTapExtensions(localizedPlaceholder),
         CursorStyleExtension,
         TrailingParagraphExtension,
         EnhancedCursorPositionExtension,
       ],
-      [placeholder]
+      [localizedPlaceholder]
     );
 
     // Hooks
@@ -129,6 +134,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       lastInsertedCodeCellIdRef,
       setCurrentEditor,
       editorRef,
+      defaultTitle: localizedPlaceholder,
     });
 
     // TipTap slash commands

@@ -1,7 +1,7 @@
 // src/components/Notebook/pages/LibraryStatePage.tsx
 // Library state page component
 
-import LibraryState from '../../Scenario/State/LibraryState/LibraryState';
+import LibraryState from '../../Scenario/State/LibraryState';
 
 interface LibraryStatePageProps {
   onSelectNotebook: (notebookId: string, notebookTitle: string) => Promise<void>;
