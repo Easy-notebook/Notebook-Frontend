@@ -3,15 +3,12 @@ import useStore from '@Store/notebookStore';
 import useCodeStore, { DISPLAY_MODES } from '@Store/codeStore';
 import { processOutput } from '../utils/outputProcessing';
 import { EXPAND_THRESHOLD } from '../utils';
-import editorLogger from '@Utils/logger/editor_logger';
 import { debounce } from 'lodash-es';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
 
 export class CodeCellViewModel extends BaseCellViewModel {
   // Properties from props
-  private dslcMode: boolean;
   private isDemoMode: boolean;
-  private isInDetachedView: boolean;
 
   // Local state
   public showThinking = true;
@@ -31,11 +28,9 @@ export class CodeCellViewModel extends BaseCellViewModel {
   public localContent = '';
   private debouncedUpdate: (value: string) => void;
 
-  constructor(cell: Cell, dslcMode = false, isDemoMode = false, isInDetachedView = false) {
+  constructor(cell: Cell, _dslcMode = false, isDemoMode = false, isInDetachedView = false) {
     super(cell);
-    this.dslcMode = dslcMode;
     this.isDemoMode = isDemoMode;
-    this.isInDetachedView = isInDetachedView;
     this.prevContent = cell.content || '';
 
     // Initialize state based on props
@@ -55,12 +50,7 @@ export class CodeCellViewModel extends BaseCellViewModel {
     }, 300);
   }
 
-  public updateProps(
-    cell: Cell,
-    dslcMode: boolean,
-    isDemoMode: boolean,
-    isInDetachedView: boolean
-  ) {
+  public updateProps(cell: Cell, isDemoMode: boolean) {
     const prevCell = this.cell;
     // Call super.updateProps to handle cell update and notification if needed,
     // but we have more complex logic here, so we might just update this.cell manually
@@ -69,9 +59,7 @@ export class CodeCellViewModel extends BaseCellViewModel {
     // However, we need to update other props too.
 
     this.cell = cell; // Update local reference first for logic below
-    this.dslcMode = dslcMode;
     this.isDemoMode = isDemoMode;
-    this.isInDetachedView = isInDetachedView;
 
     // Handle content changes for expansion logic
     const currentContent = cell.content || '';
@@ -359,20 +347,29 @@ export class CodeCellViewModel extends BaseCellViewModel {
       const isAtFirstLine = event.key === 'ArrowUp' && this.isCursorAtFirstLine();
       const isAtLastLine = event.key === 'ArrowDown' && this.isCursorAtLastLine();
 
+      console.log('Arrow navigation check', { key: event.key, isAtFirstLine, isAtLastLine });
+
       if (isAtFirstLine || isAtLastLine) {
-        const cursorInfo = {
-          line: 0,
-          isAtFirstLine,
-          isAtLastLine,
-          isAtDocStart: this.isCursorAtDocStart(),
-          isAtDocEnd: this.isCursorAtDocEnd(),
-        };
+        // If we are at the top and pressing up, we should navigate to the previous cell
+        const isAtStart = this.isCursorAtDocStart();
+        if (direction === 'up' && isAtStart) {
+          console.log('Navigating UP from CodeCell start');
+          event.preventDefault();
+          // Dispatch navigation event to parent (handled by useCodeCellViewModel or similar,
+          // but here we want to trigger the standard cell navigation)
+          // Actually, we can just use navigateToSibling which handles focusCell
+          this.navigateToSibling(direction);
+          return 'navigate';
+        }
 
-        editorLogger.logNavigationAttempt(this.cell.id, 'code', direction, cursorInfo);
-
-        event.preventDefault();
-        this.navigateToSibling(direction);
-        return 'navigate';
+        // If we are at the bottom and pressing down
+        const isAtEnd = this.isCursorAtDocEnd();
+        if (direction === 'down' && isAtEnd) {
+          console.log('Navigating DOWN from CodeCell end');
+          event.preventDefault();
+          this.navigateToSibling(direction);
+          return 'navigate';
+        }
       }
     }
 
@@ -429,5 +426,36 @@ export class CodeCellViewModel extends BaseCellViewModel {
     const cursorPos = state.selection.main.head;
     const line = state.doc.lineAt(cursorPos);
     return cursorPos === line.to && line.number === state.doc.lines;
+  }
+
+  public focus(direction: 'up' | 'down') {
+    if (!this.editorRef?.current?.view) {
+      console.warn('CodeCellViewModel.focus: No editor view available');
+      return;
+    }
+
+    const view = this.editorRef.current.view;
+    const state = view.state;
+
+    console.log('CodeCellViewModel.focus executing', { direction, docLength: state.doc.length });
+
+    // Focus the editor
+    view.focus();
+
+    // Set cursor position
+    if (direction === 'up') {
+      // Focus at the end (coming from below)
+      const length = state.doc.length;
+      view.dispatch({
+        selection: { anchor: length, head: length },
+        scrollIntoView: true,
+      });
+    } else {
+      // Focus at the start (coming from above)
+      view.dispatch({
+        selection: { anchor: 0, head: 0 },
+        scrollIntoView: true,
+      });
+    }
   }
 }

@@ -1,11 +1,13 @@
 import { ExtensionFSM, State } from '../../core/ExtensionFSM';
 import { v4 as uuidv4 } from 'uuid';
+import { Node as ProseMirrorNode } from 'prosemirror-model';
+import { Editor } from '@tiptap/core';
 
 export interface CodeBlockContext {
-  node: any;
-  updateAttributes: (attrs: any) => void;
+  node: ProseMirrorNode;
+  updateAttributes: (attrs: Record<string, unknown>) => void;
   deleteNode: () => void;
-  editor?: any;
+  editor?: Editor;
   getPos?: () => number;
 }
 
@@ -22,8 +24,10 @@ export class CodeBlockModel {
           ctx.updateAttributes({ cellId: uuidv4() });
         }
       },
-      handleEvent: (event, payload, ctx) => {
+      handleEvent: (event, _payload, _ctx) => {
         switch (event) {
+          case 'FOCUS':
+            return 'focused';
           case 'EDIT':
             return 'editing';
           case 'DELETE':
@@ -35,12 +39,30 @@ export class CodeBlockModel {
       },
     };
 
-    const editingState: State<CodeBlockContext> = {
-      name: 'editing',
-      handleEvent: (event, payload, ctx) => {
+    const focusedState: State<CodeBlockContext> = {
+      name: 'focused',
+      handleEvent: (event, _payload, _ctx) => {
         switch (event) {
           case 'BLUR':
             return 'idle';
+          case 'EDIT':
+            return 'editing';
+          default:
+            return null;
+        }
+      },
+    };
+
+    const editingState: State<CodeBlockContext> = {
+      name: 'editing',
+      handleEvent: (event, _payload, _ctx) => {
+        switch (event) {
+          case 'BLUR':
+            return 'idle'; // Or stay in editing if we want to persist edit mode?
+          case 'CANCEL':
+            return 'focused';
+          case 'SAVE':
+            return 'focused';
           default:
             return null;
         }
@@ -48,6 +70,7 @@ export class CodeBlockModel {
     };
 
     fsm.addState(idleState);
+    fsm.addState(focusedState);
     fsm.addState(editingState);
 
     // Initial transition

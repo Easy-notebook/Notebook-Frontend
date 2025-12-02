@@ -173,7 +173,93 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     // Cleanup
     useEffect(() => {
       const currentSyncTimeout = syncTimeoutRef.current;
+
+      const handleMarkdownFocus = (e: Event) => {
+        const customEvent = e as CustomEvent;
+        const { cellId, direction, sourceCellId } = customEvent.detail;
+
+        if (editor) {
+          // Find the node for this cell
+          let pos = 0;
+          let found = false;
+
+          // First try to find by target cellId
+          editor.state.doc.descendants((node, p) => {
+            if (found) return false;
+            if (node.attrs.cellId === cellId) {
+              pos = p;
+              found = true;
+              return false;
+            }
+          });
+
+          // If not found, try to find by sourceCellId and navigate relative to it
+          if (!found && sourceCellId) {
+            editor.state.doc.descendants((node, p) => {
+              if (found) return false;
+              if (node.attrs.cellId === sourceCellId) {
+                // Found source cell
+                if (direction === 'up') {
+                  // We want the node BEFORE this source cell
+                  // The source cell starts at p.
+                  // The node before ends at p - 1 (if there is a node before)
+                  // We need to resolve the position before.
+                  // resolvedPos was unused
+                  // Actually, just p is the start of the node.
+                  // If we want the previous node, we can look at p - 1?
+                  // Let's use resolve
+                  if (p > 0) {
+                    const $pos = editor.state.doc.resolve(p);
+                    const index = $pos.index($pos.depth); // Index in parent
+                    if (index > 0) {
+                      const prevNode = $pos.parent.child(index - 1);
+                      // We found the previous node. Its position start is... hard to calculate from index alone without iterating?
+                      // Actually, we can just use the resolved position logic
+                      // The previous node ends at p.
+                      // So we want to focus at p - 1?
+                      pos = p - prevNode.nodeSize;
+                      found = true; // We found the "target" (previous node) position
+                    }
+                  }
+                } else {
+                  // We want the node AFTER this source cell
+                  // Source cell starts at p, size is node.nodeSize
+                  pos = p + node.nodeSize;
+                  found = true;
+                }
+                return false;
+              }
+            });
+          }
+
+          if (found) {
+            if (direction === 'up') {
+              // Focus end of cell
+              const node = editor.state.doc.nodeAt(pos);
+              if (node) {
+                // For text blocks, end is pos + content.size
+                editor
+                  .chain()
+                  .focus()
+                  .setTextSelection(pos + node.content.size + 1)
+                  .run();
+              }
+            } else {
+              // Focus start of cell
+              editor
+                .chain()
+                .focus()
+                .setTextSelection(pos + 1)
+                .run();
+            }
+          }
+        }
+      };
+
+      window.addEventListener('markdown-cell-focus', handleMarkdownFocus);
+
       return () => {
+        window.removeEventListener('markdown-cell-focus', handleMarkdownFocus);
         if (currentSyncTimeout) {
           clearTimeout(currentSyncTimeout);
         }
@@ -182,7 +268,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           editorRef.current = null;
         }
       };
-    }, []);
+    }, [editor]);
 
     // Expose API
     useImperativeHandle(

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NodeViewProps, NodeViewWrapper } from '@tiptap/react';
 import { ExtensionFSM } from './ExtensionFSM';
 
@@ -66,6 +66,47 @@ export function BaseNodeView<TContext>({
       prevFsmStateRef.current = newFsmState;
     }
   }, [node.attrs.fsmState, currentState, fsm]);
+
+  // Monitor selection to trigger FOCUS/BLUR
+  useEffect(() => {
+    if (!props.editor) return;
+
+    const handleSelectionUpdate = () => {
+      const { selection } = props.editor.state;
+      const pos = props.getPos();
+
+      if (typeof pos !== 'number') return;
+
+      const nodeSize = node.nodeSize;
+      const isSelected =
+        (selection.from >= pos && selection.to <= pos + nodeSize) || // Cursor inside or selection inside
+        (selection.from <= pos && selection.to >= pos + nodeSize); // Node fully selected
+
+      const currentFsmState = fsm.getCurrentState();
+
+      if (isSelected) {
+        if (currentFsmState === 'idle') {
+          fsm.send('FOCUS');
+        }
+      } else {
+        if (currentFsmState === 'focused' || currentFsmState === 'editing') {
+          // Only blur if we are not in a state that should persist (like editing might want to persist if we click outside? No, usually click outside means save/cancel)
+          // But let's let the FSM decide.
+          fsm.send('BLUR');
+        }
+      }
+    };
+
+    props.editor.on('selectionUpdate', handleSelectionUpdate);
+
+    // Initial check
+    handleSelectionUpdate();
+
+    return () => {
+      props.editor.off('selectionUpdate', handleSelectionUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.editor, props.getPos, fsm, node.nodeSize]); // props object changes on every render, use specific props
 
   return (
     <NodeViewWrapper

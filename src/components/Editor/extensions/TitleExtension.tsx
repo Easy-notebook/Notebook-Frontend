@@ -4,14 +4,7 @@ import { TitleNodeView } from './TitleNodeView';
 
 export const TitleExtension = Node.create({
   name: 'title',
-
-  group: 'block',
-
   content: 'inline*',
-
-  // Ensure it's the first node in the document if we wanted to enforce that,
-  // but for now we just treat it as a special block that can exist anywhere
-  // (though typically at top).
 
   addAttributes() {
     return {

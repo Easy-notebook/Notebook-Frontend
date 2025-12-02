@@ -31,7 +31,7 @@ export abstract class BaseCellViewModel {
   }
 
   // Common Actions
-  public updateProps(cell: StoreCell, ..._args: any[]) {
+  public updateProps(cell: StoreCell, ..._args: unknown[]) {
     if (this.cell !== cell) {
       this.cell = cell;
       this.notify();
@@ -58,14 +58,24 @@ export abstract class BaseCellViewModel {
     const currentIndex = navCells.findIndex((c) => c.id === this.cell.id);
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
+    console.log('BaseCellViewModel.navigateToSibling', {
+      direction,
+      currentIndex,
+      newIndex,
+      totalCells: navCells.length,
+      currentCellId: this.cell.id,
+    });
+
     editorLogger.logNavigationAttempt(this.cell.id, this.cell.type, direction, {
       fromIndex: currentIndex,
       toIndex: newIndex,
       total: navCells.length,
-    } as any);
+    } as Record<string, unknown>);
 
     if (newIndex >= 0 && newIndex < navCells.length) {
       const targetCell = navCells[newIndex];
+      console.log('Target cell found', { targetCellId: targetCell.id, type: targetCell.type });
+
       editorLogger.logNavigationSuccess(
         this.cell.id,
         targetCell.id,
@@ -76,6 +86,7 @@ export abstract class BaseCellViewModel {
 
       this.focusCell(targetCell, direction);
     } else {
+      console.warn('Navigation blocked: No target cell available');
       editorLogger.logNavigationBlocked(
         this.cell.id,
         this.cell.type,
@@ -91,6 +102,23 @@ export abstract class BaseCellViewModel {
     if (targetCell.type === 'markdown') {
       state.setCurrentCell(targetCell.id);
       state.setEditingCellId(targetCell.id);
+
+      // Focus editor at start or end based on direction
+      // We need to access the main editor instance to set selection
+      // Since we don't have direct access here, we might need to dispatch an event or use a store action
+      // Assuming TiptapNotebookEditor listens to editingCellId changes and focuses, but it defaults to end?
+      // Let's try to dispatch a custom event for the main editor to pick up
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent('markdown-cell-focus', {
+            detail: {
+              cellId: targetCell.id,
+              direction,
+              sourceCellId: this.cell.id,
+            },
+          })
+        );
+      }, 50);
     } else {
       state.setEditingCellId(null);
       state.setCurrentCell(targetCell.id);

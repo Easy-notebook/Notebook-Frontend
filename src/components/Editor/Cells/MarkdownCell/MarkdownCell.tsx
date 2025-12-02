@@ -31,8 +31,10 @@ interface MarkdownCellProps {
 const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleStyle = false }) => {
   const vm = useMarkdownCellViewModel(cell);
   const viewMode = useStore((state) => state.viewMode);
+  const cellIndex = useStore((state) => state.cells.findIndex((c) => c.id === cell.id));
 
-  const isDefaultTitle = cell.metadata?.isDefaultTitle === true && !disableDefaultTitleStyle;
+  const isDefaultTitle =
+    cellIndex === 0 && cell.metadata?.isDefaultTitle === true && !disableDefaultTitleStyle;
 
   /** ---------- Markdown 渲染组件 ---------- **/
   const markdownComponents = useMemo(
@@ -73,13 +75,13 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
               if (!href) return;
               e.preventDefault();
               import('@Store/previewStore').then(async (mod) => {
-                const usePreviewStore = (mod as any).default;
-                const useNotebookStore = (await import('@Store/notebookStore')).default as any;
+                const usePreviewStore = mod.default;
+                const useNotebookStore = (await import('@Store/notebookStore')).default;
                 const notebookId = useNotebookStore.getState().notebookId;
                 if (!notebookId) return;
                 const { Backend_BASE_URL } = await import('@Config/base_url');
 
-                const base = (Backend_BASE_URL as any)?.replace(/\/$/, '');
+                const base = (Backend_BASE_URL as string)?.replace(/\/$/, '');
                 let filePath: string | null = null;
                 try {
                   const pattern = new RegExp(`^${base}/download_file/${notebookId}/(.+)$`);
@@ -143,7 +145,12 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
             {children}
           </a>
         ),
-      }) as any,
+      }) as Record<
+        string,
+        React.ComponentType<
+          React.HTMLAttributes<HTMLElement> & { href?: string; children?: React.ReactNode }
+        >
+      >,
     []
   );
 
@@ -175,7 +182,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
               {vm.isEditing ? (
                 <CodeMirror
                   onCreateEditor={vm.setEditorRef}
-                  value={cell.content}
+                  value={vm.localContent}
                   height="auto"
                   extensions={[
                     markdown(),

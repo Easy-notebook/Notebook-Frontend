@@ -1,6 +1,7 @@
 // 简化的表格扩展，专注于可靠的实时表格解析
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
+import { Node } from 'prosemirror-model';
 
 export const SimpleTableExtension = Extension.create({
   name: 'simpleTable',
@@ -80,7 +81,7 @@ function tryCreateTable(view) {
     const { doc } = state;
 
     // 收集所有段落
-    const paragraphs = [];
+    const paragraphs: { text: string; pos: number; node: Node; nodeSize: number }[] = [];
     doc.descendants((node, pos) => {
       if (node.type.name === 'paragraph') {
         const text = node.textContent.trim();
@@ -269,7 +270,6 @@ function addTableRow(view) {
 
   if (tableDepth === -1 || tableRowDepth === -1) return;
 
-  const table = $from.node(tableDepth);
   const currentRow = $from.node(tableRowDepth);
 
   // 计算列数

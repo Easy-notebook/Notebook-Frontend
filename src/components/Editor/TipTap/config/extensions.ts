@@ -93,10 +93,11 @@ export function getTipTapExtensions(placeholder: string) {
     FileAttachmentExtension,
     TitleExtension,
 
-    // Custom Heading extension with ID preservation (Levels 2-6)
-    Heading.configure({ levels: [2, 3, 4, 5, 6], HTMLAttributes: {} }).extend({
+    // Custom Heading extension with ID preservation (Levels 1-6)
+    Heading.configure({ levels: [1, 2, 3, 4, 5, 6], HTMLAttributes: {} }).extend({
       parseHTML() {
         return [
+          { tag: 'h1', getAttrs: (node) => ({ level: 1, id: node.getAttribute('id') }) },
           { tag: 'h2', getAttrs: (node) => ({ level: 2, id: node.getAttribute('id') }) },
           { tag: 'h3', getAttrs: (node) => ({ level: 3, id: node.getAttribute('id') }) },
           { tag: 'h4', getAttrs: (node) => ({ level: 4, id: node.getAttribute('id') }) },

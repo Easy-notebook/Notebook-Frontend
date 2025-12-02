@@ -1,6 +1,5 @@
 import { BaseExtension } from '../../core/BaseExtension';
 import { CodeBlockView } from './CodeBlockView';
-import { mergeAttributes } from '@tiptap/core';
 import { v4 as uuidv4 } from 'uuid';
 import { TextSelection } from 'prosemirror-state';
 
@@ -76,16 +75,26 @@ export const CodeBlockExtension = BaseExtension.create({
   addCommands() {
     return {
       setExecutableCodeBlock:
-        (attributes: any) =>
-        ({ commands }: any) => {
+        (attributes: Record<string, unknown>) =>
+        ({
+          commands,
+        }: {
+          commands: { setNode: (name: string, attrs: Record<string, unknown>) => boolean };
+        }) => {
           if (!attributes.cellId) {
             attributes.cellId = uuidv4();
           }
           return commands.setNode(this.name, attributes);
         },
       insertExecutableCodeBlock:
-        (attributes: any) =>
-        ({ commands }: any) => {
+        (attributes: Record<string, unknown>) =>
+        ({
+          commands,
+        }: {
+          commands: {
+            insertContent: (content: { type: string; attrs: Record<string, unknown> }) => boolean;
+          };
+        }) => {
           if (!attributes.cellId) {
             attributes.cellId = uuidv4();
           }
@@ -94,14 +103,172 @@ export const CodeBlockExtension = BaseExtension.create({
             attrs: attributes,
           });
         },
-    } as any;
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      Backspace: ({ editor }) => {
+        const { selection } = editor.state;
+        const { $from } = selection;
+
+        // If cursor is at the start of the document or block
+        if ($from.parentOffset === 0) {
+          const index = $from.index($from.depth - 1);
+          const parent = $from.node($from.depth - 1);
+
+          if (index > 0) {
+            const prevNode = parent.child(index - 1);
+            if (prevNode && prevNode.type.name === this.name) {
+              const cellId = prevNode.attrs.cellId;
+              if (cellId) {
+                // Dispatch navigation event to focus the code block at the end
+                window.dispatchEvent(
+                  new CustomEvent('cell-navigation', {
+                    detail: { targetCellId: cellId, direction: 'up' },
+                  })
+                );
+                return true; // Prevent default behavior (selecting the node)
+              }
+            }
+          }
+        }
+        return false;
+      },
+      ArrowUp: ({ editor }) => {
+        const { selection } = editor.state;
+        const { $from } = selection;
+
+        if ($from.parentOffset === 0) {
+          const index = $from.index($from.depth - 1);
+          const parent = $from.node($from.depth - 1);
+
+          if (index > 0) {
+            const prevNode = parent.child(index - 1);
+            if (prevNode && prevNode.type.name === this.name) {
+              const cellId = prevNode.attrs.cellId;
+              if (cellId) {
+                window.dispatchEvent(
+                  new CustomEvent('cell-navigation', {
+                    detail: { targetCellId: cellId, direction: 'up' },
+                  })
+                );
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      },
+      ArrowDown: ({ editor }) => {
+        const { selection } = editor.state;
+        const { $to } = selection;
+
+        // Check if at end of current node
+        const endOfNode = $to.end($to.depth);
+        if ($to.pos === endOfNode) {
+          const index = $to.index($to.depth - 1);
+          const parent = $to.node($to.depth - 1);
+
+          if (index < parent.childCount - 1) {
+            const nextNode = parent.child(index + 1);
+            if (nextNode && nextNode.type.name === this.name) {
+              const cellId = nextNode.attrs.cellId;
+              if (cellId) {
+                window.dispatchEvent(
+                  new CustomEvent('cell-navigation', {
+                    detail: { targetCellId: cellId, direction: 'down' },
+                  })
+                );
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      },
+      ArrowLeft: ({ editor }) => {
+        const { selection } = editor.state;
+        const { $from } = selection;
+
+        if ($from.parentOffset === 0) {
+          const index = $from.index($from.depth - 1);
+          const parent = $from.node($from.depth - 1);
+
+          if (index > 0) {
+            const prevNode = parent.child(index - 1);
+            if (prevNode && prevNode.type.name === this.name) {
+              const cellId = prevNode.attrs.cellId;
+              if (cellId) {
+                window.dispatchEvent(
+                  new CustomEvent('cell-navigation', {
+                    detail: { targetCellId: cellId, direction: 'up' }, // 'up' means focus end
+                  })
+                );
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      },
+      ArrowRight: ({ editor }) => {
+        const { selection } = editor.state;
+        const { $to } = selection;
+
+        const endOfNode = $to.end($to.depth);
+        if ($to.pos === endOfNode) {
+          const index = $to.index($to.depth - 1);
+          const parent = $to.node($to.depth - 1);
+
+          if (index < parent.childCount - 1) {
+            const nextNode = parent.child(index + 1);
+            if (nextNode && nextNode.type.name === this.name) {
+              const cellId = nextNode.attrs.cellId;
+              if (cellId) {
+                window.dispatchEvent(
+                  new CustomEvent('cell-navigation', {
+                    detail: { targetCellId: cellId, direction: 'down' }, // 'down' means focus start
+                  })
+                );
+                return true;
+              }
+            }
+          }
+        }
+        return false;
+      },
+    };
   },
 
   addInputRules() {
     return [
       {
         find: /```(python|javascript|js|typescript|ts|bash|shell)\s*$/,
-        handler: ({ state, range, match }: any) => {
+        handler: ({
+          state,
+          range,
+          match,
+        }: {
+          state: {
+            doc: {
+              resolve: (pos: number) => {
+                before: (depth: number) => number;
+                after: (depth: number) => number;
+                depth: number;
+              };
+            };
+            selection: { constructor: { near: (pos: unknown) => unknown } };
+          };
+          tr: {
+            replaceWith: (from: number, to: number, node: unknown) => void;
+            setSelection: (sel: unknown) => void;
+            setMeta: (key: string, value: unknown) => unknown;
+            doc: { content: { size: number }; resolve: (pos: number) => unknown };
+          };
+          range: { to: number };
+          match: string[];
+        }) => {
           const language = match[1] || 'python';
           const cellId = uuidv4();
           const { tr } = state;
@@ -132,7 +299,30 @@ export const CodeBlockExtension = BaseExtension.create({
       },
       {
         find: /```([a-zA-Z]*)\s*$/,
-        handler: ({ state, range, match }: any) => {
+        handler: ({
+          state,
+          range,
+          match,
+        }: {
+          state: {
+            doc: {
+              resolve: (pos: number) => {
+                before: (depth: number) => number;
+                after: (depth: number) => number;
+                depth: number;
+              };
+            };
+            selection: { constructor: { near: (pos: unknown) => unknown } };
+          };
+          tr: {
+            replaceWith: (from: number, to: number, node: unknown) => void;
+            setSelection: (sel: unknown) => void;
+            setMeta: (key: string, value: unknown) => unknown;
+            doc: { content: { size: number }; resolve: (pos: number) => unknown };
+          };
+          range: { to: number };
+          match: string[];
+        }) => {
           const raw = (match[1] || '').toLowerCase();
           const guess = (lang: string) => {
             if (!lang) return 'python';

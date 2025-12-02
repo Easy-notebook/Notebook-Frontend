@@ -4,25 +4,44 @@ import useStore from '@Store/notebookStore';
 import { v4 as uuidv4 } from 'uuid';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
 
+import { debounce } from 'lodash-es';
+
 export class MarkdownCellViewModel extends BaseCellViewModel {
   // Properties
   public editorRef: EditorView | null = null;
+  public localContent = '';
+  private debouncedUpdate: (value: string) => void;
 
   // Keymap for boundary navigation
-  public boundaryKeymap: any;
+  public boundaryKeymap: ReturnType<typeof keymap.of>;
 
   constructor(cell: StoreCell) {
     super(cell);
+    this.localContent = cell.content || '';
     this.boundaryKeymap = this.createBoundaryKeymap();
+
+    this.debouncedUpdate = debounce((value: string) => {
+      useStore.getState().updateCell(this.cell.id, value);
+    }, 300);
   }
 
   public updateProps(cell: StoreCell) {
+    const prevContent = this.cell.content;
     super.updateProps(cell);
+
+    // Sync local content if it differs from prop and we are not currently typing (simple heuristic)
+    // or if the update comes from outside (e.g. undo/redo, collab)
+    if (cell.content !== prevContent && cell.content !== this.localContent) {
+      this.localContent = cell.content || '';
+      // Force re-render if needed, though usually React handles this via prop change
+      // But since we use localContent in the view, we might need to notify
+      this.notify();
+    }
   }
 
   // Getters
   get hasContent() {
-    return (this.cell.content || '').trim().length > 0;
+    return (this.localContent || '').trim().length > 0;
   }
 
   get cellShowButtons() {
@@ -87,6 +106,8 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
   private isEmptyMarkdownCell = (content: string) => content.trim() === '';
 
   public handleChange = (value: string) => {
+    this.localContent = value;
+
     const state = useStore.getState();
     const cells = state.cells;
     const currentIndex = cells.findIndex((c) => c.id === this.cell.id);
@@ -104,6 +125,7 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
           this.createNewCodeCell(codeContent, currentIndex, codeIdentifier);
           state.deleteCell(this.cell.id);
         } else {
+          // Immediate update for structural changes
           state.updateCell(this.cell.id, beforeBackticks.trim());
           this.createNewCodeCell(codeContent, currentIndex, codeIdentifier);
         }
@@ -117,12 +139,14 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
       /^#{1,6}\s+.+/.test(lines[lines.length - 2]) &&
       lines[lines.length - 1].trim() === ''
     ) {
+      // Immediate update for structural changes
       state.updateCell(this.cell.id, value);
       this.createNewMarkdownCell(currentIndex);
       return;
     }
 
-    state.updateCell(this.cell.id, value);
+    // Debounced update for normal typing
+    this.debouncedUpdate(value);
   };
 
   public handleKeyDown = (event: React.KeyboardEvent) => {
@@ -144,6 +168,25 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
     if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
       event.preventDefault();
       this.navigateToSibling(event.key === 'ArrowUp' ? 'up' : 'down');
+      return;
+    }
+
+    // Special handling for Title cell (first cell): Enter creates a new cell instead of newline
+    if (
+      currentIndex === 0 &&
+      event.key === 'Enter' &&
+      !event.shiftKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      // If title is default 'Untitled', disable Enter to prevent accidental cell creation
+      if (this.cell.content.trim() === '# Untitled') {
+        event.preventDefault();
+        return;
+      }
+
+      event.preventDefault();
+      this.createNewMarkdownCell(currentIndex);
       return;
     }
 

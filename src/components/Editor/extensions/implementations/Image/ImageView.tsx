@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { NodeViewProps } from '@tiptap/react';
 import { BaseNodeView } from '../../core/BaseNodeView';
 import { ImageModel, ImageContext } from './ImageModel';
 import useStore from '@Store/notebookStore';
@@ -6,10 +7,18 @@ import { Upload, X, Edit3, Loader2, Eye, AlignCenter, AlignLeft } from 'lucide-r
 import { Image } from 'antd';
 import { generateCellId } from '../../../utils/cellConverters';
 
-const ImageViewComponent = (props: any) => {
+interface ImageViewComponentProps extends NodeViewProps {
+  fsm: {
+    getCurrentState: () => string;
+    send: (event: string, payload?: Record<string, unknown>) => void;
+    transitionTo: (state: string) => void;
+  };
+}
+
+const ImageViewComponent = (props: ImageViewComponentProps) => {
   const { node, updateAttributes, deleteNode, fsm } = props;
   const { src, alt, cellId, markdown, displayMode } = node.attrs;
-  const { cells, currentCellId, updateCell, viewMode, editingCellId } = useStore();
+  const { cells, updateCell, viewMode } = useStore();
 
   const [tempMarkdown, setTempMarkdown] = useState('');
   const [imageError, setImageError] = useState(false);
@@ -18,7 +27,6 @@ const ImageViewComponent = (props: any) => {
   const textareaRef = useRef<HTMLInputElement>(null);
 
   const cell = useMemo(() => cells.find((c) => c.id === cellId), [cells, cellId]);
-  const isFocused = cellId === currentCellId || cellId === editingCellId;
   const currentState = fsm.getCurrentState();
 
   const cellContent = cell?.content || '';
@@ -40,7 +48,7 @@ const ImageViewComponent = (props: any) => {
 
   // Infer displayMode and ensure cellId on mount (persistence fix)
   useEffect(() => {
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
 
     // Ensure cellId exists
     if (!cellId) {
@@ -63,7 +71,8 @@ const ImageViewComponent = (props: any) => {
     if (Object.keys(updates).length > 0) {
       updateAttributes(updates);
     }
-  }, []); // Run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount - intentionally empty deps for initialization
 
   // Sync FSM with cell state
   useEffect(() => {
@@ -143,16 +152,9 @@ const ImageViewComponent = (props: any) => {
     if (cellId && updateCell) {
       updateCell(cellId, tempMarkdown);
     }
-    const parsed = parseMarkdown(tempMarkdown);
-    updateAttributes({
-      markdown: tempMarkdown,
-      src: parsed.src,
-      alt: parsed.alt,
-      title: parsed.alt,
-      cellId,
-    });
+    // Delegate validation and attribute updates to FSM
+    fsm.send('SAVE', { markdown: tempMarkdown });
     setImageError(false);
-    fsm.send('SAVE');
   };
 
   const handleCancel = () => {
@@ -441,7 +443,9 @@ const ImageViewComponent = (props: any) => {
 
           {/* Floating toolbar - show on hover in create mode */}
           {viewMode === 'create' && (
-            <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <div
+              className={`absolute top-2 left-2 flex gap-1 transition-opacity z-10 ${currentState === 'focused' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+            >
               {/* Preview button */}
               {!previewData.isVideo && (
                 <button
@@ -525,11 +529,11 @@ const ImageViewComponent = (props: any) => {
         // Empty state or invalid syntax
         <div
           className={`image-placeholder border-2 border-dashed border-gray-300 rounded-lg p-8 text-center ${
-            viewMode === 'create' && isFocused
+            viewMode === 'create' && currentState === 'focused'
               ? 'hover:border-gray-400 transition-colors cursor-pointer'
               : ''
           }`}
-          onClick={viewMode === 'create' && isFocused ? handleEdit : undefined}
+          onClick={viewMode === 'create' && currentState === 'focused' ? handleEdit : undefined}
           style={displayMode ? {} : { padding: '0.2em', display: 'inline-block' }}
         >
           {displayMode ? (
@@ -538,7 +542,7 @@ const ImageViewComponent = (props: any) => {
               <div className="text-gray-600 mb-2">
                 {hasContent
                   ? 'Markdown syntax error'
-                  : viewMode === 'create' && isFocused
+                  : viewMode === 'create' && currentState === 'focused'
                     ? 'Click to add media'
                     : 'Media content'}
               </div>
@@ -550,7 +554,7 @@ const ImageViewComponent = (props: any) => {
 
           {hasContent &&
             viewMode === 'create' &&
-            isFocused &&
+            currentState === 'focused' &&
             !isGeneratedContent &&
             displayMode && (
               <div className="mt-2 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded">
@@ -563,7 +567,7 @@ const ImageViewComponent = (props: any) => {
   );
 };
 
-export const ImageView = (props: any) => {
+export const ImageView = (props: NodeViewProps) => {
   const { cells } = useStore();
   // We need to pass cell context to FSM creation
   const cell = cells.find((c) => c.id === props.node.attrs.cellId);
@@ -577,6 +581,8 @@ export const ImageView = (props: any) => {
         updateAttributes: p.updateAttributes,
         deleteNode: p.deleteNode,
         cell: cell,
+        editor: p.editor,
+        getPos: p.getPos,
       })}
       renderState={(state, context, fsm) => <ImageViewComponent {...props} fsm={fsm} />}
       wrapperComponent={props.node.attrs.displayMode ? 'div' : 'span'}
