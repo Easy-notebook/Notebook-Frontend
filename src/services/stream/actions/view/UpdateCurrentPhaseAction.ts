@@ -12,8 +12,8 @@ export class UpdateCurrentPhaseAction extends StreamAction {
   async execute(context: StreamActionContext): Promise<void> {
     const { data, payload, showToast } = context;
 
-    const rawPhaseId = payload.phaseId || (data as any).phaseId;
-    const phaseName = payload.phaseName || (data as any).phaseName;
+    const rawPhaseId = payload.phaseId || (data as any)?.phaseId;
+    const phaseName = payload.phaseName || (data as any)?.phaseName;
 
     if (rawPhaseId || phaseName) {
       const requested = rawPhaseId || phaseName!;

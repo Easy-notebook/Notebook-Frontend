@@ -6,6 +6,9 @@
 import { ActionBase, registerAction } from '../base';
 import type { ExecutionStep } from '@Store/models';
 import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
+import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
+import { WorkflowState } from '../../observation/WorkflowState';
+import { ClearEffectCurrentAction } from '../reflecting/ClearEffectCurrent';
 
 export class ExecCodeAction extends ActionBase {
   async execute(step: ExecutionStep): Promise<any> {
@@ -26,6 +29,13 @@ export class ExecCodeAction extends ActionBase {
 
     console.log(`[ExecCodeAction] Executing code: ${targetId}`);
 
+    // Clear current effects before execution
+    const stateMachine = useWorkflowStateMachine.getState();
+    const stateJSON = stateMachine.stateJSON;
+    const workflowState = new WorkflowState(stateJSON);
+    ClearEffectCurrentAction.processState(workflowState);
+    stateMachine.setState(workflowState.toJSON());
+
     // Show execution indicator
     globalUpdateInterface.createAIRunningCode('Executing...', '', [], targetId, true);
 
@@ -39,11 +49,9 @@ export class ExecCodeAction extends ActionBase {
       // Update Workflow State with Effects
       // We do this here instead of in scriptStore to keep workflow logic separate
       if (result) {
-        const { useWorkflowStateMachine } = await import('../../store/workflowStateMachine');
-        const { WorkflowState } = await import('../../observation/WorkflowState');
-
-        const stateMachine = useWorkflowStateMachine.getState();
-        const workflowState = new WorkflowState(stateMachine.stateJSON);
+        // Re-fetch the state machine since we already cleared effects earlier
+        const currentStateMachine = useWorkflowStateMachine.getState();
+        const currentWorkflowState = new WorkflowState(currentStateMachine.stateJSON);
 
         // Get outputs from result
         let outputs: any[] = result.outputs || [];
@@ -61,7 +69,7 @@ export class ExecCodeAction extends ActionBase {
             let effectContent = item.content || item.text || item.toString();
 
             if (outputType === 'error') {
-              workflowState.state.effects.addCurrentEffect({
+              currentWorkflowState.state.effects.addCurrentEffect({
                 type: 'error',
                 error: {
                   name: 'ExecutionError',
@@ -71,13 +79,13 @@ export class ExecCodeAction extends ActionBase {
                 cell_ref: targetId,
               });
             } else if (outputType === 'image') {
-              workflowState.state.effects.addCurrentEffect({
+              currentWorkflowState.state.effects.addCurrentEffect({
                 type: 'image_url',
                 image_url: effectContent,
                 cell_ref: targetId,
               });
             } else {
-              workflowState.state.effects.addCurrentEffect({
+              currentWorkflowState.state.effects.addCurrentEffect({
                 type: 'text',
                 text: effectContent,
                 cell_ref: targetId,
@@ -85,7 +93,7 @@ export class ExecCodeAction extends ActionBase {
             }
           });
 
-          stateMachine.setState(workflowState.toJSON());
+          currentStateMachine.setState(currentWorkflowState.toJSON());
           console.log(`[ExecCodeAction] Recorded ${outputs.length} effects for cell ${targetId}`);
         }
       }

@@ -41,6 +41,7 @@ export interface StreamPayload {
   label?: string;
   notebook_id?: string;
   response?: string;
+  phaseName?: string;
 }
 
 export interface StreamData {
@@ -62,7 +63,12 @@ export type ShowToastFunction = (toast: ToastMessage) => Promise<void>;
  * Context passed to stream actions
  */
 export interface StreamActionContext {
-  data: StreamData;
+  data?: StreamData;
   payload: StreamPayload;
   showToast: ShowToastFunction;
+  notebookId?: string;
+  currentCellId?: string;
+  viewMode?: string;
+  currentPhaseId?: string;
+  currentStepIndex?: number;
 }
