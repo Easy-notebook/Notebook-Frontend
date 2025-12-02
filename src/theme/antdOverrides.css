@@ -428,16 +428,36 @@
      Enhanced Modal Styling
      ==================================================================== */
 
+/* Modal Mask Enhancement */
+.ant-modal-mask {
+  backdrop-filter: blur(4px) !important;
+  background-color: rgba(0, 0, 0, 0.45) !important;
+}
+
 /* Modal Header Enhancement */
 .ant-modal-header {
+  background: transparent !important;
   border-bottom: 1px solid rgba(65, 184, 131, 0.1) !important;
-  padding: 16px 24px !important;
+  padding: 20px 24px !important;
+  margin-bottom: 0 !important;
 }
 
 .ant-modal-title {
   color: #202124 !important;
   font-weight: 600 !important;
   font-size: 18px !important;
+}
+
+/* Modal Content Enhancement - Frosted Glass */
+.ant-modal-content {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
 }
 
 /* Modal Body Enhancement */
@@ -449,9 +469,11 @@
 
 /* Modal Footer Enhancement */
 .ant-modal-footer {
+  background: transparent !important;
   border-top: 1px solid rgba(65, 184, 131, 0.1) !important;
-  padding: 10px 16px !important;
+  padding: 16px 24px !important;
   text-align: right !important;
+  margin-top: 0 !important;
 }
 
 .ant-modal-footer .ant-btn + .ant-btn {
@@ -462,10 +484,47 @@
 .ant-modal-close-x {
   color: #9ca3af !important;
   transition: all 0.2s ease !important;
+  width: 44px !important;
+  height: 44px !important;
+  line-height: 44px !important;
 }
 
 .ant-modal-close-x:hover {
   color: #6b7280 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-radius: 50% !important;
+}
+
+/* Dark Mode Support for Modal */
+.dark .ant-modal-content {
+  background: rgba(30, 30, 30, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark .ant-modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark .ant-modal-title {
+  color: #e5e7eb !important;
+}
+
+.dark .ant-modal-body {
+  color: #d1d5db !important;
+}
+
+.dark .ant-modal-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark .ant-modal-close-x {
+  color: #9ca3af !important;
+}
+
+.dark .ant-modal-close-x:hover {
+  color: #e5e7eb !important;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* ====================================================================
