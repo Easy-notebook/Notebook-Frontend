@@ -50,12 +50,15 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
     // Extract behavior from actions if streaming
     if ('actions' in apiResponse && Array.isArray(apiResponse.actions)) {
       console.log('[StartBehavior] Extracting behavior from streaming actions');
+      // Include delegate_task as it contains agent and task info
       const behaviorAction = apiResponse.actions.find(
-        (a: any) => a.type === 'plan_behavior' || a.type === 'start_behavior'
+        (a: any) =>
+          a.type === 'plan_behavior' || a.type === 'start_behavior' || a.type === 'delegate_task'
       );
 
       if (behaviorAction) {
         data = behaviorAction;
+        console.log(`[StartBehavior] Found behavior action: ${behaviorAction.type}`);
       } else {
         // If no explicit behavior action, check if we have enough info in the response or other actions
         // Sometimes complete_step_planning implies starting the first behavior?
@@ -67,15 +70,18 @@ export class StartBehaviorHandler extends BaseTransitionHandler {
     // Extract behavior fields
     const behaviorId = data.behavior_id || data.behaviorId;
     const stepId = data.step_id || data.stepId || state.location.current.stepId;
-    const agent = data.agent || 'default_agent';
-    // Use task if available, otherwise use title, otherwise use focus
-    const task = (data.task || data.title || data.focus || '').trim();
+    // FIX: Also check state for agent set by DelegateTaskAction, fallback to 'default_agent' only as last resort
+    const existingBehavior = state.location.current.behavior as { agent?: string } | undefined;
+    const agent = data.agent || existingBehavior?.agent || 'default_agent';
+    // Use task if available (including task_description from delegate_task), otherwise use title, otherwise use focus
+    const task = (data.task || data.task_description || data.title || data.focus || '').trim();
     const inputs = data.inputs || {};
     const outputs = data.outputs || {};
     const acceptance = data.acceptance || [];
     const whathappened = data.whathappened || {};
 
     console.log(`[StartBehavior] Applying behavior: ${behaviorId}`);
+    console.log(`[StartBehavior] Agent: ${agent}`);
     console.log(`[StartBehavior] Task/Title: ${task}`);
 
     // Get structures
