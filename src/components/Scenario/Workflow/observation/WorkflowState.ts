@@ -10,11 +10,29 @@ export interface Observation {
 }
 
 /**
+ * Agent Activity Tracking
+ */
+export interface AgentActivity {
+  current: string | null;
+  history: string[];
+}
+
+/**
+ * Agent State Structure
+ */
+export interface AgentState {
+  task: AgentActivity;
+  thinking: AgentActivity;
+  conclusion: AgentActivity;
+}
+
+/**
  * Complete StateJSON structure
  */
 export interface StateJSON {
   observation: Observation;
   state: InternalStateData;
+  agents?: Record<string, AgentState>;
   metadata?: Record<string, any>;
   [key: string]: unknown;
 }
@@ -97,6 +115,7 @@ export function createInitialStateJSON(
         timestamp: new Date().toISOString(),
       },
     },
+    agents: {},
     metadata: {},
   };
 }

@@ -24,6 +24,7 @@ export class DelegateTaskAction extends ActionBase {
     const step_id = step.stepId || step.step_id;
     const task_description =
       (step as ExecutionStep & { taskDescription?: string }).taskDescription ||
+      (step as any).task_description ||
       (step.metadata?.task_description as string | undefined);
     const agent = (step as ExecutionStep & { agent?: string }).agent;
     const acceptance = step.acceptance;
@@ -53,13 +54,68 @@ export class DelegateTaskAction extends ActionBase {
     currentStep.acceptance = acceptance;
 
     // Set current behavior context
-    stateJSON.observation.location.current.behavior = {
-      agent,
-      task: task_description,
-      acceptance,
-    };
+    if (stateJSON.observation?.location?.current) {
+      stateJSON.observation.location.current.behavior_id = agent;
+      stateJSON.observation.location.current.behavior = {
+        agent,
+        task: task_description,
+        acceptance: typeof acceptance === 'string' ? acceptance : JSON.stringify(acceptance),
+      };
+    }
+
+    // Update progress.behaviors.current
+    // This ensures the UI reflects the current task in the behaviors section
+    if (!stateJSON.observation.location.progress.behaviors.current) {
+      stateJSON.observation.location.progress.behaviors.current = {
+        behavior_id: agent, // Using agent as behavior_id for now
+        title: `Task for ${agent}`,
+        verified_artifacts: {},
+        iteration: 1,
+        max_iterations: 5,
+        completion_status: 'running',
+        agent: agent,
+        task: task_description,
+        inputs: {}, // Initialize inputs
+        outputs: {}, // Initialize outputs
+        acceptance: acceptance,
+      } as any;
+    } else {
+      const behaviorCurrent = stateJSON.observation.location.progress.behaviors.current as any;
+      behaviorCurrent.agent = agent;
+      behaviorCurrent.task = task_description;
+      behaviorCurrent.acceptance = acceptance;
+      // Ensure inputs/outputs exist
+      if (!behaviorCurrent.inputs) behaviorCurrent.inputs = {};
+      if (!behaviorCurrent.outputs) behaviorCurrent.outputs = {};
+    }
+
+    // --- Update Agent State ---
+    if (!stateJSON.agents) {
+      stateJSON.agents = {};
+    }
+
+    if (!stateJSON.agents[agent]) {
+      stateJSON.agents[agent] = {
+        task: { current: null, history: [] },
+        thinking: { current: null, history: [] },
+        conclusion: { current: null, history: [] },
+      };
+    }
+
+    const agentState = stateJSON.agents[agent];
+
+    // Archive current task if exists
+    if (agentState.task.current) {
+      agentState.task.history.push(agentState.task.current);
+    }
+
+    // Update current task
+    agentState.task.current = task_description;
 
     console.log(`[DelegateTaskAction] ✅ Delegated step ${step_id} to ${agent}`);
+    console.log(
+      `[DelegateTaskAction] 🔄 Updated agent ${agent} task: ${task_description.substring(0, 50)}...`
+    );
 
     // Update workflow state machine with modified stateJSON
     stateMachine.setState(stateJSON);
