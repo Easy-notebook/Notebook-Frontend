@@ -10,7 +10,6 @@ export * from './implementations/ThinkingCell/ThinkingCellExtension';
 // Re-export existing extensions
 export { FileAttachmentExtension } from './FileAttachmentExtension';
 export { RawCellExtension } from './RawCellExtension';
-export { SlashCommandExtension } from './SlashCommandExtension';
 export { SimpleTableExtension as TableExtension } from './TableExtension'; // Renamed to match usage
 export { TitleExtension } from './TitleExtension';
 export { UploadDropExtension } from './UploadDropExtension';

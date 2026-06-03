@@ -80,15 +80,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const cells = useStore((state) => state.cells);
     const setCells = useStore((state) => state.setCells);
 
-    // Debug: Log cells changes
-    useEffect(() => {
-      console.log('🔍 [TiptapNotebookEditor] cells changed', {
-        cellsCount: cells.length,
-        cellIds: cells.map((c) => c.id),
-        cellTypes: cells.map((c) => c.type),
-      });
-    }, [cells]);
-
     // Editor state
     const editorRef = useRef<Editor | null>(null);
     const [currentEditor, setCurrentEditor] = useState<Editor | null>(null);
