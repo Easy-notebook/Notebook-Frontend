@@ -18,8 +18,9 @@ import { Node as PMNode, Schema } from 'prosemirror-model';
 import { minimalSchema } from './schema.minimal';
 import { NotebookTransaction, ChangeKind, EXTERNAL_META } from './NotebookTransaction';
 import { NotebookDoc } from './NotebookDoc';
-import { CommandRegistry, CommandContext } from './NotebookCommand';
+import { CommandRegistry, CommandContext, deriveContextHelpers } from './NotebookCommand';
 import { NotebookServices } from './ports';
+import { IntentSink, BufferingIntentSink } from './intents';
 
 export interface CoreOptions {
   schema?: Schema;
@@ -27,6 +28,8 @@ export interface CoreOptions {
   services?: Partial<NotebookServices>;
   plugins?: Plugin[];
   initialDoc?: PMNode | unknown; // PMNode or PM JSON
+  /** i18n lookup injected from the host; no react-i18next inside core. */
+  t?: (key: string, fallback?: string) => string;
 }
 
 export interface ChangeEvent {
@@ -47,12 +50,24 @@ export class NotebookEditorCore {
   private editorState: EditorState;
   private editorView: EditorView | null = null;
   private services: NotebookServices;
+  /** Buffering intent sink; the shell drains it after commands run. */
+  readonly intents: IntentSink = new BufferingIntentSink();
+  private readonly t: (key: string, fallback?: string) => string;
   private readonly listeners = new Set<ChangeListener>();
 
   constructor(options: CoreOptions = {}) {
     this.schema = options.schema ?? minimalSchema;
     this.commands = options.commands ?? new CommandRegistry();
     this.services = { ...(options.services ?? {}) };
+    this.t = options.t ?? ((key, fallback) => fallback ?? key);
+
+    // Let the registry build its own contexts for list()/run()/toKeymap().
+    this.commands.setDefaults({
+      services: this.services,
+      intents: this.intents,
+      t: this.t,
+      view: () => this.editorView,
+    });
 
     const doc = this.resolveDoc(options.initialDoc);
     this.editorState = EditorState.create({
@@ -123,11 +138,12 @@ export class NotebookEditorCore {
     this.emit(event);
   }
 
-  runCommand(id: string, args?: unknown): boolean {
+  runCommand(id: string, args?: unknown): boolean | Promise<boolean> {
     const command = this.commands.get(id);
     if (!command) return false;
-    const ctx = this.commandContext();
+    const ctx = this.commandContext(typeof args === 'string' ? args : undefined);
     if (command.isAvailable && !command.isAvailable(ctx)) return false;
+    if (command.canRun && !command.canRun(ctx)) return false;
     return command.run(ctx, args);
   }
 
@@ -160,6 +176,7 @@ export class NotebookEditorCore {
 
   setServices(services: Partial<NotebookServices>): void {
     this.services = { ...this.services, ...services };
+    this.commands.setDefaults({ services: this.services });
   }
 
   // --- internals ----------------------------------------------------------
@@ -167,7 +184,7 @@ export class NotebookEditorCore {
     this.listeners.forEach((cb) => cb(event));
   }
 
-  private commandContext(): CommandContext {
+  private commandContext(arg?: string): CommandContext {
     return {
       state: this.editorState,
       dispatch: (tx) => this.dispatch(tx),
@@ -175,6 +192,10 @@ export class NotebookEditorCore {
       schema: this.schema,
       services: this.services,
       doc: this.doc,
+      arg,
+      t: this.t,
+      intents: this.intents,
+      ...deriveContextHelpers(this.editorState),
     };
   }
 

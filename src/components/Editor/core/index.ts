@@ -15,8 +15,41 @@ export type { CellKind } from './NotebookCell';
 export { NotebookTransaction, EXTERNAL_META, NO_HISTORY_META } from './NotebookTransaction';
 export type { ChangeKind } from './NotebookTransaction';
 
-export { CommandRegistry } from './NotebookCommand';
-export type { NotebookCommand, CommandContext } from './NotebookCommand';
+export {
+  CommandRegistry,
+  cellIdAt,
+  isNodeActiveIn,
+  isMarkActiveIn,
+  deriveContextHelpers,
+} from './NotebookCommand';
+export type {
+  NotebookCommand,
+  CommandContext,
+  FullCommandContext,
+  CommandGroup,
+  CommandSurface,
+  ResolvedCommand,
+  ListOptions,
+  RunOptions,
+  PMKeymapHandler,
+} from './NotebookCommand';
+
+export { BufferingIntentSink } from './intents';
+export type { EditorIntent, IntentSink } from './intents';
+
+export {
+  txCommand,
+  serviceCommand,
+  first,
+  sequence,
+  when,
+  tap,
+  byId,
+  createBuiltinCommands,
+  SPECIAL_DOWNGRADE,
+  resetBuiltinIdCounter,
+} from './commands';
+export type { CommandMeta, CommandFn } from './commands';
 
 export { minimalSchema } from './schema.minimal';
 export { notebookSchema, NODE } from './schema';
@@ -44,4 +77,5 @@ export type {
   ImageGenService,
   CellLike,
   CellType,
+  NodeIdGenerator,
 } from './ports';

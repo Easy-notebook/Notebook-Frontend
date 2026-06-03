@@ -69,10 +69,19 @@ export interface ImageGenService {
   generate(params: ImageGenParams): Promise<{ src: string }>;
 }
 
+/**
+ * Stable-id minting strategy. The core must stay crypto/window-free, so the
+ * host injects `crypto.randomUUID`/nanoid from OUTSIDE; absent it, builtins fall
+ * back to a deterministic in-module counter (headless/test use).
+ */
+export type NodeIdGenerator = () => string;
+
 /** The bundle of injected capabilities exposed to commands via CommandContext. */
 export interface NotebookServices {
   execution?: ExecutionService;
   ai?: AIService;
   upload?: UploadService;
   imageGen?: ImageGenService;
+  /** Optional injected id minting; builtins use a deterministic fallback if absent. */
+  idFactory?: NodeIdGenerator;
 }
