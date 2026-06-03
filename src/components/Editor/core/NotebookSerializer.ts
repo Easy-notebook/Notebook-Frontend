@@ -23,8 +23,10 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkStringify from 'remark-stringify';
+import remarkDirective from 'remark-directive';
 import { Node as PMNode, Mark } from 'prosemirror-model';
 import { notebookSchema as schema, NODE } from './schema';
+import { CellLike } from './ports';
 
 // mdast is loosely typed here to avoid a hard dep on @types/mdast in core.
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -37,6 +39,7 @@ function buildParser(): Processor {
     .use(remarkParse)
     .use(remarkGfm)
     .use(remarkMath)
+    .use(remarkDirective)
     .use(remarkFrontmatter, ['yaml']) as unknown as Processor;
 }
 
@@ -45,6 +48,7 @@ function buildStringifier(): Processor {
     .use(remarkStringify, { bullet: '-', fences: true, rule: '-', listItemIndent: 'one' })
     .use(remarkGfm)
     .use(remarkMath)
+    .use(remarkDirective)
     .use(remarkFrontmatter, ['yaml']) as unknown as Processor;
 }
 
@@ -168,6 +172,59 @@ function cell(body: PMNode, cellId: string | null = null): PMNode {
   return s.node(NODE.notebookCell, { cellId }, body);
 }
 
+/** Convert a `:::name{...}` container directive to its cell body (or null). */
+function directiveToCell(node: MdNode): PMNode | null {
+  const attrs = (node.attributes || {}) as Record<string, string>;
+  const cellId = attrs.id || null;
+  switch (node.name) {
+    case 'thinking':
+      return cell(
+        s.node(NODE.thinkingBlock, {
+          cellId,
+          agentName: attrs.agent || null,
+          phase: attrs.state || 'thinking',
+          text: directiveText(node),
+        }),
+        cellId
+      );
+    case 'raw':
+      return cell(
+        s.node(
+          NODE.rawBlock,
+          { format: attrs.format || 'markdown' },
+          directiveText(node) ? s.text(directiveText(node)) : undefined
+        ),
+        cellId
+      );
+    case 'image':
+      return cell(
+        s.node(NODE.imageBlock, {
+          src: attrs.src || null,
+          alt: attrs.alt || '',
+          title: attrs.title || null,
+          source: attrs.source || 'upload',
+        }),
+        cellId
+      );
+    default:
+      return null;
+  }
+}
+
+/** Flatten a directive's child text content (paragraphs joined by blank lines). */
+function directiveText(node: MdNode): string {
+  const parts: string[] = [];
+  const walk = (n: MdNode) => {
+    if (n.type === 'text' || n.type === 'inlineCode') parts.push(n.value);
+    else (n.children || []).forEach(walk);
+  };
+  (node.children || []).forEach((child: MdNode) => {
+    walk(child);
+    parts.push('\n');
+  });
+  return parts.join('').trim();
+}
+
 /** Map a top-level mdast node to a notebookCell (or null to skip, e.g. yaml). */
 function topLevelToCell(node: MdNode): PMNode | null {
   switch (node.type) {
@@ -181,6 +238,9 @@ function topLevelToCell(node: MdNode): PMNode | null {
       );
     case 'table':
       return cell(tableToPM(node));
+    case 'containerDirective':
+    case 'leafDirective':
+      return directiveToCell(node);
     default: {
       const block = blockToPM(node);
       if (!block) return null;
@@ -344,7 +404,43 @@ function cellToMd(cellNode: PMNode): MdNode[] {
     }
     case NODE.table:
       return [tableToMd(body)];
-    // thinkingBlock / imageBlock / rawBlock -> remark-directive (next phase)
+    case NODE.thinkingBlock: {
+      const attributes: Record<string, string> = {};
+      if (body.attrs.agentName) attributes.agent = body.attrs.agentName;
+      if (body.attrs.phase) attributes.state = body.attrs.phase;
+      if (cellNode.attrs.cellId) attributes.id = cellNode.attrs.cellId;
+      return [
+        {
+          type: 'containerDirective',
+          name: 'thinking',
+          attributes,
+          children: [
+            { type: 'paragraph', children: [{ type: 'text', value: body.attrs.text || '' }] },
+          ],
+        },
+      ];
+    }
+    case NODE.rawBlock: {
+      const attributes: Record<string, string> = { format: body.attrs.format || 'markdown' };
+      if (cellNode.attrs.cellId) attributes.id = cellNode.attrs.cellId;
+      return [
+        {
+          type: 'containerDirective',
+          name: 'raw',
+          attributes,
+          children: [{ type: 'paragraph', children: [{ type: 'text', value: body.textContent }] }],
+        },
+      ];
+    }
+    case NODE.imageBlock: {
+      const attributes: Record<string, string> = {};
+      if (body.attrs.src) attributes.src = body.attrs.src;
+      if (body.attrs.alt) attributes.alt = body.attrs.alt;
+      if (body.attrs.title) attributes.title = body.attrs.title;
+      if (body.attrs.source) attributes.source = body.attrs.source;
+      if (cellNode.attrs.cellId) attributes.id = cellNode.attrs.cellId;
+      return [{ type: 'containerDirective', name: 'image', attributes, children: [] }];
+    }
     default:
       return [];
   }
@@ -372,7 +468,181 @@ export function serializeMarkdown(doc: PMNode): string {
   return stringifier.stringify(root) as string;
 }
 
+// ===========================================================================
+// Legacy Cell[] <-> PM doc interop (back-compat reader for IndexedDB snapshots)
+// ===========================================================================
+
+/** Parse a markdown *fragment* (a legacy cell's `content`) into PM block nodes. */
+function parseBlocks(md: string): PMNode[] {
+  const root = parser.parse(md || '') as MdNode;
+  const out: PMNode[] = [];
+  for (const node of root.children || []) {
+    if (node.type === 'yaml') continue;
+    const b = blockToPM(node);
+    if (b) out.push(b);
+    // Tables/directives inside a legacy markdown cell are rare; they are not
+    // representable inside a single markdownBlock and are dropped here. Real
+    // table/thinking/etc. cells come through as their own typed cells.
+  }
+  if (out.length === 0) out.push(s.node(NODE.paragraph));
+  return out;
+}
+
+/** Serialize a markdownBlock's block children back to a markdown string. */
+function blocksToMarkdown(markdownBlock: PMNode): string {
+  const children: MdNode[] = [];
+  markdownBlock.forEach((b) => {
+    const md = blockToMd(b);
+    if (md) children.push(md);
+  });
+  const root: MdNode = { type: 'root', children };
+  return (stringifier.stringify(root) as string).replace(/\n+$/, '');
+}
+
+type ExecStatus = 'ok' | 'error' | 'empty';
+
+/** Legacy `outputs` (string[] with sentinels) -> structured outputBlock items. */
+function legacyOutputsToItems(outputs?: unknown[]): {
+  status: ExecStatus;
+  items: { kind: string; data: string; key: string }[];
+} {
+  const arr = (outputs as unknown[]) || [];
+  if (arr.length === 0 || arr[0] === '[without-output]') return { status: 'empty', items: [] };
+  let status: ExecStatus = 'ok';
+  let data = arr;
+  if (arr[0] === '[error-message-for-debug]') {
+    status = 'error';
+    data = arr.slice(1);
+  }
+  const items = data.map((o, i) => ({
+    kind: status === 'error' ? 'error' : 'text',
+    data: typeof o === 'string' ? o : JSON.stringify(o),
+    key: `o${i}`,
+  }));
+  return { status, items };
+}
+
+/** Inverse: structured outputBlock items -> legacy `outputs` string[] with sentinels. */
+function itemsToLegacyOutputs(outputBlock: PMNode | null): string[] {
+  if (!outputBlock) return [];
+  const status = outputBlock.attrs.status as ExecStatus;
+  const items = (outputBlock.attrs.items as { data: string }[]) || [];
+  if (status === 'empty') return [];
+  const datas = items.map((it) => it.data);
+  return status === 'error' ? ['[error-message-for-debug]', ...datas] : datas;
+}
+
+/** Wrap a body node in a notebookCell carrying the legacy cell's identity. */
+function legacyCellWrap(c: CellLike, body: PMNode): PMNode {
+  return s.node(
+    NODE.notebookCell,
+    {
+      cellId: c.id ?? null,
+      phaseId: (c.phaseId as string) ?? null,
+      enableEdit: c.enableEdit !== false,
+      description: (c.description as string) ?? null,
+    },
+    body
+  );
+}
+
+/**
+ * Convert a legacy `Cell[]` to a PM `notebook` doc. A synthetic default
+ * `titleBlock` is prepended so the schema's title-first invariant holds; every
+ * legacy cell is preserved 1:1 as a `notebookCell` (so `docToCells` is lossless
+ * for id/type/outputs/phaseId/enableEdit/description).
+ */
+export function cellsToDoc(cells: CellLike[], opts: { notebookId?: string } = {}): PMNode {
+  const out: PMNode[] = [];
+  for (const c of cells) {
+    switch (c.type) {
+      case 'code': {
+        const { status, items } = legacyOutputsToItems(c.outputs);
+        const lang = (c.metadata?.language as string) || 'python';
+        const codeChildren: PMNode[] = [
+          s.node(NODE.codeText, null, c.content ? s.text(c.content) : undefined),
+        ];
+        if (items.length || status !== 'empty') {
+          codeChildren.push(s.node(NODE.outputBlock, { status, items }));
+        }
+        out.push(legacyCellWrap(c, s.node(NODE.codeCell, { language: lang }, codeChildren)));
+        break;
+      }
+      case 'raw':
+        out.push(
+          legacyCellWrap(c, s.node(NODE.rawBlock, null, c.content ? s.text(c.content) : undefined))
+        );
+        break;
+      case 'image':
+        out.push(legacyCellWrap(c, s.node(NODE.imageBlock, { src: c.content ?? null })));
+        break;
+      case 'thinking':
+        out.push(legacyCellWrap(c, s.node(NODE.thinkingBlock, { text: c.content ?? '' })));
+        break;
+      case 'markdown':
+      default:
+        out.push(legacyCellWrap(c, s.node(NODE.markdownBlock, null, parseBlocks(c.content ?? ''))));
+    }
+  }
+  if (out.length === 0) {
+    out.push(
+      s.node(NODE.notebookCell, null, s.node(NODE.markdownBlock, null, s.node(NODE.paragraph)))
+    );
+  }
+  const title = s.node(NODE.titleBlock, { isDefault: true });
+  return s.node(NODE.notebook, { notebookId: opts.notebookId ?? null }, [title, ...out]);
+}
+
+/** Convert a PM `notebook` doc back to a legacy `Cell[]` projection. */
+export function docToCells(doc: PMNode): CellLike[] {
+  const cells: CellLike[] = [];
+  doc.forEach((node) => {
+    if (node.type.name !== NODE.notebookCell) return;
+    const body = node.firstChild;
+    if (!body) return;
+    const base = {
+      id: (node.attrs.cellId as string) ?? '',
+      enableEdit: node.attrs.enableEdit !== false,
+      phaseId: (node.attrs.phaseId as string) ?? null,
+      description: (node.attrs.description as string) ?? null,
+    };
+    switch (body.type.name) {
+      case NODE.codeCell: {
+        const outputBlock = body.childCount > 1 ? body.child(1) : null;
+        cells.push({
+          ...base,
+          type: 'code',
+          content: body.firstChild?.textContent ?? '',
+          outputs: itemsToLegacyOutputs(outputBlock),
+        });
+        break;
+      }
+      case NODE.rawBlock:
+        cells.push({ ...base, type: 'raw', content: body.textContent, outputs: [] });
+        break;
+      case NODE.imageBlock:
+        cells.push({ ...base, type: 'image', content: body.attrs.src ?? '', outputs: [] });
+        break;
+      case NODE.thinkingBlock:
+        cells.push({ ...base, type: 'thinking', content: body.attrs.text ?? '', outputs: [] });
+        break;
+      case NODE.markdownBlock:
+      default:
+        cells.push({ ...base, type: 'markdown', content: blocksToMarkdown(body), outputs: [] });
+    }
+  });
+  return cells;
+}
+
+/** Back-compat reader for a persisted `{ notebook_id, cells, tasks }` snapshot. */
+export function legacySnapshotToDoc(snapshot: { notebook_id?: string; cells: CellLike[] }): PMNode {
+  return cellsToDoc(snapshot.cells || [], { notebookId: snapshot.notebook_id });
+}
+
 export const NotebookSerializer = {
   parseMarkdown,
   serializeMarkdown,
+  cellsToDoc,
+  docToCells,
+  legacySnapshotToDoc,
 };
