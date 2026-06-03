@@ -21,7 +21,19 @@ export type { NotebookCommand, CommandContext } from './NotebookCommand';
 export { minimalSchema } from './schema.minimal';
 export { notebookSchema, NODE } from './schema';
 
-export { NotebookSerializer, parseMarkdown, serializeMarkdown } from './NotebookSerializer';
+export {
+  NotebookSerializer,
+  parseMarkdown,
+  serializeMarkdown,
+  cellsToDoc,
+  docToCells,
+  fromCells,
+  toCells,
+  legacySnapshotToDoc,
+  toJSON,
+  fromJSON,
+} from './NotebookSerializer';
+export type { NotebookJSON } from './NotebookSerializer';
 
 export type {
   NotebookStorePort,
@@ -31,4 +43,5 @@ export type {
   UploadService,
   ImageGenService,
   CellLike,
+  CellType,
 } from './ports';

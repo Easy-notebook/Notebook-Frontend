@@ -281,7 +281,14 @@ const nodes: Record<string, NodeSpec> = {
     code: true,
     group: 'cellBody',
     defining: true,
-    attrs: { format: { default: 'markdown' } }, // 'markdown' | 'html' | 'text'
+    attrs: {
+      format: { default: 'markdown' }, // 'markdown' | 'html' | 'text'
+      // When this rawBlock stands in for an unknown `:::name{...}` container
+      // directive, these carry its identity so it round-trips verbatim instead
+      // of being collapsed to a plain `:::raw` (docs/migration/03 §7.2).
+      directiveName: { default: null },
+      directiveAttrs: { default: null },
+    },
     toDOM: (n) =>
       [
         'div',
@@ -422,6 +429,40 @@ const nodes: Record<string, NodeSpec> = {
     parseDOM: [{ tag: 'span[data-type=math-inline]' }],
   },
 
+  // Inline image embedded WITHIN prose (`![alt](src)`). Distinct from the
+  // block-level `imageBlock` (reserved for the `:::image` directive) so that a
+  // plain markdown image round-trips idempotently as inline content.
+  inlineImage: {
+    inline: true,
+    group: 'inline',
+    draggable: true,
+    attrs: {
+      src: { default: null },
+      alt: { default: '' },
+      title: { default: null },
+    },
+    toDOM: (n) =>
+      [
+        'img',
+        {
+          'data-type': 'inline-image',
+          src: n.attrs.src ?? '',
+          alt: n.attrs.alt ?? '',
+          title: n.attrs.title ?? undefined,
+        },
+      ] as DOMOutputSpec,
+    parseDOM: [
+      {
+        tag: 'img[data-type=inline-image]',
+        getAttrs: (dom) => ({
+          src: (dom as HTMLElement).getAttribute('src') ?? null,
+          alt: (dom as HTMLElement).getAttribute('alt') || '',
+          title: (dom as HTMLElement).getAttribute('title') || null,
+        }),
+      },
+    ],
+  },
+
   hardBreak: {
     inline: true,
     group: 'inline',
@@ -499,6 +540,7 @@ export const NODE = {
   horizontalRule: 'horizontalRule',
   mathDisplay: 'mathDisplay',
   mathInline: 'mathInline',
+  inlineImage: 'inlineImage',
   bulletList: 'bulletList',
   orderedList: 'orderedList',
   listItem: 'listItem',

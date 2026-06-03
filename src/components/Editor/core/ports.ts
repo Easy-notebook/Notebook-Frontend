@@ -9,13 +9,25 @@
  * See docs/migration/00-architecture-and-core-api.md §5.6–5.8.
  */
 
-/** Legacy cell projection shape (kept for interop / store bridge only). */
+/** Legacy `CellType` union (store models/cell.ts). */
+export type CellType = 'code' | 'markdown' | 'raw' | 'hybrid' | 'image' | 'thinking' | 'link';
+
+/**
+ * Legacy cell projection shape (kept for interop / store bridge only).
+ *
+ * Mirrors `src/store/models/cell.ts` `Cell`: `content` is never null (defaults
+ * to ''), `outputs` is an `OutputItem[]`/string[] hybrid, and the open index
+ * signature round-trips unknown keys through `notebookCell.metadata`.
+ */
 export interface CellLike {
   id: string;
-  type: string;
+  type: CellType | string;
   content?: string;
   outputs?: unknown[];
-  metadata?: Record<string, unknown>;
+  enableEdit?: boolean;
+  phaseId?: string | null;
+  description?: string | null;
+  metadata?: Record<string, unknown> | null;
   [key: string]: unknown;
 }
 
