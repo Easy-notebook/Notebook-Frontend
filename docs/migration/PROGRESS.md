@@ -6,7 +6,7 @@ TipTap → ProseMirror-first notebook kernel. Plan: see `04-migration-plan.md`.
 |---|---|---|
 | 0 — Dead-code cleanup | ✅ done | 18 files deleted (10 dead BlockManager variants + BlockToolbar, top-level CodeBlock/LaTeX dups, katex/mermaid js, SlashCommandExtension, dead SlashCommands/ + useKeyboardShortcuts). Barrel + debug-log strip. tsc 226→187, **0 new error files**. Shortcuts mined → `mined-keyboard-shortcuts.md`. |
 | 1 — Core scaffold | ✅ done | `src/components/Editor/core/` created, **off the live path**. 22 tests pass. tsc still 187, core clean. |
-| 2 — Schema + serializer (round-trip tests) | ⬜ next | The keystone. Full 9-node schema + remark/mdast `NotebookSerializer` + golden round-trip corpus. |
+| 2 — Schema + serializer (round-trip tests) | 🟡 foundation done | Full schema (`schema.ts`) + remark/mdast `NotebookSerializer` + starter round-trip corpus. 64 tests pass, tsc still 187. **Remaining before "done": directive serialization for thinking/raw/image/output, legacy `Cell[]`↔doc interop codec, and hardening against REAL user notebooks (the actual lossless gate — needs fixtures).** |
 | 3 — Command registry | ⬜ | Builtins; port slash/bubble/keymap defs. |
 | 4 — `ControlledNotebookEditor` (behind `editorType:'pm'`) | ⬜ | First in-app run; `NotebookAdapter`. |
 | 5 — Per-cell PM NodeViews | ⬜ | Attr-driven; codeCell last. |
@@ -24,6 +24,20 @@ TipTap → ProseMirror-first notebook kernel. Plan: see `04-migration-plan.md`.
 - `ports.ts` — `NotebookStorePort` + service injection interfaces
 - `index.ts` — public SDK entry
 - `__tests__/` — change classification, **timer-free echo-guard / no-loop proof**, import-restriction guard
+
+## Phase 2 — what landed
+
+- `schema.ts` — the full production schema: `notebook > titleBlock + notebookCell+`, with cell bodies `markdownBlock` (rich `block+`: paragraph/heading/list/task-list/blockquote/codeBlock/mathDisplay/hr), `codeCell` (`codeText` + optional read-only `outputBlock`), `imageBlock`, `thinkingBlock` (durable streamed attrs), `rawBlock`, and the official `prosemirror-tables` family. Marks: strong/em/code/strike/link. `NODE` constant map = single source for type-name literals.
+- `NotebookSerializer.ts` — the **only** module that knows Markdown. Real AST round-trip `markdown ⇄ mdast (remark+gfm+math+frontmatter) ⇄ PM doc`. Each top-level mdast node → one cell; first H1 → titleBlock.
+- Tests (49 in `core/`, 64 total): schema validation incl. table family + JSON round-trip + negative cases; serializer **idempotence** across a 13-entry corpus; fidelity checks for GFM table alignment, inline-vs-block math, and all five marks.
+
+### Phase 2 deps added (npm)
+`remark-parse`, `remark-gfm`, `remark-math`, `remark-frontmatter`, `remark-stringify`, `mdast-util-to-markdown`, `unified` — installed into `node_modules`. ⚠️ These need to be reflected in a committed `package.json`, which currently also carries **unrelated pre-existing uncommitted changes** — reconcile before committing so the migration commit doesn't bundle them.
+
+### Phase 2 still-TODO (do not mark phase complete until):
+1. `remark-directive` serialization for `thinkingBlock` / `rawBlock` / `imageBlock` (and `outputBlock` re-hydration) so custom cells round-trip losslessly through `.md`.
+2. `docFromCells` / `cellsFromDoc` legacy interop + `legacySnapshotToDoc` IndexedDB back-compat reader.
+3. **Golden corpus from REAL notebooks** — replace the authored starter corpus; treat any non-idempotent real fixture as a blocking bug.
 
 ## Known follow-ups (carry into later phases)
 

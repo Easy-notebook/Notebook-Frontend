@@ -12,7 +12,11 @@ import { fileURLToPath } from 'node:url';
 const coreDir = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const FORBIDDEN_IMPORT = /\bfrom\s+['"]([^'"]+)['"]/g;
-const ALLOWED_PACKAGE = /^prosemirror-|^\.\.?\//; // prosemirror-* or relative
+// Allowed: ProseMirror, the framework-free markdown AST stack (remark/unified/
+// mdast/micromark/unist), and relative modules. The point of the guard is to
+// keep React / Zustand / app-internal (`@/…`) / browser-only deps out of core.
+const ALLOWED_PACKAGE =
+  /^prosemirror-|^remark|^unified$|^mdast(-|$)|^micromark|^unist(-|$)|^vfile|^\.\.?\//;
 const FORBIDDEN_GLOBALS = /\b(window|document|fetch|localStorage)\b/;
 
 function sourceFiles(dir: string): string[] {

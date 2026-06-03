@@ -19,6 +19,9 @@ export { CommandRegistry } from './NotebookCommand';
 export type { NotebookCommand, CommandContext } from './NotebookCommand';
 
 export { minimalSchema } from './schema.minimal';
+export { notebookSchema, NODE } from './schema';
+
+export { NotebookSerializer, parseMarkdown, serializeMarkdown } from './NotebookSerializer';
 
 export type {
   NotebookStorePort,
