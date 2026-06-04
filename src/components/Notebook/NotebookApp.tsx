@@ -29,8 +29,13 @@ import { MainContentArea } from './components';
 import { WorkspaceHeader, EmptyStateHeader, LibraryStateHeader } from './ui/layout/headers';
 import { useRef } from 'react';
 
+export interface NotebookAppProps {
+  className?: string;
+  layout?: 'viewport' | 'container';
+}
+
 // Main NotebookApp component
-const NotebookApp = () => {
+const NotebookApp = ({ className = '', layout = 'viewport' }: NotebookAppProps) => {
   // Route state
   const routeStore = useRouteStore();
   const routeView = routeStore.currentView;
@@ -288,14 +293,18 @@ const NotebookApp = () => {
     }
   };
 
+  const rootHeightClass = layout === 'container' ? 'h-full' : 'h-screen';
+
   return (
-    <div className="h-screen overflow-hidden relative text-foreground transition-colors duration-300">
+    <div
+      className={`${rootHeightClass} overflow-hidden relative text-foreground transition-colors duration-300 ${className}`}
+    >
       <SettingsPage />
 
-      {/* Global background layers now live at App level */}
+      {/* Background layers are mounted by the active runtime shell. */}
 
       {/* Content Layer on top of background */}
-      <div className="relative z-10 h-screen flex">
+      <div className={`relative z-10 ${rootHeightClass} flex`}>
         {/* Left: MiniSidebar (80px wide, full height) */}
         <div className="w-20 shrink-0">
           <LeftSideBar

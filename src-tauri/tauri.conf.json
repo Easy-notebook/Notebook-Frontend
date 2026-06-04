@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' customprotocol: asset:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost data: blob: http://localhost:18600 https://easy-notebook.silan.tech; font-src 'self' data:; connect-src 'self' http://localhost:18600 http://localhost:28600 https://easy-notebook.silan.tech ws://localhost:18600 ws://localhost:28600"
     }
   },
   "bundle": {

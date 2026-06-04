@@ -9,7 +9,12 @@ interface ImportMetaEnv {
   readonly DEV?: boolean;
   readonly PROD?: boolean;
   readonly BASE_URL?: string;
-  // Add other envs as needed
+  readonly VITE_APP_INFRA?: 'dev' | 'prod';
+  readonly VITE_BACKEND_BASE_URL?: string;
+  readonly VITE_DSLC_BASE_URL?: string;
+  readonly VITE_WORKFLOW_API_BASE_URL?: string;
+  readonly VITE_FRONTEND_BASE_URL?: string;
+  readonly VITE_FORCE_HASH_ROUTER?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

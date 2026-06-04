@@ -1,6 +1,7 @@
 import React from 'react';
 import { AnsiUp } from 'ansi_up';
 import { Output } from '../utils/types';
+import { SafeHtmlContent } from '@/components/Notebook/features/output-rendering/SafeHtmlContent';
 
 const ansi_up = new AnsiUp();
 
@@ -33,13 +34,7 @@ export const ImageOutput: React.FC<{ output: Output }> = ({ output }) => (
  */
 export const HtmlOutput: React.FC<{ output: Output }> = ({ output }) => {
   const htmlContent = String(output.content || '');
-  return (
-    <div
-      key={output.key}
-      className="output-html-container"
-      dangerouslySetInnerHTML={{ __html: htmlContent }}
-    />
-  );
+  return <SafeHtmlContent key={output.key} className="output-html-container" html={htmlContent} />;
 };
 
 /**
@@ -48,12 +43,13 @@ export const HtmlOutput: React.FC<{ output: Output }> = ({ output }) => {
 export const TextOutput: React.FC<{ output: Output }> = ({ output }) => {
   const htmlContent = ansi_up.ansi_to_html(String(output.content || ''));
   return (
-    <pre
+    <SafeHtmlContent
+      as="pre"
       key={output.key}
       className={`font-mono text-sm whitespace-pre-wrap break-words ${
         output.type === 'error' ? 'text-red-500' : ''
       }`}
-      dangerouslySetInnerHTML={{ __html: htmlContent }}
+      html={htmlContent}
     />
   );
 };

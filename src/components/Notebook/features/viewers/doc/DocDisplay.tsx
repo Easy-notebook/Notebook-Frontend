@@ -1,11 +1,12 @@
 // moved to features/viewers/doc
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import mammoth from 'mammoth';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
 import { Edit3, Eye, Save, Download, FileText, AlertCircle, Loader } from 'lucide-react';
 import { Document, Packer, Paragraph, TextRun } from 'docx';
 import { saveAs } from 'file-saver';
+import { PortableRichTextEditor } from '@/components/Notebook/features/editor/PortableRichTextEditor';
+import { SafeHtmlContent } from '@/components/Notebook/features/output-rendering/SafeHtmlContent';
+import { sanitizeNotebookHtml } from '@/components/Notebook/features/output-rendering/htmlSanitizer';
 
 interface DocDisplayProps {
   fileName: string;
@@ -29,37 +30,6 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
   const [editableContent, setEditableContent] = useState<string>('');
   const [isEditMode, setIsEditMode] = useState(initialEditMode);
   const [isDirty, setIsDirty] = useState(false);
-  const quillRef = useRef<ReactQuill>(null);
-
-  // Quill configuration
-  const quillModules = {
-    toolbar: [
-      [{ header: [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ color: [] }, { background: [] }],
-      [{ list: 'ordered' }, { list: 'bullet' }],
-      [{ indent: '-1' }, { indent: '+1' }],
-      [{ align: [] }],
-      ['link', 'image'],
-      ['clean'],
-    ],
-  };
-
-  const quillFormats = [
-    'header',
-    'bold',
-    'italic',
-    'underline',
-    'strike',
-    'color',
-    'background',
-    'list',
-    'bullet',
-    'indent',
-    'align',
-    'link',
-    'image',
-  ];
 
   // Load and parse document
   const loadDocument = useCallback(async () => {
@@ -180,9 +150,10 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
         throw new Error('Unsupported file content type');
       }
 
-      console.log('DocDisplay - Final HTML length:', html.length);
-      setHtmlContent(html);
-      setEditableContent(html);
+      const sanitizedHtml = sanitizeNotebookHtml(html);
+      console.log('DocDisplay - Final HTML length:', sanitizedHtml.length);
+      setHtmlContent(sanitizedHtml);
+      setEditableContent(sanitizedHtml);
     } catch (err) {
       console.error('Error loading document:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load document';
@@ -202,9 +173,10 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
   // Handle content change in edit mode
   const handleContentChange = useCallback(
     (content: string) => {
-      setEditableContent(content);
+      const sanitizedContent = sanitizeNotebookHtml(content);
+      setEditableContent(sanitizedContent);
       setIsDirty(true);
-      onContentChange?.(content);
+      onContentChange?.(sanitizedContent);
     },
     [onContentChange]
   );
@@ -212,11 +184,13 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
   // Save content
   const handleSave = useCallback(async () => {
     try {
-      setHtmlContent(editableContent);
+      const sanitizedContent = sanitizeNotebookHtml(editableContent);
+      setHtmlContent(sanitizedContent);
+      setEditableContent(sanitizedContent);
       setIsDirty(false);
 
       // Trigger external save handler if provided
-      onContentChange?.(editableContent);
+      onContentChange?.(sanitizedContent);
     } catch (err) {
       console.error('Error saving document:', err);
       setError('Failed to save document');
@@ -228,7 +202,7 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
     try {
       // Convert HTML back to plain text for DOCX export
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = editableContent;
+      tempDiv.innerHTML = sanitizeNotebookHtml(editableContent);
       const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
       // Create a new DOCX document
@@ -367,22 +341,18 @@ const DocDisplay: React.FC<DocDisplayProps> = ({
       <div className="flex-1 overflow-auto">
         {isEditMode ? (
           <div className="h-full">
-            <ReactQuill
-              ref={quillRef}
-              theme="snow"
+            <PortableRichTextEditor
               value={editableContent}
               onChange={handleContentChange}
-              modules={quillModules}
-              formats={quillFormats}
               style={{ height: '100%' }}
               className="h-full [&_.ql-container]:h-[calc(100%-42px)] [&_.ql-editor]:min-h-full dark:[&_.ql-toolbar]:bg-gray-800 dark:[&_.ql-toolbar]:border-gray-700 dark:[&_.ql-container]:border-gray-700 dark:[&_.ql-editor]:text-gray-200 dark:[&_.ql-stroke]:stroke-gray-400 dark:[&_.ql-fill]:fill-gray-400 dark:[&_.ql-picker]:text-gray-400"
             />
           </div>
         ) : (
           <div className="p-6 max-w-4xl mx-auto">
-            <div
+            <SafeHtmlContent
               className="prose dark:prose-invert prose-lg max-w-none"
-              dangerouslySetInnerHTML={{ __html: htmlContent }}
+              html={htmlContent}
             />
           </div>
         )}

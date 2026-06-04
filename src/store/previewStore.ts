@@ -6,6 +6,7 @@ import { FileService } from '@Services/notebook/FileService';
 import { fileLog, storeLog } from '@Utils/logger';
 import { persistenceService } from '@Services/persistence/instance';
 import { getFileType, getActivePreviewMode, getMimeType } from '@Storage/index';
+import { getBrowserLocalStorage } from '@Utils/browserCapabilities';
 import type {
   PreviewMode,
   FileObject,
@@ -1267,40 +1268,39 @@ const usePreviewStore = create<PreviewStore>()(
   )
 );
 
-// Initialize IndexedDB when the store is first used
-usePreviewStore.getState().init();
+export const initializePreviewStoreForBrowser = (): void => {
+  const storage = getBrowserLocalStorage();
+  if (!storage) return;
 
-// Clean up any stale localStorage data containing invalid file references
-// This is a one-time cleanup for existing users
-try {
-  const storedData = localStorage.getItem('preview-store');
-  if (storedData) {
+  usePreviewStore.getState().init();
+
+  try {
+    const storedData = storage.getItem('preview-store');
+    if (!storedData) return;
+
     const parsed = JSON.parse(storedData);
-    if (parsed?.state?.currentPreviewFiles) {
-      // Check if there are any suspicious file references
-      const suspiciousFiles = parsed.state.currentPreviewFiles.filter(
-        (file: any) =>
-          file.path &&
-          (file.path.includes('sa_balance_exp.xlsx') ||
-            file.path.includes('balance_exp') ||
-            // Add other problematic patterns as needed
-            (!file.path.includes('assets/') && file.path.match(/\.(xlsx?|csv|pdf)$/i)))
-      );
+    if (!parsed?.state?.currentPreviewFiles) return;
 
-      if (suspiciousFiles.length > 0) {
-        storeLog.info('Cleaning up suspicious file references from localStorage', {
-          count: suspiciousFiles.length,
-          files: suspiciousFiles,
-        });
-        // Remove currentPreviewFiles from stored state
-        delete parsed.state.currentPreviewFiles;
-        localStorage.setItem('preview-store', JSON.stringify(parsed));
-        storeLog.info('Cleaned up localStorage preview-store data');
-      }
+    const suspiciousFiles = parsed.state.currentPreviewFiles.filter(
+      (file: any) =>
+        file.path &&
+        (file.path.includes('sa_balance_exp.xlsx') ||
+          file.path.includes('balance_exp') ||
+          (!file.path.includes('assets/') && file.path.match(/\.(xlsx?|csv|pdf)$/i)))
+    );
+
+    if (suspiciousFiles.length > 0) {
+      storeLog.info('Cleaning up suspicious file references from localStorage', {
+        count: suspiciousFiles.length,
+        files: suspiciousFiles,
+      });
+      delete parsed.state.currentPreviewFiles;
+      storage.setItem('preview-store', JSON.stringify(parsed));
+      storeLog.info('Cleaned up localStorage preview-store data');
     }
+  } catch (error) {
+    storeLog.warn('Failed to clean up localStorage', { error });
   }
-} catch (error) {
-  storeLog.warn('Failed to clean up localStorage', { error });
-}
+};
 
 export default usePreviewStore;

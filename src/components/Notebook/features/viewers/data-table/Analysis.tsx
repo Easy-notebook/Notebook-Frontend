@@ -1,6 +1,6 @@
 // moved to features/viewers/data-table
 import React, { useState, useMemo, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import { BarChart3, PieChart, TrendingUp, MoreHorizontal } from 'lucide-react';
 import usePreviewStore from '@Store/previewStore';
 import useStore from '@Store/notebookStore';

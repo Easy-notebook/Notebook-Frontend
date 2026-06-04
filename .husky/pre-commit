@@ -1,1 +1,14 @@
-npx lint-staged
+#!/usr/bin/env sh
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.volta/bin:$HOME/.asdf/shims:$PATH"
+
+if [ -s "$HOME/.nvm/nvm.sh" ] && ! command -v node >/dev/null 2>&1; then
+  . "$HOME/.nvm/nvm.sh"
+fi
+
+if [ -x "node_modules/.bin/lint-staged" ]; then
+  node_modules/.bin/lint-staged
+else
+  echo "lint-staged is not available. Run npm install before committing." >&2
+  exit 127
+fi

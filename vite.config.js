@@ -37,7 +37,7 @@ export default defineConfig({
             '@radix-ui/react-dropdown-menu',
           ],
           'charts-vendor': ['recharts', 'react-google-charts'],
-          'editor-vendor': ['@tiptap/react', '@tiptap/starter-kit', 'react-quill'],
+          'editor-vendor': ['@tiptap/react', '@tiptap/starter-kit'],
           'utils-vendor': ['lodash-es', 'date-fns', 'axios'],
         },
       },

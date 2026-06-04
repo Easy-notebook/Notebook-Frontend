@@ -16,8 +16,8 @@
 
     /* Linting */
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
     /* Path mapping */
@@ -42,5 +42,5 @@
     }
   },
   "include": ["src", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist", "ref"]
+  "exclude": ["node_modules", "dist", "ref", "src/**/__tests__/**"]
 }

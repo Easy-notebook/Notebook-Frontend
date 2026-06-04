@@ -9,7 +9,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ chart }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (containerRef.current) {
-      (containerRef.current as HTMLDivElement).innerHTML = chart;
+      containerRef.current.textContent = chart;
       mermaid.initialize({ startOnLoad: true });
       mermaid.init(undefined, containerRef.current);
     }

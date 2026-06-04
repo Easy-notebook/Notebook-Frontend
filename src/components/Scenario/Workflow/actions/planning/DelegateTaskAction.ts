@@ -53,9 +53,15 @@ export class DelegateTaskAction extends ActionBase {
     currentStep.detailed_task = task_description;
     currentStep.acceptance = acceptance;
 
+    // Determine behavior_id
+    // If provided in step, use it. Otherwise generate one.
+    // The user pointed out that using agent name as behavior_id is confusing.
+    // We'll use a combination of step_id and agent, or just step_id if unique enough for the context.
+    const behavior_id = (step as ExecutionStep).behavior_id || `${step_id}_${agent}`;
+
     // Set current behavior context
     if (stateJSON.observation?.location?.current) {
-      stateJSON.observation.location.current.behavior_id = agent;
+      stateJSON.observation.location.current.behavior_id = behavior_id;
       stateJSON.observation.location.current.behavior = {
         agent,
         task: task_description,
@@ -67,7 +73,7 @@ export class DelegateTaskAction extends ActionBase {
     // This ensures the UI reflects the current task in the behaviors section
     if (!stateJSON.observation.location.progress.behaviors.current) {
       stateJSON.observation.location.progress.behaviors.current = {
-        behavior_id: agent, // Using agent as behavior_id for now
+        behavior_id: behavior_id,
         title: `Task for ${agent}`,
         verified_artifacts: {},
         iteration: 1,
@@ -81,6 +87,7 @@ export class DelegateTaskAction extends ActionBase {
       } as any;
     } else {
       const behaviorCurrent = stateJSON.observation.location.progress.behaviors.current as any;
+      behaviorCurrent.behavior_id = behavior_id; // Update ID as well
       behaviorCurrent.agent = agent;
       behaviorCurrent.task = task_description;
       behaviorCurrent.acceptance = acceptance;

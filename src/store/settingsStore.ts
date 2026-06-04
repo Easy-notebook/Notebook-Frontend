@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import { encrypt, decrypt } from '@Utils/encryption';
 import { useMemo } from 'react';
 import { storeLog } from '@Utils/logger';
+import { getBrowserLocalStorage } from '@Utils/browserCapabilities';
 import type {
   ThemeType,
   PlatformType,
@@ -612,7 +613,10 @@ const storageConfig = {
   storage: {
     getItem: async (name: string): Promise<PersistedState | null> => {
       try {
-        const value = localStorage.getItem(name);
+        const storage = getBrowserLocalStorage();
+        if (!storage) return null;
+
+        const value = storage.getItem(name);
         if (!value) {
           // Try to restore from backup if main storage is empty
           return await storageManager.restoreFromBackup();
@@ -646,14 +650,20 @@ const storageConfig = {
 
           // Compress with UTF16 for better compression ratio
           const compressed = JSON.stringify(value);
-          localStorage.setItem(name, compressed);
+          const storage = getBrowserLocalStorage();
+          if (!storage) return;
+
+          storage.setItem(name, compressed);
         } catch (error: any) {
           // If setting fails, try clearing some space and retry
           if (error.name === 'QuotaExceededError') {
             await storageManager.clearOldBackups();
             // Compress and retry
             const compressed = JSON.stringify(value);
-            localStorage.setItem(name, compressed);
+            const storage = getBrowserLocalStorage();
+            if (!storage) return;
+
+            storage.setItem(name, compressed);
           } else {
             throw error;
           }
@@ -663,7 +673,7 @@ const storageConfig = {
 
     removeItem: async (name: string): Promise<void> => {
       try {
-        localStorage.removeItem(name);
+        getBrowserLocalStorage()?.removeItem(name);
       } catch (error) {
         storeLog.error('Error removing settings', { error });
       }

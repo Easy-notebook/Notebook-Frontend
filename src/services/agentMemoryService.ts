@@ -1,4 +1,6 @@
 // services/agentMemoryService.ts
+import { getBrowserLocalStorage } from '@/utils/browserCapabilities';
+
 export type AgentType = 'general' | 'command' | 'debug' | 'output';
 
 // 通用Agent记忆存储结构
@@ -573,7 +575,10 @@ export class AgentMemoryService {
   // 存储管理
   private static saveToStorage(): void {
     try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.memories));
+      const storage = getBrowserLocalStorage();
+      if (!storage) return;
+
+      storage.setItem(this.STORAGE_KEY, JSON.stringify(this.memories));
       // 触发自定义事件通知组件更新
       const event = new CustomEvent('agentMemoryUpdated', {
         detail: { timestamp: Date.now() },
@@ -586,7 +591,10 @@ export class AgentMemoryService {
 
   static loadFromStorage(): void {
     try {
-      const stored = localStorage.getItem(this.STORAGE_KEY);
+      const storage = getBrowserLocalStorage();
+      if (!storage) return;
+
+      const stored = storage.getItem(this.STORAGE_KEY);
       if (stored) {
         this.memories = JSON.parse(stored);
       }
@@ -614,7 +622,7 @@ export class AgentMemoryService {
   static clearAllMemories(): void {
     this.memories = {};
     try {
-      localStorage.removeItem(this.STORAGE_KEY);
+      getBrowserLocalStorage()?.removeItem(this.STORAGE_KEY);
       console.log('所有agent记忆已清理');
     } catch (error) {
       console.error('清理记忆失败:', error);
@@ -626,11 +634,14 @@ export class AgentMemoryService {
     try {
       let total = 0;
       let used = 0;
+      const storage = getBrowserLocalStorage();
+      if (!storage) return { used: 0, total: 0, percentage: 0 };
 
       // 估算localStorage使用量
-      for (let key in localStorage) {
-        if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
-          used += localStorage[key].length + key.length;
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
+        if (key) {
+          used += (storage.getItem(key)?.length || 0) + key.length;
         }
       }
 
@@ -704,6 +715,3 @@ export class AgentMemoryService {
     return stats;
   }
 }
-
-// 初始化服务
-AgentMemoryService.loadFromStorage();

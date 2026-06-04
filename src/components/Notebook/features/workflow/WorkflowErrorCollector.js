@@ -5,9 +5,13 @@ class WorkflowErrorCollector {
   constructor() {
     this.errors = [];
     this.maxErrors = 100;
+    this.initialized = false;
     this.init();
   }
   init() {
+    if (this.initialized || typeof window === 'undefined') return;
+    this.initialized = true;
+
     window.addEventListener('workflowError', (event) => {
       this.collectError(event.detail);
     });
@@ -72,15 +76,19 @@ class WorkflowErrorCollector {
   }
   persistErrors() {
     try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+
       const data = { errors: this.errors.slice(0, 20), lastUpdated: new Date().toISOString() };
-      localStorage.setItem('workflowErrors', JSON.stringify(data));
+      window.localStorage.setItem('workflowErrors', JSON.stringify(data));
     } catch (e) {
       console.warn('Failed to persist workflow errors to localStorage:', e);
     }
   }
   loadPersistedErrors() {
     try {
-      const stored = localStorage.getItem('workflowErrors');
+      if (typeof window === 'undefined' || !window.localStorage) return [];
+
+      const stored = window.localStorage.getItem('workflowErrors');
       if (stored) {
         const data = JSON.parse(stored);
         return data.errors || [];
@@ -110,10 +118,14 @@ class WorkflowErrorCollector {
   }
   clearErrors() {
     this.errors = [];
-    localStorage.removeItem('workflowErrors');
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem('workflowErrors');
+    }
     console.log('🧹 Workflow errors cleared');
   }
   exportErrors() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
     const data = {
       errors: this.errors,
       exportedAt: new Date().toISOString(),
@@ -152,4 +164,5 @@ class WorkflowErrorCollector {
   }
 }
 const workflowErrorCollector = new WorkflowErrorCollector();
+export const initializeWorkflowErrorCollector = () => workflowErrorCollector.init();
 export default workflowErrorCollector;
