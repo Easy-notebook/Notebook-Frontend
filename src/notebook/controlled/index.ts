@@ -3,6 +3,7 @@ export type {
   ControlledNotebookDisplayMode,
   ControlledNotebookEditorProps,
 } from './ControlledNotebookEditor';
+export { ProseMirrorMarkdownCell, defaultProseMirrorCells } from './cells';
 export {
   EasyNotebookDocumentModel,
   createNotebookCell,

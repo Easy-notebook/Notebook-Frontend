@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ArrowDown, ArrowUp, Play, Plus, Trash2 } from 'lucide-react';
 import { SafeHtmlContent } from '@/components/Notebook/features/output-rendering/SafeHtmlContent';
+import { defaultProseMirrorCells } from './cells';
 import {
   EasyNotebookDocumentModel,
   createNotebookCell,
@@ -434,6 +435,11 @@ export const ControlledNotebookEditor: React.FC<ControlledNotebookEditorProps> =
   const CellFrame = components?.CellFrame;
   const Toolbar = components?.CellToolbar;
   const OutputRenderer = components?.OutputRenderer ?? DefaultOutputRenderer;
+  // Default to the ProseMirror-backed markdown body; caller-supplied cells win.
+  const cellComponents = useMemo(
+    () => ({ ...defaultProseMirrorCells, ...components?.cells }),
+    [components?.cells]
+  );
 
   if (notebook.cells.length === 0) {
     return (
@@ -475,7 +481,7 @@ export const ControlledNotebookEditor: React.FC<ControlledNotebookEditorProps> =
             readOnly,
             actions,
           };
-          const CustomCell = components?.cells?.[cell.type];
+          const CustomCell = cellComponents[cell.type];
           const isExecuting = executingCellIds.includes(cell.id);
           const toolbar = Toolbar ? (
             <Toolbar
