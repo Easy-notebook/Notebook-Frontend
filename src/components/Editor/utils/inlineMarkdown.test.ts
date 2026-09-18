@@ -5,6 +5,26 @@ import { convertMarkdownToHtml } from './markdownConverters';
 
 describe('inline Markdown fidelity', () => {
   it.each([
+    ['bold', 'strong'],
+    ['italic', 'em'],
+    ['strike', 'del'],
+  ])('preserves %s text with boundary whitespace', (type, tag) => {
+    const source = extractTextFromNode({
+      type: 'text',
+      text: '  marked text  ',
+      marks: [{ type }],
+    });
+    const container = document.createElement('div');
+    container.innerHTML = renderInlineMarkdown(source);
+    expect(container.textContent).toBe('  marked text  ');
+    expect(container.querySelector(tag)?.textContent).toBe('marked text');
+  });
+  it('does not emit empty formatting delimiters for whitespace-only marks', () => {
+    expect(extractTextFromNode({ type: 'text', text: '   ', marks: [{ type: 'bold' }] })).toBe(
+      '   '
+    );
+  });
+  it.each([
     '**literal**',
     '[not a link](https://example.com)',
     '# not a heading',

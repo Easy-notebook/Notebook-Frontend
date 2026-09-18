@@ -138,6 +138,12 @@ plain-text fields rather than receiving Markdown escapes. Escaped dollars no lon
 math paragraph splitting. Twenty-eight inline/parser/title tests cover these cases; this is not yet
 a complete guarantee for mixed mark boundaries, merged table cells or arbitrary whitespace.
 
+Emphasis/strike serialization now places boundary whitespace outside delimiters and avoids emitting
+empty delimiters for whitespace-only marks. This preserves visible text and formatted non-whitespace
+content; styling of whitespace itself is not represented by Markdown. A stable-revision run of the
+complete Editor directory passes 17 files / 90 tests after this change, including incremental sync,
+source transitions, literal text, title and diagram tests.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document

@@ -133,6 +133,12 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
 /**
  * 将 ProseMirror 节点转换为 Markdown 文本（保留常见格式）
  */
+function wrapInlineMark(text: string, delimiter: string): string {
+  const [, leading, body, trailing] = /^(\s*)([\s\S]*?)(\s*)$/.exec(text)!;
+  // Markdown emphasis delimiters cannot open/close against whitespace.
+  return body ? `${leading}${delimiter}${body}${delimiter}${trailing}` : text;
+}
+
 export function extractTextFromNode(node: any): string {
   // 处理纯文本并考虑 marks（bold / italic / code）
   if (node.text !== undefined) {
@@ -156,10 +162,10 @@ export function extractTextFromNode(node: any): string {
       orderedMarks.forEach((mark: any) => {
         switch (mark.type) {
           case 'bold':
-            text = `**${text}**`;
+            text = wrapInlineMark(text, '**');
             break;
           case 'italic':
-            text = `*${text}*`;
+            text = wrapInlineMark(text, '*');
             break;
           case 'code':
             {
@@ -173,7 +179,7 @@ export function extractTextFromNode(node: any): string {
             }
             break;
           case 'strike':
-            text = `~~${text}~~`;
+            text = wrapInlineMark(text, '~~');
             break;
           case 'link':
             text = `[${text}](<${String(mark.attrs?.href || '')
