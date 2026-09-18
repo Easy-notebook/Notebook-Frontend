@@ -228,3 +228,20 @@ still separate transactions. Revisions coordinate one service instance, not conc
 Browser/process termination before pending work commits can still lose edits. Incremental cell storage,
 cross-tab conflict control, and viewport mounting require separate schema/lifecycle work and recovery tests;
 they are not silently approximated by this change.
+
+### Integrated verification at `69da4a6`
+
+The fixed-revision editor, deferred-viewer and export regression run passes 25 files / 118 tests.
+`npm run build` succeeds; large-chunk warnings remain. NotebookApp is 2,717.43 kB
+(888.72 kB gzip); deferred modules still contribute to total downloaded code when used.
+
+| Use case | Implemented / evidence | Remaining acceptance gate |
+| --- | --- | --- |
+| Open a notebook with many code cells | Progressive activation; browser sample mounts 3 of 100 CodeMirror instances | Bounded eviction preserving history, composition and scroll anchors |
+| Edit one cell in a large document | Changed-block projection and selected-cell source tests | Array-index rebuilding and full save snapshots still scale with document size |
+| Navigate to an offscreen code cell | Deferred focus lifecycle tests; browser typing and undo smoke check | Cross-cell rapid navigation and real OS IME end-to-end coverage |
+| Switch Markdown/source without corrupting text | Structural parsing, literal text and marked-whitespace regressions | Full-document source, deep nested fence deletion and rich table fidelity |
+| Save reliably while editing | Serialized save queue and durable transaction completion | Atomic file/list metadata, cross-tab conflict handling and crash recovery |
+
+These gates distinguish verified improvements from architectural work still pending; neither the
+test count nor successful bundling establishes globally optimal runtime or lossless persistence.
