@@ -473,31 +473,17 @@ const useStore = create(
           return;
         }
 
-        notebookLog.cellOperation('update', 'batch', {
-          cellsCount: cells.length,
-          cellTypes: cells.map((c) => ({
-            id: c.id,
-            type: c.type,
-            contentLength: c.content?.length || 0,
-          })),
-          stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n'),
-        });
-
+        const previousById = new Map(get().cells.map((cell) => [cell.id, cell]));
         let processedCells = cells.map((cell) => ({
           ...cell,
           content: typeof cell.content === 'string' ? cell.content : String(cell.content ?? ''),
-          outputs: Array.isArray(cell.outputs) ? serializeOutput(cell.outputs) : [],
+          outputs:
+            previousById.get(cell.id) === cell
+              ? cell.outputs
+              : Array.isArray(cell.outputs)
+                ? serializeOutput(cell.outputs)
+                : [],
         }));
-
-        notebookLog.info('Processed cells', {
-          originalCount: cells.length,
-          processedCount: processedCells.length,
-          processedTypes: processedCells.map((c) => ({
-            id: c.id,
-            type: c.type,
-            contentLength: c.content?.length || 0,
-          })),
-        });
 
         if (processedCells.length === 0) {
           notebookLog.cellOperation('create', 'title', { reason: 'empty cells array' });
@@ -516,28 +502,21 @@ const useStore = create(
           notebookLog.debug('Cells not empty - keeping existing cells');
         }
 
-        notebookLog.info('setCells content check', {
-          count: processedCells.length,
-          firstCell: processedCells[0]
-            ? {
-                id: processedCells[0].id,
-                type: processedCells[0].type,
-                contentPreview: (processedCells[0].content || '').substring(0, 100),
-              }
-            : 'none',
-        });
-
         const tasks = parseMarkdownCells(processedCells as any);
         updateCellsPhaseId(processedCells as any, tasks);
+
+        // Phase assignment mutates temporary copies. Retain published identities
+        // when neither the source cell nor its derived phase changed.
+        processedCells = processedCells.map((cell, index) => {
+          const previous = previousById.get(cell.id);
+          return previous && cells[index] === previous && previous.phaseId === cell.phaseId
+            ? (previous as typeof cell)
+            : cell;
+        });
 
         notebookLog.info('setCells final update', {
           finalCellsCount: processedCells.length,
           finalTasksCount: tasks.length,
-          finalCells: processedCells.map((c) => ({
-            id: c.id,
-            type: c.type,
-            content: (c.content ?? '').substring(0, 50) + '...',
-          })),
         });
 
         set({ cells: processedCells, tasks, isInitialized: true });

@@ -5,6 +5,7 @@
 
 import type { Cell, CellType } from '@Store/models';
 import { convertMarkdownToHtml } from './markdownConverters';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -271,12 +272,52 @@ function imageCellFromAttributes(attrs: any, cellId: string): Cell {
 /**
  * 新方案：使用 ProseMirror JSON 而不是 HTML 解析
  */
-export function convertEditorStateToCells(editor: any): Cell[] {
-  if (!editor) {
-    return [];
-  }
+const projectedDocuments = new WeakMap<object, { doc: ProseMirrorNode; cells: Cell[] }>();
+const projectedBlocks = new WeakMap<ProseMirrorNode, Cell[]>();
+const cellNodeTypes = new Set([
+  'title',
+  'markdownCell',
+  'imageCell',
+  'markdownImage',
+  'executableCodeBlock',
+  'rawBlock',
+  'thinkingCell',
+  'fileAttachment',
+]);
 
-  const docJson = editor.state.doc.toJSON();
+/** Immutable ProseMirror nodes are shared across transactions, including undo. */
+export function convertEditorStateToCells(editor: any): Cell[] {
+  if (!editor) return [];
+  const doc: ProseMirrorNode = editor.state.doc;
+  const cached = projectedDocuments.get(editor);
+  if (cached?.doc === doc) return cached.cells;
+  const cells: Cell[] = [];
+  let unwrapped: any[] = [];
+  const flush = () => {
+    if (unwrapped.length) {
+      cells.push(...projectJsonToCells({ content: unwrapped }));
+      unwrapped = [];
+    }
+  };
+  doc.forEach((node) => {
+    if (!cellNodeTypes.has(node.type.name)) {
+      unwrapped.push(node.toJSON());
+      return;
+    }
+    flush();
+    let blockCells = projectedBlocks.get(node);
+    if (!blockCells) {
+      blockCells = projectJsonToCells({ content: [node.toJSON()] });
+      projectedBlocks.set(node, blockCells);
+    }
+    cells.push(...blockCells);
+  });
+  flush();
+  projectedDocuments.set(editor, { doc, cells });
+  return cells;
+}
+
+function projectJsonToCells(docJson: any): Cell[] {
   if (DEBUG) console.log('📋 Editor JSON:', docJson);
 
   if (!docJson.content || docJson.content.length === 0) {

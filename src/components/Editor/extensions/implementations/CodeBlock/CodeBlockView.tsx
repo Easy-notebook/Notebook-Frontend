@@ -4,16 +4,16 @@ import { CodeBlockModel, CodeBlockContext } from './CodeBlockModel';
 import CodeCell from '../../../Cells/CodeCell';
 import HybridCell from '../../../Cells/HybridCell';
 import useStore from '@Store/notebookStore';
+import { getCellById } from '@Store/models/cellIndex';
 import { TextSelection } from 'prosemirror-state';
 
 const CodeBlockViewComponent = (props: any) => {
   const { node, editor, getPos, deleteNode } = props;
   const { cellId, code, outputs, enableEdit } = node.attrs;
-  const { cells } = useStore();
+  const existingCell = useStore((state) => getCellById(state.cells, cellId));
 
   // Create virtual cell object (logic ported from original CodeBlockView)
   const virtualCell = useMemo(() => {
-    const existingCell = cells.find((cell) => cell.id === cellId);
     if (existingCell) {
       return existingCell;
     }
@@ -24,7 +24,7 @@ const CodeBlockViewComponent = (props: any) => {
       outputs: outputs || [],
       enableEdit: enableEdit !== false,
     };
-  }, [cellId, cells, code, enableEdit, outputs]);
+  }, [cellId, existingCell, code, enableEdit, outputs]);
 
   const handleDelete = useCallback(() => {
     // Ported deletion logic

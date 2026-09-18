@@ -49,7 +49,8 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
   onToggleFullscreen,
   isDetachedCellFullscreen,
 }) => {
-  const { setCurrentCell, updateCellObject } = useStore();
+  const setCurrentCell = useStore((state) => state.setCurrentCell);
+  const updateCellObject = useStore((state) => state.updateCellObject);
   const language = normalizeCodeLanguage(cell.language);
   const unsupportedLanguage = !CODE_LANGUAGES.some((option) => option.value === language);
 

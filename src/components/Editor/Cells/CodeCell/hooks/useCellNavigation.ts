@@ -12,7 +12,8 @@ export const useCellNavigation = (
   isCurrentCell: boolean,
   dslcMode: boolean
 ) => {
-  const { cells, setCurrentCell, setEditingCellId } = useStore();
+  const setCurrentCell = useStore((state) => state.setCurrentCell);
+  const setEditingCellId = useStore((state) => state.setEditingCellId);
   const lastNavigationDirection = useRef<'up' | 'down' | null>(null);
 
   // Check if cursor is at first line
@@ -60,6 +61,7 @@ export const useCellNavigation = (
     (event: React.KeyboardEvent) => {
       const state = useStore.getState();
       const navCells = state.getCurrentViewCells ? state.getCurrentViewCells() : state.cells;
+      const cells = navCells;
       const currentIndex = navCells.findIndex((c) => c.id === cell.id);
 
       // Backspace at start of empty code cell: Convert to markdown
@@ -190,7 +192,6 @@ export const useCellNavigation = (
     [
       cell.id,
       cell.content,
-      cells,
       setCurrentCell,
       setEditingCellId,
       isCursorAtFirstLine,
