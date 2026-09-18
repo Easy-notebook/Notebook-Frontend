@@ -83,7 +83,13 @@ export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
             (key) =>
               JSON.stringify(cell.metadata?.[key]) === JSON.stringify(projected?.metadata?.[key])
           ));
-    if (current && sameContent && sameMetadata && (current.type.name === 'title') === isTitle) {
+    if (
+      current &&
+      sameContent &&
+      sameMetadata &&
+      (current.type.name === 'markdownSourceCell') === (cell.metadata?.editorMode === 'source') &&
+      (current.type.name === 'title') === isTitle
+    ) {
       nextBlocks.push(current);
     } else {
       // Parse only changed cells. Unchanged nodes retain their NodeViews and DOM.

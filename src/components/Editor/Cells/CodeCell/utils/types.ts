@@ -10,6 +10,7 @@ export type Output = OutputItem;
 export interface CodeCellProps {
   cell: Cell;
   onDelete?: (cellId: string) => void;
+  onBreakFence?: () => void;
   dslcMode?: boolean;
   finished_thinking?: boolean;
   thinkingText?: string;

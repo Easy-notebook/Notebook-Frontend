@@ -3,7 +3,6 @@ import useStore from '@Store/notebookStore';
 import useCodeStore, { DISPLAY_MODES } from '@Store/codeStore';
 import { processOutput } from '../utils/outputProcessing';
 import { EXPAND_THRESHOLD } from '../utils';
-import { debounce } from 'lodash-es';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
 import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
 import { showToast } from '@/components/UI/Toast';
@@ -28,7 +27,6 @@ export class CodeCellViewModel extends BaseCellViewModel {
   public codeContainerRef: React.RefObject<HTMLDivElement> | null = null;
   private prevContent = '';
   public localContent = '';
-  private debouncedUpdate: (value: string) => void;
 
   constructor(cell: Cell, _dslcMode = false, isDemoMode = false, isInDetachedView = false) {
     super(cell);
@@ -47,9 +45,6 @@ export class CodeCellViewModel extends BaseCellViewModel {
     }
 
     this.localContent = cell.content || '';
-    this.debouncedUpdate = debounce((value: string) => {
-      useStore.getState().updateCell(this.cell.id, value);
-    }, 300);
   }
 
   public updateProps(cell: Cell, isDemoMode: boolean) {
@@ -268,7 +263,9 @@ export class CodeCellViewModel extends BaseCellViewModel {
 
   public handleChange = (value: string) => {
     this.localContent = value;
-    this.debouncedUpdate(value);
+    // Publish edits immediately; persistence already owns write coalescing.
+    // A delayed cell update can otherwise overwrite a source-mode conversion.
+    useStore.getState().updateCell(this.cell.id, value);
   };
 
   public copyCode = () => {

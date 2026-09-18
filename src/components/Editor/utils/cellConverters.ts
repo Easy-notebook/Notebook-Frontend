@@ -45,6 +45,9 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
       if (DEBUG) console.log(`转换代码块 ${index}: ID=${cell.id}, type=${cell.type}`);
       return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}" data-is-generating="${(cell as any).metadata?.isGenerating === true}"></div>`;
     } else if (cell.type === 'markdown') {
+      if (cell.metadata?.editorMode === 'source') {
+        return `<div data-type="markdown-source-cell" data-cell-id="${cell.id}" data-source="${encodeURIComponent(cell.content)}"></div>`;
+      }
       // markdown cell转换为HTML
       // For the first cell, check if it has cover/icon metadata and should be rendered as title
       if (includeDocumentFrame && index === 0 && /^#(?:\s|$)/.test(cell.content.trim())) {
@@ -278,6 +281,7 @@ const projectedBlocks = new WeakMap<ProseMirrorNode, Cell[]>();
 const cellNodeTypes = new Set([
   'title',
   'markdownCell',
+  'markdownSourceCell',
   'imageCell',
   'markdownImage',
   'executableCodeBlock',
@@ -347,7 +351,17 @@ function projectJsonToCells(docJson: any): Cell[] {
   docJson.content.forEach((node: any, idx: number) => {
     if (DEBUG) console.log(`🔍 处理节点 ${idx}:`, { type: node.type, attrs: node.attrs });
 
-    if (node.type === 'markdownCell') {
+    if (node.type === 'markdownSourceCell') {
+      flushMarkdownContent();
+      newCells.push({
+        id: node.attrs.cellId,
+        type: 'markdown',
+        content: node.attrs.source,
+        outputs: [],
+        enableEdit: true,
+        metadata: { editorMode: 'source' },
+      });
+    } else if (node.type === 'markdownCell') {
       flushMarkdownContent();
       newCells.push({
         id: node.attrs?.cellId || generateCellId(),

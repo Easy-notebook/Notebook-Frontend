@@ -14,6 +14,7 @@ import { CodeCellProps, ReactCodeMirrorRef } from './utils/types';
 const CodeCell: React.FC<CodeCellProps> = ({
   cell,
   onDelete,
+  onBreakFence,
   dslcMode = false,
   finished_thinking = false,
   thinkingText = 'finished thinking',
@@ -58,6 +59,25 @@ const CodeCell: React.FC<CodeCellProps> = ({
   return (
     <div
       data-cell-id={cell.id}
+      onKeyDownCapture={(event) => {
+        const selection = editorRef.current?.view?.state.selection.main;
+        if (
+          onBreakFence &&
+          event.key === 'Backspace' &&
+          !event.nativeEvent.isComposing &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          selection?.empty &&
+          selection.from === 0 &&
+          !vm.isExecuting &&
+          !dslcMode
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          onBreakFence();
+        }
+      }}
       className={`code-cell-container codeCell ${
         isInDetachedView
           ? 'bg-white dark:bg-gray-900 h-full'

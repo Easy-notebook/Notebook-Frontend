@@ -15,6 +15,13 @@ export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
       return previous;
     }
 
+    if (cell.type === 'markdown' && cell.metadata?.editorMode !== previous.metadata?.editorMode) {
+      return {
+        ...previous,
+        content: cell.content,
+        metadata: { ...previous.metadata, editorMode: cell.metadata?.editorMode },
+      };
+    }
     if (cell.content === previous.content) return previous;
     return { ...previous, content: cell.content };
   });

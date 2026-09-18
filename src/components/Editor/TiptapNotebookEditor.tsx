@@ -8,6 +8,7 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import useStore from '@Store/notebookStore';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from './utils/cellConverters';
+import { editSelectedCellSource } from './TipTap/model/sourceCellTransitions';
 import '@Utils/logger'; // Initialize debug tools
 
 // Hooks
@@ -281,6 +282,19 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
           <EditorCover editor={currentEditor} />
 
           <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
+            {!readOnly && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="text-sm px-2 py-1"
+                  title="Edit selected Markdown cell source"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => editSelectedCellSource(editor)}
+                >
+                  Cell source
+                </button>
+              </div>
+            )}
             <div onClick={handleEditorClick} className="w-full h-full">
               <EditorBubbleMenu editor={currentEditor} />
               <EditorContent editor={editor} className="w-full h-full focus-within:outline-none" />

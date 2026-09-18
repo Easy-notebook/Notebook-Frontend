@@ -1,14 +1,14 @@
-import React, { useCallback, useMemo } from 'react';
-import { BaseNodeView, BaseNodeViewProps } from '../../core/BaseNodeView';
+import { useCallback, useMemo } from 'react';
+import { BaseNodeView } from '../../core/BaseNodeView';
 import { CodeBlockModel, CodeBlockContext } from './CodeBlockModel';
 import CodeCell from '../../../Cells/CodeCell';
 import HybridCell from '../../../Cells/HybridCell';
 import useStore from '@Store/notebookStore';
 import { getCellById } from '@Store/models/cellIndex';
-import { TextSelection } from 'prosemirror-state';
+import { breakCodeBlockFence } from '../../../TipTap/model/sourceCellTransitions';
 
 const CodeBlockViewComponent = (props: any) => {
-  const { node, editor, getPos, deleteNode } = props;
+  const { node, editor, getPos } = props;
   const { cellId, code, outputs, enableEdit } = node.attrs;
   const existingCell = useStore((state) => getCellById(state.cells, cellId));
 
@@ -27,46 +27,11 @@ const CodeBlockViewComponent = (props: any) => {
   }, [cellId, existingCell, code, enableEdit, outputs]);
 
   const handleDelete = useCallback(() => {
-    // Ported deletion logic
-    if (editor && getPos) {
-      const pos = getPos();
-      const { tr } = editor.state;
-      const nodeStart = pos;
-      const nodeEnd = pos + node.nodeSize;
-
-      const placeholder = '```python\n';
-      const textNode = editor.state.schema.text(placeholder);
-      tr.replaceWith(nodeStart, nodeEnd, textNode);
-
-      let targetPos = nodeStart + placeholder.length;
-      if (targetPos >= 0 && targetPos <= tr.doc.content.size) {
-        try {
-          const $pos = tr.doc.resolve(targetPos);
-          const selection = TextSelection.near($pos);
-          tr.setSelection(selection);
-        } catch (e) {
-          console.warn('Set cursor failed', e);
-        }
-      }
-      editor.view.dispatch(tr);
-
-      // Focus handling
-      setTimeout(() => {
-        const { state: newState, view: newView } = editor;
-        const safePos = Math.min(targetPos, newState.doc.content.size);
-        try {
-          const $pos = newState.doc.resolve(safePos);
-          const sel = TextSelection.near($pos);
-          newView.dispatch(newState.tr.setSelection(sel).scrollIntoView());
-          newView.focus();
-        } catch (err) {
-          console.warn('Post-delete focus reset failed', err);
-        }
-      }, 20);
-    } else {
-      deleteNode();
-    }
-  }, [deleteNode, editor, getPos, node]);
+    const pos = getPos?.();
+    if (typeof pos !== 'number') return;
+    const latest = getCellById(useStore.getState().cells, cellId) || virtualCell;
+    breakCodeBlockFence(editor, pos, latest);
+  }, [editor, getPos, cellId, virtualCell]);
 
   const CellComponent = virtualCell.type === 'hybrid' ? HybridCell : CodeCell;
 
@@ -75,6 +40,7 @@ const CodeBlockViewComponent = (props: any) => {
       <CellComponent
         cell={virtualCell}
         onDelete={handleDelete}
+        onBreakFence={handleDelete}
         dslcMode={false}
         finished_thinking={false}
         thinkingText="finished thinking"
@@ -103,7 +69,7 @@ export const CodeBlockView = (props: any) => {
         editor: p.editor,
         getPos: p.getPos,
       })}
-      renderState={(state, context, fsm) => <CodeBlockViewComponent {...props} />}
+      renderState={() => <CodeBlockViewComponent {...props} />}
     />
   );
 };

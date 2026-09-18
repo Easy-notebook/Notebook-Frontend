@@ -51,6 +51,23 @@ retaining an unbounded revision log.
 
 ## Remaining architectural limits
 
+### Source-cell editing progress
+
+Executable code blocks can now be converted into a literal Markdown source cell by Backspace at
+the start of code or the existing block deletion action. The opening fence loses one backtick;
+language, code and cell ID survive. Undo restores the latest store-backed code. Editing is published
+to the in-memory store immediately, avoiding delayed code updates overwriting structural conversions.
+
+The `Cell source` action opens a selected Markdown cell as literal source. Source mode persists through
+reloads. Preview recognizes a repaired standalone code fence and routes Mermaid fences to diagrams,
+not the Python executor. Browser keyboard verification covers breaking the fence, source focus/caret,
+repairing the fence and returning to a code editor without disturbing adjacent cells.
+
+This does not yet prove full-document source editing or lossless round trips for arbitrary mixed
+Markdown. Remaining goal checks include mixed/nested fences, read-only and IME interactions,
+undo/redo focus across editor types, full-document source mode, broader chart/table interactions,
+and the performance/persistence limits below. The overall optimization goal remains active.
+
 This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
 task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are
 still separate transactions. Revisions coordinate one service instance, not concurrent browser tabs.
