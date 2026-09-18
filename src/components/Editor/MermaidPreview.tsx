@@ -1,78 +1,68 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { observePreview } from './utils/previewVisibility';
-let renderer: Promise<(typeof import('mermaid'))['default']> | undefined;
-function loadRenderer() {
-  renderer ??= import('mermaid')
-    .then(({ default: mermaid }) => {
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: 'strict',
-        suppressErrorRendering: true,
-      });
-      return mermaid;
-    })
-    .catch((error) => {
-      renderer = undefined;
-      throw error;
-    });
-  return renderer;
-}
+import { useTheme } from '@/contexts/ThemeContext';
+import { mermaidRenderService } from './model/MermaidRenderService';
+
+type RenderResult = { source: string; theme: string } & (
+  | { status: 'ready'; svg: string }
+  | { status: 'failed'; message: string }
+);
 
 /** Reusable, derived preview; the caller retains the original source text. */
 export function MermaidPreview({ source }: { source: string }) {
   const id = useId().replace(/:/g, '');
+  const { resolvedTheme } = useTheme();
   const renderSequence = useRef(0);
   const container = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
-  const completedSource = useRef<string>();
-  const [svg, setSvg] = useState('');
-  const [error, setError] = useState('');
+  const [result, setResult] = useState<RenderResult | null>(null);
+  const currentResult = result?.source === source && result.theme === resolvedTheme ? result : null;
 
   useEffect(() => {
     if (container.current) return observePreview(container.current, setVisible);
   }, []);
 
   useEffect(() => {
-    let current = true;
-    if (!visible || completedSource.current === source) return;
-    if (!source.trim()) {
-      completedSource.current = undefined;
-      setSvg('');
-      setError('Enter Mermaid source to preview the diagram.');
-      return () => {
-        current = false;
-      };
-    }
+    if (!visible || currentResult || !source.trim()) return;
+    const controller = new AbortController();
     const renderId = `notebook-mermaid-${id}-${++renderSequence.current}`;
     const timer = window.setTimeout(() => {
-      loadRenderer()
-        .then((mermaid) => (current ? mermaid.render(renderId, source) : undefined))
-        .then((result) => {
-          if (!current || !result) return;
-          setSvg(result.svg);
-          setError('');
-          completedSource.current = source;
+      mermaidRenderService
+        .render({ id: renderId, source, theme: resolvedTheme, signal: controller.signal })
+        .then((rendered) => {
+          if (controller.signal.aborted || !rendered) return;
+          setResult({ source, theme: resolvedTheme, status: 'ready', svg: rendered.svg });
         })
         .catch((reason: unknown) => {
-          if (!current) return;
-          completedSource.current = undefined;
-          setSvg('');
-          setError(reason instanceof Error ? reason.message : 'Diagram could not be rendered.');
+          if (controller.signal.aborted) return;
+          setResult({
+            source,
+            theme: resolvedTheme,
+            status: 'failed',
+            message: reason instanceof Error ? reason.message : 'Diagram could not be rendered.',
+          });
         });
     }, 180);
     return () => {
-      current = false;
+      controller.abort();
       window.clearTimeout(timer);
     };
-  }, [id, source, visible]);
+  }, [id, source, resolvedTheme, visible, currentResult]);
 
-  if (error)
+  if (!source.trim() || currentResult?.status === 'failed')
     return (
       <div ref={container} className="notebook-mermaid-error" role="status">
-        {error}
+        {currentResult?.status === 'failed'
+          ? currentResult.message
+          : 'Enter Mermaid source to preview the diagram.'}
+        {currentResult?.status === 'failed' && (
+          <button type="button" onClick={() => setResult(null)}>
+            Retry diagram
+          </button>
+        )}
       </div>
     );
-  if (!svg)
+  if (currentResult?.status !== 'ready')
     return (
       <div
         ref={container}
@@ -88,7 +78,7 @@ export function MermaidPreview({ source }: { source: string }) {
       ref={container}
       className="notebook-mermaid-preview"
       aria-label="Mermaid diagram"
-      dangerouslySetInnerHTML={{ __html: svg }}
+      dangerouslySetInnerHTML={{ __html: currentResult.svg }}
     />
   );
 }

@@ -293,3 +293,25 @@ A failing regression first demonstrated physical row splitting. After the fix, 8
 source/preview and persisted-cell reload round trips, and unsafe-HTML cases. This does not encode
 multiple paragraph boundaries or merged cells in GFM tables, and does not establish browser/IME
 end-to-end behavior.
+
+### Mermaid rendering lifecycle
+
+One render service now owns lazy renderer loading and the configure/render critical section.
+Mermaid's configuration is global, so theme initialization and rendering are serialized together.
+Each preview aborts obsolete requests when its source/theme changes, it leaves the visibility
+margin, or it unmounts. Waiting jobs are held in a Set and removed in O(1) on cancellation rather
+than handed to the library's uncancellable queue. An already-running library call still finishes;
+its cancelled result is ignored. This bounds waiting work by active preview requests, not by the
+number of edits made while a slow diagram renders.
+
+Preview results are keyed by source and resolved theme. A mismatched SVG is hidden immediately,
+and errors offer an explicit retry without an automatic retry loop. The strict security setting
+is re-applied for each job. There is no cross-document SVG cache or duplicated persistent diagram
+state. Ten targeted tests cover 1,000 cancelled queued edits, cancellation during loading/unmount,
+load/render failure recovery, theme changes, stale result suppression and offscreen deferral.
+These use a mocked Mermaid engine; actual diagram-layout and browser theme appearance require
+separate visual verification.
+
+The integrated editor run passes 24 files / 139 tests, and the production build succeeds with
+existing large-chunk warnings. The full TypeScript check is still failing; no diagnostic names
+MermaidPreview or MermaidRenderService.
