@@ -315,6 +315,79 @@ describe('source cell transitions', () => {
     expect(previewMarkdownSource(editor, pos)).toBe(true);
     expect(convertEditorStateToCells(editor)[1]).toMatchObject(cell);
   });
+  it.each(['code', 'hybrid'] as const)(
+    'restores %s origin through source HTML and saved-cell reload',
+    (type) => {
+      const cell: Cell = {
+        id: 'origin',
+        type,
+        language: 'python',
+        content: 'print(1)',
+        outputs: [{ type: 'text', content: '1' }],
+        metadata: { custom: 'keep' },
+      };
+      const pos = create(cell);
+      const original = [markdown('title', '# Notebook'), cell, markdown('after', 'Untouched')];
+      expect(breakCodeBlockFence(editor, pos, cell)).toBe(true);
+      editor.commands.setContent(editor.getHTML());
+      expect(editor.state.doc.nodeAt(pos)!.attrs.sourceCellType).toBe(type);
+      const stored = JSON.parse(
+        JSON.stringify(reconcileCells(convertEditorStateToCells(editor), original))
+      ) as Cell[];
+      expect(stored[1].metadata?.sourceCellType).toBe(type);
+      editor.commands.setContent(convertCellsToHtml(stored));
+      const source = editor.state.doc.nodeAt(pos)!;
+      editor.view.dispatch(
+        editor.state.tr.setNodeMarkup(pos, undefined, {
+          ...source.attrs,
+          source: '`' + source.attrs.source,
+        })
+      );
+      expect(previewMarkdownSource(editor, pos)).toBe(true);
+      expect(editor.state.doc.nodeAt(pos)!.attrs.originalType).toBe(type);
+      const restored = reconcileCells(convertEditorStateToCells(editor), stored);
+      expect(restored[1]).toMatchObject(cell);
+      expect(restored[1].metadata?.sourceCellType).toBeUndefined();
+      expect(restored[1].metadata?.editorMode).toBeUndefined();
+    }
+  );
+  it('positions the source caret after a shortened long delimiter and repairs at that position', () => {
+    const cell: Cell = {
+      id: 'long-fence',
+      type: 'code',
+      language: 'python',
+      content: '```\nprint(1)',
+      outputs: [],
+    };
+    const pos = create(cell);
+    expect(breakCodeBlockFence(editor, pos, cell)).toBe(true);
+    const source = editor.state.doc.nodeAt(pos)!;
+    expect(source.attrs.source).toBe('```python\n```\nprint(1)\n````');
+    expect(source.attrs.caret).toBe(3);
+    const repaired =
+      source.attrs.source.slice(0, source.attrs.caret) +
+      '`' +
+      source.attrs.source.slice(source.attrs.caret);
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(pos, undefined, { ...source.attrs, source: repaired })
+    );
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    expect(convertEditorStateToCells(editor)[1]).toMatchObject(cell);
+  });
+  it('clears executable origin when source is deliberately changed into prose', () => {
+    const cell: Cell = {
+      ...markdown('origin', 'Plain prose'),
+      metadata: { editorMode: 'source', sourceCellType: 'hybrid', custom: 'keep' },
+    };
+    const pos = create(cell);
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    const restored = reconcileCells(convertEditorStateToCells(editor), [cell]).find(
+      (item) => item.id === 'origin'
+    )!;
+    expect(restored.type).toBe('markdown');
+    expect(restored.metadata?.sourceCellType).toBeUndefined();
+    expect(restored.metadata?.custom).toBe('keep');
+  });
   it('retains outputs and metadata after a broken fence is saved, reloaded and repaired', () => {
     const cell: Cell = {
       id: 'code',

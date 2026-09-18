@@ -8,6 +8,7 @@ import { convertMarkdownToHtml } from './markdownConverters';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { formatCodeFence, standaloneFence } from './fencedMarkdown';
 import { codeCellFromAttributes } from './codeCellAttributes';
+import { parseSourceCellType } from './sourceCellAttributes';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -48,7 +49,8 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
       return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}" data-is-generating="${(cell as any).metadata?.isGenerating === true}"></div>`;
     } else if (cell.type === 'markdown') {
       if (cell.metadata?.editorMode === 'source') {
-        return `<div data-type="markdown-source-cell" data-cell-id="${cell.id}" data-source="${encodeURIComponent(cell.content)}"></div>`;
+        const sourceCellType = parseSourceCellType(cell.metadata.sourceCellType);
+        return `<div data-type="markdown-source-cell" data-cell-id="${cell.id}" data-source="${encodeURIComponent(cell.content)}"${sourceCellType ? ` data-source-cell-type="${sourceCellType}"` : ''}></div>`;
       }
       // markdown cell转换为HTML
       // For the first cell, check if it has cover/icon metadata and should be rendered as title
@@ -436,13 +438,14 @@ function projectJsonToCells(docJson: any): Cell[] {
 
     if (node.type === 'markdownSourceCell') {
       flushMarkdownContent();
+      const sourceCellType = parseSourceCellType(node.attrs.sourceCellType);
       newCells.push({
         id: node.attrs.cellId,
         type: 'markdown',
         content: node.attrs.source,
         outputs: [],
         enableEdit: true,
-        metadata: { editorMode: 'source' },
+        metadata: { editorMode: 'source', ...(sourceCellType && { sourceCellType }) },
       });
     } else if (node.type === 'markdownCell') {
       flushMarkdownContent();

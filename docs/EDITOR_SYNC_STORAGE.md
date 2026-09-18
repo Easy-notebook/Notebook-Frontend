@@ -327,5 +327,20 @@ ProseMirror attributes are not a second live output database.
 
 Five model test files / 53 tests pass, covering code-fence break/repair across serialized-cell reload,
 metadata preservation, undo/redo through the update/reconciliation path, and explicit output clearing.
-This does not yet preserve an original hybrid subtype through every source-mode conversion, nor
-provide full-document source editing or cross-tab conflict resolution.
+Full-document source editing and cross-tab conflict resolution remain outside this reconciliation
+change.
+
+### Executable source origin and fence caret
+
+Source nodes now carry a validated `sourceCellType` (`code` or `hybrid`), projected into source-mode
+metadata and encoded in HTML. Repairing a standalone executable fence restores that subtype rather
+than always creating a plain code cell. Source-mode lifecycle metadata is cleared on preview, including
+when the user intentionally changes the source to prose or Mermaid. Outputs and business metadata
+retain the store ownership described above; no additional output snapshot is introduced.
+
+Fence-breaking caret placement uses the actual generated opening delimiter length. Code containing
+fence-like lines can require four or more backticks, so the old fixed offset of two was incorrect.
+The length is read from the opening run without scanning the entire generated source again.
+
+Five model test files / 57 tests pass, including code/hybrid restoration across HTML and serialized-cell
+reload, source-origin cleanup on prose conversion, and repairing a longer fence at the reported caret.

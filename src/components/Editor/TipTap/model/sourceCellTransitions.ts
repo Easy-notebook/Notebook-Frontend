@@ -8,6 +8,7 @@ import { DOMParser } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { convertCellsToHtml, serializeMarkdownBlock } from '../../utils/cellConverters';
 import { formatCodeFence, standaloneFence } from '../../utils/fencedMarkdown';
+import { parseSourceCellType } from '../../utils/sourceCellAttributes';
 
 /** Convert only the owning cell; unrelated cells are neither projected nor replaced. */
 export function breakNestedCodeFence(editor: Editor): boolean {
@@ -75,11 +76,15 @@ export function breakCodeBlockFence(editor: Editor, pos: number, cell: Cell): bo
       .setMeta('addToHistory', false)
       .setMeta(EXTERNAL_CELL_SYNC, true)
   );
-  const source = formatCodeFence(cell.content, language).slice(1);
+  const completeSource = formatCodeFence(cell.content, language);
+  const delimiterLength = /^`+/.exec(completeSource)![0].length;
+  const source =
+    completeSource.slice(0, delimiterLength - 1) + completeSource.slice(delimiterLength);
   const replacement = editor.schema.nodes.markdownSourceCell.create({
     cellId: cell.id,
     source,
-    caret: 2,
+    caret: delimiterLength - 1,
+    sourceCellType: parseSourceCellType(cell.type),
   });
   const tr = closeHistory(editor.state.tr).replaceWith(pos, pos + current.nodeSize, replacement);
   tr.setSelection(NodeSelection.create(tr.doc, pos));
@@ -100,7 +105,7 @@ export function previewMarkdownSource(editor: Editor, pos: number): boolean {
       language: normalizeCodeLanguage(fence.language),
       code: encodeURIComponent(fence.code),
       outputs: encodeURIComponent('[]'),
-      originalType: 'code',
+      originalType: parseSourceCellType(node.attrs.sourceCellType) || 'code',
     });
   } else {
     const container = document.createElement('div');

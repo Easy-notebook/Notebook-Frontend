@@ -3,6 +3,7 @@ import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { previewMarkdownSource } from '../TipTap/model/sourceCellTransitions';
 import { isCompositionInput } from '../utils/compositionInput';
+import { parseSourceCellType } from '../utils/sourceCellAttributes';
 
 export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
   const input = useRef<HTMLTextAreaElement>(null);
@@ -71,6 +72,14 @@ export const MarkdownSourceCellExtension = Node.create({
   addAttributes() {
     return {
       caret: { default: 0, rendered: false },
+      sourceCellType: {
+        default: null,
+        parseHTML: (element) => parseSourceCellType(element.getAttribute('data-source-cell-type')),
+        renderHTML: (attrs) => {
+          const type = parseSourceCellType(attrs.sourceCellType);
+          return type ? { 'data-source-cell-type': type } : {};
+        },
+      },
       cellId: {
         default: null,
         parseHTML: (element) => element.getAttribute('data-cell-id'),
