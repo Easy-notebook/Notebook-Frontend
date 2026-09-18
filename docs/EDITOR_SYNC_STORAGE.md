@@ -90,6 +90,13 @@ removing one opening fence character while preserving siblings, cell identity an
 serializes only that cell, O(cell content length), and does not project the entire notebook. Deeper
 list/blockquote nesting still requires a structure-aware source mapping before this command applies.
 
+Mermaid layout is now visibility-gated with a 300px prefetch margin. Offscreen edits do not schedule
+layout; the newest source is rendered when visible. A completed preview is reused on scroll reentry.
+All mounted previews share one IntersectionObserver and release it after the last unmount. Tests
+cover deferred rendering, stale-result suppression, reentry reuse and 1,000-preview observer cleanup.
+This reduces expensive layout work, not the O(number of mounted previews) React/observer bookkeeping;
+it is not full notebook virtualization. Environments without IntersectionObserver render eagerly.
+
 This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
 task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are
 still separate transactions. Revisions coordinate one service instance, not concurrent browser tabs.
