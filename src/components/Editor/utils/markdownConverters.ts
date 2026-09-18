@@ -68,6 +68,24 @@ export function convertMarkdownToHtml(
 ) {
   if (!markdown) return '<p></p>';
 
+  // Mermaid fences are notebook blocks, not inline code. Split them before
+  // formatting so their source remains byte-for-byte editable and durable.
+  const mermaidFence = /^```mermaid[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*(?=\r?\n|$)/gm;
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const match of markdown.matchAll(mermaidFence)) {
+    const start = match.index || 0;
+    const before = markdown.slice(cursor, start).trim();
+    if (before) parts.push(convertMarkdownToHtml(before, cell, headingSlugCounter));
+    parts.push(`<div data-type="mermaid-block" data-code="${encodeURIComponent(match[1])}"></div>`);
+    cursor = start + match[0].length;
+  }
+  if (parts.length) {
+    const after = markdown.slice(cursor).trim();
+    if (after) parts.push(convertMarkdownToHtml(after, cell, headingSlugCounter));
+    return parts.join('');
+  }
+
   // 处理LaTeX语法 - 分步骤处理避免嵌套问题
   let processedText = markdown;
   const latexNodes: string[] = [];

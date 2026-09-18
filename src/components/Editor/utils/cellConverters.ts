@@ -221,6 +221,9 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
 }
 
 function serializeMarkdownBlock(node: any): string {
+  if (node.type === 'mermaidBlock') {
+    return `\`\`\`mermaid\n${node.attrs?.code || ''}\n\`\`\``;
+  }
   if (node.type === 'heading') {
     return `${'#'.repeat(node.attrs?.level || 1)} ${extractTextFromNode(node)}`;
   }

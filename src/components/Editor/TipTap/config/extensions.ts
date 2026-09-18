@@ -13,6 +13,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableRow from '@tiptap/extension-table-row';
 import Heading from '@tiptap/extension-heading';
 import { MarkdownCellExtension } from '@Editor/extensions/MarkdownCellExtension';
+import { MermaidBlockExtension } from '@Editor/extensions/MermaidBlockExtension';
 import { Extension as CoreExtension, InputRule } from '@tiptap/core';
 import {
   CodeBlockExtension,
@@ -90,6 +91,7 @@ export function getTipTapExtensions(placeholder: string) {
 
     // Custom cell extensions
     MarkdownCellExtension,
+    MermaidBlockExtension,
     CodeBlockExtension,
     ThinkingCellExtension,
     FileAttachmentExtension,

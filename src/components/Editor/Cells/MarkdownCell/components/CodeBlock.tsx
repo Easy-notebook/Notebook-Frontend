@@ -1,5 +1,5 @@
 import React from 'react';
-import { MermaidDiagram } from './MermaidDiagram';
+import { MermaidPreview } from '@Editor/MermaidPreview';
 
 interface CodeBlockProps {
   inline?: boolean;
@@ -13,7 +13,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ inline, className, childre
   if (!inline && match) {
     const lang = match[1];
     if (lang === 'mermaid') {
-      return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
+      return <MermaidPreview source={String(children).replace(/\n$/, '')} />;
     }
     return (
       <pre {...props} className={className}>

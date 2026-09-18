@@ -61,4 +61,19 @@ describe('document synchronization', () => {
     expect(convertEditorStateToCells(editor)[1]).toMatchObject({ id: 'hybrid', type: 'hybrid' });
     editor.destroy();
   });
+
+  it.each(['graph TD\nA-->B', 'this is not valid Mermaid syntax'])(
+    'preserves Mermaid source in a Markdown cell: %s',
+    (source) => {
+      const content = `Before\n\n\`\`\`mermaid\n${source}\n\`\`\`\n\nAfter`;
+      const cells = [markdown('title', '# Notebook'), markdown('diagram', content)];
+      const editor = new Editor({
+        extensions: getTipTapExtensions('Untitled'),
+        content: convertCellsToHtml(cells),
+      });
+      expect(editor.state.doc.child(1).child(1).type.name).toBe('mermaidBlock');
+      expect(convertEditorStateToCells(editor)[1]).toMatchObject({ id: 'diagram', content });
+      editor.destroy();
+    }
+  );
 });
