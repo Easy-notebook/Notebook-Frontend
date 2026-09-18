@@ -1,6 +1,7 @@
 import { Cell as StoreCell } from '@Store/models';
 import useStore from '@Store/notebookStore';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
+import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
 
 export class HybridCellViewModel extends BaseCellViewModel {
   // Local state
@@ -28,7 +29,7 @@ export class HybridCellViewModel extends BaseCellViewModel {
 
         return {
           type: 'code',
-          language: language || 'javascript',
+          language: normalizeCodeLanguage(language),
           content: content.trim(),
         };
       }

@@ -2,8 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { CellModel } from '@Store/models/cell';
 import { canExecuteCodeLanguage, normalizeCodeLanguage } from '@Store/models/codeLanguage';
 import { codeLanguageExtensions } from './languageSupport';
+import { HybridCellViewModel } from '../../HybridCell/model/HybridCellViewModel';
 
 describe('code-cell language contract', () => {
+  it('defaults unspecified code languages, including hybrid fences, to Python', () => {
+    expect(normalizeCodeLanguage()).toBe('python');
+    expect(normalizeCodeLanguage('')).toBe('python');
+    const cell = new HybridCellViewModel({
+      id: 'hybrid',
+      type: 'hybrid',
+      content: '```\nprint(1)\n```',
+      outputs: [],
+    });
+    expect(cell.contentType).toMatchObject({ type: 'code', language: 'python' });
+  });
   it('keeps the language across the Cell model round trip', () => {
     const cell = CellModel.fromJSON({
       id: 'js',

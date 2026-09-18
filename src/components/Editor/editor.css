@@ -172,9 +172,15 @@
 }
 
 .tiptap-notebook-editor h1.node-title-content {
-  color: var(--editor-ink);
-  background: none;
   margin: 0 0 1rem;
+}
+
+.tiptap-notebook-editor h1.node-title-content,
+.tiptap-notebook-editor .node-title-content > [data-node-view-content-react] {
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 
 .tiptap-notebook-editor .node-title-content * {

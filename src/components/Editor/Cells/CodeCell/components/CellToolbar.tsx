@@ -91,7 +91,7 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
           value={language}
           disabled={isExecuting}
           onChange={(event) => updateCellObject(cell.id, { language: event.target.value })}
-          className="rounded border border-gray-300 bg-transparent px-2 py-1 text-xs"
+          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark]"
         >
           {CODE_LANGUAGES.map((option) => (
             <option key={option.value} value={option.value}>
