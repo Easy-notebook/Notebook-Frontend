@@ -16,7 +16,6 @@ import { useEditorEvents } from './TipTap/hooks/useEditorEvents';
 import { useEditorSync } from './TipTap/hooks/useEditorSync';
 import { useKeyboardHandlers } from './TipTap/hooks/useKeyboardHandlers';
 import { useLinkHandler } from './TipTap/hooks/useLinkHandler';
-import { useBeforeUnload } from './TipTap/hooks/useBeforeUnload';
 import { useTranslation } from 'react-i18next';
 
 // Config
@@ -93,11 +92,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const editorRef = useRef<Editor | null>(null);
     const [currentEditor, setCurrentEditor] = useState<Editor | null>(null);
 
-    // Sync refs
-    const isInternalUpdate = useRef<boolean>(false);
-    const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastInsertedCodeCellIdRef = useRef<string | null>(null);
-
     // Calculate initial content once on mount
     const initialContent = useMemo(() => {
       console.log('🔍 [TiptapNotebookEditor] calculating initialContent', {
@@ -127,11 +121,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const { handleKeyDown } = useKeyboardHandlers();
     const cellManagement = useCellManagement({ cells, setCells });
     const editorEvents = useEditorEvents({
-      cells,
-      setCells,
-      isInternalUpdate,
-      syncTimeoutRef,
-      lastInsertedCodeCellIdRef,
       setCurrentEditor,
       editorRef,
       defaultTitle: localizedPlaceholder,
@@ -149,7 +138,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       onDestroy: editorEvents.onDestroy,
       onTransaction: editorEvents.onTransaction,
       onUpdate: editorEvents.onUpdate,
-      onBlur: editorEvents.onBlur,
       editorProps: {
         attributes: {
           class: `tiptap-notebook-editor markdown-cell prose max-w-none focus:outline-none ${className}`,
@@ -165,15 +153,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const { handleEditorClick } = useLinkHandler(editor);
 
     // Editor sync hook
-    useEditorSync({ editor, cells, isInternalUpdate });
-
-    // Before unload handler
-    useBeforeUnload({ editor, cells, setCells, isInternalUpdate, syncTimeoutRef });
+    useEditorSync({ editor, cells });
 
     // Cleanup
     useEffect(() => {
-      const currentSyncTimeout = syncTimeoutRef.current;
-
       const handleMarkdownFocus = (e: Event) => {
         const customEvent = e as CustomEvent;
         const { cellId, direction, sourceCellId } = customEvent.detail;
@@ -260,9 +243,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
       return () => {
         window.removeEventListener('markdown-cell-focus', handleMarkdownFocus);
-        if (currentSyncTimeout) {
-          clearTimeout(currentSyncTimeout);
-        }
         if (editorRef.current) {
           editorRef.current.destroy();
           editorRef.current = null;

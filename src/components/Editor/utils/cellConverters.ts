@@ -65,7 +65,7 @@ export function convertCellsToHtml(cells: Cell[]) {
         console.log(`转换Markdown单元格 ${index}: ID=${cell.id}, content="${cell.content}"`);
       const html = convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter);
       if (DEBUG) console.log(`Markdown转HTML结果 ${index}: "${html}"`);
-      return html;
+      return `<div data-type="markdown-cell" data-cell-id="${cell.id}">${html}</div>`;
     } else if (cell.type === 'image') {
       // image cell转换为HTML - 包含cellId和metadata信息
       if (DEBUG) console.log(`转换图片单元格 ${index}: ID=${cell.id}`);
@@ -220,6 +220,30 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
   }
 }
 
+function serializeMarkdownBlock(node: any): string {
+  if (node.type === 'heading') {
+    return `${'#'.repeat(node.attrs?.level || 1)} ${extractTextFromNode(node)}`;
+  }
+  if (node.type === 'table') {
+    const rows: string[][] = (node.content || []).map((row: any) =>
+      (row.content || []).map((cell: any) =>
+        (cell.content || [])
+          .map((child: any) => extractTextFromNode(child))
+          .join('')
+          .trim()
+      )
+    );
+    if (rows.length === 0) return '';
+    const formatRow = (cells: string[]) => `| ${cells.join(' | ')} |`;
+    return [
+      formatRow(rows[0]),
+      formatRow(rows[0].map(() => '---')),
+      ...rows.slice(1).map(formatRow),
+    ].join('\n');
+  }
+  return extractTextFromNode(node).trimEnd();
+}
+
 /**
  * 新方案：使用 ProseMirror JSON 而不是 HTML 解析
  */
@@ -290,7 +314,16 @@ export function convertEditorStateToCells(editor: any): Cell[] {
     docJson.content.forEach((node: any, idx: number) => {
       if (DEBUG) console.log(`🔍 处理节点 ${idx}:`, { type: node.type, attrs: node.attrs });
 
-      if (node.type === 'markdownImage') {
+      if (node.type === 'markdownCell') {
+        flushMarkdownContent();
+        newCells.push({
+          id: node.attrs?.cellId || generateCellId(),
+          type: 'markdown',
+          content: (node.content || []).map(serializeMarkdownBlock).join('\n\n'),
+          outputs: [],
+          enableEdit: true,
+        });
+      } else if (node.type === 'markdownImage') {
         // 处理图片节点 - 先清空累积的markdown内容
         flushMarkdownContent();
 

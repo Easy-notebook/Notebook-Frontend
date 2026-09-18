@@ -12,6 +12,7 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import TableRow from '@tiptap/extension-table-row';
 import Heading from '@tiptap/extension-heading';
+import { MarkdownCellExtension } from '@Editor/extensions/MarkdownCellExtension';
 import { Extension as CoreExtension, InputRule } from '@tiptap/core';
 import {
   CodeBlockExtension,
@@ -88,6 +89,7 @@ export function getTipTapExtensions(placeholder: string) {
     WikiLinkInput,
 
     // Custom cell extensions
+    MarkdownCellExtension,
     CodeBlockExtension,
     ThinkingCellExtension,
     FileAttachmentExtension,
