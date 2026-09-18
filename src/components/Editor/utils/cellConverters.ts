@@ -137,8 +137,23 @@ export function extractTextFromNode(node: any): string {
   // 处理纯文本并考虑 marks（bold / italic / code）
   if (node.text !== undefined) {
     let text = node.text as string;
+    const marks = Array.isArray(node.marks) ? node.marks : [];
+    if (!marks.some((mark: any) => mark.type === 'code')) {
+      text = text
+        .replace(/&/g, '&amp;')
+        .replace(/[\\`*_[\]<>~$#|!:@]/g, '\\$&')
+        .replace(/\bwww\./gi, (prefix) => prefix.slice(0, -1) + '\\.')
+        .replace(/^(\s*)(\d+)([.)])(?=\s)/gm, '$1$2\\$3')
+        .replace(/^([ \t]*)([-+=>])/gm, '$1\\$2');
+    }
     if (Array.isArray(node.marks)) {
-      node.marks.forEach((mark: any) => {
+      // Code owns the literal payload; links wrap the final formatted label.
+      const orderedMarks = [
+        ...marks.filter((mark: any) => mark.type === 'code'),
+        ...marks.filter((mark: any) => mark.type !== 'code' && mark.type !== 'link'),
+        ...marks.filter((mark: any) => mark.type === 'link'),
+      ];
+      orderedMarks.forEach((mark: any) => {
         switch (mark.type) {
           case 'bold':
             text = `**${text}**`;
@@ -473,7 +488,11 @@ function projectJsonToCells(docJson: any): Cell[] {
     } else if (node.type === 'title') {
       // Treat title as H1 and save cover/icon to metadata
       flushMarkdownContent();
-      const headingText = extractTextFromNode(node).trim();
+      // Notebook title is a plain-text field; its loader does not parse Markdown.
+      const headingText = (node.content || [])
+        .map((child: any) => child.text || '')
+        .join('')
+        .trim();
       const markdownHeading = `# ${headingText}`;
       const metadata: any = {};
 

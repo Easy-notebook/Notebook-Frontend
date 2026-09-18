@@ -73,7 +73,6 @@ export function renderNotebookMarkdown(
       {
         name: 'notebookDisplayMath',
         level: 'block',
-        start: (text) => text.search(/^\s*\$/m),
         tokenizer(text) {
           const match = /^(?:\$\$([^$]+)\$\$|\$([^$\n]+)\$)[ \t]*(?:\n|$)/.exec(text);
           if (match)

@@ -131,6 +131,13 @@ literal code examples, CRLF fence source and incomplete fences. The migration pa
 69-test Editor suite; added nested and boundary tests pass separately. This is not a proof of arbitrary
 Markdown losslessness or full-document source mode, which remain open goal items.
 
+Literal text serialization now escapes Markdown syntax, entities and unmarked automatic-link
+patterns so switching modes does not reinterpret plain text as formatting, lists, formulas or links.
+Code marks serialize the literal payload before other formatting wraps it. Notebook titles remain
+plain-text fields rather than receiving Markdown escapes. Escaped dollars no longer trigger display
+math paragraph splitting. Twenty-eight inline/parser/title tests cover these cases; this is not yet
+a complete guarantee for mixed mark boundaries, merged table cells or arbitrary whitespace.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document

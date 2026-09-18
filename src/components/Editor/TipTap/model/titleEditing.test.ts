@@ -22,6 +22,13 @@ function pressEnter() {
 }
 
 describe('title editing', () => {
+  it('does not add Markdown escapes to the plain notebook title on reload', () => {
+    createTitle('# A & B *literal*');
+    const cells = convertEditorStateToCells(editor);
+    expect(cells[0].content).toBe('# A & B *literal*');
+    editor.commands.setContent(convertCellsToHtml(cells));
+    expect(editor.state.doc.firstChild?.textContent).toBe('A & B *literal*');
+  });
   it('keeps an empty title empty through persistence and reload', () => {
     createTitle();
     expect(editor.state.doc.firstChild?.textContent).toBe('');

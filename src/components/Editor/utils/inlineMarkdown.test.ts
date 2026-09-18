@@ -1,8 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { renderInlineMarkdown } from './inlineMarkdown';
 import { extractTextFromNode } from './cellConverters';
+import { convertMarkdownToHtml } from './markdownConverters';
 
 describe('inline Markdown fidelity', () => {
+  it.each([
+    '**literal**',
+    '[not a link](https://example.com)',
+    '# not a heading',
+    '10. not a list',
+    '- not a list',
+    '$not math$',
+    '&copy;',
+    'a | b',
+    '`not code`',
+  ])('preserves unformatted literal text: %s', (text) => {
+    const source = extractTextFromNode({ type: 'text', text });
+    const container = document.createElement('div');
+    container.innerHTML = convertMarkdownToHtml(source);
+    expect(container.textContent?.trimEnd()).toBe(text);
+    expect(
+      container.querySelector('strong, a, h1, ol, ul, code, [data-type="latex-block"]')
+    ).toBeNull();
+  });
+  it('keeps bold code semantic regardless of mark order', () => {
+    const source = extractTextFromNode({
+      type: 'text',
+      text: 'a*b',
+      marks: [{ type: 'bold' }, { type: 'code' }],
+    });
+    const container = document.createElement('div');
+    container.innerHTML = renderInlineMarkdown(source);
+    expect(container.querySelector('strong code')?.textContent).toBe('a*b');
+  });
   it('renders links, strike and nested emphasis', () => {
     const html = renderInlineMarkdown('[link](https://example.com) ~~old~~ **bold *italic***');
     expect(html).toContain('<a href="https://example.com">link</a>');
