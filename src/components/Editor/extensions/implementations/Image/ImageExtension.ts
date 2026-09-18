@@ -36,7 +36,7 @@ export const ImageExtension = BaseExtension.create({
         }),
       },
       {
-        tag: 'div[data-type="markdown-image"]',
+        tag: 'div[data-type="markdown-image"], span[data-type="markdown-image"]',
         getAttrs: (element) => ({
           src: element.getAttribute('data-src'),
           alt: element.getAttribute('data-alt'),

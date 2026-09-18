@@ -34,6 +34,29 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it('round trips nested lists, quoted code, images and math through the notebook parser', () => {
+    const content =
+      '10. first\n\n    second\n\n    - nested\n11. next\n\n> quoted\n>\n> ```python\n> print(1)\n> ```\n\nFormula $x^2$ and ![alt](https://example.com/a.png)';
+    const pos = create(markdown('nested', content));
+    const body = editor.state.doc.nodeAt(pos)!;
+    expect(body.firstChild?.type.name).toBe('orderedList');
+    expect(body.firstChild?.attrs.start).toBe(10);
+    expect(body.firstChild?.firstChild?.child(2).type.name).toBe('bulletList');
+    expect(body.child(1).lastChild?.type.name).toBe('fencedCodeBlock');
+    const types: string[] = [];
+    body.descendants((node) => {
+      types.push(node.type.name);
+    });
+    expect(types).toContain('latexBlock');
+    expect(types).toContain('markdownImage');
+    editor.commands.setTextSelection(pos + 4);
+    expect(editSelectedCellSource(editor)).toBe(true);
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    const restored = editor.state.doc.nodeAt(pos)!;
+    expect(restored.firstChild?.eq(body.firstChild!)).toBe(true);
+    expect(restored.child(1).eq(body.child(1))).toBe(true);
+    expect(restored.lastChild?.eq(body.lastChild!)).toBe(true);
+  });
   it('serializes only the selected cell when opening source in a 1000-cell document', () => {
     editor = new Editor({
       extensions: getTipTapExtensions('Untitled'),

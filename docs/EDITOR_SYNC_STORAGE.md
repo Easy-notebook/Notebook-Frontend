@@ -114,18 +114,22 @@ This reduces expensive layout work, not the O(number of mounted previews) React/
 it is not full notebook virtualization. Environments without IntersectionObserver render eagerly.
 
 Inline Markdown rendering now uses the existing marked dependency instead of three formatting
-regular expressions. Notebook image/math placeholders remain opaque inline tokens. Links, strike,
+regular expressions. Links, strike,
 nested emphasis and variable-length code spans are covered; serialization retains link destinations,
 titles and strike marks. Raw inline HTML is escaped and explicit link schemes are restricted to
-HTTP(S), mailto and tel. Seven inline tests and fifteen source/title regressions pass. This does not
-replace the remaining handwritten block parser or prove arbitrary nested Markdown round trips.
+HTTP(S), mailto and tel. Seven inline tests and fifteen source/title regressions pass.
 
 Block serialization now preserves ordered-list start numbers, indents multiline/list-child content
 under the actual marker width, and prefixes every line of quoted content. Nested fenced code reuses
 the same fence serializer rather than being flattened into text. Three tests parse the generated
 Markdown with marked to verify list/quote/code hierarchy; ten source-transition regressions also pass.
-These are serializer guarantees. The current notebook block parser still needs replacement before
-equivalent nested structures are guaranteed on source-to-preview transitions.
+The block parser has subsequently been replaced by marked tokenization with notebook-specific
+renderers for headings, code, Mermaid, images and math. The handwritten parser and placeholder
+replacement passes are removed. A real Tiptap source/preview round-trip test verifies nested lists,
+ordered starts, quoted code, images and math. Boundary tests cover repeated heading IDs, mixed tables,
+literal code examples, CRLF fence source and incomplete fences. The migration passed the then-current
+69-test Editor suite; added nested and boundary tests pass separately. This is not a proof of arbitrary
+Markdown losslessness or full-document source mode, which remain open goal items.
 
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.

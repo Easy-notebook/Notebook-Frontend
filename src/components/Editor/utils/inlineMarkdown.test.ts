@@ -3,14 +3,11 @@ import { renderInlineMarkdown } from './inlineMarkdown';
 import { extractTextFromNode } from './cellConverters';
 
 describe('inline Markdown fidelity', () => {
-  it('renders links, strike and nested emphasis while preserving notebook placeholders', () => {
-    const html = renderInlineMarkdown(
-      '[link](https://example.com) ~~old~~ **bold *italic*** __LATEX_INLINE_0__'
-    );
+  it('renders links, strike and nested emphasis', () => {
+    const html = renderInlineMarkdown('[link](https://example.com) ~~old~~ **bold *italic***');
     expect(html).toContain('<a href="https://example.com">link</a>');
     expect(html).toContain('<del>old</del>');
     expect(html).toContain('<strong>bold <em>italic</em></strong>');
-    expect(html).toContain('__LATEX_INLINE_0__');
   });
   it('does not interpret raw HTML or executable link targets', () => {
     expect(renderInlineMarkdown('<script>alert(1)</script>')).not.toContain('<script>');
