@@ -139,7 +139,11 @@ function wrapInlineMark(text: string, delimiter: string): string {
   return body ? `${leading}${delimiter}${body}${delimiter}${trailing}` : text;
 }
 
-export function extractTextFromNode(node: any): string {
+export interface MarkdownSerializationOptions {
+  transformFence?: (node: any, source: string) => string;
+}
+
+export function extractTextFromNode(node: any, options?: MarkdownSerializationOptions): string {
   // 处理纯文本并考虑 marks（bold / italic / code）
   if (node.text !== undefined) {
     let text = node.text as string;
@@ -206,7 +210,9 @@ export function extractTextFromNode(node: any): string {
       return '';
 
     case 'blockquote': {
-      const inner = (node.content || []).map(serializeMarkdownBlock).join('\n\n');
+      const inner = (node.content || [])
+        .map((child: any) => serializeMarkdownBlock(child, options))
+        .join('\n\n');
       return inner
         .split('\n')
         .map((line: string) => `> ${line}`)
@@ -219,7 +225,9 @@ export function extractTextFromNode(node: any): string {
       return (node.content || [])
         .map((item: any, index: number) => {
           const prefix = node.type === 'orderedList' ? `${start + index}. ` : '- ';
-          const body = (item.content || []).map(serializeMarkdownBlock).join('\n\n');
+          const body = (item.content || [])
+            .map((child: any) => serializeMarkdownBlock(child, options))
+            .join('\n\n');
           return body
             .split('\n')
             .map(
@@ -232,7 +240,9 @@ export function extractTextFromNode(node: any): string {
     }
 
     case 'listItem': {
-      return (node.content || []).map(serializeMarkdownBlock).join('\n\n');
+      return (node.content || [])
+        .map((child: any) => serializeMarkdownBlock(child, options))
+        .join('\n\n');
     }
 
     case 'hardBreak':
@@ -270,21 +280,24 @@ export function extractTextFromNode(node: any): string {
   }
 }
 
-export function serializeMarkdownBlock(node: any): string {
+export function serializeMarkdownBlock(node: any, options?: MarkdownSerializationOptions): string {
   if (node.type === 'mermaidBlock' || node.type === 'fencedCodeBlock') {
     const code =
       node.type === 'mermaidBlock'
         ? node.attrs?.code || ''
         : (node.content || []).map((child: any) => child.text || '').join('');
     const original = standaloneFence(node.attrs?.source || '');
-    if (original && original.code.replace(/\r\n?/g, '\n') === code.replace(/\r\n?/g, '\n'))
-      return original.source;
-    return formatCodeFence(
-      code,
-      original?.info || (node.type === 'mermaidBlock' ? 'mermaid' : node.attrs?.language || ''),
-      original?.marker,
-      original?.length
-    );
+    const source =
+      original && original.code.replace(/\r\n?/g, '\n') === code.replace(/\r\n?/g, '\n')
+        ? original.source
+        : formatCodeFence(
+            code,
+            original?.info ||
+              (node.type === 'mermaidBlock' ? 'mermaid' : node.attrs?.language || ''),
+            original?.marker,
+            original?.length
+          );
+    return options?.transformFence ? options.transformFence(node, source) : source;
   }
   if (node.type === 'heading') {
     return `${'#'.repeat(node.attrs?.level || 1)} ${extractTextFromNode(node)}`;
@@ -306,7 +319,7 @@ export function serializeMarkdownBlock(node: any): string {
       ...rows.slice(1).map(formatRow),
     ].join('\n');
   }
-  return extractTextFromNode(node).trimEnd();
+  return extractTextFromNode(node, options).trimEnd();
 }
 
 function imageCellFromAttributes(attrs: any, cellId: string): Cell {
@@ -422,7 +435,9 @@ function projectJsonToCells(docJson: any): Cell[] {
       newCells.push({
         id: node.attrs?.cellId || generateCellId(),
         type: 'markdown',
-        content: (node.content || []).map(serializeMarkdownBlock).join('\n\n'),
+        content: (node.content || [])
+          .map((child: any) => serializeMarkdownBlock(child))
+          .join('\n\n'),
         outputs: [],
         enableEdit: true,
       });

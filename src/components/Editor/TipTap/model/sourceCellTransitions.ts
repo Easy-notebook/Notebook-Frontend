@@ -1,4 +1,4 @@
-import type { Editor } from '@tiptap/core';
+import type { Editor, JSONContent } from '@tiptap/core';
 import { NodeSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
 import type { Cell } from '@Store/models';
@@ -17,30 +17,38 @@ export function breakNestedCodeFence(editor: Editor): boolean {
     !empty ||
     $from.parentOffset !== 0 ||
     $from.parent.type.name !== 'fencedCodeBlock' ||
-    $from.depth !== 2 ||
+    $from.depth < 2 ||
     $from.node(1).type.name !== 'markdownCell'
   )
     return false;
   const cell = $from.node(1);
-  const selectedIndex = $from.index(1);
-  const parts: string[] = [];
-  let offset = 0;
+  const json: JSONContent = cell.toJSON();
+  let selected = json;
+  for (let depth = 1; depth < $from.depth; depth++) {
+    selected = selected.content![$from.index(depth)];
+  }
+  const original = json.content!.map((child) => serializeMarkdownBlock(child)).join('\n\n');
+  const source = json
+    .content!.map((child) =>
+      serializeMarkdownBlock(child, {
+        transformFence: (node, value) => {
+          if (node !== selected) return value;
+          const fence = standaloneFence(value)!;
+          const deletion = fence.indent.length + fence.length - 1;
+          return value.slice(0, deletion) + value.slice(deletion + 1);
+        },
+      })
+    )
+    .join('\n\n');
+  // Container prefixes are owned by the shared serializer. Comparing the two
+  // projections locates the deleted delimiter even inside nested lists/quotes.
   let caret = 0;
-  cell.forEach((child, _position, index) => {
-    let source = serializeMarkdownBlock(child.toJSON());
-    if (index === selectedIndex) {
-      const fence = standaloneFence(source)!;
-      const deletion = fence.indent.length + fence.length - 1;
-      source = source.slice(0, deletion) + source.slice(deletion + 1);
-      caret = offset + deletion;
-    }
-    parts.push(source);
-    offset += source.length + 2;
-  });
+  while (caret < source.length && source[caret] === original[caret]) caret++;
+  if (source === original) return false;
   const pos = $from.before(1);
   const replacement = editor.schema.nodes.markdownSourceCell.create({
     cellId: cell.attrs.cellId,
-    source: parts.join('\n\n'),
+    source,
     caret,
   });
   const tr = closeHistory(editor.state.tr).replaceWith(pos, pos + cell.nodeSize, replacement);

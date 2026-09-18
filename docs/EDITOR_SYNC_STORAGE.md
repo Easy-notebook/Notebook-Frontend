@@ -240,8 +240,21 @@ The fixed-revision editor, deferred-viewer and export regression run passes 25 f
 | Open a notebook with many code cells | Progressive activation; browser sample mounts 3 of 100 CodeMirror instances | Bounded eviction preserving history, composition and scroll anchors |
 | Edit one cell in a large document | Changed-block projection and selected-cell source tests | Array-index rebuilding and full save snapshots still scale with document size |
 | Navigate to an offscreen code cell | Deferred focus lifecycle tests; browser typing and undo smoke check | Cross-cell rapid navigation and real OS IME end-to-end coverage |
-| Switch Markdown/source without corrupting text | Structural parsing, literal text and marked-whitespace regressions | Full-document source, deep nested fence deletion and rich table fidelity |
+| Switch Markdown/source without corrupting text | Structural parsing, literal text and marked-whitespace regressions | Full-document source and rich table fidelity |
 | Save reliably while editing | Serialized save queue and durable transaction completion | Atomic file/list metadata, cross-tab conflict handling and crash recovery |
 
 These gates distinguish verified improvements from architectural work still pending; neither the
 test count nor successful bundling establishes globally optimal runtime or lossless persistence.
+
+### Fence deletion inside containers
+
+Backspace at the start of a static code block now resolves the selected node through its structural
+path, including lists and blockquotes. A shared serializer fence transform removes one opening
+delimiter only from that node; container prefixes are not reimplemented in the transition handler.
+Comparing the original and modified cell projections locates the source caret after prefix insertion.
+The operation projects only the owning cell (twice), not the whole notebook; deeply nested container
+serialization still builds intermediate strings and is not claimed to be globally optimal.
+
+Seven related test files / 57 tests pass. New cases exercise the Backspace keymap, quote/list/mixed
+nesting, identical sibling fences, cell identity, neighboring cells, undo/redo and repaired-source
+preview. These are editor integration tests, not browser/OS input validation.

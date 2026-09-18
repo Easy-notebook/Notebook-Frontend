@@ -114,6 +114,62 @@ describe('source cell transitions', () => {
     editor.commands.setTextSelection({ from: start, to: start + 1 });
     expect(breakNestedCodeFence(editor)).toBe(false);
   });
+  it.each([
+    '> Before\n>\n> ```python\n> print(1)\n> ```\n>\n> After',
+    '10. Before\n\n    ```python\n    print(1)\n    ```\n\n    After',
+    '- Before\n\n  > quoted\n  >\n  > ~~~~python\n  > print(1)\n  > ~~~~\n\n  After',
+  ])('breaks a structurally nested fence and preserves its containers: %s', (content) => {
+    const pos = create(markdown('nested', content));
+    const original = editor.state.doc;
+    let codePos = -1;
+    original.descendants((node, position) => {
+      if (node.type.name === 'fencedCodeBlock') codePos = position;
+    });
+    expect(codePos).toBeGreaterThan(pos);
+    const canonical = convertEditorStateToCells(editor)[1].content;
+    editor.commands.setTextSelection(codePos + 1);
+    expect(
+      editor.view.someProp('handleKeyDown', (handler) =>
+        handler(editor.view, new KeyboardEvent('keydown', { key: 'Backspace' }))
+      )
+    ).toBe(true);
+    const source = editor.state.doc.nodeAt(pos)!;
+    const delimiter = canonical.indexOf('python') - 1;
+    expect(source.attrs.source).toBe(
+      canonical.slice(0, delimiter) + canonical.slice(delimiter + 1)
+    );
+    expect(source.attrs.caret).toBe(delimiter);
+    expect(source.attrs.cellId).toBe('nested');
+    expect(editor.state.doc.lastChild).toBe(original.lastChild);
+    editor.commands.undo();
+    expect(editor.state.doc.eq(original)).toBe(true);
+    editor.commands.redo();
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(pos, undefined, {
+        ...editor.state.doc.nodeAt(pos)!.attrs,
+        source: canonical,
+      })
+    );
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    expect(convertEditorStateToCells(editor)[1].content).toBe(canonical);
+  });
+  it('breaks only the selected fence when identical fences occur in a quote', () => {
+    const pos = create(
+      markdown('duplicates', '> ```python\n> x\n> ```\n>\n> ```python\n> x\n> ```')
+    );
+    let lastCode = -1;
+    editor.state.doc.descendants((node, position) => {
+      if (node.type.name === 'fencedCodeBlock') lastCode = position;
+    });
+    const canonical = convertEditorStateToCells(editor)[1].content;
+    const deletion = canonical.lastIndexOf('python') - 1;
+    editor.commands.setTextSelection(lastCode + 1);
+    expect(breakNestedCodeFence(editor)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)?.attrs.source).toBe(
+      canonical.slice(0, deletion) + canonical.slice(deletion + 1)
+    );
+    expect(editor.state.doc.nodeAt(pos)?.attrs.caret).toBe(deletion);
+  });
   it('preserves code outputs through HTML import and export', () => {
     const cell: Cell = {
       id: 'code',
