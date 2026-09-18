@@ -100,7 +100,10 @@ it is not full notebook virtualization. Environments without IntersectionObserve
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document
-update. Embedded executable-editor permission propagation remains a separate verification item.
+update. A runtime React context propagates this policy to embedded code/hybrid views without changing
+persisted cells: code input and execution keyboard callbacks are removed, mutating toolbars/deletion
+are hidden, and reading/copying remain available. Component tests cover switching read-only on and
+off. Browser-level portal behavior and already-open detached windows still require verification.
 
 This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
 task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are

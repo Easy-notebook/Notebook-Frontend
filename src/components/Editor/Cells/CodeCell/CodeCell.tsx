@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { DISPLAY_MODES } from '@Store/codeStore';
 import { useCodeCellViewModel } from './model/useCodeCellViewModel';
+import { useEditorReadOnly } from '../../EditorAccessContext';
 
 // Import components
 import { CellToolbar, CodeEditor, OutputDisplay, CompactModeView } from './components';
@@ -21,6 +22,7 @@ const CodeCell: React.FC<CodeCellProps> = ({
   isInDetachedView = false,
   isDemoMode = false,
 }) => {
+  const readOnly = useEditorReadOnly();
   // ========== Refs ==========
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const codeContainerRef = useRef<HTMLDivElement | null>(null);
@@ -40,11 +42,11 @@ const CodeCell: React.FC<CodeCellProps> = ({
   // ========== Rendering Logic ==========
 
   // DSLC mode visibility
-  const shouldHideToolbar = dslcMode;
+  const shouldHideToolbar = dslcMode || readOnly;
   const shouldHideCode = dslcMode && vm.processedOutputs.length > 0;
 
   // Show compact mode if detached but not in detached view
-  if (vm.isDetached && !isInDetachedView) {
+  if (vm.isDetached && !isInDetachedView && !readOnly) {
     return (
       <CompactModeView
         cell={cell}
@@ -63,6 +65,7 @@ const CodeCell: React.FC<CodeCellProps> = ({
         const selection = editorRef.current?.view?.state.selection.main;
         if (
           onBreakFence &&
+          !readOnly &&
           event.key === 'Backspace' &&
           !event.nativeEvent.isComposing &&
           !event.metaKey &&
@@ -161,8 +164,12 @@ const CodeCell: React.FC<CodeCellProps> = ({
               onHoverChange={(h) => vm.setIsHovering(h)}
               onExpand={vm.handleExpand}
               onCollapse={vm.handleCollapse}
-              onChange={vm.handleChange}
-              onKeyDown={vm.handleKeyDown}
+              onChange={(value) => {
+                if (!readOnly) vm.handleChange(value);
+              }}
+              onKeyDown={(event) => {
+                if (!readOnly) vm.handleKeyDown(event);
+              }}
               onCopyCode={vm.copyCode}
             />
           )}

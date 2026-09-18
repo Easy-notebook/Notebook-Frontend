@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Cell as StoreCell } from '@Store/models';
 import { useHybridCellViewModel } from './model/useHybridCellViewModel';
+import { useEditorReadOnly } from '../../EditorAccessContext';
 
 const LoadingIndicator = () => (
   <div className="flex items-center space-x-2 text-xs text-gray-600">
@@ -23,6 +24,7 @@ interface HybridCellProps {
 
 const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
   const { resolvedTheme } = useTheme();
+  const readOnly = useEditorReadOnly();
   const vm = useHybridCellViewModel(cell);
   const contentType = vm.contentType;
 
@@ -41,7 +43,7 @@ const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
             <LoadingIndicator />
           </div>
           <div className="flex items-center space-x-2">
-            {onDelete && (
+            {onDelete && !readOnly && (
               <button
                 onClick={() => onDelete(cell.id)}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-red-500 text-white rounded-md hover:bg-red-700"
@@ -65,7 +67,8 @@ const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
                 value={contentType.content}
                 height="auto"
                 extensions={codeLanguageExtensions(contentType.language)}
-                onChange={vm.handleContentChange}
+                readOnly={readOnly}
+                onChange={readOnly ? undefined : vm.handleContentChange}
                 className="text-base"
                 theme={resolvedTheme === 'dark' ? dracula : 'light'}
               />
@@ -73,7 +76,9 @@ const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
           ) : (
             <div
               className="prose max-w-none text-base leading-relaxed"
-              onClick={() => vm.setIsProcessing(false)}
+              onClick={() => {
+                if (!readOnly) vm.setIsProcessing(false);
+              }}
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符） */}

@@ -9,6 +9,7 @@ import useStore from '@Store/notebookStore';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from './utils/cellConverters';
 import { editSelectedCellSource } from './TipTap/model/sourceCellTransitions';
+import { EditorReadOnlyContext } from './EditorAccessContext';
 import '@Utils/logger'; // Initialize debug tools
 
 // Hooks
@@ -277,51 +278,56 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     }
 
     return (
-      <SimpleDragManager editor={currentEditor}>
-        <div
-          className="tiptap-notebook-editor-container w-full h-full bg-transparent flex flex-col"
-          style={{ minHeight: '500px' }}
-        >
-          {/* Main editor content with drag manager */}
-          <EditorCover editor={currentEditor} />
+      <EditorReadOnlyContext.Provider value={readOnly}>
+        <SimpleDragManager editor={currentEditor}>
+          <div
+            className="tiptap-notebook-editor-container w-full h-full bg-transparent flex flex-col"
+            style={{ minHeight: '500px' }}
+          >
+            {/* Main editor content with drag manager */}
+            <EditorCover editor={currentEditor} />
 
-          <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
-            {!readOnly && (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  className="text-sm px-2 py-1"
-                  title="Edit selected Markdown cell source"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => editSelectedCellSource(editor)}
-                >
-                  Cell source
-                </button>
+            <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
+              {!readOnly && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="text-sm px-2 py-1"
+                    title="Edit selected Markdown cell source"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => editSelectedCellSource(editor)}
+                  >
+                    Cell source
+                  </button>
+                </div>
+              )}
+              <div onClick={handleEditorClick} className="w-full h-full">
+                <EditorBubbleMenu editor={currentEditor} />
+                <EditorContent
+                  editor={editor}
+                  className="w-full h-full focus-within:outline-none"
+                />
               </div>
-            )}
-            <div onClick={handleEditorClick} className="w-full h-full">
-              <EditorBubbleMenu editor={currentEditor} />
-              <EditorContent editor={editor} className="w-full h-full focus-within:outline-none" />
+              <div className="h-20 w-full flex-shrink-0"></div>
             </div>
-            <div className="h-20 w-full flex-shrink-0"></div>
+
+            {/* TipTap slash commands menu */}
+            <TipTapSlashCommands
+              editor={currentEditor}
+              isOpen={slashCommands.isMenuOpen}
+              onClose={() => {
+                slashCommands.removeSlashText();
+                slashCommands.closeMenu();
+              }}
+              position={slashCommands.menuPosition}
+              searchQuery={slashCommands.searchQuery}
+              onQueryUpdate={slashCommands.updateSlashQuery}
+            />
+
+            {/* Editor styles */}
           </div>
-
-          {/* TipTap slash commands menu */}
-          <TipTapSlashCommands
-            editor={currentEditor}
-            isOpen={slashCommands.isMenuOpen}
-            onClose={() => {
-              slashCommands.removeSlashText();
-              slashCommands.closeMenu();
-            }}
-            position={slashCommands.menuPosition}
-            searchQuery={slashCommands.searchQuery}
-            onQueryUpdate={slashCommands.updateSlashQuery}
-          />
-
-          {/* Editor styles */}
-        </div>
-      </SimpleDragManager>
+        </SimpleDragManager>
+      </EditorReadOnlyContext.Provider>
     );
   }
 );

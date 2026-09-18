@@ -6,6 +6,7 @@ import { CodeEditorProps } from '../utils/types';
 import { EXPAND_THRESHOLD } from '../utils';
 import { codeLanguageExtensions } from '../utils/languageSupport';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useEditorReadOnly } from '../../../EditorAccessContext';
 
 /**
  * Code editor component with CodeMirror
@@ -30,6 +31,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onCopyCode,
 }) => {
   const { resolvedTheme } = useTheme();
+  const readOnly = useEditorReadOnly();
   return (
     <div
       className={`relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
@@ -90,16 +92,16 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             }
             height={isInDetachedView ? '100%' : 'auto'}
             extensions={codeLanguageExtensions(cell.language)}
-            onChange={onChange}
-            onKeyDown={onKeyDown}
+            onChange={readOnly ? undefined : onChange}
+            onKeyDown={readOnly ? undefined : onKeyDown}
             theme={resolvedTheme === 'dark' ? dracula : 'light'}
             style={{
               fontSize: '16px',
               lineHeight: '1.5',
               height: isInDetachedView ? '100%' : 'auto',
             }}
-            readOnly={isExecuting || dslcMode}
-            autoFocus={isCurrentCell && !dslcMode}
+            readOnly={readOnly || isExecuting || dslcMode}
+            autoFocus={isCurrentCell && !dslcMode && !readOnly}
             ref={editorRef}
           />
           {isExecuting && (

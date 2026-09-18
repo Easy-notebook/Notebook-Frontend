@@ -1,18 +1,56 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CodeEditorProps } from '../utils/types';
+import { EditorReadOnlyContext } from '../../../EditorAccessContext';
 
 const themeState = vi.hoisted(() => ({ resolvedTheme: 'light' }));
 vi.mock('@/contexts/ThemeContext', () => ({ useTheme: () => themeState }));
 vi.mock('@uiw/react-codemirror', () => ({
-  default: ({ theme }: { theme: string | object }) => (
-    <div data-testid="code-mirror-theme" data-theme={typeof theme === 'string' ? theme : 'dark'} />
+  default: ({ theme, readOnly, onChange, onKeyDown }: any) => (
+    <div
+      data-testid="code-mirror-theme"
+      data-theme={typeof theme === 'string' ? theme : 'dark'}
+      data-readonly={String(readOnly)}
+      data-change={String(!!onChange)}
+      data-keydown={String(!!onKeyDown)}
+    />
   ),
 }));
 
 import { CodeEditor } from './CodeEditor';
 
 describe('CodeEditor theme', () => {
+  it('reacts to notebook read-only transitions and removes mutation callbacks', () => {
+    const props = {
+      cell: { id: 'code', type: 'code', content: 'print(1)', language: 'python' },
+      isExecuting: false,
+      dslcMode: false,
+      onChange: vi.fn(),
+      onKeyDown: vi.fn(),
+    } as unknown as CodeEditorProps;
+    const view = render(
+      <EditorReadOnlyContext.Provider value={false}>
+        <CodeEditor {...props} />
+      </EditorReadOnlyContext.Provider>
+    );
+    const node = view.getByTestId('code-mirror-theme');
+    expect(node.getAttribute('data-readonly')).toBe('false');
+    view.rerender(
+      <EditorReadOnlyContext.Provider value={true}>
+        <CodeEditor {...props} />
+      </EditorReadOnlyContext.Provider>
+    );
+    expect(node.getAttribute('data-readonly')).toBe('true');
+    expect(node.getAttribute('data-change')).toBe('false');
+    expect(node.getAttribute('data-keydown')).toBe('false');
+    view.rerender(
+      <EditorReadOnlyContext.Provider value={false}>
+        <CodeEditor {...props} />
+      </EditorReadOnlyContext.Provider>
+    );
+    expect(node.getAttribute('data-change')).toBe('true');
+    view.unmount();
+  });
   it('follows the resolved notebook theme', () => {
     const props = {
       cell: { id: 'code', type: 'code', content: 'print(1)', language: 'python' },
