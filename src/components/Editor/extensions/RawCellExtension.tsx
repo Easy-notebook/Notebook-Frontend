@@ -1,37 +1,40 @@
 import { Node, mergeAttributes, RawCommands } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import useStore from '@Store/notebookStore';
+import { getCellById } from '@Store/models/cellIndex';
+import { useEditorReadOnly } from '../EditorAccessContext';
 
-const RawCellView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
-  const { cells, updateCell, editingCellId, setEditingCellId, currentCellId } = useStore();
+export const RawCellView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
+  const readOnly = useEditorReadOnly();
+  const updateCell = useStore((state) => state.updateCell);
   const cellId = node.attrs.cellId;
-  const storeCell = useMemo(() => cells.find((c) => c.id === cellId) || null, [cells, cellId]);
-  const contentFromStore = storeCell?.content ?? '';
+  const storeCell = useStore((state) => getCellById(state.cells, cellId));
+  const contentFromStore = storeCell?.content ?? node.attrs.content ?? '';
   const [isEditing, setIsEditing] = useState(false);
-  const [temp, setTemp] = useState<string>('');
+  const [temp, setTemp] = useState<string>(contentFromStore);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // keep node attr and local state in sync with store
   useEffect(() => {
     const next = contentFromStore;
-    if (next !== node.attrs.content) {
+    if (storeCell && next !== node.attrs.content) {
       updateAttributes({ content: next, cellId });
     }
     if (!isEditing) setTemp(next);
-  }, [contentFromStore, node.attrs.content, cellId, isEditing]);
-
-  useEffect(() => {
-    // initialize
-    setTemp(node.attrs.content || '');
-  }, [node.attrs.content]);
+  }, [contentFromStore, node.attrs.content, cellId, isEditing, storeCell, updateAttributes]);
 
   const beginEdit = () => {
+    if (readOnly) return;
     setIsEditing(true);
     setTimeout(() => textareaRef.current?.focus(), 0);
   };
 
   const save = () => {
+    if (readOnly) {
+      setIsEditing(false);
+      return;
+    }
     const value = temp ?? '';
     if (cellId && updateCell) {
       updateCell(cellId, value);
@@ -47,9 +50,14 @@ const RawCellView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
           ref={textareaRef}
           className="w-full min-h-[80px] p-2 font-mono text-sm border rounded bg-white text-black"
           value={temp}
-          onChange={(e) => setTemp(e.target.value)}
+          readOnly={readOnly}
+          onChange={(e) => {
+            if (!readOnly) setTemp(e.target.value);
+          }}
           onBlur={save}
           onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.nativeEvent.isComposing) return;
             if (e.key === 'Escape') {
               e.preventDefault();
               setIsEditing(false);
@@ -70,20 +78,24 @@ const RawCellView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
           >
             {node.attrs.content || ''}
           </pre>
-          <button
-            className="absolute -top-2 right-0 opacity-0 group-hover:opacity-100 text-xs px-2 py-1 bg-black bg-opacity-60 text-white rounded"
-            onClick={() => beginEdit()}
-            title="Edit"
-          >
-            Edit
-          </button>
-          <button
-            className="absolute -top-2 right-14 opacity-0 group-hover:opacity-100 text-xs px-2 py-1 bg-red-600 text-white rounded"
-            onClick={() => deleteNode()}
-            title="Delete"
-          >
-            Delete
-          </button>
+          {!readOnly && (
+            <button
+              className="absolute -top-2 right-0 opacity-0 group-hover:opacity-100 text-xs px-2 py-1 bg-black bg-opacity-60 text-white rounded"
+              onClick={() => beginEdit()}
+              title="Edit"
+            >
+              Edit
+            </button>
+          )}
+          {!readOnly && (
+            <button
+              className="absolute -top-2 right-14 opacity-0 group-hover:opacity-100 text-xs px-2 py-1 bg-red-600 text-white rounded"
+              onClick={() => deleteNode()}
+              title="Delete"
+            >
+              Delete
+            </button>
+          )}
         </div>
       )}
     </NodeViewWrapper>

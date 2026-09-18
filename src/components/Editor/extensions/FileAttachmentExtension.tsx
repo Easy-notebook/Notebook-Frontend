@@ -3,6 +3,8 @@ import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import React, { useEffect } from 'react';
 import useStore from '@Store/notebookStore';
 import LinkCell from '../Cells/LinkCell';
+import { getCellById } from '@Store/models/cellIndex';
+import { useEditorReadOnly } from '../EditorAccessContext';
 
 export interface FileAttachmentAttributes {
   cellId: string | null;
@@ -12,15 +14,9 @@ export interface FileAttachmentAttributes {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface FileAttachmentOptions {}
 
-const FileAttachmentView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
-  const { cells } = useStore();
-
-  const matchedCell = React.useMemo(() => {
-    const byId = cells.find((c) => c.id === node?.attrs?.cellId);
-    if (byId) return byId;
-    const markdown = node?.attrs?.markdown || '';
-    return cells.find((c) => c.type === 'link' && (c.content || '') === markdown) || null;
-  }, [cells, node?.attrs?.cellId, node?.attrs?.markdown]);
+export const FileAttachmentView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
+  const readOnly = useEditorReadOnly();
+  const matchedCell = useStore((state) => getCellById(state.cells, node.attrs.cellId));
 
   const fallbackId = React.useMemo(
     () => node?.attrs?.cellId || `attach-${Math.random().toString(36).slice(2)}`,
@@ -56,8 +52,8 @@ const FileAttachmentView: React.FC<any> = ({ node, updateAttributes, deleteNode 
     <NodeViewWrapper>
       <LinkCell
         cell={cell as any}
-        readOnly={!matchedCell}
-        onDelete={() => deleteNode()}
+        readOnly={readOnly || !matchedCell}
+        onDelete={readOnly ? undefined : () => deleteNode()}
         isInDetachedView={false}
       />
     </NodeViewWrapper>

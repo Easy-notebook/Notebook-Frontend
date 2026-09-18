@@ -157,6 +157,14 @@ event filtering and final cleanup. The unused prior navigation hook is removed. 
 select only their required store fields, avoiding subscription to unrelated notebook edits. This
 does not remove the remaining O(cell count) React mounting cost or constitute viewport virtualization.
 
+Raw and attachment node views now select their own cell through the shared immutable-snapshot ID
+index instead of subscribing to the whole store and independently scanning the cell array. The index
+still costs O(cell count) once per new snapshot; individual lookups are average O(1). Attachments no
+longer adopt another cell by matching content. Raw nodes retain content before store hydration and
+keep in-progress drafts across node refreshes. Both respect the notebook read-only view policy.
+Four component tests cover hydration, draft refresh, read-only Raw controls and duplicate attachment
+text with distinct IDs. Draft conflict reconciliation beyond explicit local save remains unimplemented.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document
