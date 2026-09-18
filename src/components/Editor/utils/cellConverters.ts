@@ -85,7 +85,7 @@ export function convertCellsToHtml(cells: Cell[]) {
         });
       }
 
-      return `<div data-type="markdown-image" data-cell-id="${cell.id}" data-src="${parsedSrc}" data-alt="${parsedAlt}" data-markdown="${markdownContent}" data-is-generating="${metadata.isGenerating || false}" data-generation-type="${metadata.generationType || ''}" data-generation-prompt="${metadata.prompt || ''}" data-generation-params="${encodeURIComponent(JSON.stringify(metadata.generationParams || {}))}" data-generation-start-time="${metadata.generationStartTime || ''}" data-generation-error="${metadata.generationError || ''}" data-generation-status="${metadata.generationStatus || ''}"></div>`;
+      return `<div data-type="image-cell" data-cell-id="${cell.id}"><div data-type="markdown-image" data-cell-id="${cell.id}" data-src="${parsedSrc}" data-alt="${parsedAlt}" data-markdown="${markdownContent}" data-display-mode="true" data-is-generating="${metadata.isGenerating || false}" data-generation-type="${metadata.generationType || ''}" data-generation-prompt="${metadata.prompt || ''}" data-generation-params="${encodeURIComponent(JSON.stringify(metadata.generationParams || {}))}" data-generation-start-time="${metadata.generationStartTime || ''}" data-generation-error="${metadata.generationError || ''}" data-generation-status="${metadata.generationStatus || ''}"></div></div>`;
     } else if (cell.type === 'thinking') {
       // thinking cell转换为HTML
       if (DEBUG) console.log(`转换AI思考单元格 ${index}: ID=${cell.id}`);
@@ -247,6 +247,26 @@ function serializeMarkdownBlock(node: any): string {
   return extractTextFromNode(node).trimEnd();
 }
 
+function imageCellFromAttributes(attrs: any, cellId: string): Cell {
+  const markdown = attrs.markdown || (attrs.src ? `![${attrs.alt || ''}](${attrs.src})` : '');
+  return {
+    id: cellId,
+    type: 'image',
+    content: markdown,
+    outputs: [],
+    enableEdit: true,
+    metadata: {
+      isGenerating: attrs.isGenerating || false,
+      generationType: attrs.generationType || '',
+      prompt: attrs.prompt || '',
+      generationStartTime: attrs.generationStartTime,
+      generationError: attrs.generationError,
+      generationStatus: attrs.generationStatus,
+      generationParams: attrs.generationParams || {},
+    },
+  };
+}
+
 /**
  * 新方案：使用 ProseMirror JSON 而不是 HTML 解析
  */
@@ -326,36 +346,20 @@ export function convertEditorStateToCells(editor: any): Cell[] {
           outputs: [],
           enableEdit: true,
         });
+      } else if (node.type === 'imageCell') {
+        flushMarkdownContent();
+        const imageNode = (node.content || []).find((child: any) => child.type === 'markdownImage');
+        const attrs = imageNode?.attrs || {};
+        newCells.push(
+          imageCellFromAttributes(attrs, node.attrs?.cellId || attrs.cellId || generateCellId())
+        );
       } else if (node.type === 'markdownImage') {
         // 处理图片节点 - 先清空累积的markdown内容
         flushMarkdownContent();
 
         const attrs = node.attrs || {};
         const cellId = attrs.cellId || generateCellId();
-        const markdown = attrs.markdown || '';
-
-        if (DEBUG)
-          console.log(
-            `✅ 发现 markdownImage 节点: ${cellId}, content: ${markdown.substring(0, 50)}`
-          );
-
-        // 创建独立的image cell
-        newCells.push({
-          id: cellId,
-          type: 'image',
-          content: markdown,
-          outputs: [],
-          enableEdit: true,
-          metadata: {
-            isGenerating: attrs.isGenerating || false,
-            generationType: attrs.generationType || '',
-            prompt: attrs.prompt || '',
-            generationStartTime: attrs.generationStartTime,
-            generationError: attrs.generationError,
-            generationStatus: attrs.generationStatus,
-            generationParams: attrs.generationParams || {},
-          },
-        });
+        newCells.push(imageCellFromAttributes(attrs, cellId));
       } else if (node.type === 'executableCodeBlock') {
         // 处理代码块
         flushMarkdownContent();

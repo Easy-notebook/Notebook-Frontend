@@ -42,6 +42,41 @@ describe('document synchronization', () => {
     editor.destroy();
   });
 
+  it('keeps the caret in the same Markdown cell after an external reorder', () => {
+    const cells = [
+      markdown('title', '# Notebook'),
+      markdown('first', 'One'),
+      markdown('second', 'Two'),
+    ];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    editor.commands.setTextSelection(editor.state.doc.child(0).nodeSize + 2);
+    expect(synchronizeDocument(editor, [cells[0], cells[2], cells[1]])).toBe(true);
+    expect(convertEditorStateToCells(editor).map((cell) => cell.id)).toEqual([
+      'title',
+      'second',
+      'first',
+    ]);
+    const index = editor.state.doc.resolve(editor.state.selection.anchor).index(0);
+    expect(editor.state.doc.child(index).attrs.cellId).toBe('first');
+    editor.destroy();
+  });
+
+  it('keeps local Markdown edits in the editor undo history', () => {
+    const cells = [markdown('title', '# Notebook'), markdown('body', 'One')];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    editor.commands.insertContentAt(editor.state.doc.child(0).nodeSize + 2, 'X');
+    expect(convertEditorStateToCells(editor)[1].content).toBe('XOne');
+    expect(editor.commands.undo()).toBe(true);
+    expect(convertEditorStateToCells(editor)[1].content).toBe('One');
+    editor.destroy();
+  });
+
   it('retains the hybrid-cell type across HTML and document boundaries', () => {
     const cells: Cell[] = [
       markdown('title', '# Notebook'),
@@ -76,4 +111,23 @@ describe('document synchronization', () => {
       editor.destroy();
     }
   );
+
+  it.each([
+    { id: 'code', type: 'code', content: 'print(1)', language: 'python', outputs: [] },
+    { id: 'image', type: 'image', content: '![alt](https://example.com/image.png)', outputs: [] },
+    { id: 'thinking', type: 'thinking', content: '', outputs: [] },
+    { id: 'raw', type: 'raw', content: '<not markdown>', outputs: [] },
+    { id: 'link', type: 'link', content: '[file](https://example.com/file.txt)', outputs: [] },
+  ] as Cell[])('keeps $type cell identity and content through a document round trip', (cell) => {
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml([markdown('title', '# Notebook'), cell]),
+    });
+    expect(convertEditorStateToCells(editor)[1]).toMatchObject({
+      id: cell.id,
+      type: cell.type,
+      content: cell.content,
+    });
+    editor.destroy();
+  });
 });

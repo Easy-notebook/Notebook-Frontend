@@ -3,6 +3,7 @@ import { DOMParser as ProseMirrorDOMParser, Fragment } from 'prosemirror-model';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from '@Editor/utils/cellConverters';
+import { Selection } from 'prosemirror-state';
 
 export const EXTERNAL_CELL_SYNC = 'externalCellSync';
 
@@ -65,12 +66,28 @@ export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
     .slice(range.start, range.oldEnd)
     .reduce((pos, node) => pos + node.nodeSize, from);
   const replacement = Fragment.fromArray(nextBlocks.slice(range.start, range.newEnd));
+  const selectionIndex = editor.state.doc.resolve(editor.state.selection.anchor).index(0);
+  const selectedCellId = currentBlocks[selectionIndex]?.attrs.cellId as string | undefined;
+  const selectedBlockStart = currentBlocks
+    .slice(0, selectionIndex)
+    .reduce((pos, node) => pos + node.nodeSize, 0);
+  const selectedOffset = editor.state.selection.anchor - selectedBlockStart;
   const scroller = editor.view.dom.closest('.tiptap-editor') as HTMLElement | null;
   const scrollTop = scroller?.scrollTop;
   const transaction = editor.state.tr
     .replaceWith(from, to, replacement)
     .setMeta(EXTERNAL_CELL_SYNC, true)
     .setMeta('addToHistory', false);
+  if (selectedCellId && selectionIndex >= range.start && selectionIndex < range.oldEnd) {
+    const targetIndex = nextBlocks.findIndex((node) => node.attrs.cellId === selectedCellId);
+    if (targetIndex >= 0) {
+      const targetStart = nextBlocks
+        .slice(0, targetIndex)
+        .reduce((pos, node) => pos + node.nodeSize, 0);
+      const position = targetStart + Math.min(selectedOffset, nextBlocks[targetIndex].nodeSize - 1);
+      transaction.setSelection(Selection.near(transaction.doc.resolve(position)));
+    }
+  }
   editor.view.dispatch(transaction);
   if (scroller && scrollTop !== undefined) scroller.scrollTop = scrollTop;
   return true;
