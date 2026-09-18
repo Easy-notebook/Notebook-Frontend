@@ -59,7 +59,9 @@ const CodeCell: React.FC<CodeCellProps> = ({
     <div
       data-cell-id={cell.id}
       className={`code-cell-container codeCell ${
-        isInDetachedView ? 'bg-white h-full' : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm'
+        isInDetachedView
+          ? 'bg-white dark:bg-gray-900 h-full'
+          : 'bg-white/90 dark:bg-gray-900/90 shadow-sm rounded-lg backdrop-blur-sm'
       }`}
       ref={codeContainerRef}
       style={{
@@ -72,11 +74,11 @@ const CodeCell: React.FC<CodeCellProps> = ({
       <div
         className={`${
           isInDetachedView ? 'h-full flex flex-col' : 'rounded-xl border hover:shadow-md'
-        } backdrop-blur-md transition-all duration-500 ease-out
+        } dark:border-gray-700 backdrop-blur-md transition-all duration-500 ease-out
                     ${
                       vm.isExecuting
-                        ? 'border-yellow-400/50 shadow-lg bg-white/95'
-                        : 'bg-white/90 text-black'
+                        ? 'border-yellow-400/50 shadow-lg bg-white/95 dark:bg-gray-900/95'
+                        : 'bg-white/90 dark:bg-gray-900/90 text-black dark:text-gray-100'
                     }
                     ${isInDetachedView ? '' : 'hover:shadow-md'}
                 `}

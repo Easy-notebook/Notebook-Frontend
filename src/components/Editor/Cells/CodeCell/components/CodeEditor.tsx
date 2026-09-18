@@ -5,6 +5,7 @@ import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { CodeEditorProps } from '../utils/types';
 import { EXPAND_THRESHOLD } from '../utils';
 import { codeLanguageExtensions } from '../utils/languageSupport';
+import { useTheme } from '@/contexts/ThemeContext';
 
 /**
  * Code editor component with CodeMirror
@@ -28,6 +29,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onKeyDown,
   onCopyCode,
 }) => {
+  const { resolvedTheme } = useTheme();
   return (
     <div
       className={`relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
@@ -63,7 +65,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         >
           <button
             onClick={onCopyCode}
-            className="px-2 py-1 text-xs text-white rounded hover:bg-gray-600 transition-colors backdrop-blur-sm"
+            className="px-2 py-1 text-xs text-gray-700 dark:text-gray-100 bg-white/70 dark:bg-gray-800/80 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors backdrop-blur-sm"
             title="Copy code"
             style={{
               minWidth: '44px',
@@ -90,7 +92,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             extensions={codeLanguageExtensions(cell.language)}
             onChange={onChange}
             onKeyDown={onKeyDown}
-            theme={dracula}
+            theme={resolvedTheme === 'dark' ? dracula : 'light'}
             style={{
               fontSize: '16px',
               lineHeight: '1.5',

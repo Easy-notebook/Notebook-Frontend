@@ -1,6 +1,8 @@
 import React from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { codeLanguageExtensions } from '../CodeCell/utils/languageSupport';
+import { dracula } from '@uiw/codemirror-theme-dracula';
+import { useTheme } from '@/contexts/ThemeContext';
 import { Trash2, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -20,6 +22,7 @@ interface HybridCellProps {
 }
 
 const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
+  const { resolvedTheme } = useTheme();
   const vm = useHybridCellViewModel(cell);
   const contentType = vm.contentType;
 
@@ -64,7 +67,7 @@ const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
                 extensions={codeLanguageExtensions(contentType.language)}
                 onChange={vm.handleContentChange}
                 className="text-base"
-                theme="light"
+                theme={resolvedTheme === 'dark' ? dracula : 'light'}
               />
             </div>
           ) : (
