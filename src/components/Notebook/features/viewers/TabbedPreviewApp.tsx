@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import usePreviewStore, { FileType } from '@Store/previewStore';
-import CSVPreviewWrapper from './data-table';
+import {
+  CSVPreviewWrapper,
+  DocDisplay,
+  ReactLiveSandbox,
+  PreviewLoadBoundary,
+} from './DeferredViewers';
 import ImageDisplay from './image/ImageDisplay';
 import PDFDisplay from './pdf/PDFDisplay';
-import ReactLiveSandbox from './web/ReactLiveSandbox';
-import DocDisplay from './doc/DocDisplay';
 import CodeDisplay from './code/CodeDisplay';
 import HexDisplay from './hex/HexDisplay';
 import { Code, Monitor } from 'lucide-react';
@@ -289,7 +292,9 @@ const TabbedPreviewApp: React.FC = () => {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">{renderContent()}</div>
+      <div className="flex-1 overflow-hidden">
+        <PreviewLoadBoundary key={activeFile?.id}>{renderContent()}</PreviewLoadBoundary>
+      </div>
     </div>
   );
 };

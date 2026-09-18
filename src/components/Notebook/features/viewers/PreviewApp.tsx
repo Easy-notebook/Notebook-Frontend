@@ -1,11 +1,14 @@
 import usePreviewStore, { FileType } from '@Store/previewStore';
 import useStore from '@Store/notebookStore';
 import { useEffect, useCallback, useState } from 'react';
-import CSVPreviewWrapper from './data-table';
+import {
+  CSVPreviewWrapper,
+  DocDisplay,
+  ReactLiveSandbox,
+  PreviewLoadBoundary,
+} from './DeferredViewers';
 import ImageDisplay from './image/ImageDisplay';
 import PDFDisplay from './pdf/PDFDisplay';
-import ReactLiveSandbox from './web/ReactLiveSandbox';
-import DocDisplay from './doc/DocDisplay';
 import CodeDisplay from './code/CodeDisplay';
 import HexDisplay from './hex/HexDisplay';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -284,7 +287,11 @@ const PreviewApp: React.FC = () => {
     }
   }, [currentFile, setTabDirty, showSource, isInSplitView]);
 
-  return <div className="w-full h-full flex flex-col">{renderFileContent()}</div>;
+  return (
+    <div className="w-full h-full flex flex-col">
+      <PreviewLoadBoundary key={currentFile?.id}>{renderFileContent()}</PreviewLoadBoundary>
+    </div>
+  );
 };
 
 export default PreviewApp;

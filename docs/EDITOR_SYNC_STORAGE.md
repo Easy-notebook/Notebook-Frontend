@@ -64,8 +64,14 @@ Export handlers now load format converters on demand. Export UI keeps pending wo
 disables duplicate actions and exposes failures for retry. Three focused tests cover loading and
 failure lifecycle. Production build reduced NotebookApp JS from 6,330.05 kB (gzip 2,170.75 kB) to
 4,857.07 kB (gzip 1,549.06 kB), about 29% less compressed main-chunk payload. PDF export is a separate
-1,408.42 kB chunk; total functionality is deferred, not removed. Word libraries still have static
-document-viewer consumers. This measurement is bundle size, not a browser startup-time benchmark.
+1,408.42 kB chunk; total functionality is deferred, not removed.
+
+The subsequent viewer boundary change defers spreadsheet, Word and React sandbox modules in both
+preview panes. NotebookApp is now 2,716.76 kB (gzip 888.31 kB), approximately 43% less compressed
+main-chunk payload than after the export change. Viewer chunks are loaded only when selected, with
+loading feedback and a reset-on-file-change error boundary. Two tests cover demand loading and failed
+module isolation. Production build passes. These measurements are bundle sizes, not browser startup
+or scrolling benchmarks; they do not imply all cell editors are virtualized.
 
 ### Source-cell editing progress
 
