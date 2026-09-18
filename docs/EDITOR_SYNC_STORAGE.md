@@ -60,6 +60,13 @@ JavaScript code into broken-fence source: focus moves to the textarea at offset 
 unchanged, and inserting the missing backtick plus Preview restores the original code. This browser
 check does not cover whole-document source, IME, detached windows or real scrolling performance.
 
+Export handlers now load format converters on demand. Export UI keeps pending work visible,
+disables duplicate actions and exposes failures for retry. Three focused tests cover loading and
+failure lifecycle. Production build reduced NotebookApp JS from 6,330.05 kB (gzip 2,170.75 kB) to
+4,857.07 kB (gzip 1,549.06 kB), about 29% less compressed main-chunk payload. PDF export is a separate
+1,408.42 kB chunk; total functionality is deferred, not removed. Word libraries still have static
+document-viewer consumers. This measurement is bundle size, not a browser startup-time benchmark.
+
 ### Source-cell editing progress
 
 Executable code blocks can now be converted into a literal Markdown source cell by Backspace at

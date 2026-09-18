@@ -1,8 +1,4 @@
 // utils/exportUtils.ts
-import { exportToJson } from './exportToJson';
-import { exportToDocx } from './exportToDocx';
-import { exportToPdf } from './exportToPDF';
-import { exportToMarkdown } from './exportToMarkdown';
 
 // Type definitions for export utilities
 import type { Cell, Task } from '@Store/models';
@@ -26,22 +22,23 @@ export const exportTypes: Record<string, ExportType> = {
   json: {
     title: 'Export as JSON',
     description: 'Save notebook with all metadata as JSON file',
-    handler: (cells: Cell[], tasks?: Task[]) => exportToJson(cells, tasks),
+    handler: async (cells: Cell[], tasks?: Task[]) =>
+      (await import('./exportToJson')).exportToJson(cells, tasks),
   },
   docx: {
     title: 'Export as DOCX',
     description: 'Export as Microsoft Word document',
-    handler: (cells: Cell[]) => exportToDocx(cells),
+    handler: async (cells: Cell[]) => (await import('./exportToDocx')).exportToDocx(cells),
   },
   pdf: {
     title: 'Export as PDF',
     description: 'Export as PDF document',
-    handler: (cells: Cell[]) => exportToPdf(cells),
+    handler: async (cells: Cell[]) => (await import('./exportToPDF')).exportToPdf(cells),
   },
   markdown: {
     title: 'Export as Markdown',
     description: 'Export as Markdown document',
-    handler: (cells: Cell[]) => exportToMarkdown(cells),
+    handler: async (cells: Cell[]) => (await import('./exportToMarkdown')).exportToMarkdown(cells),
   },
 };
 

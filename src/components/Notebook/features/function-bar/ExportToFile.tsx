@@ -19,19 +19,33 @@ const ExportToFile: React.FC<ExportToFileProps> = ({
 }) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
+  const [exportState, setExportState] = useState<'idle' | 'pending' | 'failed'>('idle');
+  const [error, setError] = useState('');
 
   const openModal = () => {
     if (disabled) return;
+    setExportState('idle');
+    setError('');
     setIsOpen(true);
   };
 
   const closeModal = () => {
+    if (exportState === 'pending') return;
     setIsOpen(false);
   };
 
-  const handleExport = (callback: () => void) => {
-    callback();
-    closeModal();
+  const handleExport = async (callback: () => void | Promise<void>) => {
+    if (exportState === 'pending') return;
+    setExportState('pending');
+    setError('');
+    try {
+      await callback();
+      setExportState('idle');
+      setIsOpen(false);
+    } catch (reason) {
+      setExportState('failed');
+      setError(reason instanceof Error ? reason.message : 'Export failed. Please try again.');
+    }
   };
 
   return (
@@ -71,7 +85,13 @@ const ExportToFile: React.FC<ExportToFileProps> = ({
             </div>
 
             {/* Body */}
-            <div className="p-6 grid grid-cols-1 gap-3">
+            <fieldset
+              disabled={exportState === 'pending'}
+              aria-busy={exportState === 'pending'}
+              className="p-6 grid grid-cols-1 gap-3"
+            >
+              {exportState === 'pending' && <p role="status">Preparing export…</p>}
+              {exportState === 'failed' && <p role="alert">{error}</p>}
               <ExportOption
                 icon={FileJson}
                 label={t('exportOptions.exportToJSON')}
@@ -96,7 +116,7 @@ const ExportToFile: React.FC<ExportToFileProps> = ({
                 description="Export as Markdown file"
                 onClick={() => handleExport(onExportMarkdown)}
               />
-            </div>
+            </fieldset>
           </div>
         </div>
       )}
