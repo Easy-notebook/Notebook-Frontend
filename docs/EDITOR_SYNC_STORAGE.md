@@ -169,6 +169,25 @@ Raw-node contents are decoded only at their HTML import boundary. Document proje
 decodes them again, so literal `%20`, `%2520`, backslashes and markup survive HTML export/reimport.
 Redundant render-time attribute encoding is removed; the node attribute codec owns serialization.
 
+### Browser mount baseline (2026-09-19)
+
+An isolated headless Chromium profile against the local Vite development server measured document
+replacement with store updates enabled, followed by two animation frames. Cases ran sequentially
+in one session; timings include React/store work and are not statistically stable production metrics.
+
+| Body cells | Dispatch ms | Two-frame elapsed ms | CodeMirror instances | Editor DOM nodes |
+| --- | ---: | ---: | ---: | ---: |
+| 100 simple Markdown | 15.0 | 41.8 | 0 | 214 |
+| 1,000 simple Markdown | 11.9 | 90.4 | 0 | 2,014 |
+| 20 Python code | 69.8 | 345.2 | 20 | 1,354 |
+| 100 Python code | 1,491.1 | 1,553.4 | 100 | 6,714 |
+
+These counts confirm that offscreen code editors are all mounted. The next rendering change should
+defer CodeMirror creation while preserving cell/store identity, with explicit activation on viewport
+entry and keyboard navigation. Tests must cover navigation to an unmounted editor, editing/undo,
+IME and scroll stability before claiming full virtualization. A bounded mount/unmount policy must
+also preserve CodeMirror history if editors are later evicted; merely hiding DOM is insufficient.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document
