@@ -4,6 +4,7 @@ node_modules/
 .pnp.js
 
 ref/
+pr/
 # Production build
 dist/
 dist-ssr/
