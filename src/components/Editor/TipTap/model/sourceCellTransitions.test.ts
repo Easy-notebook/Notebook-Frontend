@@ -34,6 +34,28 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it.each(['a|b', 'a\\|b', 'a\\\\|b', '`tick` | <tag> &amp; $x$', '中文|值'])(
+    'preserves table inline code without splitting columns: %s',
+    (text) => {
+      const pos = create(markdown('code-table', '| Code | Other |\n| --- | --- |\n| x | keep |'));
+      const table = editor.state.doc.nodeAt(pos)!.firstChild!;
+      const json = table.toJSON();
+      json.content[1].content[0].content = [
+        { type: 'paragraph', content: [{ type: 'text', text, marks: [{ type: 'code' }] }] },
+      ];
+      const original = editor.schema.nodeFromJSON(json);
+      editor.view.dispatch(
+        editor.state.tr.replaceWith(pos + 1, pos + 1 + table.nodeSize, original)
+      );
+      editor.commands.setTextSelection(pos + 5);
+      expect(editSelectedCellSource(editor)).toBe(true);
+      expect(previewMarkdownSource(editor, pos)).toBe(true);
+      expect(editor.state.doc.nodeAt(pos)!.firstChild!.eq(original)).toBe(true);
+      const cells = convertEditorStateToCells(editor);
+      editor.commands.setContent(convertCellsToHtml(cells));
+      expect(editor.state.doc.child(1).firstChild!.eq(original)).toBe(true);
+    }
+  );
   it('keeps table hard breaks and literal br text through source and reload', () => {
     const pos = create(markdown('breaks', '| Header | Other |\n| --- | --- |\n| x | y |'));
     const table = editor.state.doc.nodeAt(pos)!.firstChild!;

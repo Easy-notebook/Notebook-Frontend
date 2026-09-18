@@ -277,7 +277,7 @@ composition guards apply before input handling. Column alignment is persisted th
 cell attributes and Markdown alignment markers, with source/preview/HTML round-trip coverage.
 
 Remaining table fidelity gaps include merged-cell source representation, multi-paragraph cells
-and inline-code pipes. Column-level Markdown alignment cannot express arbitrary
+and exact boundary-whitespace/newline preservation inside inline code. Column-level Markdown alignment cannot express arbitrary
 per-cell alignment. These are not claimed fixed by the input-path refactor.
 
 The final related regression run passes 8 files / 65 tests. Production bundling succeeded before
@@ -415,3 +415,23 @@ unverified. The browser assertions and output are `/tmp/notebook-code-eviction-c
 At the final implementation, 25 editor test files / 155 tests pass and production bundling succeeds.
 Existing CSS/minification and large-chunk warnings remain. The isolated browser was stopped after
 verification; the project development server remains running.
+
+### Literal inline code in GFM tables
+
+Five regressions initially demonstrated that pipe-containing inline code was split into columns
+or changed on source preview/reload. Such code now uses an attribute-free HTML `code` pair with
+HTML entities for table delimiters, backslashes and Markdown metacharacters. Simple table code
+without pipes continues using ordinary backticks. A plain GFM parser test verifies that the
+exported representation preserves code text without depending on the notebook parser.
+
+The notebook inline tokenizer consumes a complete, single-line, attribute-free code pair and
+treats its payload as literal text. Child HTML is escaped, entities remain text entities, and
+math/Markdown are not recursively parsed. Attributed or unfinished code tags remain literal.
+Tokenization uses the existing HTML boundary instead of searching the remaining input on each
+text token, and stops at nested opening code tags to avoid repeatedly scanning malformed suffixes.
+Security tests cover attributed tags, nested image markup and 2,000 unfinished opening tags.
+
+This change does not add arbitrary raw-HTML support or solve merged/multi-paragraph table encoding.
+
+The final related regression run passes 7 files / 83 tests, including table source/preview and
+serialized-cell reload round trips, plain-GFM interoperability and literal-code safety cases.

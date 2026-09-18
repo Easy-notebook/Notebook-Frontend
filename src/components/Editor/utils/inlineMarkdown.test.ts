@@ -1,9 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { renderInlineMarkdown } from './inlineMarkdown';
+import { encodeTableCode, renderInlineMarkdown } from './inlineMarkdown';
+import { marked } from 'marked';
 import { extractTextFromNode } from './cellConverters';
 import { convertMarkdownToHtml } from './markdownConverters';
 
 describe('inline Markdown fidelity', () => {
+  it('keeps repeated unfinished code tags literal', () => {
+    const source = '<code>'.repeat(2000);
+    const element = document.createElement('div');
+    element.innerHTML = renderInlineMarkdown(source);
+    expect(element.querySelector('code')).toBeNull();
+    expect(element.textContent).toBe(source);
+  });
+  it('exports table code using standard HTML entities understood by a plain GFM parser', () => {
+    const text = 'a\\|`b` **literal** ~~strike~~ [x](https://example.com) <tag> &amp; 中文';
+    const element = document.createElement('div');
+    element.innerHTML = marked.parse(
+      `| Code | Other |\n| --- | --- |\n| ${encodeTableCode(text)} | keep |`,
+      { async: false }
+    );
+    expect(element.querySelectorAll('tbody td')).toHaveLength(2);
+    expect(element.querySelector('tbody td code')?.textContent).toBe(text);
+  });
   it.each([
     ['bold', 'strong'],
     ['italic', 'em'],
@@ -62,6 +80,26 @@ describe('inline Markdown fidelity', () => {
   it('does not interpret raw HTML or executable link targets', () => {
     expect(renderInlineMarkdown('<script>alert(1)</script>')).not.toContain('<script>');
     expect(renderInlineMarkdown('[bad](javascript:alert)')).not.toContain('href');
+  });
+  it('allows complete attribute-free literal code without activating nested HTML or Markdown', () => {
+    const source =
+      'Before <code><img src=x onerror=alert(1)> **not bold** $not math$ &#124; &#92;</code> after';
+    const element = document.createElement('div');
+    element.innerHTML = convertMarkdownToHtml(source);
+    expect(element.querySelector('img, strong, [data-type="latex-block"]')).toBeNull();
+    expect(element.querySelector('code')?.textContent).toBe(
+      '<img src=x onerror=alert(1)> **not bold** $not math$ | \\'
+    );
+  });
+  it.each([
+    '<code onclick="alert(1)">x</code>',
+    '<code style="color:red">x</code>',
+    '<code>unfinished',
+  ])('does not enable attributed or incomplete code markup: %s', (source) => {
+    const element = document.createElement('div');
+    element.innerHTML = renderInlineMarkdown(source);
+    expect(element.querySelector('code')).toBeNull();
+    expect(element.textContent).toBe(source);
   });
   it.each(['<br>', '<BR/>', '<br />'])(
     'allows only attribute-free hard break markup: %s',

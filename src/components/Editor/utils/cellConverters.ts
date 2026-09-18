@@ -9,7 +9,7 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { formatCodeFence, standaloneFence } from './fencedMarkdown';
 import { codeCellFromAttributes } from './codeCellAttributes';
 import { parseSourceCellType } from './sourceCellAttributes';
-import { escapeHtml } from './inlineMarkdown';
+import { encodeTableCode, escapeHtml } from './inlineMarkdown';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -177,6 +177,10 @@ export function extractTextFromNode(node: any, options?: MarkdownSerializationOp
             break;
           case 'code':
             {
+              if (options?.tableCell && text.includes('|')) {
+                text = encodeTableCode(text);
+                break;
+              }
               const runs = text.match(/`+/g) || [];
               const delimiter = '`'.repeat(
                 runs.reduce((length, run) => Math.max(length, run.length + 1), 1)
