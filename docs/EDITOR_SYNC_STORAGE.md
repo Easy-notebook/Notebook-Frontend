@@ -113,6 +113,13 @@ cover deferred rendering, stale-result suppression, reentry reuse and 1,000-prev
 This reduces expensive layout work, not the O(number of mounted previews) React/observer bookkeeping;
 it is not full notebook virtualization. Environments without IntersectionObserver render eagerly.
 
+Inline Markdown rendering now uses the existing marked dependency instead of three formatting
+regular expressions. Notebook image/math placeholders remain opaque inline tokens. Links, strike,
+nested emphasis and variable-length code spans are covered; serialization retains link destinations,
+titles and strike marks. Raw inline HTML is escaped and explicit link schemes are restricted to
+HTTP(S), mailto and tel. Seven inline tests and fifteen source/title regressions pass. This does not
+replace the remaining handwritten block parser or prove arbitrary nested Markdown round trips.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document

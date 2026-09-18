@@ -3,6 +3,7 @@
  */
 
 import { scanFencedMarkdown } from './fencedMarkdown';
+import { renderInlineMarkdown } from './inlineMarkdown';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -193,10 +194,7 @@ export function convertMarkdownToHtml(
       return text;
     }
 
-    return text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // 粗体
-      .replace(/\*(.*?)\*/g, '<em>$1</em>') // 斜体
-      .replace(/`(.*?)`/g, '<code>$1</code>'); // 行内代码
+    return renderInlineMarkdown(text);
   }
 
   // 按段落分割

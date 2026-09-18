@@ -147,7 +147,26 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
             text = `*${text}*`;
             break;
           case 'code':
-            text = `\`${text}\``;
+            {
+              const runs = text.match(/`+/g) || [];
+              const delimiter = '`'.repeat(
+                runs.reduce((length, run) => Math.max(length, run.length + 1), 1)
+              );
+              const padding =
+                /^`|`$/.test(text) || (/^ .* $/.test(text) && /[^ ]/.test(text)) ? ' ' : '';
+              text = `${delimiter}${padding}${text}${padding}${delimiter}`;
+            }
+            break;
+          case 'strike':
+            text = `~~${text}~~`;
+            break;
+          case 'link':
+            text = `[${text}](<${String(mark.attrs?.href || '')
+              .replace(/</g, '%3C')
+              .replace(
+                />/g,
+                '%3E'
+              )}>${mark.attrs?.title ? ` "${String(mark.attrs.title).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"` : ''})`;
             break;
           default:
             break;
