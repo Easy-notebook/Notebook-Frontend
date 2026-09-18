@@ -6,8 +6,53 @@ import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
 import { EXTERNAL_CELL_SYNC } from './documentSync';
 import { DOMParser } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
-import { convertCellsToHtml, convertEditorStateToCells } from '../../utils/cellConverters';
+import {
+  convertCellsToHtml,
+  convertEditorStateToCells,
+  serializeMarkdownBlock,
+} from '../../utils/cellConverters';
 import { formatCodeFence, standaloneFence } from '../../utils/fencedMarkdown';
+
+/** Convert only the owning cell; unrelated cells are neither projected nor replaced. */
+export function breakNestedCodeFence(editor: Editor): boolean {
+  const { $from, empty } = editor.state.selection;
+  if (
+    !editor.isEditable ||
+    !empty ||
+    $from.parentOffset !== 0 ||
+    $from.parent.type.name !== 'fencedCodeBlock' ||
+    $from.depth !== 2 ||
+    $from.node(1).type.name !== 'markdownCell'
+  )
+    return false;
+  const cell = $from.node(1);
+  const selectedIndex = $from.index(1);
+  const parts: string[] = [];
+  let offset = 0;
+  let caret = 0;
+  cell.forEach((child, _position, index) => {
+    let source = serializeMarkdownBlock(child.toJSON());
+    if (index === selectedIndex) {
+      const fence = standaloneFence(source)!;
+      const deletion = fence.indent.length + fence.length - 1;
+      source = source.slice(0, deletion) + source.slice(deletion + 1);
+      caret = offset + deletion;
+    }
+    parts.push(source);
+    offset += source.length + 2;
+  });
+  const pos = $from.before(1);
+  const replacement = editor.schema.nodes.markdownSourceCell.create({
+    cellId: cell.attrs.cellId,
+    source: parts.join('\n\n'),
+    caret,
+  });
+  const tr = closeHistory(editor.state.tr).replaceWith(pos, pos + cell.nodeSize, replacement);
+  tr.setSelection(NodeSelection.create(tr.doc, pos));
+  editor.view.focus();
+  editor.view.dispatch(tr.scrollIntoView());
+  return true;
+}
 
 export function breakCodeBlockFence(editor: Editor, pos: number, cell: Cell): boolean {
   const current = editor.state.doc.nodeAt(pos);

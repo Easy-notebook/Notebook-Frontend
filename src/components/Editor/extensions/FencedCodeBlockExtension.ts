@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from '@tiptap/core';
+import { breakNestedCodeFence } from '../TipTap/model/sourceCellTransitions';
 
 /** Non-executable code nested inside a Markdown cell; no extra store identity or CodeMirror. */
 export const FencedCodeBlockExtension = Node.create({
@@ -10,6 +11,11 @@ export const FencedCodeBlockExtension = Node.create({
   defining: true,
   addKeyboardShortcuts() {
     return {
+      Backspace: () => {
+        if (!this.editor.isActive(this.name)) return false;
+        if (!this.editor.isEditable) return true;
+        return breakNestedCodeFence(this.editor);
+      },
       Enter: () => {
         if (!this.editor.isActive(this.name)) return false;
         if (!this.editor.isEditable) return true;

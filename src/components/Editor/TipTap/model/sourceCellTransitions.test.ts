@@ -5,6 +5,7 @@ import { getTipTapExtensions } from '../config/extensions';
 import { convertCellsToHtml, convertEditorStateToCells } from '../../utils/cellConverters';
 import {
   breakCodeBlockFence,
+  breakNestedCodeFence,
   editSelectedCellSource,
   previewMarkdownSource,
 } from './sourceCellTransitions';
@@ -32,6 +33,33 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it('breaks a nested fence while retaining siblings, cell identity, caret and undo', () => {
+    const content = 'Before\n\n~~~python\nprint(1)\n~~~\n\nAfter';
+    const pos = create(markdown('mixed', content));
+    const original = editor.state.doc;
+    const cell = original.nodeAt(pos)!;
+    editor.commands.setTextSelection(pos + 1 + cell.firstChild!.nodeSize + 1);
+    expect(
+      editor.view.someProp('handleKeyDown', (handler) =>
+        handler(editor.view, new KeyboardEvent('keydown', { key: 'Backspace' }))
+      )
+    ).toBe(true);
+    const source = editor.state.doc.nodeAt(pos)!;
+    expect(source.attrs.source).toBe('Before\n\n~~python\nprint(1)\n~~~\n\nAfter');
+    expect(source.attrs.caret).toBe('Before\n\n~~'.length);
+    expect(source.attrs.cellId).toBe('mixed');
+    expect(editor.state.doc.lastChild).toBe(original.lastChild);
+    editor.commands.undo();
+    expect(editor.state.doc.eq(original)).toBe(true);
+  });
+  it('does not convert a nested fence during ordinary character deletion or selection', () => {
+    const pos = create(markdown('mixed', 'Before\n\n```python\nprint(1)\n```'));
+    const start = pos + 2 + editor.state.doc.nodeAt(pos)!.firstChild!.nodeSize;
+    editor.commands.setTextSelection(start + 1);
+    expect(breakNestedCodeFence(editor)).toBe(false);
+    editor.commands.setTextSelection({ from: start, to: start + 1 });
+    expect(breakNestedCodeFence(editor)).toBe(false);
+  });
   it('preserves code outputs through HTML import and export', () => {
     const cell: Cell = {
       id: 'code',

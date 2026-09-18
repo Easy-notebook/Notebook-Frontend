@@ -228,7 +228,7 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
   }
 }
 
-function serializeMarkdownBlock(node: any): string {
+export function serializeMarkdownBlock(node: any): string {
   if (node.type === 'mermaidBlock' || node.type === 'fencedCodeBlock') {
     const code =
       node.type === 'mermaidBlock'

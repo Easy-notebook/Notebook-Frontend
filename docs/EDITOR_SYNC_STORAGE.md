@@ -84,6 +84,12 @@ node HTML serialization now emits the same discriminator its parser accepts, pre
 loss on HTML round trips. Focused attribute, source-transition and document-sync regressions pass
 (28 tests, including the 1,000-cell single-change case).
 
+For code directly inside a Markdown cell, Enter inserts a code newline and Mod-Enter exits into
+a paragraph in the same cell. Backspace at the start converts the owning cell into literal source,
+removing one opening fence character while preserving siblings, cell identity and undo. Conversion
+serializes only that cell, O(cell content length), and does not project the entire notebook. Deeper
+list/blockquote nesting still requires a structure-aware source mapping before this command applies.
+
 This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
 task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are
 still separate transactions. Revisions coordinate one service instance, not concurrent browser tabs.
