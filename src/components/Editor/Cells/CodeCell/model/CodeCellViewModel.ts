@@ -6,6 +6,7 @@ import { EXPAND_THRESHOLD } from '../utils';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
 import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
 import { showToast } from '@/components/UI/Toast';
+import { isCompositionInput } from '../../../utils/compositionInput';
 
 export class CodeCellViewModel extends BaseCellViewModel {
   // Properties from props
@@ -320,6 +321,8 @@ export class CodeCellViewModel extends BaseCellViewModel {
 
   // Navigation Logic
   public handleKeyDown = (event: React.KeyboardEvent) => {
+    if (isCompositionInput(event.nativeEvent) || this.editorRef?.current?.view?.composing)
+      return null;
     // Backspace at start of empty code cell
     if (event.key === 'Backspace' && !this.cell.content.trim()) {
       if (this.isCursorAtDocStart()) {

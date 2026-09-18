@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { DISPLAY_MODES } from '@Store/codeStore';
 import { useCodeCellViewModel } from './model/useCodeCellViewModel';
 import { useEditorReadOnly } from '../../EditorAccessContext';
+import { isCompositionInput } from '../../utils/compositionInput';
 
 // Import components
 import { CellToolbar, CodeEditor, OutputDisplay, CompactModeView } from './components';
@@ -67,7 +68,8 @@ const CodeCell: React.FC<CodeCellProps> = ({
           onBreakFence &&
           !readOnly &&
           event.key === 'Backspace' &&
-          !event.nativeEvent.isComposing &&
+          !isCompositionInput(event.nativeEvent) &&
+          !editorRef.current?.view?.composing &&
           !event.metaKey &&
           !event.ctrlKey &&
           !event.altKey &&

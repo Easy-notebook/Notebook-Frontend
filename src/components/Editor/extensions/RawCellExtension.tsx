@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import useStore from '@Store/notebookStore';
 import { getCellById } from '@Store/models/cellIndex';
 import { useEditorReadOnly } from '../EditorAccessContext';
+import { isCompositionInput } from '../utils/compositionInput';
 
 export const RawCellView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
   const readOnly = useEditorReadOnly();
@@ -57,7 +58,7 @@ export const RawCellView: React.FC<any> = ({ node, updateAttributes, deleteNode 
           onBlur={save}
           onKeyDown={(e) => {
             e.stopPropagation();
-            if (e.nativeEvent.isComposing) return;
+            if (isCompositionInput(e.nativeEvent)) return;
             if (e.key === 'Escape') {
               e.preventDefault();
               setIsEditing(false);

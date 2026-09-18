@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { previewMarkdownSource } from '../TipTap/model/sourceCellTransitions';
+import { isCompositionInput } from '../utils/compositionInput';
 
 export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
   const input = useRef<HTMLTextAreaElement>(null);
@@ -49,7 +50,7 @@ export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes 
         }}
         onKeyDown={(event) => {
           event.stopPropagation();
-          if (!editor.isEditable || event.nativeEvent.isComposing) return;
+          if (!editor.isEditable || isCompositionInput(event.nativeEvent)) return;
           if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
             event.preventDefault();
             if (event.shiftKey) editor.commands.redo();

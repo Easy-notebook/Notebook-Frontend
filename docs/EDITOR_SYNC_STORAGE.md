@@ -209,6 +209,11 @@ subsequent navigation after creation and cancels queued focus on unmount. The du
 navigation subscription/focus implementation is removed. Twelve code-cell tests pass, including
 activation-window navigation and unmount cancellation regressions.
 
+Code execution/navigation, notebook keyboard handlers, fence breaking, source undo and Raw-cell
+shortcuts now share a composition-input guard. It respects native isComposing, IME keyCode 229 and
+editor composition state where available. Thirteen targeted tests cover shortcut non-interference
+and Raw view regressions. This is event-level verification, not a real OS IME end-to-end guarantee.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document
