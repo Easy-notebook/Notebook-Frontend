@@ -7,6 +7,7 @@ import { EXTERNAL_CELL_SYNC } from './documentSync';
 import { DOMParser } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { convertCellsToHtml, convertEditorStateToCells } from '../../utils/cellConverters';
+import { formatCodeFence, standaloneFence } from '../../utils/fencedMarkdown';
 
 export function breakCodeBlockFence(editor: Editor, pos: number, cell: Cell): boolean {
   const current = editor.state.doc.nodeAt(pos);
@@ -25,7 +26,7 @@ export function breakCodeBlockFence(editor: Editor, pos: number, cell: Cell): bo
       .setMeta('addToHistory', false)
       .setMeta(EXTERNAL_CELL_SYNC, true)
   );
-  const source = `\`\`${language}\n${cell.content}\n\`\`\``;
+  const source = formatCodeFence(cell.content, language).slice(1);
   const replacement = editor.schema.nodes.markdownSourceCell.create({
     cellId: cell.id,
     source,
@@ -42,13 +43,13 @@ export function previewMarkdownSource(editor: Editor, pos: number): boolean {
   const node = editor.state.doc.nodeAt(pos);
   if (!editor.isEditable || node?.type.name !== 'markdownSourceCell') return false;
   const source = node.attrs.source as string;
-  const fence = source.match(/^```([\w+-]*)[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/);
+  const fence = standaloneFence(source);
   let replacement;
-  if (fence && fence[1].toLowerCase() !== 'mermaid') {
+  if (fence && fence.language !== 'mermaid') {
     replacement = editor.schema.nodes.executableCodeBlock.create({
       cellId: node.attrs.cellId,
-      language: normalizeCodeLanguage(fence[1]),
-      code: encodeURIComponent(fence[2]),
+      language: normalizeCodeLanguage(fence.language),
+      code: encodeURIComponent(fence.code),
       outputs: encodeURIComponent('[]'),
       originalType: 'code',
     });

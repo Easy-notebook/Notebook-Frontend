@@ -11,6 +11,23 @@ vi.mock('../MermaidPreview', () => ({ MermaidPreview: () => <div>Diagram preview
 import { MermaidBlockView } from './MermaidBlockExtension';
 
 describe('Mermaid block controls', () => {
+  it('allows viewing source without changing a read-only document', () => {
+    const updateAttributes = vi.fn();
+    render(
+      <MermaidBlockView
+        {...({
+          node: { attrs: { code: 'graph TD; A-->B' } },
+          editor: { isEditable: false },
+          updateAttributes,
+        } as unknown as NodeViewProps)}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+    const input = screen.getByRole('textbox', { name: 'Mermaid source' });
+    expect((input as HTMLTextAreaElement).readOnly).toBe(true);
+    fireEvent.change(input, { target: { value: 'changed' } });
+    expect(updateAttributes).not.toHaveBeenCalled();
+  });
   it('switches between preview and source, edits and copies the source', async () => {
     const updateAttributes = vi.fn();
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -18,6 +35,7 @@ describe('Mermaid block controls', () => {
     const props = {
       node: { attrs: { code: 'graph TD; A-->B' } },
       updateAttributes,
+      editor: { isEditable: true },
     } as unknown as NodeViewProps;
     render(<MermaidBlockView {...props} />);
 

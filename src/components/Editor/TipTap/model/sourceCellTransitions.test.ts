@@ -32,6 +32,16 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it('round trips mixed code and Mermaid fences without executing nested code', () => {
+    const content =
+      'Example\n\n````markdown\n```mermaid\ngraph TD; A-->B\n```\n````\n\n~~~mermaid\ngraph TD; B-->C\n~~~';
+    const pos = create({ ...markdown('mixed', content), metadata: { editorMode: 'source' } });
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    const types: string[] = [];
+    editor.state.doc.child(1).forEach((node) => types.push(node.type.name));
+    expect(types).toEqual(['paragraph', 'fencedCodeBlock', 'mermaidBlock']);
+    expect(convertEditorStateToCells(editor)[1].content).toBe(content);
+  });
   it('breaks the opening fence without losing code, language, ID or neighboring cells', () => {
     const cell: Cell = {
       id: 'code',

@@ -68,6 +68,15 @@ Markdown. Remaining goal checks include mixed/nested fences, read-only and IME i
 undo/redo focus across editor types, full-document source mode, broader chart/table interactions,
 and the performance/persistence limits below. The overall optimization goal remains active.
 
+Mixed top-level fenced blocks now share a single forward scanner across rendering and source
+transitions (O(source length) time and O(source length) output storage). Backtick and tilde fences,
+longer delimiters, CRLF and fence metadata are covered. A Mermaid example inside an outer code
+fence remains code. Static fenced code inside a Markdown cell uses a lightweight ProseMirror node,
+not an additional executable CodeMirror instance. Unchanged fence source is retained on serialization;
+edited content grows delimiters when necessary. Mermaid source controls now respect read-only mode.
+Thirteen focused tests cover scanning, source transitions and Mermaid controls. This does not yet
+cover full CommonMark list/blockquote nesting, full-document source mode or browser IME behavior.
+
 This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
 task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are
 still separate transactions. Revisions coordinate one service instance, not concurrent browser tabs.

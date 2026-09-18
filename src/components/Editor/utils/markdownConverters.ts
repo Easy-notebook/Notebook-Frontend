@@ -2,6 +2,8 @@
  * Markdown conversion utilities for TiptapNotebookEditor
  */
 
+import { scanFencedMarkdown } from './fencedMarkdown';
+
 // Debug flag - set to true only when debugging
 const DEBUG = false;
 
@@ -65,25 +67,27 @@ export function convertMarkdownToHtml(
   markdown: string,
   cell: any = null,
   headingSlugCounter: any = null
-) {
+): string {
   if (!markdown) return '<p></p>';
 
-  // Mermaid fences are notebook blocks, not inline code. Split them before
-  // formatting so their source remains byte-for-byte editable and durable.
-  const mermaidFence = /^```mermaid[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*(?=\r?\n|$)/gm;
-  const parts: string[] = [];
-  let cursor = 0;
-  for (const match of markdown.matchAll(mermaidFence)) {
-    const start = match.index || 0;
-    const before = markdown.slice(cursor, start).trim();
-    if (before) parts.push(convertMarkdownToHtml(before, cell, headingSlugCounter));
-    parts.push(`<div data-type="mermaid-block" data-code="${encodeURIComponent(match[1])}"></div>`);
-    cursor = start + match[0].length;
-  }
-  if (parts.length) {
-    const after = markdown.slice(cursor).trim();
-    if (after) parts.push(convertMarkdownToHtml(after, cell, headingSlugCounter));
-    return parts.join('');
+  const segments = scanFencedMarkdown(markdown);
+  if (segments.some((part) => part.kind === 'fence')) {
+    return segments
+      .map((part) => {
+        if (part.kind === 'text')
+          return part.source.trim()
+            ? convertMarkdownToHtml(part.source.trim(), cell, headingSlugCounter)
+            : '';
+        if (part.language === 'mermaid') {
+          return `<div data-type="mermaid-block" data-code="${encodeURIComponent(part.code)}" data-source="${encodeURIComponent(part.source)}"></div>`;
+        }
+        const escaped = part.code
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        return `<pre data-type="fenced-code-block" data-language="${part.language.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" data-source="${encodeURIComponent(part.source)}"><code>${escaped}</code></pre>`;
+      })
+      .join('');
   }
 
   // 处理LaTeX语法 - 分步骤处理避免嵌套问题

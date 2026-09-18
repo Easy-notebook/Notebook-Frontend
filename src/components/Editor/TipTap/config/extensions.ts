@@ -14,6 +14,7 @@ import TableRow from '@tiptap/extension-table-row';
 import Heading from '@tiptap/extension-heading';
 import { MarkdownCellExtension } from '@Editor/extensions/MarkdownCellExtension';
 import { MarkdownSourceCellExtension } from '@Editor/extensions/MarkdownSourceCellExtension';
+import { FencedCodeBlockExtension } from '@Editor/extensions/FencedCodeBlockExtension';
 import { MermaidBlockExtension } from '@Editor/extensions/MermaidBlockExtension';
 import { ImageCellExtension } from '@Editor/extensions/ImageCellExtension';
 import { Extension as CoreExtension, InputRule } from '@tiptap/core';
@@ -94,6 +95,7 @@ export function getTipTapExtensions(placeholder: string) {
     // Custom cell extensions
     MarkdownCellExtension,
     MarkdownSourceCellExtension,
+    FencedCodeBlockExtension,
     ImageCellExtension,
     MermaidBlockExtension,
     CodeBlockExtension,

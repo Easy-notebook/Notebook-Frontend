@@ -3,7 +3,7 @@ import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { MermaidPreview } from '../MermaidPreview';
 
-export function MermaidBlockView({ node, updateAttributes }: NodeViewProps) {
+export function MermaidBlockView({ node, updateAttributes, editor }: NodeViewProps) {
   const id = useId().replace(/:/g, '');
   const code = node.attrs.code as string;
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
@@ -43,7 +43,11 @@ export function MermaidBlockView({ node, updateAttributes }: NodeViewProps) {
           id={`notebook-mermaid-source-${id}`}
           className="notebook-mermaid-source"
           value={code}
-          onChange={(event) => updateAttributes({ code: event.target.value })}
+          readOnly={!editor.isEditable}
+          onChange={(event) => {
+            if (editor.isEditable) updateAttributes({ code: event.target.value });
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
           spellCheck={false}
           aria-label="Mermaid source"
         />
@@ -68,6 +72,11 @@ export const MermaidBlockExtension = Node.create({
 
   addAttributes() {
     return {
+      source: {
+        default: '',
+        parseHTML: (element) => decodeURIComponent(element.getAttribute('data-source') || ''),
+        renderHTML: (attrs) => ({ 'data-source': encodeURIComponent(attrs.source) }),
+      },
       code: {
         default: '',
         parseHTML: (element) => {

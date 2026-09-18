@@ -6,6 +6,7 @@
 import type { Cell, CellType } from '@Store/models';
 import { convertMarkdownToHtml } from './markdownConverters';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import { formatCodeFence, standaloneFence } from './fencedMarkdown';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -227,8 +228,20 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
 }
 
 function serializeMarkdownBlock(node: any): string {
-  if (node.type === 'mermaidBlock') {
-    return `\`\`\`mermaid\n${node.attrs?.code || ''}\n\`\`\``;
+  if (node.type === 'mermaidBlock' || node.type === 'fencedCodeBlock') {
+    const code =
+      node.type === 'mermaidBlock'
+        ? node.attrs?.code || ''
+        : (node.content || []).map((child: any) => child.text || '').join('');
+    const original = standaloneFence(node.attrs?.source || '');
+    if (original && original.code.replace(/\r\n?/g, '\n') === code.replace(/\r\n?/g, '\n'))
+      return original.source;
+    return formatCodeFence(
+      code,
+      original?.info || (node.type === 'mermaidBlock' ? 'mermaid' : node.attrs?.language || ''),
+      original?.marker,
+      original?.length
+    );
   }
   if (node.type === 'heading') {
     return `${'#'.repeat(node.attrs?.level || 1)} ${extractTextFromNode(node)}`;
