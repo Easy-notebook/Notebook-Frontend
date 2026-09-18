@@ -8,6 +8,7 @@ export interface ExecuteButtonProps {
   elapsedTime: number;
   onExecute: () => void;
   onCancel: () => void;
+  disabledReason?: string;
 }
 
 /**
@@ -19,6 +20,7 @@ export const ExecuteButton: React.FC<ExecuteButtonProps> = ({
   elapsedTime,
   onExecute,
   onCancel,
+  disabledReason,
 }) => {
   if (isExecuting) {
     return (
@@ -43,8 +45,9 @@ export const ExecuteButton: React.FC<ExecuteButtonProps> = ({
   return (
     <button
       onClick={onExecute}
-      className="p-2 hover:bg-yellow-600 rounded"
-      title="Execute cell (Ctrl+Enter)"
+      className="p-2 hover:bg-yellow-600 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+      title={disabledReason || 'Execute cell (Ctrl+Enter)'}
+      disabled={!!disabledReason}
     >
       <Play className="w-4 h-4" />
     </button>

@@ -5,6 +5,8 @@ import { processOutput } from '../utils/outputProcessing';
 import { EXPAND_THRESHOLD } from '../utils';
 import { debounce } from 'lodash-es';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
+import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
+import { showToast } from '@/components/UI/Toast';
 
 export class CodeCellViewModel extends BaseCellViewModel {
   // Properties from props
@@ -239,6 +241,14 @@ export class CodeCellViewModel extends BaseCellViewModel {
   };
 
   public execute = () => {
+    if (!canExecuteCodeLanguage(this.cell.language)) {
+      showToast({
+        description:
+          'This notebook runs Python only. Switch the cell language to Python to execute it.',
+        variant: 'destructive',
+      });
+      return;
+    }
     useCodeStore.getState().executeCell(this.cell.id);
   };
 

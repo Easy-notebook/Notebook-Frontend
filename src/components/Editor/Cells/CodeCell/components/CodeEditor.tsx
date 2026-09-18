@@ -1,10 +1,10 @@
 import React from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { python } from '@codemirror/lang-python';
 import { dracula } from '@uiw/codemirror-theme-dracula';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { CodeEditorProps } from '../utils/types';
 import { EXPAND_THRESHOLD } from '../utils';
+import { codeLanguageExtensions } from '../utils/languageSupport';
 
 /**
  * Code editor component with CodeMirror
@@ -87,7 +87,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                   : String(cell.content || '')
             }
             height={isInDetachedView ? '100%' : 'auto'}
-            extensions={[python()]}
+            extensions={codeLanguageExtensions(cell.language)}
             onChange={onChange}
             onKeyDown={onKeyDown}
             theme={dracula}

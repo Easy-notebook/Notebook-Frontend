@@ -1,6 +1,6 @@
 import React from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { markdown } from '@codemirror/lang-markdown';
+import { codeLanguageExtensions } from '../CodeCell/utils/languageSupport';
 import { Trash2, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -61,7 +61,7 @@ const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
               <CodeMirror
                 value={contentType.content}
                 height="auto"
-                extensions={[markdown()]}
+                extensions={codeLanguageExtensions(contentType.language)}
                 onChange={vm.handleContentChange}
                 className="text-base"
                 theme="light"

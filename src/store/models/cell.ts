@@ -14,6 +14,7 @@ export interface Cell {
   id: string;
   type: CellType;
   content: string;
+  language?: string;
   outputs?: OutputItem[];
   enableEdit?: boolean;
   phaseId?: string | null;
@@ -26,6 +27,7 @@ export class CellModel implements Cell {
   id: string;
   type: CellType;
   content: string;
+  language?: string;
   outputs: OutputItem[];
   enableEdit: boolean;
   phaseId: string | null;
@@ -36,6 +38,7 @@ export class CellModel implements Cell {
     this.id = init.id ?? uuidv4();
     this.type = init.type;
     this.content = init.content ?? '';
+    this.language = init.language;
     this.outputs = Array.isArray(init.outputs) ? [...init.outputs] : [];
     this.enableEdit = init.enableEdit ?? true;
     this.phaseId = init.phaseId ?? null;
@@ -56,6 +59,7 @@ export class CellModel implements Cell {
       id: this.id,
       type: this.type,
       content: this.content,
+      language: this.language,
       outputs: this.outputs ? [...this.outputs] : [],
       enableEdit: this.enableEdit,
       phaseId: this.phaseId,
