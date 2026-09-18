@@ -34,6 +34,30 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it('preserves Markdown table column alignment through source and HTML round trips', () => {
+    const content = '| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |';
+    const pos = create(markdown('aligned', content));
+    const check = () => {
+      const table = editor.state.doc.nodeAt(pos)!.firstChild!;
+      expect(table.type.name).toBe('table');
+      table.forEach((row) => {
+        expect([0, 1, 2].map((index) => row.child(index).attrs.textAlign)).toEqual([
+          'left',
+          'center',
+          'right',
+        ]);
+      });
+    };
+    check();
+    editor.commands.setTextSelection(pos + 5);
+    expect(editSelectedCellSource(editor)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)?.attrs.source).toBe(content);
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    check();
+    editor.commands.setContent(editor.getHTML());
+    check();
+    expect(convertEditorStateToCells(editor)[1].content).toBe(content);
+  });
   it.each(['%20', '%2520', '100% complete', '\\n **literal** <tag> 中文'])(
     'preserves raw cell bytes through HTML and projection: %s',
     (content) => {

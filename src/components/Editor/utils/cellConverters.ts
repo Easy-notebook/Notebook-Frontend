@@ -315,7 +315,20 @@ export function serializeMarkdownBlock(node: any, options?: MarkdownSerializatio
     const formatRow = (cells: string[]) => `| ${cells.join(' | ')} |`;
     return [
       formatRow(rows[0]),
-      formatRow(rows[0].map(() => '---')),
+      formatRow(
+        (node.content[0].content || []).map((cell: any) => {
+          switch (cell.attrs?.textAlign) {
+            case 'left':
+              return ':---';
+            case 'center':
+              return ':---:';
+            case 'right':
+              return '---:';
+            default:
+              return '---';
+          }
+        })
+      ),
       ...rows.slice(1).map(formatRow),
     ].join('\n');
   }

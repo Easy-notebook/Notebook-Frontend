@@ -258,3 +258,25 @@ serialization still builds intermediate strings and is not claimed to be globall
 Seven related test files / 57 tests pass. New cases exercise the Backspace keymap, quote/list/mixed
 nesting, identical sibling fences, cell identity, neighboring cells, undo/redo and repaired-source
 preview. These are editor integration tests, not browser/OS input validation.
+
+### Local table input and alignment
+
+Table input no longer schedules a timer or scans all document paragraphs. It checks the edited
+paragraph and its immediate sibling inside the same parent; unrelated typing does not construct
+a candidate transaction. Detection depends on local text and ancestor depth rather than notebook
+paragraph count. ProseMirror transaction application, rendering and store synchronization still
+have their own costs; this does not make the complete keystroke O(1).
+
+Enter-created and separator-created tables share the notebook Markdown parser and one transaction
+constructor. Empty columns and escaped pipes in headers survive. Row insertion/deletion delegates
+to ProseMirror's table-aware commands, including logical width for merged cells. Read-only and
+composition guards apply before input handling. Column alignment is persisted through validated
+cell attributes and Markdown alignment markers, with source/preview/HTML round-trip coverage.
+
+Remaining table fidelity gaps include merged-cell source representation, multi-paragraph cells,
+inline-code pipes and line breaks. Column-level Markdown alignment cannot express arbitrary
+per-cell alignment. These are not claimed fixed by the input-path refactor.
+
+The final related regression run passes 8 files / 65 tests. Production bundling succeeded before
+the final unrelated-input allocation guard was added; the guard is covered by the final test run.
+The full TypeScript check remains failing (316 diagnostics); no diagnostic names TableExtension.
