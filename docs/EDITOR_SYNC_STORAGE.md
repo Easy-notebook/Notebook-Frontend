@@ -51,6 +51,15 @@ retaining an unbounded revision log.
 
 ## Remaining architectural limits
 
+### Combined verification (2026-09-19)
+
+After the source/fence, visibility and embedded read-only changes, the complete Editor test directory
+passes: 14 files, 59 tests. Production Vite build passes but retains oversized-chunk warnings. An
+isolated Chromium session at `/workspace/smoke-notebook` verifies actual keyboard Backspace from
+JavaScript code into broken-fence source: focus moves to the textarea at offset 2, the next cell is
+unchanged, and inserting the missing backtick plus Preview restores the original code. This browser
+check does not cover whole-document source, IME, detached windows or real scrolling performance.
+
 ### Source-cell editing progress
 
 Executable code blocks can now be converted into a literal Markdown source cell by Backspace at
