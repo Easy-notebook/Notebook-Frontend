@@ -197,6 +197,35 @@
   text-transform: uppercase;
 }
 
+.tiptap-notebook-editor .notebook-mermaid-toolbar,
+.tiptap-notebook-editor .notebook-mermaid-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-toolbar {
+  justify-content: space-between;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-actions button {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  color: var(--editor-muted);
+  font-size: 0.75rem;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-actions button:hover,
+.tiptap-notebook-editor .notebook-mermaid-actions button[aria-pressed='true'] {
+  color: var(--editor-ink);
+  background: var(--editor-surface-muted);
+}
+
+.tiptap-notebook-editor .notebook-mermaid-copy-status {
+  color: var(--editor-muted);
+  font-size: 0.75rem;
+}
+
 .tiptap-notebook-editor .notebook-mermaid-source {
   width: 100%;
   min-height: 6rem;

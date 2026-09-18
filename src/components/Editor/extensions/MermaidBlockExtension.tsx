@@ -1,26 +1,60 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { MermaidPreview } from '../MermaidPreview';
 
-function MermaidBlockView({ node, updateAttributes }: NodeViewProps) {
+export function MermaidBlockView({ node, updateAttributes }: NodeViewProps) {
   const id = useId().replace(/:/g, '');
   const code = node.attrs.code as string;
+  const [mode, setMode] = useState<'preview' | 'source'>('preview');
+  const [copyStatus, setCopyStatus] = useState('');
+
+  const copySource = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyStatus('Source copied');
+    } catch {
+      setCopyStatus('Could not copy source');
+    }
+  };
 
   return (
     <NodeViewWrapper className="notebook-mermaid-block" data-type="mermaid-block">
-      <label className="notebook-mermaid-label" htmlFor={`notebook-mermaid-source-${id}`}>
-        Mermaid
-      </label>
-      <textarea
-        id={`notebook-mermaid-source-${id}`}
-        className="notebook-mermaid-source"
-        value={code}
-        onChange={(event) => updateAttributes({ code: event.target.value })}
-        spellCheck={false}
-        aria-label="Mermaid source"
-      />
-      <MermaidPreview source={code} />
+      <div className="notebook-mermaid-toolbar">
+        <span className="notebook-mermaid-label">Mermaid</span>
+        <div className="notebook-mermaid-actions">
+          <button
+            type="button"
+            aria-pressed={mode === 'preview'}
+            onClick={() => setMode('preview')}
+          >
+            Preview
+          </button>
+          <button type="button" aria-pressed={mode === 'source'} onClick={() => setMode('source')}>
+            Source
+          </button>
+          <button type="button" onClick={copySource} aria-label="Copy Mermaid source">
+            Copy
+          </button>
+        </div>
+      </div>
+      {mode === 'source' ? (
+        <textarea
+          id={`notebook-mermaid-source-${id}`}
+          className="notebook-mermaid-source"
+          value={code}
+          onChange={(event) => updateAttributes({ code: event.target.value })}
+          spellCheck={false}
+          aria-label="Mermaid source"
+        />
+      ) : (
+        <MermaidPreview source={code} />
+      )}
+      {copyStatus && (
+        <span className="notebook-mermaid-copy-status" role="status">
+          {copyStatus}
+        </span>
+      )}
     </NodeViewWrapper>
   );
 }
