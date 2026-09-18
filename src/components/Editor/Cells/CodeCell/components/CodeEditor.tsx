@@ -39,6 +39,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   return (
     <div
       ref={activation.container}
+      onBlurCapture={activation.onInputSettled}
+      onCompositionEndCapture={activation.onInputSettled}
       className={`relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
@@ -90,7 +92,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           {activation.active ? (
             <CodeMirror
               value={value}
+              initialState={activation.initialState(value)}
               onCreateEditor={activation.onCreateEditor}
+              onUpdate={activation.onUpdate}
               height={isInDetachedView ? '100%' : 'auto'}
               extensions={codeLanguageExtensions(cell.language)}
               onChange={readOnly ? undefined : onChange}
@@ -108,7 +112,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           ) : (
             <pre
               className="m-0 px-3 py-1 font-mono whitespace-pre overflow-hidden"
-              style={{ fontSize: 16, lineHeight: '24px', minHeight: 32 }}
+              style={{
+                fontSize: 16,
+                lineHeight: '24px',
+                minHeight: activation.placeholderHeight ?? 32,
+                height: activation.placeholderHeight,
+              }}
               tabIndex={0}
               aria-label="Code preview; focus to activate editor"
               onFocus={activation.activate}

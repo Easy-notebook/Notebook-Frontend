@@ -190,6 +190,9 @@ also preserve CodeMirror history if editors are later evicted; merely hiding DOM
 
 ### Deferred CodeMirror activation
 
+This section records the initial progressive-mount implementation; its one-way retention policy
+is superseded by the suspension lifecycle described below.
+
 Code editors now use a one-way deferred-to-active lifecycle. Offscreen cells show literal code;
 viewport proximity, pointer/focus or targeted cell navigation activates CodeMirror. Selected and
 detached editors activate immediately. Navigation intent is replayed after creation, and activated
@@ -381,3 +384,34 @@ Artifacts from this run: `/tmp/notebook-mermaid-browser-check.mjs`,
 CI gate. This smoke check does not cover every Mermaid grammar, accessibility, export fidelity,
 production deployment or full-document source editing. The isolated browser was stopped afterward;
 the project development server remains available on port 4173.
+
+### CodeMirror suspension and restoration
+
+Code editors now transition between deferred, active and suspended states. The shared visibility
+observer stays subscribed; an offscreen view can be reclaimed after a 500 ms grace period only
+when it is not selected/detached, focused, composing or awaiting navigation focus. Blur and
+composition completion reconsider reclamation, and visibility/navigation cancel a pending timer.
+
+`CodeEditorSession` owns a JSON snapshot of document, selection, history and folds, plus scroll
+offsets and exact measured height. It does not retain the old EditorView or its callback-bearing
+state configuration. Remount uses the current language/theme/read-only extensions. Changes made
+in the store while suspended are applied as a common-prefix/suffix text update without creating
+an undo entry. Snapshot creation is proportional to cell text/history; retained snapshots still
+consume memory proportional to visited editing state. This is not constant-space history.
+
+Real-browser checks used 100 code cells and navigation across ten viewport positions. After
+settling, live CodeMirror counts were 16, 12, 11, 11, 12, 12, 14, 11, 12 and 12. Returning to an
+evicted cell preserved actual typed text and Cmd-Z undo. Its outer height was 62.796875 px before
+and after suspension. The check exposed and fixed two issues: navigation needed to scroll the
+notebook ancestor, not only CodeMirror's internal viewport; a fixed 32 px placeholder minimum
+changed compact-cell height, so measured height is now used exactly.
+
+The grace period and asynchronous visibility delivery allow transient extra views (a busy-run
+750 ms sample reached 42), so this is not a strict global capacity/LRU bound. Cell toolbars/models
+and non-code cells remain mounted. Real OS IME and large multi-line scroll-anchor stress remain
+unverified. The browser assertions and output are `/tmp/notebook-code-eviction-check.mjs` and
+`/tmp/notebook-code-eviction-results.log`; they are temporary local artifacts, not CI coverage.
+
+At the final implementation, 25 editor test files / 155 tests pass and production bundling succeeds.
+Existing CSS/minification and large-chunk warnings remain. The isolated browser was stopped after
+verification; the project development server remains running.

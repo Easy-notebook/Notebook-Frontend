@@ -1,5 +1,6 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { EditorState } from '@codemirror/state';
 const observation = vi.hoisted(() => ({ notify: (_visible: boolean) => {}, release: vi.fn() }));
 vi.mock('../../../utils/previewVisibility', () => ({
   observePreview: (_node: Element, listener: (visible: boolean) => void) => {
@@ -16,15 +17,74 @@ function Probe({ immediate = false }) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
-it('defers offscreen creation, activates near the viewport and never evicts active state', () => {
+const suspendedView = () => ({
+  state: EditorState.create({ doc: 'print(1)' }),
+  dom: {
+    isConnected: true,
+    getBoundingClientRect: () => ({ height: 120 }),
+    scrollIntoView: vi.fn(),
+  },
+  scrollDOM: { scrollTop: 0, scrollLeft: 0 },
+  hasFocus: false,
+  composing: false,
+  requestMeasure: vi.fn(),
+  dispatch: vi.fn(),
+  focus: vi.fn(),
+});
+it('defers creation, suspends offscreen views and restores their initial state', () => {
+  vi.useFakeTimers();
   render(<Probe />);
   expect(screen.getByText('deferred')).toBeDefined();
   act(() => observation.notify(true));
   expect(screen.getByText('active')).toBeDefined();
-  expect(observation.release).toHaveBeenCalledOnce();
+  act(() => latest.onCreateEditor(suspendedView() as any));
+  expect(observation.release).not.toHaveBeenCalled();
   act(() => observation.notify(false));
+  act(() => vi.advanceTimersByTime(499));
   expect(screen.getByText('active')).toBeDefined();
+  act(() => vi.advanceTimersByTime(1));
+  expect(screen.getByText('deferred')).toBeDefined();
+  expect(latest.placeholderHeight).toBe(120);
+  expect(latest.initialState('print(1)')?.json.doc).toBe('print(1)');
+  act(() => observation.notify(true));
+  expect(screen.getByText('active')).toBeDefined();
+});
+it('pins focus and IME, then reclaims after blur or composition settlement', async () => {
+  vi.useFakeTimers();
+  render(<Probe />);
+  act(() => observation.notify(true));
+  const view = suspendedView();
+  view.hasFocus = true;
+  act(() => latest.onCreateEditor(view as any));
+  act(() => observation.notify(false));
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('active')).toBeDefined();
+  view.hasFocus = false;
+  view.composing = true;
+  act(() => latest.onUpdate({} as any));
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('active')).toBeDefined();
+  view.composing = false;
+  await act(async () => {
+    latest.onInputSettled();
+    await vi.advanceTimersByTimeAsync(500);
+  });
+  expect(screen.getByText('deferred')).toBeDefined();
+});
+it('cancels pending suspension on visibility and releases observation on unmount', () => {
+  vi.useFakeTimers();
+  const rendered = render(<Probe />);
+  act(() => observation.notify(true));
+  act(() => latest.onCreateEditor(suspendedView() as any));
+  act(() => observation.notify(false));
+  act(() => vi.advanceTimersByTime(250));
+  act(() => observation.notify(true));
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('active')).toBeDefined();
+  rendered.unmount();
+  expect(observation.release).toHaveBeenCalledOnce();
 });
 it('activates a navigation target and restores direction-dependent focus after creation', async () => {
   render(<Probe />);
@@ -40,7 +100,7 @@ it('activates a navigation target and restores direction-dependent focus after c
     )
   );
   const view = {
-    dom: { isConnected: true },
+    dom: { isConnected: true, scrollIntoView: vi.fn() },
     state: { doc: { length: 42 } },
     dispatch: vi.fn(),
     focus: vi.fn(),
@@ -48,12 +108,18 @@ it('activates a navigation target and restores direction-dependent focus after c
   await act(async () => latest.onCreateEditor(view as any));
   expect(view.dispatch).toHaveBeenCalledWith({ selection: { anchor: 42 }, scrollIntoView: true });
   expect(view.focus).toHaveBeenCalledOnce();
+  expect(view.dom.scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
 });
-it('immediately mounts selected/detached editors and retains them after deselection', () => {
+it('pins selected/detached editors and can reclaim them after deselection', () => {
+  vi.useFakeTimers();
   const rendered = render(<Probe immediate />);
   expect(screen.getByText('active')).toBeDefined();
-  rendered.rerender(<Probe immediate={false} />);
+  act(() => latest.onCreateEditor(suspendedView() as any));
+  act(() => vi.advanceTimersByTime(1000));
   expect(screen.getByText('active')).toBeDefined();
+  rendered.rerender(<Probe immediate={false} />);
+  act(() => vi.advanceTimersByTime(500));
+  expect(screen.getByText('deferred')).toBeDefined();
 });
 
 it('keeps the latest direction during activation and continues routing after creation', async () => {
@@ -65,7 +131,7 @@ it('keeps the latest direction during activation and continues routing after cre
   act(() => navigate('up'));
   act(() => navigate('down'));
   const view = {
-    dom: { isConnected: true },
+    dom: { isConnected: true, scrollIntoView: vi.fn() },
     state: { doc: { length: 42 } },
     dispatch: vi.fn(),
     focus: vi.fn(),
@@ -89,7 +155,7 @@ it('keeps the latest direction during activation and continues routing after cre
 it('cancels queued focus when the cell unmounts', async () => {
   const rendered = render(<Probe />);
   const view = {
-    dom: { isConnected: true },
+    dom: { isConnected: true, scrollIntoView: vi.fn() },
     state: { doc: { length: 42 } },
     dispatch: vi.fn(),
     focus: vi.fn(),
