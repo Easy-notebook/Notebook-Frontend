@@ -5,6 +5,12 @@ import { EditorReadOnlyContext } from '../../../EditorAccessContext';
 
 const themeState = vi.hoisted(() => ({ resolvedTheme: 'light' }));
 vi.mock('@/contexts/ThemeContext', () => ({ useTheme: () => themeState }));
+vi.mock('../../../utils/previewVisibility', () => ({
+  observePreview: (_element: Element, listener: (visible: boolean) => void) => {
+    listener(true);
+    return () => {};
+  },
+}));
 vi.mock('@uiw/react-codemirror', () => ({
   default: ({ theme, readOnly, onChange, onKeyDown }: any) => (
     <div

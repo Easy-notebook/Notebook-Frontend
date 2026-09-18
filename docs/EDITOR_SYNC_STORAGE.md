@@ -188,6 +188,21 @@ entry and keyboard navigation. Tests must cover navigation to an unmounted edito
 IME and scroll stability before claiming full virtualization. A bounded mount/unmount policy must
 also preserve CodeMirror history if editors are later evicted; merely hiding DOM is insufficient.
 
+### Deferred CodeMirror activation
+
+Code editors now use a one-way deferred-to-active lifecycle. Offscreen cells show literal code;
+viewport proximity, pointer/focus or targeted cell navigation activates CodeMirror. Selected and
+detached editors activate immediately. Navigation intent is replayed after creation, and activated
+instances are retained to avoid dropping undo/IME state on scroll. The shared visibility observer is
+released per editor after activation. Cell models/toolbars still mount eagerly.
+
+The same Chromium development benchmark mounted 3 CodeMirror instances for 100 code cells instead
+of 100, with 5,065 editor DOM nodes instead of 6,714. Two runs measured 147.5 ms and 331.7 ms to two
+frames versus the earlier 1,553.4 ms single-run baseline; do not interpret these as stable speedup
+ratios. Actual navigation to deferred cell 99 activated and focused it, and real typing plus Cmd-Z
+restored its content. Ten code-cell tests pass. Full IME/scroll stability and bounded memory after
+visiting every cell remain unverified; this is progressive mounting, not complete virtualization.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document

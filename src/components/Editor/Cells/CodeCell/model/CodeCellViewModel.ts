@@ -437,7 +437,7 @@ export class CodeCellViewModel extends BaseCellViewModel {
 
   public focus(direction: 'up' | 'down') {
     if (!this.editorRef?.current?.view) {
-      console.warn('CodeCellViewModel.focus: No editor view available');
+      // A deferred editor is activated by the shared navigation router.
       return;
     }
 

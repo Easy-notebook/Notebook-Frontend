@@ -7,6 +7,7 @@ import { EXPAND_THRESHOLD } from '../utils';
 import { codeLanguageExtensions } from '../utils/languageSupport';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useEditorReadOnly } from '../../../EditorAccessContext';
+import { useCodeEditorActivation } from '../model/useCodeEditorActivation';
 
 /**
  * Code editor component with CodeMirror
@@ -32,8 +33,12 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 }) => {
   const { resolvedTheme } = useTheme();
   const readOnly = useEditorReadOnly();
+  const activation = useCodeEditorActivation(cell.id, !!isCurrentCell || !!isInDetachedView);
+  const value =
+    content ?? (typeof cell.content === 'string' ? cell.content : String(cell.content || ''));
   return (
     <div
+      ref={activation.container}
       className={`relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
@@ -82,28 +87,36 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           className={`${isInDetachedView ? 'h-full' : 'h-full'} overflow-auto`}
           ref={codeBlockWrapperRef}
         >
-          <CodeMirror
-            value={
-              content !== undefined
-                ? content
-                : typeof cell.content === 'string'
-                  ? cell.content
-                  : String(cell.content || '')
-            }
-            height={isInDetachedView ? '100%' : 'auto'}
-            extensions={codeLanguageExtensions(cell.language)}
-            onChange={readOnly ? undefined : onChange}
-            onKeyDown={readOnly ? undefined : onKeyDown}
-            theme={resolvedTheme === 'dark' ? dracula : 'light'}
-            style={{
-              fontSize: '16px',
-              lineHeight: '1.5',
-              height: isInDetachedView ? '100%' : 'auto',
-            }}
-            readOnly={readOnly || isExecuting || dslcMode}
-            autoFocus={isCurrentCell && !dslcMode && !readOnly}
-            ref={editorRef}
-          />
+          {activation.active ? (
+            <CodeMirror
+              value={value}
+              onCreateEditor={activation.onCreateEditor}
+              height={isInDetachedView ? '100%' : 'auto'}
+              extensions={codeLanguageExtensions(cell.language)}
+              onChange={readOnly ? undefined : onChange}
+              onKeyDown={readOnly ? undefined : onKeyDown}
+              theme={resolvedTheme === 'dark' ? dracula : 'light'}
+              style={{
+                fontSize: '16px',
+                lineHeight: '1.5',
+                height: isInDetachedView ? '100%' : 'auto',
+              }}
+              readOnly={readOnly || isExecuting || dslcMode}
+              autoFocus={isCurrentCell && !dslcMode && !readOnly}
+              ref={editorRef}
+            />
+          ) : (
+            <pre
+              className="m-0 px-3 py-1 font-mono whitespace-pre overflow-hidden"
+              style={{ fontSize: 16, lineHeight: '24px', minHeight: 32 }}
+              tabIndex={0}
+              aria-label="Code preview; focus to activate editor"
+              onFocus={activation.activate}
+              onPointerDown={activation.activate}
+            >
+              {value || ' '}
+            </pre>
+          )}
           {isExecuting && (
             <div className="absolute inset-0 flex items-center justify-center rounded-b-lg">
               <Loader2 className="w-16 h-16 animate-spin text-red-500" />
