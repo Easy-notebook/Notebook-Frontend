@@ -360,3 +360,24 @@ the Markdown path, not the O(cell count) scan/maps in synchronization; other cel
 their own presentation-field audit.
 
 The final model regression run passes 5 files / 60 tests.
+
+### Real-browser Mermaid verification at `e5ab294`
+
+An isolated headless Chrome profile against the local development server rendered flowchart,
+sequence and pie diagrams in both light and dark themes. All six SVGs had nonzero dimensions.
+Flowchart node fill changed from `rgb(236, 236, 255)` to `rgb(31, 32, 32)` on theme change;
+light/dark screenshots were inspected for the flowchart and sequence diagram. Source edits made
+through Chrome's input API replaced the displayed labels. Invalid source showed an error without
+the old SVG, and replacing it with valid source restored the diagram.
+
+The first browser attempt found a blank page: the long-running Vite process still resolved the
+renamed table extension to the removed `.tsx` file and returned 404. Restarting the verified project
+dev server cleared the module graph; the importer then resolved `TableExtension.ts`. The same
+browser checks passed after recovery. No compatibility file was added for the obsolete path.
+
+Artifacts from this run: `/tmp/notebook-mermaid-browser-check.mjs`,
+`/tmp/notebook-mermaid-browser-results.log`, `/tmp/notebook-mermaid-light.png`, and
+`/tmp/notebook-mermaid-dark.png`. These are local temporary verification artifacts, not a persistent
+CI gate. This smoke check does not cover every Mermaid grammar, accessibility, export fidelity,
+production deployment or full-document source editing. The isolated browser was stopped afterward;
+the project development server remains available on port 4173.
