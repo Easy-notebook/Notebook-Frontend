@@ -150,6 +150,13 @@ content; styling of whitespace itself is not represented by Markdown. A stable-r
 complete Editor directory passes 17 files / 90 tests after this change, including incremental sync,
 source transitions, literal text, title and diagram tests.
 
+Code-cell navigation now uses one shared router with a cell-ID map instead of a window listener per
+mounted cell. Dispatch does average O(1) lookup plus callbacks for the target cell's views, rather
+than visiting every cell. A 1,000-subscriber test verifies one listener, target-only delivery, invalid
+event filtering and final cleanup. The unused prior navigation hook is removed. Preview panes now
+select only their required store fields, avoiding subscription to unrelated notebook edits. This
+does not remove the remaining O(cell count) React mounting cost or constitute viewport virtualization.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document

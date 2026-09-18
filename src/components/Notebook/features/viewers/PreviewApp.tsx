@@ -21,12 +21,15 @@ const PreviewApp: React.FC = () => {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === 'dark';
   // Check if we're in split view mode (detached cell)
-  const { detachedCellId } = useStore();
+  const detachedCellId = useStore((state) => state.detachedCellId);
   const isInSplitView = !!detachedCellId;
 
   // Get appropriate state based on mode
-  const { previewMode, currentPreviewFiles, activeFile, activeSplitFile, setTabDirty } =
-    usePreviewStore();
+  const previewMode = usePreviewStore((state) => state.previewMode);
+  const currentPreviewFiles = usePreviewStore((state) => state.currentPreviewFiles);
+  const activeFile = usePreviewStore((state) => state.activeFile);
+  const activeSplitFile = usePreviewStore((state) => state.activeSplitFile);
+  const setTabDirty = usePreviewStore((state) => state.setTabDirty);
 
   // Use split file if in split view, otherwise use regular active file
   const currentFile = isInSplitView ? activeSplitFile : activeFile;

@@ -23,7 +23,8 @@ const TabbedPreviewApp: React.FC = () => {
   // UI-only state
   const [showSource, setShowSource] = useState(false);
 
-  const { activeFile, setTabDirty } = usePreviewStore();
+  const activeFile = usePreviewStore((state) => state.activeFile);
+  const setTabDirty = usePreviewStore((state) => state.setTabDirty);
 
   // 键盘快捷键：⌘/Ctrl+S 清理当前 tab 的 dirty（不阻断你已有的保存逻辑）
   useEffect(() => {
