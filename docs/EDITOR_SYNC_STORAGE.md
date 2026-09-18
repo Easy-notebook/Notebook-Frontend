@@ -165,6 +165,10 @@ keep in-progress drafts across node refreshes. Both respect the notebook read-on
 Four component tests cover hydration, draft refresh, read-only Raw controls and duplicate attachment
 text with distinct IDs. Draft conflict reconciliation beyond explicit local save remains unimplemented.
 
+Raw-node contents are decoded only at their HTML import boundary. Document projection no longer
+decodes them again, so literal `%20`, `%2520`, backslashes and markup survive HTML export/reimport.
+Redundant render-time attribute encoding is removed; the node attribute codec owns serialization.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document

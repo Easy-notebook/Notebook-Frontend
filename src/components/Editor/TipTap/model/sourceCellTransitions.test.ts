@@ -34,6 +34,16 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it.each(['%20', '%2520', '100% complete', '\\n **literal** <tag> 中文'])(
+    'preserves raw cell bytes through HTML and projection: %s',
+    (content) => {
+      const cell: Cell = { id: 'raw', type: 'raw', content, outputs: [] };
+      create(cell);
+      expect(convertEditorStateToCells(editor)[1].content).toBe(content);
+      editor.commands.setContent(editor.getHTML());
+      expect(convertEditorStateToCells(editor)[1].content).toBe(content);
+    }
+  );
   it('round trips nested lists, quoted code, images and math through the notebook parser', () => {
     const content =
       '10. first\n\n    second\n\n    - nested\n11. next\n\n> quoted\n>\n> ```python\n> print(1)\n> ```\n\nFormula $x^2$ and ![alt](https://example.com/a.png)';

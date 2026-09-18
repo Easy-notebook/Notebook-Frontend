@@ -133,13 +133,11 @@ export const RawCellExtension = Node.create({
     return [{ tag: 'div[data-type="raw-block"]' }];
   },
 
-  renderHTML({ node, HTMLAttributes }) {
+  renderHTML({ HTMLAttributes }) {
     return [
       'div',
       mergeAttributes(HTMLAttributes, {
         'data-type': 'raw-block',
-        'data-cell-id': node.attrs.cellId,
-        'data-content': encodeURIComponent(node.attrs.content || ''),
       }),
     ];
   },

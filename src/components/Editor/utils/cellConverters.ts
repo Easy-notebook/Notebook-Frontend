@@ -451,16 +451,11 @@ function projectJsonToCells(docJson: any): Cell[] {
       flushMarkdownContent();
       const attrs = node.attrs || {};
       const cellId = attrs.cellId || generateCellId();
-      let txt = attrs.content || '';
-      try {
-        txt = decodeURIComponent(txt);
-      } catch {
-        // Keep original text if decode fails
-      }
       newCells.push({
         id: cellId,
         type: 'raw',
-        content: txt,
+        // The raw-node HTML boundary already decoded this attribute.
+        content: attrs.content || '',
         outputs: [],
         enableEdit: true,
       } as any);
