@@ -141,6 +141,7 @@ function wrapInlineMark(text: string, delimiter: string): string {
 
 export interface MarkdownSerializationOptions {
   transformFence?: (node: any, source: string) => string;
+  tableCell?: boolean;
 }
 
 export function extractTextFromNode(node: any, options?: MarkdownSerializationOptions): string {
@@ -205,7 +206,7 @@ export function extractTextFromNode(node: any, options?: MarkdownSerializationOp
   switch (node.type) {
     case 'paragraph':
       if (node.content && Array.isArray(node.content)) {
-        return node.content.map((child: any) => extractTextFromNode(child)).join('');
+        return node.content.map((child: any) => extractTextFromNode(child, options)).join('');
       }
       return '';
 
@@ -246,7 +247,7 @@ export function extractTextFromNode(node: any, options?: MarkdownSerializationOp
     }
 
     case 'hardBreak':
-      return '\n';
+      return options?.tableCell ? '<br>' : '\n';
 
     case 'text':
       return node.text || '';
@@ -273,7 +274,7 @@ export function extractTextFromNode(node: any, options?: MarkdownSerializationOp
     default: {
       // 递归子节点
       if (node.content && Array.isArray(node.content)) {
-        return node.content.map((child: any) => extractTextFromNode(child)).join('');
+        return node.content.map((child: any) => extractTextFromNode(child, options)).join('');
       }
       return '';
     }
@@ -306,7 +307,7 @@ export function serializeMarkdownBlock(node: any, options?: MarkdownSerializatio
     const rows: string[][] = (node.content || []).map((row: any) =>
       (row.content || []).map((cell: any) =>
         (cell.content || [])
-          .map((child: any) => extractTextFromNode(child))
+          .map((child: any) => extractTextFromNode(child, { ...options, tableCell: true }))
           .join('')
           .trim()
       )

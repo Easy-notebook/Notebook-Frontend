@@ -63,6 +63,26 @@ describe('inline Markdown fidelity', () => {
     expect(renderInlineMarkdown('<script>alert(1)</script>')).not.toContain('<script>');
     expect(renderInlineMarkdown('[bad](javascript:alert)')).not.toContain('href');
   });
+  it.each(['<br>', '<BR/>', '<br />'])(
+    'allows only attribute-free hard break markup: %s',
+    (source) => {
+      const element = document.createElement('div');
+      element.innerHTML = renderInlineMarkdown(`first${source}last`);
+      expect(element.querySelectorAll('br')).toHaveLength(1);
+      expect(element.textContent).toBe('firstlast');
+    }
+  );
+  it.each([
+    '<br onmouseover="alert(1)">',
+    '<br style="color:red">',
+    '<img src=x onerror=alert(1)>',
+    '<svg onload=alert(1)>',
+  ])('does not activate attributed or other HTML: %s', (source) => {
+    const element = document.createElement('div');
+    element.innerHTML = renderInlineMarkdown(source);
+    expect(element.childElementCount).toBe(0);
+    expect(element.textContent).toBe(source);
+  });
   it.each(['a`b', '`edge`', '  padded  ', 'plain'])('round trips code span %s', (text) => {
     const markdown = extractTextFromNode({ type: 'text', text, marks: [{ type: 'code' }] });
     const container = document.createElement('div');

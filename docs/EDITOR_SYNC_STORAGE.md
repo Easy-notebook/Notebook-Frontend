@@ -273,10 +273,23 @@ to ProseMirror's table-aware commands, including logical width for merged cells.
 composition guards apply before input handling. Column alignment is persisted through validated
 cell attributes and Markdown alignment markers, with source/preview/HTML round-trip coverage.
 
-Remaining table fidelity gaps include merged-cell source representation, multi-paragraph cells,
-inline-code pipes and line breaks. Column-level Markdown alignment cannot express arbitrary
+Remaining table fidelity gaps include merged-cell source representation, multi-paragraph cells
+and inline-code pipes. Column-level Markdown alignment cannot express arbitrary
 per-cell alignment. These are not claimed fixed by the input-path refactor.
 
 The final related regression run passes 8 files / 65 tests. Production bundling succeeded before
 the final unrelated-input allocation guard was added; the guard is covered by the final test run.
 The full TypeScript check remains failing (316 diagnostics); no diagnostic names TableExtension.
+
+### Hard breaks in table source
+
+Table-cell hard-break nodes serialize as `<br>` instead of physical newlines, with the table context
+propagated through inline extraction. The Markdown renderer accepts only attribute-free `br` tags;
+attributed tags and all other raw HTML remain escaped. Literal text such as `<br>` is still escaped
+by text serialization, so it does not turn into a break on reload.
+
+A failing regression first demonstrated physical row splitting. After the fix, 8 related files /
+73 tests pass, including leading, repeated and trailing breaks, adjacent bold literal markup,
+source/preview and persisted-cell reload round trips, and unsafe-HTML cases. This does not encode
+multiple paragraph boundaries or merged cells in GFM tables, and does not establish browser/IME
+end-to-end behavior.

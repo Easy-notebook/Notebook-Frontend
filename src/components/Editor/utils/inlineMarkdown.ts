@@ -6,7 +6,9 @@ export const createMarkdownParser = () =>
   new Marked({
     gfm: true,
     renderer: {
-      html: ({ text }) => escapeHtml(text),
+      // GFM tables cannot contain physical newlines inside a cell. Accept only
+      // the attribute-free break emitted by serialization; all other HTML stays literal.
+      html: ({ text }) => (/^<br[ \t]*\/?>$/i.test(text) ? '<br>' : escapeHtml(text)),
       link({ href, title, tokens }) {
         const label = this.parser.parseInline(tokens);
         // Remove URL control characters before checking the scheme, including embedded NUL.
