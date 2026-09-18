@@ -133,7 +133,7 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
 /**
  * 将 ProseMirror 节点转换为 Markdown 文本（保留常见格式）
  */
-export function extractTextFromNode(node: any, parentType: string | null = null): string {
+export function extractTextFromNode(node: any): string {
   // 处理纯文本并考虑 marks（bold / italic / code）
   if (node.text !== undefined) {
     let text = node.text as string;
@@ -185,31 +185,33 @@ export function extractTextFromNode(node: any, parentType: string | null = null)
       return '';
 
     case 'blockquote': {
-      // 每一行前缀 '> '
-      const inner = (node.content || []).map((child: any) => extractTextFromNode(child)).join('');
-      // 确保换行
-      return `> ${inner}\n`;
+      const inner = (node.content || []).map(serializeMarkdownBlock).join('\n\n');
+      return inner
+        .split('\n')
+        .map((line: string) => `> ${line}`)
+        .join('\n');
     }
 
-    case 'bulletList': {
-      return (node.content || []).map((li: any) => extractTextFromNode(li, 'bullet')).join('');
-    }
-
+    case 'bulletList':
     case 'orderedList': {
-      let counter = 1;
+      const start = node.attrs?.start ?? 1;
       return (node.content || [])
-        .map((li: any) => {
-          const line = extractTextFromNode(li, 'ordered');
-          const prefix = `${counter++}. `;
-          return line.replace(/^-/, '').replace(/^\s*/, prefix);
+        .map((item: any, index: number) => {
+          const prefix = node.type === 'orderedList' ? `${start + index}. ` : '- ';
+          const body = (item.content || []).map(serializeMarkdownBlock).join('\n\n');
+          return body
+            .split('\n')
+            .map(
+              (line: string, lineIndex: number) =>
+                `${lineIndex ? ' '.repeat(prefix.length) : prefix}${line}`
+            )
+            .join('\n');
         })
-        .join('');
+        .join('\n');
     }
 
     case 'listItem': {
-      const inner = (node.content || []).map((child: any) => extractTextFromNode(child)).join('');
-      const prefix = parentType === 'ordered' ? '- ' : '- ';
-      return `${prefix}${inner}\n`;
+      return (node.content || []).map(serializeMarkdownBlock).join('\n\n');
     }
 
     case 'hardBreak':

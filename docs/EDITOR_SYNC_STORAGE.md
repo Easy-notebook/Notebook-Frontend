@@ -120,6 +120,13 @@ titles and strike marks. Raw inline HTML is escaped and explicit link schemes ar
 HTTP(S), mailto and tel. Seven inline tests and fifteen source/title regressions pass. This does not
 replace the remaining handwritten block parser or prove arbitrary nested Markdown round trips.
 
+Block serialization now preserves ordered-list start numbers, indents multiline/list-child content
+under the actual marker width, and prefixes every line of quoted content. Nested fenced code reuses
+the same fence serializer rather than being flattened into text. Three tests parse the generated
+Markdown with marked to verify list/quote/code hierarchy; ten source-transition regressions also pass.
+These are serializer guarantees. The current notebook block parser still needs replacement before
+equivalent nested structures are guaranteed on source-to-preview transitions.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document
