@@ -434,35 +434,4 @@ export class CodeCellViewModel extends BaseCellViewModel {
     const line = state.doc.lineAt(cursorPos);
     return cursorPos === line.to && line.number === state.doc.lines;
   }
-
-  public focus(direction: 'up' | 'down') {
-    if (!this.editorRef?.current?.view) {
-      // A deferred editor is activated by the shared navigation router.
-      return;
-    }
-
-    const view = this.editorRef.current.view;
-    const state = view.state;
-
-    console.log('CodeCellViewModel.focus executing', { direction, docLength: state.doc.length });
-
-    // Focus the editor
-    view.focus();
-
-    // Set cursor position
-    if (direction === 'up') {
-      // Focus at the end (coming from below)
-      const length = state.doc.length;
-      view.dispatch({
-        selection: { anchor: length, head: length },
-        scrollIntoView: true,
-      });
-    } else {
-      // Focus at the start (coming from above)
-      view.dispatch({
-        selection: { anchor: 0, head: 0 },
-        scrollIntoView: true,
-      });
-    }
-  }
 }

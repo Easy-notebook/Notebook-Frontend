@@ -55,3 +55,50 @@ it('immediately mounts selected/detached editors and retains them after deselect
   rendered.rerender(<Probe immediate={false} />);
   expect(screen.getByText('active')).toBeDefined();
 });
+
+it('keeps the latest direction during activation and continues routing after creation', async () => {
+  render(<Probe />);
+  const navigate = (direction: string) =>
+    window.dispatchEvent(
+      new CustomEvent('cell-navigation', { detail: { targetCellId: 'target', direction } })
+    );
+  act(() => navigate('up'));
+  act(() => navigate('down'));
+  const view = {
+    dom: { isConnected: true },
+    state: { doc: { length: 42 } },
+    dispatch: vi.fn(),
+    focus: vi.fn(),
+  };
+  await act(async () => latest.onCreateEditor(view as any));
+  expect(view.dispatch).toHaveBeenCalledTimes(1);
+  expect(view.dispatch).toHaveBeenLastCalledWith({
+    selection: { anchor: 0 },
+    scrollIntoView: true,
+  });
+  await act(async () => {
+    navigate('up');
+  });
+  expect(view.dispatch).toHaveBeenCalledTimes(2);
+  expect(view.dispatch).toHaveBeenLastCalledWith({
+    selection: { anchor: 42 },
+    scrollIntoView: true,
+  });
+});
+
+it('cancels queued focus when the cell unmounts', async () => {
+  const rendered = render(<Probe />);
+  const view = {
+    dom: { isConnected: true },
+    state: { doc: { length: 42 } },
+    dispatch: vi.fn(),
+    focus: vi.fn(),
+  };
+  act(() => {
+    latest.activate();
+    latest.onCreateEditor(view as any);
+    rendered.unmount();
+  });
+  await act(async () => {});
+  expect(view.focus).not.toHaveBeenCalled();
+});

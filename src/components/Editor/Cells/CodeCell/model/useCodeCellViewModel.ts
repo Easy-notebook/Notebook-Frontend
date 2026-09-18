@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { CodeCellViewModel } from './CodeCellViewModel';
 import { Cell, ReactCodeMirrorRef } from '../utils/types';
-import { cellNavigationRouter } from './CellNavigationRouter';
 
 export const useCodeCellViewModel = (
   cell: Cell,
@@ -32,11 +31,6 @@ export const useCodeCellViewModel = (
   useEffect(() => {
     return viewModel.subscribe(() => forceUpdate((n) => n + 1));
   }, [viewModel]);
-
-  // Listen for cell navigation events
-  useEffect(() => {
-    return cellNavigationRouter.subscribe(cell.id, (direction) => viewModel.focus(direction));
-  }, [cell.id, viewModel]);
 
   return viewModel;
 };

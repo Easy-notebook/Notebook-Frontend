@@ -203,6 +203,12 @@ ratios. Actual navigation to deferred cell 99 activated and focused it, and real
 restored its content. Ten code-cell tests pass. Full IME/scroll stability and bounded memory after
 visiting every cell remain unverified; this is progressive mounting, not complete virtualization.
 
+Navigation focus is now owned solely by the editor-activation lifecycle, including the interval
+between activation request and CodeMirror creation. It keeps the newest pending direction, routes
+subsequent navigation after creation and cancels queued focus on unmount. The duplicate ViewModel
+navigation subscription/focus implementation is removed. Twelve code-cell tests pass, including
+activation-window navigation and unmount cancellation regressions.
+
 Opening selected-cell source now serializes only that cell rather than projecting/searching the
 entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
 The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document
