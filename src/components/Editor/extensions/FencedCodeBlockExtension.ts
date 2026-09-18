@@ -8,6 +8,21 @@ export const FencedCodeBlockExtension = Node.create({
   marks: '',
   code: true,
   defining: true,
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => {
+        if (!this.editor.isActive(this.name)) return false;
+        if (!this.editor.isEditable) return true;
+        // Code lines belong to one block, not new notebook cells or paragraphs.
+        return this.editor.commands.insertContent('\n');
+      },
+      'Mod-Enter': () => {
+        if (!this.editor.isActive(this.name)) return false;
+        if (!this.editor.isEditable) return true;
+        return this.editor.commands.exitCode();
+      },
+    };
+  },
   addAttributes() {
     return {
       language: {

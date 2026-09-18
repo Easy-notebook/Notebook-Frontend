@@ -44,9 +44,12 @@ export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes 
         value={node.attrs.source}
         readOnly={!editor.isEditable}
         spellCheck={false}
-        onChange={(event) => updateAttributes({ source: event.target.value })}
+        onChange={(event) => {
+          if (editor.isEditable) updateAttributes({ source: event.target.value });
+        }}
         onKeyDown={(event) => {
           event.stopPropagation();
+          if (!editor.isEditable || event.nativeEvent.isComposing) return;
           if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
             event.preventDefault();
             if (event.shiftKey) editor.commands.redo();
