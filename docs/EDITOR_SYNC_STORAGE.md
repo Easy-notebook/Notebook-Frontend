@@ -1,0 +1,59 @@
+# Editor synchronization and persistence
+
+## Scope and reference
+
+Reference inspected: [Tydora 5f924b2](https://github.com/zuorn/Tydora/tree/5f924b261ab7f9397f5831381e3d6909b5eccdb1/app/tydora-web/src/Editor).
+Its `text-patch.ts` and `tryApplyExternalMarkdownPatch` demonstrate bounded block replacement
+for external edits. This implementation uses the same general principle, but reuses unchanged
+notebook nodes before parsing, rather than parsing the entire Markdown document first.
+No wholesale editor migration or Tiptap version upgrade is involved.
+
+## Ownership and complexity
+
+- ProseMirror owns Markdown editing and selection; store-backed views own executable cell content/output.
+- External synchronization indexes current top-level nodes and projected cells once: O(n).
+- Only changed cell content is converted to HTML and parsed: O(changed content size).
+- A same-cell update applies a ProseMirror content diff so selection endpoints map through the edit.
+  Structural changes use closed top-level block replacement, preserving cell boundaries.
+- Temporary synchronization space is O(n + changed content size), in addition to the retained document.
+- Mermaid is imported on first nonempty preview, not at editor-module evaluation. Stale preview results
+  are discarded. This is demand loading, not viewport virtualization.
+
+## Save lifecycle
+
+All save entry points enqueue immutable snapshots before awaiting I/O. Each queued edit receives
+a session-local revision. One writer drains snapshots; each notebook keeps at most its newest queued
+snapshot alongside any in-flight snapshot. Completion acknowledges only the revision actually written.
+
+`queued -> writing -> committed` or `writing -> retry -> failed/dirty`.
+
+Failed snapshots remain queued after bounded retries. Flush/pause propagate failure instead of claiming
+the notebook is safe to leave. A failing notebook does not prevent attempts to save other queued notebooks.
+The automatic scheduler coalesces edits for 250 ms, with a 1 s max-wait scheduling bound; storage latency
+and retries can exceed that bound. Manual save and flush bypass the debounce.
+
+Notebook snapshots are always saved locally, including large outputs. IndexedDB writes acknowledge
+transaction completion and reject aborts. File metadata and file content use their existing shared
+transaction. Compact JSON avoids formatting-related allocation; full snapshots are still O(total bytes)
+to serialize and write. Queue operations are O(1) per enqueue; draining visits pending work without
+retaining an unbounded revision log.
+
+## Verified scenarios
+
+- 1,000-cell document, one changed cell: exactly one parse; identical second sync: zero parses.
+- Nonempty selection survives text inserted before it within the same cell.
+- Existing title, blank-cell Enter, reorder, undo and cell-type round-trip regressions.
+- Latest queued snapshot wins; immediate saves wait behind the in-flight writer.
+- Transient failure retries; exhausted retries retain dirty data; failed pause does not disconnect.
+- A later edit supersedes the snapshot captured at the start of pause.
+- Request success alone does not acknowledge durability; abort rejects the write.
+- Mermaid preview ignores an older asynchronous result.
+
+## Remaining architectural limits
+
+This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
+task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are
+still separate transactions. Revisions coordinate one service instance, not concurrent browser tabs.
+Browser/process termination before pending work commits can still lose edits. Incremental cell storage,
+cross-tab conflict control, and viewport mounting require separate schema/lifecycle work and recovery tests;
+they are not silently approximated by this change.

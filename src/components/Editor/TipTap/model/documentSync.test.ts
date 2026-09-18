@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model';
 import { Editor } from '@tiptap/core';
 import type { Cell } from '@Store/models';
 import { getTipTapExtensions } from '../config/extensions';
@@ -13,6 +14,69 @@ const markdown = (id: string, content: string): Cell => ({
 });
 
 describe('document synchronization', () => {
+  it.each(['## Heading', '- one\n- two', '```mermaid\ngraph TD; A-->B\n```', ''])(
+    'preserves cell boundaries when externally changing the block structure: %s',
+    (content) => {
+      const cells = [
+        markdown('title', '# Notebook'),
+        markdown('body', 'Original'),
+        markdown('after', 'Untouched'),
+      ];
+      const editor = new Editor({
+        extensions: getTipTapExtensions('Untitled'),
+        content: convertCellsToHtml(cells),
+      });
+      try {
+        synchronizeDocument(editor, [cells[0], markdown('body', content), cells[2]]);
+        const projected = convertEditorStateToCells(editor);
+        expect(projected.map((cell) => cell.id)).toEqual(['title', 'body', 'after']);
+        expect(projected[2].content).toBe('Untouched');
+        expect(editor.state.doc.child(1).type.name).toBe('markdownCell');
+      } finally {
+        editor.destroy();
+      }
+    }
+  );
+  it('parses only one changed cell in a 1000-cell notebook', () => {
+    const cells = [
+      markdown('title', '# Notebook'),
+      ...Array.from({ length: 1000 }, (_, i) => markdown(`body-${i}`, `Paragraph ${i}`)),
+    ];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    const spy = vi.spyOn(ProseMirrorDOMParser.prototype, 'parseSlice');
+    try {
+      const next = [...cells];
+      next[501] = { ...next[501], content: 'Changed paragraph' };
+      synchronizeDocument(editor, next);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(convertEditorStateToCells(editor)[501].content).toBe('Changed paragraph');
+      spy.mockClear();
+      synchronizeDocument(editor, next);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+      editor.destroy();
+    }
+  }, 20000);
+
+  it('maps a non-empty text selection through an external insertion in the same cell', () => {
+    const cells = [markdown('title', '# Notebook'), markdown('body', 'Hello world')];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    const start = editor.state.doc.firstChild!.nodeSize + 2;
+    editor.commands.setTextSelection({ from: start + 6, to: start + 11 });
+    synchronizeDocument(editor, [cells[0], markdown('body', 'Hello brave world')]);
+    expect(
+      editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
+    ).toBe('world');
+    expect(editor.state.selection.empty).toBe(false);
+    editor.destroy();
+  });
   it('preserves markdown cell IDs through document conversion', () => {
     const cells = [markdown('title', '# Notebook'), markdown('body', 'A paragraph')];
     const editor = new Editor({

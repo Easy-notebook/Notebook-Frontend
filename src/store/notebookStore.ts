@@ -1587,18 +1587,7 @@ useStore.subscribe(
     if (hasChanges) {
       notebookLog.info('Notebook content changed - triggering auto-save');
 
-      if (import.meta.env.DEV) {
-        const codeCellsWithOutputs = current.cells.filter(
-          (c) => c.type === 'code' && c.outputs && c.outputs.length > 0
-        );
-        console.log('🔍 [notebookStore] Auto-save triggered:', {
-          totalCells: current.cells.length,
-          codeCellsWithOutputs: codeCellsWithOutputs.length,
-        });
-      }
-
       try {
-        await autoSaveService.initialize();
         await autoSaveService.queueSave({
           notebookId: current.notebookId,
           notebookTitle: current.notebookTitle,

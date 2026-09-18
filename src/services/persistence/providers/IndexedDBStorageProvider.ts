@@ -141,9 +141,11 @@ export class IndexedDBStorageProvider implements IStorageProvider {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([storeName], 'readwrite');
       const store = transaction.objectStore(storeName);
-      const request = store.put(value);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      store.put(value);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Storage transaction aborted'));
     });
   }
 
@@ -152,9 +154,11 @@ export class IndexedDBStorageProvider implements IStorageProvider {
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([storeName], 'readwrite');
       const store = transaction.objectStore(storeName);
-      const request = store.delete(key);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
+      store.delete(key);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Storage transaction aborted'));
     });
   }
 
@@ -172,31 +176,25 @@ export class IndexedDBStorageProvider implements IStorageProvider {
         stores[name] = transaction.objectStore(name);
       });
 
-      // We need to handle the promise returned by the callback manually
-      // because IDB transactions auto-commit when the event loop is empty.
-      // However, for simple operations, this structure is okay.
-      // For complex async operations inside a transaction, we need to be careful.
-      // But since we are wrapping the transaction logic, we rely on the callback
-      // to perform operations synchronously or chain them properly.
-
-      // Actually, to support async/await in the callback properly with IDB,
-      // we just need to make sure we don't await something that isn't an IDBRequest
-      // before the transaction commits.
-
-      // For this implementation, we will execute the callback and wait for it.
-      // If the callback throws, we abort.
-
-      Promise.resolve(callback(stores))
-        .then(() => {
-          // Transaction commits automatically
-        })
-        .catch((err) => {
-          transaction.abort();
-          reject(err);
-        });
-
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error('Storage transaction aborted'));
+      const abort = (error: unknown) => {
+        try {
+          transaction.abort();
+        } catch {
+          /* Already committed or aborted. */
+        }
+        reject(error);
+      };
+      // Callers must schedule requests synchronously or from IDB callbacks;
+      // arbitrary awaited work cannot keep an IndexedDB transaction alive.
+      try {
+        Promise.resolve(callback(stores)).catch(abort);
+      } catch (error) {
+        abort(error);
+      }
     });
   }
 }

@@ -29,13 +29,16 @@ describe('MermaidPreview', () => {
       .mockReturnValueOnce(second.promise as ReturnType<typeof mermaid.render>);
 
     const view = render(<MermaidPreview source="graph TD; A-->B" />);
-    act(() => {
-      vi.advanceTimersByTime(180);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+      await vi.dynamicImportSettled();
     });
+    expect(mermaid.render).toHaveBeenCalledTimes(1);
     view.rerender(<MermaidPreview source="graph TD; B-->C" />);
-    act(() => {
-      vi.advanceTimersByTime(180);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
     });
+    expect(mermaid.render).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       second.resolve({ svg: '<svg id="new"></svg>' });

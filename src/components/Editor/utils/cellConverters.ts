@@ -20,8 +20,9 @@ export function generateCellId() {
 /**
  * 将cells数组转换为HTML内容
  */
-export function convertCellsToHtml(cells: Cell[]) {
+export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
   if (!cells || cells.length === 0) {
+    if (!includeDocumentFrame) return '';
     // Schema requires 'title block+', so return default title and empty paragraph
     return `<div data-type="title" data-cell-id="${generateCellId()}"></div><p></p>`;
   }
@@ -46,7 +47,7 @@ export function convertCellsToHtml(cells: Cell[]) {
     } else if (cell.type === 'markdown') {
       // markdown cell转换为HTML
       // For the first cell, check if it has cover/icon metadata and should be rendered as title
-      if (index === 0 && /^#(?:\s|$)/.test(cell.content.trim())) {
+      if (includeDocumentFrame && index === 0 && /^#(?:\s|$)/.test(cell.content.trim())) {
         const metadata = cell.metadata || {};
         const cover = metadata.cover || null;
         const icon = metadata.icon || null;
@@ -111,10 +112,10 @@ export function convertCellsToHtml(cells: Cell[]) {
   let result = htmlParts.join('\n');
 
   // Ensure a title exists at the beginning if one wasn't generated from the first cell
-  if (!titleGenerated) {
+  if (includeDocumentFrame && !titleGenerated) {
     if (DEBUG) console.log('⚠️ No title found in first cell, injecting empty title');
     result = `<div data-type="title" data-cell-id="${generateCellId()}"></div>\n${result}`;
-  } else if (cells.length === 1) {
+  } else if (includeDocumentFrame && cells.length === 1) {
     // If we have a title but no other cells, append an empty paragraph to satisfy 'title block+' schema
     if (DEBUG) console.log('⚠️ Only title found, appending empty paragraph to satisfy schema');
     result += '\n<p></p>';
