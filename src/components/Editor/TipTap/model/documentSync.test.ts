@@ -14,6 +14,92 @@ const markdown = (id: string, content: string): Cell => ({
 });
 
 describe('document synchronization', () => {
+  it('does not parse or stringify business metadata in a 1000-cell Markdown notebook', () => {
+    const cells = [
+      markdown('title', '# Notebook'),
+      ...Array.from({ length: 1000 }, (_, i) => ({
+        ...markdown(`body-${i}`, `Paragraph ${i}`),
+        metadata: { executionCount: i, custom: { tags: ['a', 'b'] } },
+      })),
+    ];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    const parse = vi.spyOn(ProseMirrorDOMParser.prototype, 'parseSlice');
+    const serialize = vi.fn(() => {
+      throw new Error('Business payload must not be serialized');
+    });
+    try {
+      const next = cells.map((cell) => ({
+        ...cell,
+        metadata: { ...cell.metadata, custom: { toJSON: serialize } },
+      }));
+      const original = editor.state.doc;
+      expect(synchronizeDocument(editor, next)).toBe(false);
+      expect(parse).not.toHaveBeenCalled();
+      expect(serialize).not.toHaveBeenCalled();
+      expect(editor.state.doc).toBe(original);
+    } finally {
+      parse.mockRestore();
+      editor.destroy();
+    }
+  }, 20000);
+  it('updates phase-owned heading IDs when text is unchanged', () => {
+    const cells = [
+      markdown('title', '# Notebook'),
+      { ...markdown('body', '## Heading'), phaseId: 'old-phase' },
+    ];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    try {
+      expect(editor.state.doc.child(1).attrs.phaseId).toBe('old-phase');
+      expect(synchronizeDocument(editor, [cells[0], { ...cells[1], phaseId: 'new-phase' }])).toBe(
+        true
+      );
+      expect(editor.state.doc.child(1).attrs.phaseId).toBe('new-phase');
+      expect(editor.state.doc.child(1).firstChild?.attrs.id).toBe('new-phase');
+      expect(convertEditorStateToCells(editor)[1].phaseId).toBe('new-phase');
+    } finally {
+      editor.destroy();
+    }
+  });
+  it('updates source origin without reparsing unrelated source metadata', () => {
+    const cells = [
+      markdown('title', '# Notebook'),
+      {
+        ...markdown('body', '```python\nprint(1)\n```'),
+        metadata: { editorMode: 'source', sourceCellType: 'code', custom: 1 },
+      },
+    ];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    const parse = vi.spyOn(ProseMirrorDOMParser.prototype, 'parseSlice');
+    try {
+      expect(
+        synchronizeDocument(editor, [
+          cells[0],
+          { ...cells[1], metadata: { ...cells[1].metadata, custom: 2 } },
+        ])
+      ).toBe(false);
+      expect(parse).not.toHaveBeenCalled();
+      expect(
+        synchronizeDocument(editor, [
+          cells[0],
+          { ...cells[1], metadata: { ...cells[1].metadata, sourceCellType: 'hybrid' } },
+        ])
+      ).toBe(true);
+      expect(parse).toHaveBeenCalledTimes(1);
+      expect(editor.state.doc.child(1).attrs.sourceCellType).toBe('hybrid');
+    } finally {
+      parse.mockRestore();
+      editor.destroy();
+    }
+  });
   it.each(['## Heading', '- one\n- two', '```mermaid\ngraph TD; A-->B\n```', ''])(
     'preserves cell boundaries when externally changing the block structure: %s',
     (content) => {

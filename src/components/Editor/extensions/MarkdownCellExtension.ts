@@ -9,6 +9,11 @@ export const MarkdownCellExtension = Node.create({
 
   addAttributes() {
     return {
+      phaseId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute('data-phase-id'),
+        renderHTML: ({ phaseId }) => (phaseId ? { 'data-phase-id': phaseId } : {}),
+      },
       cellId: {
         default: null,
         parseHTML: (element) => element.getAttribute('data-cell-id'),

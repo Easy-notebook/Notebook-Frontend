@@ -9,6 +9,7 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { formatCodeFence, standaloneFence } from './fencedMarkdown';
 import { codeCellFromAttributes } from './codeCellAttributes';
 import { parseSourceCellType } from './sourceCellAttributes';
+import { escapeHtml } from './inlineMarkdown';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -75,7 +76,7 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
         console.log(`转换Markdown单元格 ${index}: ID=${cell.id}, content="${cell.content}"`);
       const html = convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter);
       if (DEBUG) console.log(`Markdown转HTML结果 ${index}: "${html}"`);
-      return `<div data-type="markdown-cell" data-cell-id="${cell.id}">${html}</div>`;
+      return `<div data-type="markdown-cell" data-cell-id="${cell.id}"${cell.phaseId ? ` data-phase-id="${escapeHtml(cell.phaseId)}"` : ''}>${html}</div>`;
     } else if (cell.type === 'image') {
       // image cell转换为HTML - 包含cellId和metadata信息
       if (DEBUG) console.log(`转换图片单元格 ${index}: ID=${cell.id}`);
@@ -451,6 +452,7 @@ function projectJsonToCells(docJson: any): Cell[] {
       flushMarkdownContent();
       newCells.push({
         id: node.attrs?.cellId || generateCellId(),
+        ...(node.attrs?.phaseId && { phaseId: node.attrs.phaseId }),
         type: 'markdown',
         content: (node.content || [])
           .map((child: any) => serializeMarkdownBlock(child))

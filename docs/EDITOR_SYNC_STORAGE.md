@@ -344,3 +344,19 @@ The length is read from the opening run without scanning the entire generated so
 
 Five model test files / 57 tests pass, including code/hybrid restoration across HTML and serialized-cell
 reload, source-origin cleanup on prose conversion, and repairing a longer fence at the reported caret.
+
+### Markdown presentation-only synchronization
+
+The Markdown synchronization path now compares only node presentation fields: title cover/icon,
+source origin, and the phase ID used to derive heading anchors. It no longer serializes arbitrary
+business metadata or reparses Markdown simply because the document projection does not contain
+those store-owned fields. Markdown wrappers persist phaseId so an external phase change can update
+heading IDs even when the text is unchanged.
+
+A 1,000-cell regression attaches business metadata whose `toJSON` would throw and verifies zero
+metadata serialization, zero parseSlice calls and unchanged document identity. Additional tests cover
+phase-owned heading IDs and source-origin changes. This removes metadata-payload-dependent work on
+the Markdown path, not the O(cell count) scan/maps in synchronization; other cell types still need
+their own presentation-field audit.
+
+The final model regression run passes 5 files / 60 tests.

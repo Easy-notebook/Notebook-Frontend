@@ -4,8 +4,40 @@ import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml, convertEditorStateToCells } from '@Editor/utils/cellConverters';
 import { Selection } from 'prosemirror-state';
+import { parseSourceCellType } from '../../utils/sourceCellAttributes';
 
 export const EXTERNAL_CELL_SYNC = 'externalCellSync';
+
+function samePresentation(
+  current: ProseMirrorNode | undefined,
+  projected: Cell | undefined,
+  cell: Cell,
+  isTitle: boolean
+): boolean {
+  if (cell.type === 'code' || cell.type === 'hybrid') return true;
+  if (isTitle) {
+    return (
+      (current?.attrs.cover || null) === (cell.metadata?.cover || null) &&
+      (current?.attrs.icon || null) === (cell.metadata?.icon || null)
+    );
+  }
+  if (cell.type === 'markdown') {
+    // Business metadata is store-owned and absent from Markdown node markup.
+    if (cell.metadata?.editorMode === 'source') {
+      return (
+        parseSourceCellType(current?.attrs.sourceCellType) ===
+        parseSourceCellType(cell.metadata.sourceCellType)
+      );
+    }
+    return (current?.attrs.phaseId || null) === (cell.phaseId || null);
+  }
+  return (
+    !cell.metadata ||
+    Object.keys(cell.metadata).every(
+      (key) => JSON.stringify(cell.metadata?.[key]) === JSON.stringify(projected?.metadata?.[key])
+    )
+  );
+}
 
 function sameProjectedNode(current: ProseMirrorNode, next: ProseMirrorNode): boolean {
   // CodeMirror and the Cell Store own executable text and outputs. Their NodeView
@@ -73,20 +105,10 @@ export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
     const storeOwned = cell.type === 'code' || cell.type === 'hybrid';
     const sameContent =
       projected?.type === cell.type && (storeOwned || projected.content === cell.content);
-    const sameMetadata =
-      storeOwned ||
-      (isTitle
-        ? (current?.attrs.cover || null) === (cell.metadata?.cover || null) &&
-          (current?.attrs.icon || null) === (cell.metadata?.icon || null)
-        : !cell.metadata ||
-          Object.keys(cell.metadata).every(
-            (key) =>
-              JSON.stringify(cell.metadata?.[key]) === JSON.stringify(projected?.metadata?.[key])
-          ));
     if (
       current &&
       sameContent &&
-      sameMetadata &&
+      samePresentation(current, projected, cell, isTitle) &&
       (current.type.name === 'markdownSourceCell') === (cell.metadata?.editorMode === 'source') &&
       (current.type.name === 'title') === isTitle
     ) {
