@@ -9,7 +9,23 @@ export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
 
   return projected.map((cell) => {
     const previous = byId.get(cell.id);
-    if (!previous || previous.type !== cell.type) return cell;
+    if (!previous) return cell;
+
+    // A representation change does not create a new cell. Outputs and business
+    // metadata remain store-owned; only the document's editorMode is authoritative.
+    if (previous.type !== cell.type) {
+      return {
+        ...previous,
+        ...cell,
+        outputs: previous.outputs ?? cell.outputs,
+        enableEdit: previous.enableEdit ?? cell.enableEdit,
+        metadata: {
+          ...cell.metadata,
+          ...previous.metadata,
+          editorMode: cell.metadata?.editorMode,
+        },
+      };
+    }
 
     if (cell.type === 'code' || cell.type === 'hybrid' || cell.type === 'thinking') {
       return previous;

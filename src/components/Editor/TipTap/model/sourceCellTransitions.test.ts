@@ -11,7 +11,7 @@ import {
   previewMarkdownSource,
 } from './sourceCellTransitions';
 import { reconcileCells } from './reconcileCells';
-import { synchronizeDocument } from './documentSync';
+import { EXTERNAL_CELL_SYNC, synchronizeDocument } from './documentSync';
 
 let editor: Editor;
 const markdown = (id: string, content: string): Cell => ({
@@ -314,6 +314,64 @@ describe('source cell transitions', () => {
     );
     expect(previewMarkdownSource(editor, pos)).toBe(true);
     expect(convertEditorStateToCells(editor)[1]).toMatchObject(cell);
+  });
+  it('retains outputs and metadata after a broken fence is saved, reloaded and repaired', () => {
+    const cell: Cell = {
+      id: 'code',
+      type: 'code',
+      language: 'python',
+      content: 'print(1)',
+      outputs: [{ type: 'text', content: '1' }],
+      phaseId: 'phase',
+      description: 'Example',
+      metadata: { custom: { tags: ['keep'] }, executionCount: 3 },
+    };
+    const pos = create(cell);
+    const original = [markdown('title', '# Notebook'), cell, markdown('after', 'Untouched')];
+    expect(breakCodeBlockFence(editor, pos, cell)).toBe(true);
+    const sourceCells = reconcileCells(convertEditorStateToCells(editor), original);
+    const persisted: Cell[] = JSON.parse(JSON.stringify(sourceCells));
+    editor.commands.setContent(convertCellsToHtml(persisted));
+    const source = editor.state.doc.nodeAt(pos)!;
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(pos, undefined, {
+        ...source.attrs,
+        source: '`' + source.attrs.source,
+      })
+    );
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    const restored = reconcileCells(convertEditorStateToCells(editor), persisted);
+    expect(restored[1]).toMatchObject(cell);
+    expect(restored[1].metadata?.editorMode).toBeUndefined();
+    synchronizeDocument(editor, restored);
+    // Executable NodeViews read live outputs from the store, not stale node attrs.
+    expect(reconcileCells(convertEditorStateToCells(editor), restored)[1]).toBe(restored[1]);
+    editor.commands.setContent(convertCellsToHtml(JSON.parse(JSON.stringify(restored))));
+    expect(convertEditorStateToCells(editor)[1].outputs).toEqual(cell.outputs);
+  });
+  it('keeps store-owned data through undo and redo of a fence break', () => {
+    const cell: Cell = {
+      id: 'code',
+      type: 'code',
+      language: 'python',
+      content: 'print(1)',
+      outputs: [{ type: 'text', content: '1' }],
+      metadata: { executionCount: 4 },
+    };
+    const pos = create(cell);
+    let stored = [markdown('title', '# Notebook'), cell, markdown('after', 'Untouched')];
+    editor.on('update', ({ transaction }) => {
+      if (!transaction.getMeta(EXTERNAL_CELL_SYNC))
+        stored = reconcileCells(convertEditorStateToCells(editor), stored);
+    });
+    expect(breakCodeBlockFence(editor, pos, cell)).toBe(true);
+    expect(stored[1].type).toBe('markdown');
+    expect(stored[1].outputs).toBe(cell.outputs);
+    expect(editor.commands.undo()).toBe(true);
+    expect(stored[1]).toMatchObject(cell);
+    expect(editor.commands.redo()).toBe(true);
+    expect(stored[1].metadata).toMatchObject({ executionCount: 4, editorMode: 'source' });
+    expect(stored[1].outputs).toBe(cell.outputs);
   });
 
   it('persists source mode and exits it even when Markdown text did not change', () => {

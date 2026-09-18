@@ -315,3 +315,17 @@ separate visual verification.
 The integrated editor run passes 24 files / 139 tests, and the production build succeeds with
 existing large-chunk warnings. The full TypeScript check is still failing; no diagnostic names
 MermaidPreview or MermaidRenderService.
+
+### Cell-owned data during source transitions
+
+Reconciliation now retains store-owned outputs, editability and business metadata when a document
+projection changes the representation of the same cell ID. The projected type/content/language
+and editorMode remain authoritative for the representation. Output arrays are retained by reference,
+not copied into an additional source-mode snapshot. Explicitly cleared store outputs take precedence
+over stale node attributes. Executable NodeViews continue reading live data from the store; their
+ProseMirror attributes are not a second live output database.
+
+Five model test files / 53 tests pass, covering code-fence break/repair across serialized-cell reload,
+metadata preservation, undo/redo through the update/reconciliation path, and explicit output clearing.
+This does not yet preserve an original hybrid subtype through every source-mode conversion, nor
+provide full-document source editing or cross-tab conflict resolution.
