@@ -77,6 +77,13 @@ edited content grows delimiters when necessary. Mermaid source controls now resp
 Thirteen focused tests cover scanning, source transitions and Mermaid controls. This does not yet
 cover full CommonMark list/blockquote nesting, full-document source mode or browser IME behavior.
 
+Code node views and document projection now share a code-attribute decoder. Already-decoded output
+arrays are reused without copying; encoded HTML outputs are decoded at the boundary. This fixes
+output loss on import and encoded source/incorrect output-only mode before store hydration. Code
+node HTML serialization now emits the same discriminator its parser accepts, preventing whole-block
+loss on HTML round trips. Focused attribute, source-transition and document-sync regressions pass
+(28 tests, including the 1,000-cell single-change case).
+
 This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
 task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are
 still separate transactions. Revisions coordinate one service instance, not concurrent browser tabs.

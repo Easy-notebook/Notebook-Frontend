@@ -32,6 +32,20 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it('preserves code outputs through HTML import and export', () => {
+    const cell: Cell = {
+      id: 'code',
+      type: 'code',
+      language: 'python',
+      content: 'print(1)',
+      outputs: [{ output_type: 'stream', text: '1' } as any],
+    };
+    create(cell);
+    expect(convertEditorStateToCells(editor)[1]).toMatchObject(cell);
+    const html = editor.getHTML();
+    editor.commands.setContent(html);
+    expect(convertEditorStateToCells(editor)[1]).toMatchObject(cell);
+  });
   it('round trips mixed code and Mermaid fences without executing nested code', () => {
     const content =
       'Example\n\n````markdown\n```mermaid\ngraph TD; A-->B\n```\n````\n\n~~~mermaid\ngraph TD; B-->C\n~~~';

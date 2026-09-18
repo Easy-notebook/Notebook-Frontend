@@ -6,10 +6,11 @@ import HybridCell from '../../../Cells/HybridCell';
 import useStore from '@Store/notebookStore';
 import { getCellById } from '@Store/models/cellIndex';
 import { breakCodeBlockFence } from '../../../TipTap/model/sourceCellTransitions';
+import { codeCellFromAttributes } from '../../../utils/codeCellAttributes';
 
 const CodeBlockViewComponent = (props: any) => {
   const { node, editor, getPos } = props;
-  const { cellId, code, outputs, enableEdit } = node.attrs;
+  const { cellId } = node.attrs;
   const existingCell = useStore((state) => getCellById(state.cells, cellId));
 
   // Create virtual cell object (logic ported from original CodeBlockView)
@@ -17,14 +18,8 @@ const CodeBlockViewComponent = (props: any) => {
     if (existingCell) {
       return existingCell;
     }
-    return {
-      id: cellId,
-      type: 'code' as const,
-      content: code || '',
-      outputs: outputs || [],
-      enableEdit: enableEdit !== false,
-    };
-  }, [cellId, existingCell, code, enableEdit, outputs]);
+    return codeCellFromAttributes(node.attrs, cellId);
+  }, [cellId, existingCell, node.attrs]);
 
   const handleDelete = useCallback(() => {
     const pos = getPos?.();

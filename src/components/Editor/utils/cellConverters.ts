@@ -3,10 +3,11 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { Cell, CellType } from '@Store/models';
+import type { Cell } from '@Store/models';
 import { convertMarkdownToHtml } from './markdownConverters';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { formatCodeFence, standaloneFence } from './fencedMarkdown';
+import { codeCellFromAttributes } from './codeCellAttributes';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -402,36 +403,7 @@ function projectJsonToCells(docJson: any): Cell[] {
       flushMarkdownContent();
       const attrs = node.attrs || {};
       const cellId = attrs.cellId || generateCellId();
-      // 解码代码内容及输出
-      let codeContent = '';
-      if (attrs.code) {
-        try {
-          codeContent = decodeURIComponent(attrs.code);
-        } catch {
-          codeContent = attrs.code;
-        }
-      }
-      let outputsParsed: any[] = [];
-      if (attrs.outputs) {
-        try {
-          outputsParsed = JSON.parse(decodeURIComponent(attrs.outputs));
-        } catch {
-          try {
-            outputsParsed = JSON.parse(attrs.outputs);
-          } catch {
-            // ignore parse error
-          }
-        }
-      }
-      newCells.push({
-        id: cellId,
-        type: (attrs.originalType || 'code') as CellType,
-        content: codeContent,
-        outputs: outputsParsed,
-        enableEdit: attrs.enableEdit !== false,
-        metadata: { ...(attrs.metadata || {}), isGenerating: attrs.isGenerating === true },
-        ...(attrs.originalType !== 'markdown' && { language: attrs.language || 'python' }),
-      } as any);
+      newCells.push(codeCellFromAttributes(attrs, cellId));
     } else if (node.type === 'rawBlock') {
       // 处理Raw块
       flushMarkdownContent();

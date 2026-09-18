@@ -2,6 +2,8 @@ import { BaseExtension } from '../../core/BaseExtension';
 import { CodeBlockView } from './CodeBlockView';
 import { v4 as uuidv4 } from 'uuid';
 import { TextSelection } from 'prosemirror-state';
+import { decodeCodeOutputs } from '../../../utils/codeCellAttributes';
+import { mergeAttributes } from '@tiptap/core';
 
 export const CodeBlockExtension = BaseExtension.create({
   name: 'executableCodeBlock',
@@ -27,20 +29,10 @@ export const CodeBlockExtension = BaseExtension.create({
       outputs: {
         default: [],
         parseHTML: (element) => {
-          const outputsAttr = element.getAttribute('data-outputs');
-          if (!outputsAttr) return [];
-          try {
-            return JSON.parse(decodeURIComponent(outputsAttr));
-          } catch {
-            try {
-              return JSON.parse(outputsAttr);
-            } catch {
-              return [];
-            }
-          }
+          return decodeCodeOutputs(element.getAttribute('data-outputs'));
         },
         renderHTML: (attributes) => ({
-          'data-outputs': encodeURIComponent(JSON.stringify(attributes.outputs || [])),
+          'data-outputs': encodeURIComponent(JSON.stringify(decodeCodeOutputs(attributes.outputs))),
         }),
       },
       enableEdit: {
@@ -65,6 +57,10 @@ export const CodeBlockExtension = BaseExtension.create({
         }),
       },
     };
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'executable-code-block' })];
   },
 
   parseHTML() {
