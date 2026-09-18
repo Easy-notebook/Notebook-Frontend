@@ -22,7 +22,7 @@ export function generateCellId() {
 export function convertCellsToHtml(cells: Cell[]) {
   if (!cells || cells.length === 0) {
     // Schema requires 'title block+', so return default title and empty paragraph
-    return '<div data-type="title">Untitled</div><p></p>';
+    return `<div data-type="title" data-cell-id="${generateCellId()}"></div><p></p>`;
   }
 
   if (DEBUG) {
@@ -45,13 +45,18 @@ export function convertCellsToHtml(cells: Cell[]) {
     } else if (cell.type === 'markdown') {
       // markdown cell转换为HTML
       // For the first cell, check if it has cover/icon metadata and should be rendered as title
-      if (index === 0 && cell.content.trim().startsWith('#')) {
+      if (index === 0 && /^#(?:\s|$)/.test(cell.content.trim())) {
         const metadata = cell.metadata || {};
         const cover = metadata.cover || null;
         const icon = metadata.icon || null;
 
         // Extract title text (remove # prefix)
-        const titleText = cell.content.trim().replace(/^#+\s*/, '');
+        const titleText = cell.content
+          .trim()
+          .replace(/^#\s*/, '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
 
         titleGenerated = true;
         // Create title node with cover, icon, and cellId attributes
@@ -106,8 +111,8 @@ export function convertCellsToHtml(cells: Cell[]) {
 
   // Ensure a title exists at the beginning if one wasn't generated from the first cell
   if (!titleGenerated) {
-    if (DEBUG) console.log('⚠️ No title found in first cell, injecting default Untitled title');
-    result = `<div data-type="title">Untitled</div>\n${result}`;
+    if (DEBUG) console.log('⚠️ No title found in first cell, injecting empty title');
+    result = `<div data-type="title" data-cell-id="${generateCellId()}"></div>\n${result}`;
   } else if (cells.length === 1) {
     // If we have a title but no other cells, append an empty paragraph to satisfy 'title block+' schema
     if (DEBUG) console.log('⚠️ Only title found, appending empty paragraph to satisfy schema');
@@ -285,42 +290,13 @@ export function convertEditorStateToCells(editor: any): Cell[] {
     if (currentMarkdownContent.length > 0) {
       const markdownText = currentMarkdownContent.join('\n').trim();
       if (markdownText) {
-        // 检查是否是重复的标题内容，但允许替换默认的 "Untitled" 标题
-        const isDuplicateTitle =
-          markdownText.startsWith('#') &&
-          newCells.some((cell) => {
-            if (cell.type === 'markdown' && cell.content.trim() === markdownText.trim()) {
-              // 如果是默认的 "Untitled" 标题，允许被替换
-              return !(
-                cell.content.trim() === '# Untitled' && markdownText.trim() !== '# Untitled'
-              );
-            }
-            return false;
-          });
-
-        if (!isDuplicateTitle) {
-          // 如果新标题不是 "Untitled"，移除现有的默认 "Untitled" 标题
-          if (markdownText.startsWith('#') && markdownText.trim() !== '# Untitled') {
-            const untitledIndex = newCells.findIndex(
-              (cell) => cell.type === 'markdown' && cell.content.trim() === '# Untitled'
-            );
-            if (untitledIndex !== -1) {
-              newCells.splice(untitledIndex, 1);
-              if (DEBUG)
-                console.log('🔄 移除默认的 Untitled 标题，替换为:', markdownText.substring(0, 30));
-            }
-          }
-
-          newCells.push({
-            id: generateCellId(),
-            type: 'markdown',
-            content: markdownText,
-            outputs: [],
-            enableEdit: true,
-          });
-        } else {
-          if (DEBUG) console.log('🚫 跳过重复的标题内容:', markdownText.substring(0, 30));
-        }
+        newCells.push({
+          id: generateCellId(),
+          type: 'markdown',
+          content: markdownText,
+          outputs: [],
+          enableEdit: true,
+        });
       }
       currentMarkdownContent = [];
     }
@@ -436,32 +412,30 @@ export function convertEditorStateToCells(editor: any): Cell[] {
       // Treat title as H1 and save cover/icon to metadata
       flushMarkdownContent();
       const headingText = extractTextFromNode(node).trim();
-      if (headingText) {
-        const markdownHeading = `# ${headingText}`;
-        const metadata: any = {};
+      const markdownHeading = `# ${headingText}`;
+      const metadata: any = {};
 
-        // Save cover and icon from title node attributes
-        if (node.attrs) {
-          if (node.attrs.cover) {
-            metadata.cover = node.attrs.cover;
-          }
-          if (node.attrs.icon) {
-            metadata.icon = node.attrs.icon;
-          }
+      // Save cover and icon from title node attributes
+      if (node.attrs) {
+        if (node.attrs.cover) {
+          metadata.cover = node.attrs.cover;
         }
-
-        // Use cellId from node attrs if available, otherwise generate new one
-        const cellId = node.attrs?.cellId || generateCellId();
-
-        newCells.push({
-          id: cellId,
-          type: 'markdown',
-          content: markdownHeading,
-          outputs: [],
-          enableEdit: true,
-          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-        });
+        if (node.attrs.icon) {
+          metadata.icon = node.attrs.icon;
+        }
       }
+
+      // Use cellId from node attrs if available, otherwise generate new one
+      const cellId = node.attrs?.cellId || generateCellId();
+
+      newCells.push({
+        id: cellId,
+        type: 'markdown',
+        content: markdownHeading,
+        outputs: [],
+        enableEdit: true,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      });
     } else if (node.type === 'heading') {
       // Treat headings as independent markdown cells (#, ## ...)
       flushMarkdownContent();

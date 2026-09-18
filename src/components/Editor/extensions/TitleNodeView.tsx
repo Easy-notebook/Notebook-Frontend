@@ -80,7 +80,6 @@ export const TitleNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes,
   };
 
   const { t } = useTranslation();
-  const isDefaultTitle = node.textContent.trim() === t('common.untitled');
 
   return (
     <NodeViewWrapper
@@ -127,7 +126,9 @@ export const TitleNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes,
       {/* Title Content */}
       <NodeViewContent
         as="h1"
-        className={`node-title-content !text-[40px] !font-bold !leading-[1.2] outline-none ${isDefaultTitle ? '!text-gray-400 dark:!text-gray-500' : ''}`}
+        data-empty={node.content.size === 0 ? 'true' : undefined}
+        data-placeholder={t('common.untitled')}
+        className="node-title-content outline-none"
       />
     </NodeViewWrapper>
   );

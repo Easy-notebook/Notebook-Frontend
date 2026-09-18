@@ -1397,7 +1397,7 @@ const useStore = create(
             const defaultCell: Cell = {
               id: `title-${Date.now()}`,
               type: 'markdown',
-              content: '# Untitled',
+              content: '# ',
               outputs: [],
               enableEdit: true,
               phaseId: null,

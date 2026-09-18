@@ -38,7 +38,7 @@
   caret-color: var(--editor-ink);
 }
 
-.tiptap-notebook-editor :is(.is-editor-empty:first-child, p.is-editor-empty:first-child)::before {
+.tiptap-notebook-editor p.is-empty::before {
   color: var(--editor-muted);
   content: attr(data-placeholder);
   float: left;
@@ -46,7 +46,7 @@
   pointer-events: none;
 }
 
-.tiptap-notebook-editor .group.is-empty::before {
+.tiptap-notebook-editor .node-title-content[data-empty='true']::before {
   color: var(--editor-muted);
   content: attr(data-placeholder);
   float: left;
@@ -55,8 +55,6 @@
   font-size: 40px;
   font-weight: 700;
   line-height: 1.2;
-  position: absolute;
-  z-index: 1;
 }
 
 .tiptap-notebook-editor .selectedCell {
@@ -171,6 +169,17 @@
   font-size: 40px;
   line-height: 1.2;
   font-weight: 700;
+}
+
+.tiptap-notebook-editor h1.node-title-content {
+  color: var(--editor-ink);
+  background: none;
+  margin: 0 0 1rem;
+}
+
+.tiptap-notebook-editor .node-title-content * {
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .tiptap-notebook-editor-container .editor-cover-icon .absolute {

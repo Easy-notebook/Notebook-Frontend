@@ -69,7 +69,7 @@ export interface TiptapNotebookEditorRef {
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(
   (
     {
-      className = 'text-2xl font-bold leading-relaxed',
+      className = 'text-base font-normal leading-relaxed',
       placeholder: _placeholder = 'Untitled',
       readOnly = false,
     },
@@ -123,7 +123,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const editorEvents = useEditorEvents({
       setCurrentEditor,
       editorRef,
-      defaultTitle: localizedPlaceholder,
     });
 
     // TipTap slash commands
