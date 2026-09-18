@@ -41,4 +41,24 @@ describe('document synchronization', () => {
     expect(convertEditorStateToCells(editor)[1]).toMatchObject({ id: 'first', content: 'Updated' });
     editor.destroy();
   });
+
+  it('retains the hybrid-cell type across HTML and document boundaries', () => {
+    const cells: Cell[] = [
+      markdown('title', '# Notebook'),
+      {
+        id: 'hybrid',
+        type: 'hybrid',
+        content: 'print(1)',
+        outputs: [],
+        language: 'python',
+      },
+    ];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    expect(editor.state.doc.child(1).attrs.originalType).toBe('hybrid');
+    expect(convertEditorStateToCells(editor)[1]).toMatchObject({ id: 'hybrid', type: 'hybrid' });
+    editor.destroy();
+  });
 });

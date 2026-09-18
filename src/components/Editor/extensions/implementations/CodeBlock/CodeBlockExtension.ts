@@ -50,6 +50,13 @@ export const CodeBlockExtension = BaseExtension.create({
           'data-enable-edit': String(attributes.enableEdit),
         }),
       },
+      originalType: {
+        default: 'code',
+        parseHTML: (element) => element.getAttribute('data-original-type') || 'code',
+        renderHTML: (attributes) => ({
+          'data-original-type': attributes.originalType || 'code',
+        }),
+      },
       isGenerating: {
         default: false,
         parseHTML: (element) => element.getAttribute('data-is-generating') === 'true',

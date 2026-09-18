@@ -10,7 +10,10 @@ function sameProjectedNode(current: ProseMirrorNode, next: ProseMirrorNode): boo
   // CodeMirror and the Cell Store own executable text and outputs. Their NodeView
   // subscribes to the store, so replacing that ProseMirror node would steal focus.
   if (current.type.name === 'executableCodeBlock' && next.type.name === current.type.name) {
-    return current.attrs.cellId === next.attrs.cellId;
+    return (
+      current.attrs.cellId === next.attrs.cellId &&
+      current.attrs.originalType === next.attrs.originalType
+    );
   }
   return current.eq(next);
 }
