@@ -6,11 +6,7 @@ import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
 import { EXTERNAL_CELL_SYNC } from './documentSync';
 import { DOMParser } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
-import {
-  convertCellsToHtml,
-  convertEditorStateToCells,
-  serializeMarkdownBlock,
-} from '../../utils/cellConverters';
+import { convertCellsToHtml, serializeMarkdownBlock } from '../../utils/cellConverters';
 import { formatCodeFence, standaloneFence } from '../../utils/fencedMarkdown';
 
 /** Convert only the owning cell; unrelated cells are neither projected nor replaced. */
@@ -125,11 +121,11 @@ export function editSelectedCellSource(editor: Editor): boolean {
   const pos = $from.depth ? $from.before(1) : $from.pos;
   const node = editor.state.doc.nodeAt(pos);
   if (!editor.isEditable || node?.type.name !== 'markdownCell') return false;
-  const cell = convertEditorStateToCells(editor).find((cell) => cell.id === node.attrs.cellId);
-  if (!cell) return false;
+  const blocks: string[] = [];
+  node.forEach((block) => blocks.push(serializeMarkdownBlock(block.toJSON())));
   const replacement = editor.schema.nodes.markdownSourceCell.create({
-    cellId: cell.id,
-    source: cell.content,
+    cellId: node.attrs.cellId,
+    source: blocks.join('\n\n'),
   });
   const tr = closeHistory(editor.state.tr).replaceWith(pos, pos + node.nodeSize, replacement);
   tr.setSelection(NodeSelection.create(tr.doc, pos));

@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Editor } from '@tiptap/core';
 import type { Cell } from '@Store/models';
 import { getTipTapExtensions } from '../config/extensions';
@@ -33,6 +34,26 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it('serializes only the selected cell when opening source in a 1000-cell document', () => {
+    editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(
+        Array.from({ length: 1000 }, (_, index) =>
+          markdown(`cell-${index}`, index ? 'Body' : '# Title')
+        )
+      ),
+    });
+    const pos = editor.state.doc.firstChild!.nodeSize;
+    editor.commands.setTextSelection(pos + 2);
+    const serialize = vi.spyOn(ProseMirrorNode.prototype, 'toJSON');
+    try {
+      expect(editSelectedCellSource(editor)).toBe(true);
+      expect(serialize).toHaveBeenCalledTimes(2);
+      expect(editor.state.doc.nodeAt(pos)?.attrs.source).toBe('Body');
+    } finally {
+      serialize.mockRestore();
+    }
+  });
   it('breaks a nested fence while retaining siblings, cell identity, caret and undo', () => {
     const content = 'Before\n\n~~~python\nprint(1)\n~~~\n\nAfter';
     const pos = create(markdown('mixed', content));

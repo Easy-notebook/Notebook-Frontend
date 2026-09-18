@@ -97,6 +97,11 @@ cover deferred rendering, stale-result suppression, reentry reuse and 1,000-prev
 This reduces expensive layout work, not the O(number of mounted previews) React/observer bookkeeping;
 it is not full notebook virtualization. Environments without IntersectionObserver render eagerly.
 
+Opening selected-cell source now serializes only that cell rather than projecting/searching the
+entire document. A 1,000-cell test verifies only the selected paragraph and text are serialized.
+The editor also synchronizes runtime readOnly prop changes into Tiptap without emitting a document
+update. Embedded executable-editor permission propagation remains a separate verification item.
+
 This is not a claim of globally optimal algorithms or crash-proof persistence. Full snapshot writing,
 task derivation and initial document mounting remain. Notebook-list metadata and the notebook file are
 still separate transactions. Revisions coordinate one service instance, not concurrent browser tabs.

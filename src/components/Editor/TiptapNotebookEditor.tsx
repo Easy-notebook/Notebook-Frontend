@@ -142,6 +142,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     // Editor sync hook
     useEditorSync({ editor, cells });
 
+    useEffect(() => {
+      if (editor && editor.isEditable === readOnly) editor.setEditable(!readOnly, false);
+    }, [editor, readOnly]);
+
     // Cleanup
     useEffect(() => {
       const handleMarkdownFocus = (e: Event) => {
