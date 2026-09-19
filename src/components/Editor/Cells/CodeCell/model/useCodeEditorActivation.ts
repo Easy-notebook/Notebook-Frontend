@@ -4,7 +4,7 @@ import { observePreview } from '../../../utils/previewVisibility';
 import { cellNavigationRouter } from './CellNavigationRouter';
 import { CodeEditorSession } from './CodeEditorSession';
 
-/** Deferred/active/suspended lifecycle; focused and composing editors are pinned. */
+/** Deferred/active/suspended lifecycle; focus, composition and DOM selections pin editors. */
 export function useCodeEditorActivation(cellId: string, immediate: boolean) {
   const container = useRef<HTMLDivElement>(null);
   const [activated, setActivated] = useState(immediate);
@@ -24,7 +24,7 @@ export function useCodeEditorActivation(cellId: string, immediate: boolean) {
   }, []);
   const maySuspend = useCallback(() => {
     const view = editorView.current;
-    return (
+    const eligible = (
       mounted.current &&
       view &&
       !visible.current &&
@@ -33,6 +33,10 @@ export function useCodeEditorActivation(cellId: string, immediate: boolean) {
       !view.hasFocus &&
       !view.composing
     );
+    if (!eligible) return false;
+    const selection = document.getSelection();
+    const element = container.current;
+    return !(element && selection && !selection.isCollapsed && selection.containsNode(element, true));
   }, []);
   const scheduleEviction = useCallback(() => {
     if (!maySuspend()) {
@@ -48,6 +52,13 @@ export function useCodeEditorActivation(cellId: string, immediate: boolean) {
       setActivated(false);
     }, 500);
   }, [cancelEviction, maySuspend, session]);
+
+  useEffect(() => {
+    if (!active) return;
+    // Only mounted editors listen; deferred placeholders carry no selection listener.
+    document.addEventListener('selectionchange', scheduleEviction);
+    return () => document.removeEventListener('selectionchange', scheduleEviction);
+  }, [active, scheduleEviction]);
 
   useEffect(() => {
     mounted.current = true;
@@ -99,7 +110,8 @@ export function useCodeEditorActivation(cellId: string, immediate: boolean) {
     pendingFocus.current = 'down';
     cancelEviction();
     setActivated(true);
-  }, [cancelEviction]);
+    flushFocus();
+  }, [cancelEviction, flushFocus]);
   const onCreateEditor = useCallback(
     (view: EditorView) => {
       editorView.current = view;

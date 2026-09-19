@@ -5,12 +5,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
 
 import { debounce } from 'lodash-es';
+import { getCellById, getCellIndexById } from '@Store/models/cellIndex';
+import { isCompositionInput } from '../../../utils/compositionInput';
 
 export class MarkdownCellViewModel extends BaseCellViewModel {
   // Properties
   public editorRef: EditorView | null = null;
   public localContent = '';
-  private debouncedUpdate: (value: string) => void;
+  private debouncedUpdate: ((value: string) => void) & { cancel(): void; flush(): void };
+  private lastPublishedContent: string | undefined;
 
   // Keymap for boundary navigation
   public boundaryKeymap: ReturnType<typeof keymap.of>;
@@ -21,17 +24,26 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
     this.boundaryKeymap = this.createBoundaryKeymap();
 
     this.debouncedUpdate = debounce((value: string) => {
-      useStore.getState().updateCell(this.cell.id, value);
-    }, 300);
+      const state = useStore.getState();
+      const current = getCellById(state.cells, cell.id);
+      if (current?.type === 'markdown' && current.content !== value) {
+        this.lastPublishedContent = value;
+        state.updateCell(cell.id, value);
+      }
+    }, 300, { maxWait: 1000 });
   }
 
   public updateProps(cell: StoreCell) {
     const prevContent = this.cell.content;
+    const acknowledgesWrite = cell.content === this.lastPublishedContent;
+    if (acknowledgesWrite) this.lastPublishedContent = undefined;
     super.updateProps(cell);
 
-    // Sync local content if it differs from prop and we are not currently typing (simple heuristic)
-    // or if the update comes from outside (e.g. undo/redo, collab)
-    if (cell.content !== prevContent && cell.content !== this.localContent) {
+    // Our preceding write can arrive after more typing; acknowledge it without
+    // replacing the newer local buffer. A different external revision wins.
+    if (!acknowledgesWrite && cell.content !== prevContent && cell.content !== this.localContent) {
+      this.debouncedUpdate.cancel();
+      this.lastPublishedContent = undefined;
       this.localContent = cell.content || '';
       // Force re-render if needed, though usually React handles this via prop change
       // But since we use localContent in the view, we might need to notify
@@ -68,6 +80,7 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
   };
 
   public createNewMarkdownCell = (afterIndex: number) => {
+    this.flushPendingChanges();
     const state = useStore.getState();
     const newCellId = uuidv4();
     const newCell: Partial<StoreCell> = {
@@ -82,79 +95,24 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
     return newCellId;
   };
 
-  public createNewCodeCell = (content: string, afterIndex: number, codeIdentifier?: string) => {
-    const state = useStore.getState();
-    const newCellId = uuidv4();
-    const newCell: Partial<StoreCell> = {
-      id: newCellId,
-      type: 'code' as CellType,
-      content: content.trim(),
-      outputs: [] as OutputItem[],
-      enableEdit: true,
-      metadata: { ...(this.cell.metadata || {}), language: codeIdentifier || 'python' },
-    };
-    state.addCell(newCell, afterIndex + 1);
-    state.setCurrentCell(newCellId);
-    state.setEditingCellId(null);
-
-    if (this.editorRef) {
-      this.editorRef.scrollDOM.scrollTop = this.editorRef.scrollDOM.scrollHeight;
-    }
-    return newCellId;
-  };
-
-  private isEmptyMarkdownCell = (content: string) => content.trim() === '';
-
+  /** CodeMirror edits this cell's literal Markdown; gestures own structural changes. */
   public handleChange = (value: string) => {
+    if (value === this.localContent) return;
     this.localContent = value;
-
-    const state = useStore.getState();
-    const cells = state.cells;
-    const currentIndex = cells.findIndex((c) => c.id === this.cell.id);
-    const lines = value.split('\n');
-
-    // ```lang code block splitting
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const currentLine = lines[i];
-      if (currentLine.startsWith('```') && currentLine.length > 3 && i < lines.length - 1) {
-        const beforeBackticks = lines.slice(0, i).join('\n');
-        const codeIdentifier = currentLine.slice(3).trim();
-        const codeContent = lines.slice(i + 1).join('\n');
-
-        if (this.isEmptyMarkdownCell(beforeBackticks)) {
-          this.createNewCodeCell(codeContent, currentIndex, codeIdentifier);
-          state.deleteCell(this.cell.id);
-        } else {
-          // Immediate update for structural changes
-          state.updateCell(this.cell.id, beforeBackticks.trim());
-          this.createNewCodeCell(codeContent, currentIndex, codeIdentifier);
-        }
-        return;
-      }
-    }
-
-    // Auto-create markdown cell after heading + empty line
-    if (
-      lines.length >= 2 &&
-      /^#{1,6}\s+.+/.test(lines[lines.length - 2]) &&
-      lines[lines.length - 1].trim() === ''
-    ) {
-      // Immediate update for structural changes
-      state.updateCell(this.cell.id, value);
-      this.createNewMarkdownCell(currentIndex);
-      return;
-    }
-
-    // Debounced update for normal typing
     this.debouncedUpdate(value);
   };
 
   public handleKeyDown = (event: React.KeyboardEvent) => {
+    if (isCompositionInput(event.nativeEvent)) return;
+    if (event.key !== 'Enter' && event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
     const state = useStore.getState();
     const cells = state.cells;
-    const currentIndex = cells.findIndex((c) => c.id === this.cell.id);
+    const currentIndex = getCellIndexById(cells, this.cell.id) ?? -1;
+    if (currentIndex === -1) return;
 
-    if (event.ctrlKey && event.key === 'Enter') {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      this.flushPendingChanges();
       this.toggleEditing();
       return;
     }
@@ -179,12 +137,6 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
       !event.ctrlKey &&
       !event.altKey
     ) {
-      // If title is default 'Untitled', disable Enter to prevent accidental cell creation
-      if (this.cell.content.trim() === '# Untitled') {
-        event.preventDefault();
-        return;
-      }
-
       event.preventDefault();
       this.createNewMarkdownCell(currentIndex);
       return;
@@ -198,16 +150,28 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
   };
 
   public handleBlur = () => {
+    this.flushPendingChanges();
     if (this.isEditing) {
       useStore.getState().setEditingCellId(null);
     }
   };
+
+  public flushPendingChanges = () => {
+    this.debouncedUpdate.flush();
+    this.debouncedUpdate.cancel();
+  };
+
+  public override navigateToSibling(direction: 'up' | 'down') {
+    this.flushPendingChanges();
+    super.navigateToSibling(direction);
+  }
 
   private createBoundaryKeymap() {
     return keymap.of([
       {
         key: 'ArrowDown',
         run: (view) => {
+          if (view.composing) return false;
           const sel = view.state.selection.main;
           if (!sel.empty) return false;
           const line = view.state.doc.lineAt(sel.head);
@@ -221,6 +185,7 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
       {
         key: 'ArrowUp',
         run: (view) => {
+          if (view.composing) return false;
           const sel = view.state.selection.main;
           if (!sel.empty) return false;
           const line = view.state.doc.lineAt(sel.head);
@@ -234,6 +199,7 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
       {
         key: 'ArrowRight',
         run: (view) => {
+          if (view.composing) return false;
           const sel = view.state.selection.main;
           if (!sel.empty) return false;
           const atDocEnd = sel.head === view.state.doc.length;
@@ -249,6 +215,7 @@ export class MarkdownCellViewModel extends BaseCellViewModel {
       {
         key: 'ArrowLeft',
         run: (view) => {
+          if (view.composing) return false;
           const sel = view.state.selection.main;
           if (!sel.empty) return false;
           const atDocStart = sel.head === 0;

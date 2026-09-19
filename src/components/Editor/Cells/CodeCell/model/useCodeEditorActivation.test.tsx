@@ -15,9 +15,34 @@ function Probe({ immediate = false }) {
   return <div ref={latest.container}>{latest.active ? 'active' : 'deferred'}</div>;
 }
 afterEach(() => {
+  document.getSelection()?.removeAllRanges();
   cleanup();
   vi.clearAllMocks();
   vi.useRealTimers();
+});
+it.each([false, true])('pins external DOM selection and resumes eviction after clearing (already pending: %s)', (pending) => {
+  vi.useFakeTimers();
+  render(<Probe />);
+  act(() => observation.notify(true));
+  act(() => latest.onCreateEditor(suspendedView() as any));
+  if (pending) {
+    act(() => observation.notify(false));
+    act(() => vi.advanceTimersByTime(250));
+  }
+  const range = document.createRange();
+  // Both endpoints are outside the editor container.
+  range.selectNode(latest.container.current!);
+  document.getSelection()!.addRange(range);
+  act(() => document.dispatchEvent(new Event('selectionchange')));
+  act(() => observation.notify(false));
+  act(() => vi.advanceTimersByTime(1000));
+  expect(screen.getByText('active')).toBeDefined();
+  act(() => {
+    document.getSelection()!.removeAllRanges();
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  act(() => vi.advanceTimersByTime(500));
+  expect(screen.getByText('deferred')).toBeDefined();
 });
 const suspendedView = () => ({
   state: EditorState.create({ doc: 'print(1)' }),
@@ -167,4 +192,22 @@ it('cancels queued focus when the cell unmounts', async () => {
   });
   await act(async () => {});
   expect(view.focus).not.toHaveBeenCalled();
+});
+it('focuses an editor already created by visibility before an activation event arrives', async () => {
+  render(<Probe />);
+  act(() => observation.notify(true));
+  const view = suspendedView();
+  act(() => latest.onCreateEditor(view as any));
+  expect(view.focus).not.toHaveBeenCalled();
+  await act(async () => latest.activate());
+  expect(view.focus).toHaveBeenCalledOnce();
+  expect(view.dispatch).toHaveBeenCalledWith({ selection: { anchor: 0 }, scrollIntoView: true });
+});
+it('transfers placeholder focus once when activation precedes editor creation', async () => {
+  render(<Probe />);
+  await act(async () => latest.activate());
+  const view = suspendedView();
+  await act(async () => latest.onCreateEditor(view as any));
+  expect(view.focus).toHaveBeenCalledOnce();
+  expect(view.dispatch).toHaveBeenCalledTimes(1);
 });

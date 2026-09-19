@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { observePreview } from './utils/previewVisibility';
 import { useTheme } from '@/contexts/ThemeContext';
 import { mermaidRenderService } from './model/MermaidRenderService';
@@ -14,6 +14,7 @@ export function MermaidPreview({ source }: { source: string }) {
   const { resolvedTheme } = useTheme();
   const renderSequence = useRef(0);
   const container = useRef<HTMLDivElement>(null);
+  const placeholderHeight = useRef(80);
   const [visible, setVisible] = useState(false);
   const [result, setResult] = useState<RenderResult | null>(null);
   const currentResult = result?.source === source && result.theme === resolvedTheme ? result : null;
@@ -22,8 +23,64 @@ export function MermaidPreview({ source }: { source: string }) {
     if (container.current) return observePreview(container.current, setVisible);
   }, []);
 
+  useLayoutEffect(() => {
+    const element = container.current;
+    if (!element || currentResult?.status !== 'ready') return;
+    const measure = () => {
+      const height = element.getBoundingClientRect().height;
+      if (height > 0) placeholderHeight.current = height;
+    };
+    // Capture ready geometry before a source/theme update replaces the SVG with
+    // a loading placeholder. Resizes can change wrapping after the initial paint.
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [currentResult]);
+
   useEffect(() => {
-    if (!visible || currentResult || !source.trim()) return;
+    if (visible || result?.status !== 'ready') return;
+    // Keep short scroll reversals cheap; long-offscreen diagrams release both
+    // their SVG DOM and derived string. Original source remains caller-owned.
+    const element = container.current;
+    if (!element) return;
+    let timer: number;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(reclaim, 500);
+    };
+    const reclaim = () => {
+      const selection = document.getSelection();
+      if (
+        element.contains(document.activeElement) ||
+        (selection && !selection.isCollapsed && selection.containsNode(element, true))
+      ) {
+        // Subscribe only while interaction pins an offscreen diagram. A range
+        // may span the whole diagram with both endpoints outside its subtree.
+        element.addEventListener('focusout', schedule);
+        document.addEventListener('selectionchange', schedule);
+        return;
+      }
+      const height = element.getBoundingClientRect().height;
+      if (height > 0) placeholderHeight.current = height;
+      setResult(null);
+    };
+    schedule();
+    return () => {
+      window.clearTimeout(timer);
+      element.removeEventListener('focusout', schedule);
+      document.removeEventListener('selectionchange', schedule);
+    };
+  }, [visible, result]);
+
+  useEffect(() => {
+    if (!source.trim()) {
+      // Clearing source ends ownership of any derived SVG/error, even while visible.
+      setResult(null);
+      return;
+    }
+    if (!visible || currentResult) return;
     const controller = new AbortController();
     const renderId = `notebook-mermaid-${id}-${++renderSequence.current}`;
     const timer = window.setTimeout(() => {
@@ -68,7 +125,7 @@ export function MermaidPreview({ source }: { source: string }) {
         ref={container}
         className="notebook-mermaid-loading"
         role="status"
-        style={{ minHeight: 80 }}
+        style={{ height: placeholderHeight.current, overflow: 'hidden' }}
       >
         {visible ? 'Rendering diagram…' : 'Diagram preview loads when visible.'}
       </div>

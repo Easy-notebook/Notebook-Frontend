@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EditorState } from '@codemirror/state';
+import { EditorSelection, EditorState } from '@codemirror/state';
 import { history, undo, redo, undoDepth } from '@codemirror/commands';
 import { codeFolding, foldEffect, foldedRanges } from '@codemirror/language';
 import type { EditorView } from '@codemirror/view';
@@ -15,6 +15,35 @@ function capture(state: EditorState, height = 120) {
   return session;
 }
 describe('suspended code editor state', () => {
+  it.each(['', '短', 'new\ntext'])('maps multiple selections and folds safely when suspended source shrinks to %j', value => {
+    const state = EditorState.create({
+      doc: 'alpha\nbeta\ngamma',
+      extensions: [history(), codeFolding(), EditorState.allowMultipleSelections.of(true)],
+      selection: EditorSelection.create([EditorSelection.range(1, 4), EditorSelection.range(12, 16)], 1),
+    }).update({ effects: foldEffect.of({ from: 5, to: 16 }) }).state;
+    const session = capture(state);
+    const snapshot = session.initialState(value)!;
+    const restored = EditorState.fromJSON(snapshot.json, {
+      extensions: [history(), codeFolding(), EditorState.allowMultipleSelections.of(true)],
+    }, snapshot.fields);
+    expect(restored.doc.toString()).toBe(value);
+    for (const range of restored.selection.ranges) {
+      expect(range.from).toBeGreaterThanOrEqual(0);
+      expect(range.to).toBeLessThanOrEqual(value.length);
+    }
+    expect(undoDepth(restored)).toBe(0);
+    expect(session.initialState(value)!.json).toBe(snapshot.json);
+  });
+  it('keeps the last usable height when a hidden ancestor produces zero geometry', () => {
+    const state = EditorState.create({ doc: 'print(1)' });
+    const session = capture(state, 180);
+    session.capture({ state,
+      dom: { getBoundingClientRect: () => ({ height: 0 }) },
+      scrollDOM: { scrollTop: 0, scrollLeft: 0 },
+    } as unknown as EditorView);
+    expect(session.height).toBe(180);
+    expect(capture(state, 0).height).toBeUndefined();
+  });
   it('retains exact measured height even for compact code editors', () => {
     expect(capture(EditorState.create({ doc: 'print(1)' }), 24.796875).height).toBe(24.796875);
   });

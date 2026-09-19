@@ -23,6 +23,7 @@ export class MermaidRenderService {
   private readonly pending = new Set<RenderJob>();
   private running = false;
   private renderer?: Promise<Renderer>;
+  private configuredTheme?: RenderRequest['theme'];
 
   constructor(
     private readonly load: () => Promise<Renderer> = () =>
@@ -62,12 +63,16 @@ export class MermaidRenderService {
           });
           const renderer = await this.renderer;
           if (job.signal.aborted) continue;
-          renderer.initialize({
-            startOnLoad: false,
-            securityLevel: 'strict',
-            suppressErrorRendering: true,
-            theme: job.theme === 'dark' ? 'dark' : 'default',
-          });
+          if (this.configuredTheme !== job.theme) {
+            this.configuredTheme = undefined;
+            renderer.initialize({
+              startOnLoad: false,
+              securityLevel: 'strict',
+              suppressErrorRendering: true,
+              theme: job.theme === 'dark' ? 'dark' : 'default',
+            });
+            this.configuredTheme = job.theme;
+          }
           const result = await renderer.render(job.id, job.source);
           if (!job.signal.aborted) job.resolve(result);
         } catch (error) {

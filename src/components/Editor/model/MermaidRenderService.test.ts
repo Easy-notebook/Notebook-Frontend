@@ -15,6 +15,65 @@ const request = (
 ) => ({ id, source: id, theme, signal: controller.signal });
 
 describe('Mermaid render scheduling', () => {
+  it('does not load Mermaid for a request already cancelled before enqueueing', async () => {
+    const load = vi.fn();
+    const service = new MermaidRenderService(load);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(service.render(request('cancelled', controller))).resolves.toBeUndefined();
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('consumes a late failure from a cancelled running diagram and continues the queue', async () => {
+    let rejectRender!: (reason: Error) => void;
+    const started = deferred<void>();
+    const renderer = {
+      initialize: vi.fn(),
+      render: vi.fn().mockImplementationOnce(() => {
+        started.resolve();
+        return new Promise((_, reject) => { rejectRender = reject; });
+      }).mockResolvedValue({ svg: 'next' }),
+    };
+    const service = new MermaidRenderService(async () => renderer);
+    const controller = new AbortController();
+    const obsolete = service.render(request('obsolete', controller));
+    await started.promise;
+    const next = service.render(request('next', new AbortController(), 'dark'));
+    controller.abort();
+    await expect(obsolete).resolves.toBeUndefined();
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+    rejectRender(new Error('obsolete parse failure'));
+    await expect(next).resolves.toEqual({ svg: 'next' });
+    expect(renderer.render.mock.calls.map(call => call[0])).toEqual(['obsolete', 'next']);
+    expect(renderer.initialize).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'dark' }));
+  });
+  it('retries configuration after initialization throws', async () => {
+    const renderer = {
+      initialize: vi.fn().mockImplementationOnce(() => {
+        throw new Error('config');
+      }),
+      render: vi.fn().mockResolvedValue({ svg: 'ok' }),
+    };
+    const service = new MermaidRenderService(async () => renderer);
+    await expect(service.render(request('bad'))).rejects.toThrow('config');
+    await expect(service.render(request('retry'))).resolves.toEqual({ svg: 'ok' });
+    expect(renderer.initialize).toHaveBeenCalledTimes(2);
+    expect(renderer.render).toHaveBeenCalledExactlyOnceWith('retry', 'retry');
+  });
+  it('initializes once per theme transition rather than once per diagram', async () => {
+    const renderer = { initialize: vi.fn(), render: vi.fn().mockResolvedValue({ svg: 'ok' }) };
+    const service = new MermaidRenderService(async () => renderer);
+    await Promise.all(['a', 'b', 'c'].map((id) => service.render(request(id))));
+    expect(renderer.initialize).toHaveBeenCalledTimes(1);
+    await service.render(request('dark', new AbortController(), 'dark'));
+    await service.render(request('light'));
+    expect(renderer.initialize.mock.calls.map((call) => call[0].theme)).toEqual([
+      'default',
+      'dark',
+      'default',
+    ]);
+    expect(renderer.render).toHaveBeenCalledTimes(5);
+  });
   it('removes obsolete queued edits and serializes theme configuration with rendering', async () => {
     const first = deferred<{ svg: string }>();
     const started = deferred<void>();
