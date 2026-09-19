@@ -4,7 +4,7 @@ import { AutoSaveStatus, type NotebookSnapshot } from './types';
 
 const storage = vi.hoisted(() => ({
   initialize: vi.fn(),
-  notebooks: { saveNotebook: vi.fn() },
+  notebooks: { saveNotebook: vi.fn(), getNotebook: vi.fn() },
   files: { saveFile: vi.fn(), getFile: vi.fn(), getFilesForNotebook: vi.fn() },
 }));
 vi.mock('../persistence/PersistenceService', () => ({
@@ -43,6 +43,122 @@ beforeEach(() => {
 afterEach(() => AutoSaveService.resetInstance());
 
 describe('single-writer autosave', () => {
+  it('reuses unchanged text byte counts but invalidates in-place content edits', async () => {
+    const NativeBlob = globalThis.Blob;
+    const measured: unknown[] = [];
+    vi.stubGlobal(
+      'Blob',
+      class extends NativeBlob {
+        constructor(parts: BlobPart[] = [], options?: BlobPropertyBag) {
+          super(parts, options);
+          measured.push(parts[0]);
+        }
+      }
+    );
+    try {
+      const data = snapshot('size');
+      data.cells[0].content = '中文 🐍';
+      await service.saveNow(data);
+      await service.saveNow({ ...data, notebookTitle: 'renamed' });
+      expect(measured.filter((value) => value === '中文 🐍')).toHaveLength(1);
+      expect(storage.notebooks.saveNotebook.mock.calls[1][0].totalSize).toBe(
+        new NativeBlob(['中文 🐍']).size
+      );
+      data.cells[0].content = 'changed';
+      await service.saveNow(data);
+      expect(measured.filter((value) => value === 'changed')).toHaveLength(1);
+      expect(storage.notebooks.saveNotebook.mock.calls[2][0].totalSize).toBe(7);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it.each(['', undefined, null])(
+    'does not treat an existing file with unavailable content %j as missing',
+    async (content) => {
+      storage.files.getFile.mockResolvedValue({ content });
+      storage.notebooks.getNotebook.mockResolvedValue({ name: 'Existing notebook' });
+      await expect(service.load('notebook')).rejects.toThrow();
+      await expect(service.saveNow({ ...snapshot('empty'), cells: [] })).rejects.toThrow();
+      expect(storage.notebooks.getNotebook).not.toHaveBeenCalled();
+      expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
+      expect(storage.files.saveFile).not.toHaveBeenCalled();
+      expect(service.hasPending('notebook')).toBe(true);
+    }
+  );
+  it('loads metadata for a genuinely absent content file', async () => {
+    storage.files.getFile.mockResolvedValue(null);
+    storage.notebooks.getNotebook.mockResolvedValue({ name: 'New notebook' });
+    await expect(service.load('notebook')).resolves.toEqual({
+      notebookTitle: 'New notebook',
+      cells: [],
+      tasks: [],
+    });
+  });
+  it('prepares serializable content before writing notebook metadata', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const invalid = snapshot('invalid');
+    invalid.cells[0].metadata = circular;
+    await expect(service.saveNow(invalid)).rejects.toThrow();
+    expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
+    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(service.hasPending('notebook')).toBe(true);
+  });
+  it.each([{}, [], { cells: null }, { cells: {} }, { cells: [], tasks: {} }])(
+    'does not interpret an invalid stored structure as an empty notebook: %j',
+    async (data) => {
+      storage.files.getFile.mockResolvedValue({ content: JSON.stringify(data) });
+      await expect(service.load('notebook')).rejects.toThrow('Invalid notebook data structure');
+      await expect(service.saveNow({ ...snapshot('empty'), cells: [] })).rejects.toThrow(
+        'Invalid notebook data structure'
+      );
+      expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
+      expect(storage.files.saveFile).not.toHaveBeenCalled();
+      expect(service.hasPending('notebook')).toBe(true);
+    }
+  );
+  it('loads an explicitly empty cells array without inventing missing tasks', async () => {
+    storage.files.getFile.mockResolvedValue({
+      content: JSON.stringify({ title: 'Empty', cells: [] }),
+    });
+    await expect(service.load('notebook')).resolves.toEqual({
+      notebookTitle: 'Empty',
+      cells: [],
+      tasks: [],
+    });
+  });
+  it('retains an empty save without writing when existing content cannot be read', async () => {
+    storage.files.getFile.mockRejectedValue(new Error('read unavailable'));
+    await expect(service.saveNow({ ...snapshot('empty'), cells: [] })).rejects.toThrow(
+      'read unavailable'
+    );
+    expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
+    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(service.hasPending('notebook')).toBe(true);
+    expect(service.getState().isDirty).toBe(true);
+    storage.files.getFile.mockResolvedValue({ content: JSON.stringify({ cells: [], tasks: [] }) });
+    await service.flush();
+    expect(storage.files.saveFile).toHaveBeenCalledTimes(1);
+    expect(service.hasPending('notebook')).toBe(false);
+  });
+
+  it('does not replace a corrupt stored notebook with an empty snapshot', async () => {
+    storage.files.getFile.mockResolvedValue({ content: '{broken json' });
+    await expect(service.saveNow({ ...snapshot('empty'), cells: [] })).rejects.toThrow();
+    expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
+    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(service.hasPending('notebook')).toBe(true);
+  });
+
+  it('reports corrupt stored content as a load failure rather than an empty notebook', async () => {
+    storage.files.getFile.mockResolvedValue({ content: '{broken json' });
+    const events: string[] = [];
+    service.subscribe((event) => events.push(event.type));
+    await expect(service.load('notebook')).rejects.toThrow();
+    expect(events).toContain('load_failed');
+    expect(events).not.toContain('load_completed');
+    expect(storage.files.saveFile).not.toHaveBeenCalled();
+  });
   it('coalesces queued edits and forces local persistence', async () => {
     await service.queueSave(snapshot('old'));
     await service.queueSave(snapshot('new'));
@@ -77,6 +193,36 @@ describe('single-writer autosave', () => {
     await service.saveNow(snapshot('keep'));
     expect(storage.files.saveFile).toHaveBeenCalledTimes(2);
     expect(service.getState().isDirty).toBe(false);
+  });
+
+  it('replaces a failed in-flight revision with the latest edit without retrying stale content', async () => {
+    const gate = deferred();
+    storage.files.saveFile.mockImplementationOnce(async () => {
+      await gate.promise;
+      throw new Error('old revision failed');
+    });
+    const saving = service.saveNow(snapshot('old'));
+    await vi.waitFor(() => expect(storage.files.saveFile).toHaveBeenCalledTimes(1));
+    await service.queueSave(snapshot('new'));
+    gate.resolve();
+    await saving;
+    expect(
+      storage.files.saveFile.mock.calls.map(([file]) => JSON.parse(file.content).title)
+    ).toEqual(['old', 'new']);
+    expect(service.hasPending()).toBe(false);
+    expect(service.getState()).toMatchObject({ isDirty: false, error: null });
+  });
+
+  it('recovers from an unserializable queued revision when a corrected edit arrives', async () => {
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const invalid = snapshot('bad');
+    invalid.cells[0].metadata = circular;
+    await expect(service.saveNow(invalid)).rejects.toThrow();
+    await service.saveNow(snapshot('corrected'));
+    expect(storage.files.saveFile).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(storage.files.saveFile.mock.calls[0][0].content).title).toBe('corrected');
+    expect(service.getState()).toMatchObject({ isDirty: false, pendingCount: 0, error: null });
   });
 
   it('retains failed writes and refuses to report a successful pause', async () => {

@@ -52,6 +52,7 @@ export class AutoSaveService implements IAutoSaveService {
   private readonly debouncedSave: ReturnType<typeof debounce>;
   private processing: Promise<void> | null = null;
   private nextRevision = 0;
+  private readonly contentSizes = new WeakMap<Cell, { content: string; bytes: number }>();
 
   // Event listeners
   private readonly listeners: Set<AutoSaveEventListener> = new Set();
@@ -429,8 +430,9 @@ export class AutoSaveService implements IAutoSaveService {
       this.setStatus(AutoSaveStatus.SYNCING);
       this.emitEvent('save_started', notebookId);
 
-      // 1. Save notebook metadata
-      await this.persistence.notebooks.saveNotebook({
+      // Prepare both records before any write: serialization failures must not
+      // leave updated metadata pointing at the previous content revision.
+      const notebookMetadata = {
         id: notebookId,
         name: notebookTitle || `Notebook ${notebookId.slice(0, 8)}`,
         description: '',
@@ -439,9 +441,9 @@ export class AutoSaveService implements IAutoSaveService {
         fileCount: cells.length,
         totalSize: this.calculateContentSize(cells),
         cacheEnabled: true,
-      });
+      };
 
-      // 2. Save notebook content as JSON file
+      // Preserve the existing notebook JSON format.
       const notebookContent = JSON.stringify({
         notebook_id: notebookId,
         title: notebookTitle,
@@ -456,6 +458,9 @@ export class AutoSaveService implements IAutoSaveService {
           lastSaved: new Date(timestamp).toISOString(),
         },
       });
+      const contentSize = new Blob([notebookContent]).size;
+
+      await this.persistence.notebooks.saveNotebook(notebookMetadata);
 
       if (this.isDevelopment) {
         notebookLog.lifecycleEvent('save', notebookId, {
@@ -473,7 +478,7 @@ export class AutoSaveService implements IAutoSaveService {
           fileName: `${notebookTitle || 'Untitled'}.easynb`,
           content: notebookContent,
           lastModified: new Date(timestamp).toISOString(),
-          size: new Blob([notebookContent]).size,
+          size: contentSize,
           remoteUrl: undefined,
         },
         { forceLocal: true }
@@ -521,15 +526,24 @@ export class AutoSaveService implements IAutoSaveService {
     const expectedFilePath = `notebook_${notebookId}.json`;
     const mainFile = await this.persistence.files.getFile(notebookId, expectedFilePath);
 
-    if (mainFile?.content) {
+    if (mainFile) {
       try {
+        if (typeof mainFile.content !== 'string') {
+          throw new Error('Notebook content is unavailable');
+        }
         const data = JSON.parse(mainFile.content);
 
-        if (typeof data !== 'object' || data === null) {
+        if (
+          typeof data !== 'object' ||
+          data === null ||
+          Array.isArray(data) ||
+          !Array.isArray(data.cells) ||
+          (data.tasks !== undefined && !Array.isArray(data.tasks))
+        ) {
           throw new Error('Invalid notebook data structure');
         }
 
-        const loadedCells = Array.isArray(data.cells) ? data.cells : [];
+        const loadedCells = data.cells;
 
         if (this.isDevelopment) {
           const codeCellsWithOutputs = loadedCells.filter(
@@ -545,13 +559,16 @@ export class AutoSaveService implements IAutoSaveService {
         return {
           notebookTitle: data.title || data.notebookTitle || 'Untitled',
           cells: loadedCells,
-          tasks: Array.isArray(data.tasks) ? data.tasks : [],
+          tasks: data.tasks ?? [],
         };
       } catch (parseError) {
         notebookLog.warn('AutoSaveService: Failed to parse notebook file', {
           notebookId,
           error: parseError,
         });
+        // Existing but unreadable content is not an empty/missing notebook.
+        // Propagate so loading and empty-save protection cannot erase evidence.
+        throw parseError;
       }
     }
 
@@ -588,21 +605,14 @@ export class AutoSaveService implements IAutoSaveService {
    */
   private async shouldPreventDataLoss(snapshot: NotebookSnapshot): Promise<boolean> {
     if (!snapshot.cells || snapshot.cells.length === 0) {
-      try {
-        const existingData = await this.loadFromPersistence(snapshot.notebookId);
-        if (existingData?.cells && existingData.cells.length > 0) {
-          notebookLog.warn('AutoSaveService: Preventing data loss - empty save blocked', {
-            notebookId: snapshot.notebookId,
-            existingCellsCount: existingData.cells.length,
-          });
-          return true;
-        }
-      } catch (error) {
-        // If we can't check, allow the save
-        notebookLog.warn('AutoSaveService: Failed to check existing content, allowing save', {
+      // A failed read must fail the save; the queue retains the revision for retry.
+      const existingData = await this.loadFromPersistence(snapshot.notebookId);
+      if (existingData?.cells && existingData.cells.length > 0) {
+        notebookLog.warn('AutoSaveService: Preventing data loss - empty save blocked', {
           notebookId: snapshot.notebookId,
-          error,
+          existingCellsCount: existingData.cells.length,
         });
+        return true;
       }
     }
     return false;
@@ -614,7 +624,13 @@ export class AutoSaveService implements IAutoSaveService {
   private calculateContentSize(cells: Cell[]): number {
     let totalSize = 0;
     for (const cell of cells) {
-      totalSize += new Blob([cell.content || '']).size;
+      const content = cell.content || '';
+      let measured = this.contentSizes.get(cell);
+      if (!measured || measured.content !== content) {
+        measured = { content, bytes: new Blob([content]).size };
+        this.contentSizes.set(cell, measured);
+      }
+      totalSize += measured.bytes;
       if (cell.outputs?.length) {
         totalSize += new Blob([JSON.stringify(cell.outputs)]).size;
       }
