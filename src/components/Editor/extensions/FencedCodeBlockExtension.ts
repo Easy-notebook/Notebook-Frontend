@@ -1,5 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { breakNestedCodeFence } from '../TipTap/model/sourceCellTransitions';
+import { decodeTextAttribute } from '../utils/encodedText';
 
 /** Non-executable code nested inside a Markdown cell; no extra store identity or CodeMirror. */
 export const FencedCodeBlockExtension = Node.create({
@@ -38,7 +39,7 @@ export const FencedCodeBlockExtension = Node.create({
       },
       source: {
         default: '',
-        parseHTML: (element) => decodeURIComponent(element.getAttribute('data-source') || ''),
+        parseHTML: (element) => decodeTextAttribute(element.getAttribute('data-source')),
         renderHTML: (attrs) => ({ 'data-source': encodeURIComponent(attrs.source) }),
       },
     };

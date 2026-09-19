@@ -6,10 +6,11 @@
 import type { Cell } from '@Store/models';
 import { convertMarkdownToHtml } from './markdownConverters';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { formatCodeFence, standaloneFence } from './fencedMarkdown';
+import { formatCodeFence, replaceFencedCode, standaloneFence } from '@Utils/markdown/fencedMarkdown';
 import { codeCellFromAttributes } from './codeCellAttributes';
 import { parseSourceCellType } from './sourceCellAttributes';
 import { encodeTableCode, escapeHtml } from './inlineMarkdown';
+import { requiresHtmlTable, serializeHtmlTable, serializeTableBlock } from './tableSource';
 
 // Debug flag - set to true only when debugging
 const DEBUG = false;
@@ -44,14 +45,15 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
   let titleGenerated = false;
 
   const htmlParts = cells.map((cell, index) => {
+    const cellId = escapeHtml(cell.id);
     if (cell.type === 'code' || cell.type === 'hybrid') {
       // code和Hybrid cell转换为可执行代码块，确保包含正确的ID和位置信息
       if (DEBUG) console.log(`转换代码块 ${index}: ID=${cell.id}, type=${cell.type}`);
-      return `<div data-type="executable-code-block" data-language="${(cell as any).language || 'python'}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cell.id}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}" data-is-generating="${(cell as any).metadata?.isGenerating === true}"></div>`;
+      return `<div data-type="executable-code-block" data-language="${escapeHtml((cell as any).language || 'python')}" data-code="${encodeURIComponent(cell.content || '')}" data-cell-id="${cellId}" data-outputs="${encodeURIComponent(JSON.stringify(cell.outputs || []))}" data-enable-edit="${cell.enableEdit !== false}" data-original-type="${cell.type}" data-is-generating="${(cell as any).metadata?.isGenerating === true}"></div>`;
     } else if (cell.type === 'markdown') {
       if (cell.metadata?.editorMode === 'source') {
         const sourceCellType = parseSourceCellType(cell.metadata.sourceCellType);
-        return `<div data-type="markdown-source-cell" data-cell-id="${cell.id}" data-source="${encodeURIComponent(cell.content)}"${sourceCellType ? ` data-source-cell-type="${sourceCellType}"` : ''}></div>`;
+        return `<div data-type="markdown-source-cell" data-cell-id="${cellId}" data-source="${encodeURIComponent(cell.content)}"${sourceCellType ? ` data-source-cell-type="${sourceCellType}"` : ''}></div>`;
       }
       // markdown cell转换为HTML
       // For the first cell, check if it has cover/icon metadata and should be rendered as title
@@ -70,17 +72,16 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
 
         titleGenerated = true;
         // Create title node with cover, icon, and cellId attributes
-        return `<div data-type="title" data-cover="${cover || ''}" data-icon="${icon || ''}" data-cell-id="${cell.id}">${titleText}</div>`;
+        return `<div data-type="title" data-cover="${escapeHtml(cover || '')}" data-icon="${escapeHtml(icon || '')}" data-cell-id="${cellId}">${titleText}</div>`;
       }
       if (DEBUG)
         console.log(`转换Markdown单元格 ${index}: ID=${cell.id}, content="${cell.content}"`);
       const html = convertMarkdownToHtml(cell.content || '', cell, headingSlugCounter);
       if (DEBUG) console.log(`Markdown转HTML结果 ${index}: "${html}"`);
-      return `<div data-type="markdown-cell" data-cell-id="${cell.id}"${cell.phaseId ? ` data-phase-id="${escapeHtml(cell.phaseId)}"` : ''}>${html}</div>`;
+      return `<div data-type="markdown-cell" data-cell-id="${cellId}"${cell.phaseId ? ` data-phase-id="${escapeHtml(cell.phaseId)}"` : ''}>${html}</div>`;
     } else if (cell.type === 'image') {
       // image cell转换为HTML - 包含cellId和metadata信息
       if (DEBUG) console.log(`转换图片单元格 ${index}: ID=${cell.id}`);
-      const metadata = cell.metadata || {};
 
       // 解析 markdown 以提取 src 和 alt
       const markdownContent = cell.content || '';
@@ -96,22 +97,23 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
         });
       }
 
-      return `<div data-type="image-cell" data-cell-id="${cell.id}"><div data-type="markdown-image" data-cell-id="${cell.id}" data-src="${parsedSrc}" data-alt="${parsedAlt}" data-markdown="${markdownContent}" data-display-mode="true" data-is-generating="${metadata.isGenerating || false}" data-generation-type="${metadata.generationType || ''}" data-generation-prompt="${metadata.prompt || ''}" data-generation-params="${encodeURIComponent(JSON.stringify(metadata.generationParams || {}))}" data-generation-start-time="${metadata.generationStartTime || ''}" data-generation-error="${metadata.generationError || ''}" data-generation-status="${metadata.generationStatus || ''}"></div></div>`;
+      // Generation state is store-owned and observed directly by ImageView.
+      return `<div data-type="image-cell" data-cell-id="${escapeHtml(cell.id)}"><div data-type="markdown-image" data-cell-id="${escapeHtml(cell.id)}" data-src="${escapeHtml(parsedSrc)}" data-alt="${escapeHtml(parsedAlt)}" data-markdown="${escapeHtml(markdownContent)}" data-display-mode="true"></div></div>`;
     } else if (cell.type === 'thinking') {
       // thinking cell转换为HTML
       if (DEBUG) console.log(`转换AI思考单元格 ${index}: ID=${cell.id}`);
-      return `<div data-type="thinking-cell" data-cell-id="${cell.id}" data-agent-name="${(cell as any).agentName || 'AI'}" data-custom-text="${encodeURIComponent((cell as any).customText || '')}" data-text-array="${encodeURIComponent(JSON.stringify((cell as any).textArray || []))}" data-use-workflow-thinking="${(cell as any).useWorkflowThinking || false}"></div>`;
+      return `<div data-type="thinking-cell" data-cell-id="${cellId}" data-agent-name="${escapeHtml((cell as any).agentName || 'AI')}" data-custom-text="${encodeURIComponent((cell as any).customText || '')}" data-text-array="${encodeURIComponent(JSON.stringify((cell as any).textArray || []))}" data-use-workflow-thinking="${Boolean((cell as any).useWorkflowThinking)}"></div>`;
     } else if (cell.type === 'link') {
       const md = String(cell.content || '').trim();
       const m = md.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       const href = m ? m[2] : md;
       const label = m ? m[1] : href.split(/[\\/]/).pop() || href;
       // 使用附件节点渲染，保持与Jupyter一致的卡片UI，并传入真实 cellId
-      return `<div data-type="file-attachment" data-cell-id="${cell.id}" data-markdown="[${label}](${href})"></div>`;
+      return `<div data-type="file-attachment" data-cell-id="${cellId}" data-markdown="${escapeHtml(`[${label}](${href})`)}"></div>`;
     } else if (cell.type === 'raw') {
       // raw cell：原样存储文本，不作为markdown解释
       if (DEBUG) console.log(`转换Raw单元格 ${index}: ID=${cell.id}`);
-      return `<div data-type="raw-block" data-cell-id="${cell.id}" data-content="${encodeURIComponent(cell.content || '')}"></div>`;
+      return `<div data-type="raw-block" data-cell-id="${cellId}" data-content="${encodeURIComponent(cell.content || '')}"></div>`;
     }
 
     return '';
@@ -223,7 +225,7 @@ export function extractTextFromNode(node: any, options?: MarkdownSerializationOp
         .join('\n\n');
       return inner
         .split('\n')
-        .map((line: string) => `> ${line}`)
+        .map((line: string) => line.length === 0 ? '>' : `> ${line}`)
         .join('\n');
     }
 
@@ -298,12 +300,9 @@ export function serializeMarkdownBlock(node: any, options?: MarkdownSerializatio
     const source =
       original && original.code.replace(/\r\n?/g, '\n') === code.replace(/\r\n?/g, '\n')
         ? original.source
-        : formatCodeFence(
+        : original ? replaceFencedCode(original, code) : formatCodeFence(
             code,
-            original?.info ||
-              (node.type === 'mermaidBlock' ? 'mermaid' : node.attrs?.language || ''),
-            original?.marker,
-            original?.length
+            node.type === 'mermaidBlock' ? 'mermaid' : node.attrs?.language || ''
           );
     return options?.transformFence ? options.transformFence(node, source) : source;
   }
@@ -311,6 +310,11 @@ export function serializeMarkdownBlock(node: any, options?: MarkdownSerializatio
     return `${'#'.repeat(node.attrs?.level || 1)} ${extractTextFromNode(node)}`;
   }
   if (node.type === 'table') {
+    if (requiresHtmlTable(node)) {
+      return serializeHtmlTable(node, (child) =>
+        serializeTableBlock(child, (fence) => serializeMarkdownBlock(fence, options))
+      );
+    }
     const rows: string[][] = (node.content || []).map((row: any) =>
       (row.content || []).map((cell: any) =>
         (cell.content || [])
@@ -351,15 +355,6 @@ function imageCellFromAttributes(attrs: any, cellId: string): Cell {
     content: markdown,
     outputs: [],
     enableEdit: true,
-    metadata: {
-      isGenerating: attrs.isGenerating || false,
-      generationType: attrs.generationType || '',
-      prompt: attrs.prompt || '',
-      generationStartTime: attrs.generationStartTime,
-      generationError: attrs.generationError,
-      generationStatus: attrs.generationStatus,
-      generationParams: attrs.generationParams || {},
-    },
   };
 }
 

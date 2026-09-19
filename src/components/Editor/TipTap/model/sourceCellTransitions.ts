@@ -7,7 +7,7 @@ import { EXTERNAL_CELL_SYNC } from './documentSync';
 import { DOMParser } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { convertCellsToHtml, serializeMarkdownBlock } from '../../utils/cellConverters';
-import { formatCodeFence, standaloneFence } from '../../utils/fencedMarkdown';
+import { formatCodeFence, standaloneFence } from '@Utils/markdown/fencedMarkdown';
 import { parseSourceCellType } from '../../utils/sourceCellAttributes';
 
 /** Convert only the owning cell; unrelated cells are neither projected nor replaced. */

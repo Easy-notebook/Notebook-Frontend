@@ -1,118 +1,47 @@
-// utils/markdownExport.ts
 import { saveAs } from 'file-saver';
+import type { Cell, OutputItem } from '@Store/models';
+import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
+import { formatCodeFence } from '@Utils/markdown/fencedMarkdown';
 
-// Type definitions for markdown export
-interface CellOutput {
-  type: 'image' | 'error' | 'text';
-  content: string;
+function formatOutput(output: OutputItem): string {
+  const text = String(output.content ?? '');
+  if (output.type === 'image') return `![Output](${text})`;
+  const label = output.type === 'error' ? '❌ Error:' : 'Output:';
+  return `\n${label}\n${formatCodeFence(text, '')}\n`;
 }
 
-interface Cell {
-  id: string;
-  type: 'markdown' | 'code' | 'hybrid';
-  content: string;
-  outputs?: CellOutput[];
-  [key: string]: any;
-}
-
-interface CellStats {
-  total: number;
-  code: number;
-  markdown: number;
-}
-
-const CELL_SEPARATOR = '\n\n---\n\n';
-const CODE_BLOCK_DELIMITER = '```';
-
-/**
- * Convert a cell's outputs to markdown format
- * @param outputs - Array of cell outputs
- * @returns Markdown formatted outputs
- */
-const formatOutputs = (outputs: CellOutput[] | undefined): string => {
-  if (!outputs || outputs.length === 0) return '';
-
-  return outputs
-    .map((output: CellOutput) => {
-      if (output.type === 'image') {
-        // For images, create a markdown image tag with base64 content
-        return `![Output](${output.content})`;
-      } else if (output.type === 'error') {
-        // For errors, create a code block with error formatting
-        return `\n❌ Error:\n${CODE_BLOCK_DELIMITER}\n${output.content}\n${CODE_BLOCK_DELIMITER}\n`;
-      } else {
-        // For regular text output
-        return `\nOutput:\n${CODE_BLOCK_DELIMITER}\n${output.content}\n${CODE_BLOCK_DELIMITER}\n`;
-      }
-    })
-    .join('\n');
-};
-
-/**
- * Convert a code cell to markdown format
- * @param cell - Code cell object
- * @returns Markdown formatted code cell
- */
-const convertCodeCellToMarkdown = (cell: Cell): string => {
-  const codeBlock = `${CODE_BLOCK_DELIMITER}python\n${cell.content || ''}\n${CODE_BLOCK_DELIMITER}`;
-  const outputs: string = formatOutputs(cell.outputs);
-
-  return `${codeBlock}\n${outputs}`;
-};
-
-/**
- * Add frontmatter to the markdown document
- * @param cells - Array of notebook cells
- * @returns Frontmatter section
- */
-const createFrontmatter = (cells: Cell[]): string => {
-  const date: string = new Date().toISOString().split('T')[0];
-  const totalCells: number = cells.length;
-  const codeCells: number = cells.filter((cell: Cell) => cell.type === 'code').length;
-  const markdownCells: number = cells.filter((cell: Cell) => cell.type === 'markdown').length;
-
+/** Export the source model, never mounted editor DOM or derived preview caches. */
+export function notebookToMarkdown(cells: readonly Cell[], date = new Date()): string {
+  let code = 0;
+  let markdown = 0;
+  const sections = cells.map((cell) => {
+    if (cell.type === 'code' || cell.type === 'hybrid') {
+      code++;
+      const source = cell.type === 'code'
+        ? formatCodeFence(cell.content || '', normalizeCodeLanguage(cell.language))
+        : cell.content || '';
+      return `${source}\n${(cell.outputs || []).map(formatOutput).join('\n')}`;
+    }
+    if (cell.type === 'markdown') markdown++;
+    if (cell.type === 'raw') return formatCodeFence(cell.content || '', 'text');
+    if (cell.type === 'thinking' && !cell.content) {
+      return (cell.textArray || []).join('\n') || cell.customText || '';
+    }
+    return cell.content || '';
+  });
   return `---
 title: Exported Notebook
-date: ${date}
+date: ${date.toISOString().split('T')[0]}
 cells:
-  total: ${totalCells}
-  code: ${codeCells}
-  markdown: ${markdownCells}
+  total: ${cells.length}
+  code: ${code}
+  markdown: ${markdown}
 ---
 
-`;
-};
+${sections.join('\n\n---\n\n')}`;
+}
 
-/**
- * Export notebook cells to markdown format
- * @param cells - Array of notebook cells
- * @param filename - Output filename
- */
-const exportToMarkdown = (cells: Cell[], filename = 'notebook.md'): void => {
-  try {
-    // Create frontmatter
-    let markdownContent: string = createFrontmatter(cells);
-
-    // Convert each cell
-    const cellsContent: string[] = cells.map((cell: Cell) => {
-      if (cell.type === 'markdown') {
-        return cell.content || '';
-      } else if (cell.type === 'code') {
-        return convertCodeCellToMarkdown(cell);
-      }
-      return '';
-    });
-
-    // Combine all content with separators
-    markdownContent += cellsContent.join(CELL_SEPARATOR);
-
-    // Create and save the file
-    const blob: Blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8' });
-    saveAs(blob, filename);
-  } catch (error: unknown) {
-    console.error('Error generating Markdown:', error);
-    throw error;
-  }
-};
-
-export { exportToMarkdown };
+export function exportToMarkdown(cells: Cell[], filename = 'notebook.md'): void {
+  const blob = new Blob([notebookToMarkdown(cells)], { type: 'text/markdown;charset=utf-8' });
+  saveAs(blob, filename);
+}

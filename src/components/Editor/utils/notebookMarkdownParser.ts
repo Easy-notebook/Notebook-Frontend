@@ -1,5 +1,7 @@
 import { createMarkdownParser, escapeHtml } from './inlineMarkdown';
-import { scanFencedMarkdown, standaloneFence } from './fencedMarkdown';
+import { iterateFencedMarkdown, standaloneFence } from '@Utils/markdown/fencedMarkdown';
+import { sanitizeTableSource } from './tableSource';
+import { tableSourceTokenizer } from '@Utils/markdown/tableBoundary';
 
 type HeadingCounters = Map<string, Map<string, number>>;
 interface CellIdentity {
@@ -14,8 +16,14 @@ export function renderNotebookMarkdown(
   counters: HeadingCounters | null
 ): string {
   const parser = createMarkdownParser();
+  const renderTable = (text: string) =>
+    sanitizeTableSource(text, (source) =>
+      standaloneFence(source)
+        ? renderNotebookMarkdown(source, cell, counters)
+        : `<p>${escapeHtml(source).replace(/\n/g, '<br>')}</p>`
+    );
   const originals = new Map<string, string[]>();
-  for (const part of scanFencedMarkdown(source)) {
+  for (const part of iterateFencedMarkdown(source)) {
     if (part.kind !== 'fence') continue;
     const key = part.source.replace(/\r\n?/g, '\n');
     const queue = originals.get(key) || [];
@@ -28,6 +36,9 @@ export function renderNotebookMarkdown(
   parser.use({
     breaks: true,
     renderer: {
+      html({ text }) {
+        return renderTable(text) ?? (/^<br[ \t]*\/?>$/i.test(text) ? '<br>' : escapeHtml(text));
+      },
       heading({ depth, text, tokens }) {
         const body = this.parser.parseInline(tokens);
         const base = cell?.phaseId || cell?.id || '';
@@ -70,6 +81,11 @@ export function renderNotebookMarkdown(
       },
     },
     extensions: [
+      {
+        ...tableSourceTokenizer,
+        renderer: (token) =>
+          (token.complete ? renderTable(token.raw) : null) ?? escapeHtml(token.raw),
+      },
       {
         name: 'notebookDisplayMath',
         level: 'block',
