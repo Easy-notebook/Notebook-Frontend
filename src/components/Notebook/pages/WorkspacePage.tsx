@@ -24,8 +24,6 @@ interface WorkspacePageProps {
 }
 
 export const WorkspacePage = (props: WorkspacePageProps) => {
-  const viewCells = props.getCurrentViewCells();
-
   // Render based on viewMode (matching original MainContent logic)
   if (props.viewMode === 'demo') {
     return (
@@ -52,6 +50,8 @@ export const WorkspacePage = (props: WorkspacePageProps) => {
   if (props.viewMode === 'create') {
     return <CreateMode readOnly={false} />;
   }
+
+  const viewCells = props.getCurrentViewCells();
 
   // Default: render cells with proper layout (for 'complete' mode and others)
   return (

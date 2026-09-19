@@ -5,6 +5,19 @@ import { useEffect } from 'react';
 import useStore from '@Store/notebookStore';
 import { useAIAgentStore } from '@Store/AIAgentStore';
 import { uiLog } from '@Utils/logger';
+import { isCompositionInput } from '@Editor/utils/compositionInput';
+import { getCellIndexById } from '@Store/models/cellIndex';
+
+function canHandleNotebookShortcut(event: KeyboardEvent): boolean {
+  if (event.defaultPrevented || isCompositionInput(event)) return false;
+  const target = event.target;
+  return !(
+    target instanceof Element &&
+    target.closest(
+      '.cm-editor, input, textarea, select, [contenteditable="true"], [contenteditable=""], [role="textbox"], dialog, [role="dialog"]'
+    )
+  );
+}
 
 interface KeyboardShortcutsProps {
   viewMode: string;
@@ -31,11 +44,11 @@ export const useNotebookKeyboardShortcuts = ({
 }: KeyboardShortcutsProps) => {
   const { showCommandInput, setShowCommandInput } = useAIAgentStore();
 
-  // Command input shortcut (Alt/Ctrl + /)
+  // Command input shortcut (Alt/Meta + /)
   useEffect(() => {
-    const handleKeyPress = (e: any) => {
-      const tag = e.target.tagName.toLowerCase();
-      if ((e.altKey || e.metaKey) && e.key === '/' && tag !== 'input' && tag !== 'textarea') {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!canHandleNotebookShortcut(e)) return;
+      if ((e.altKey || e.metaKey) && e.key === '/') {
         e.preventDefault();
         setShowCommandInput(!showCommandInput);
         uiLog.debug('Command input toggled via keyboard shortcut');
@@ -47,33 +60,37 @@ export const useNotebookKeyboardShortcuts = ({
 
   // Navigation and mode toggle shortcuts
   useEffect(() => {
-    const handleKeyDown = (e: any) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!canHandleNotebookShortcut(e)) return;
       // Alt + Left/Right Arrow for navigation
-      if (e.altKey && e.key === 'ArrowLeft') {
+      if (viewMode === 'step' && e.altKey && !e.ctrlKey && e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (viewMode === 'step') {
-          if (currentStepIndex > 0) {
-            handlePreviousStep();
-          } else {
-            handlePreviousPhase();
-          }
+        if (currentStepIndex > 0) {
+          handlePreviousStep();
+        } else {
+          handlePreviousPhase();
         }
       }
 
-      if (e.altKey && e.key === 'ArrowRight') {
+      if (viewMode === 'step' && e.altKey && !e.ctrlKey && e.key === 'ArrowRight') {
         e.preventDefault();
-        if (viewMode === 'step') {
-          const totalSteps = getTotalSteps();
-          if (currentStepIndex < totalSteps - 1) {
-            handleNextStep();
-          } else {
-            handleNextPhase();
-          }
+        const totalSteps = getTotalSteps();
+        if (currentStepIndex < totalSteps - 1) {
+          handleNextStep();
+        } else {
+          handleNextPhase();
         }
       }
 
       // Alt + Ctrl to toggle view mode
-      if (e.altKey && e.ctrlKey && !e.shiftKey) {
+      if (
+        e.altKey &&
+        e.ctrlKey &&
+        !e.shiftKey &&
+        !e.repeat &&
+        (e.key === 'Alt' || e.key === 'Control') &&
+        !e.getModifierState('AltGraph')
+      ) {
         e.preventDefault();
         handleModeChange(viewMode === 'create' ? 'step' : 'create');
       }
@@ -96,6 +113,7 @@ export const useNotebookKeyboardShortcuts = ({
   // Create mode arrow navigation
   useEffect(() => {
     const handleArrowNav = (e: KeyboardEvent) => {
+      if (!canHandleNotebookShortcut(e)) return;
       if (viewMode !== 'create') return;
       if (e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
       if (
@@ -106,20 +124,13 @@ export const useNotebookKeyboardShortcuts = ({
       )
         return;
 
-      const target = e.target as HTMLElement | null;
-      if (target) {
-        const inEditor = target.closest('.cm-editor');
-        const inInput = target.closest('input, textarea, [contenteditable="true"]');
-        if (inEditor || inInput) return;
-      }
-
       const state = useStore.getState();
       const navCells = state.getCurrentViewCells ? state.getCurrentViewCells() : state.cells;
       if (!navCells || navCells.length === 0) return;
 
       const currentId = state.editingCellId || state.currentCellId || navCells[0]?.id;
-      const idx = navCells.findIndex((c) => c.id === currentId);
-      if (idx < 0) return;
+      const idx = getCellIndexById(navCells, currentId);
+      if (idx === undefined) return;
 
       e.preventDefault();
       const goPrev = e.key === 'ArrowUp' || e.key === 'ArrowLeft';

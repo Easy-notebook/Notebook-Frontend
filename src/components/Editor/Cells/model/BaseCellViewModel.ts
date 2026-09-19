@@ -1,5 +1,6 @@
 import { Cell as StoreCell } from '@Store/models';
 import useStore from '@Store/notebookStore';
+import { getCellIndexById } from '@Store/models/cellIndex';
 import editorLogger from '@Utils/logger/editor_logger';
 
 export abstract class BaseCellViewModel {
@@ -55,7 +56,8 @@ export abstract class BaseCellViewModel {
     const state = useStore.getState();
     // Use getCurrentViewCells if available (for detached view support), otherwise fallback to cells
     const navCells = state.getCurrentViewCells ? state.getCurrentViewCells() : state.cells;
-    const currentIndex = navCells.findIndex((c) => c.id === this.cell.id);
+    const currentIndex = getCellIndexById(navCells, this.cell.id);
+    if (currentIndex === undefined) return;
     const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
     console.log('BaseCellViewModel.navigateToSibling', {
