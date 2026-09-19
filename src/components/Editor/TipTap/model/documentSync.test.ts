@@ -14,6 +14,110 @@ const markdown = (id: string, content: string): Cell => ({
 });
 
 describe('document synchronization', () => {
+  it('does not allocate a parsing DOM container for an unchanged document', () => {
+    const cells = [markdown('title', '# Notebook'), markdown('body', 'Text')];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    const create = vi.spyOn(document, 'createElement');
+    try {
+      expect(synchronizeDocument(editor, cells)).toBe(false);
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      create.mockRestore();
+      editor.destroy();
+    }
+  });
+  it.each(['raw', 'link', 'image'] as const)(
+    'does not traverse business metadata for %s cells',
+    (type) => {
+      const cells: Cell[] = [
+        markdown('title', '# Notebook'),
+        {
+          id: 'body',
+          type,
+          content:
+            type === 'link'
+              ? '[file](https://example.com/file)'
+              : type === 'image'
+                ? '![image](https://example.com/image.png)'
+                : 'raw text',
+        },
+      ];
+      const editor = new Editor({
+        extensions: getTipTapExtensions('Untitled'),
+        content: convertCellsToHtml(cells),
+      });
+      const parse = vi.spyOn(ProseMirrorDOMParser.prototype, 'parseSlice');
+      const serialize = vi.fn(() => {
+        throw new Error('Business metadata was traversed');
+      });
+      try {
+        const original = editor.state.doc;
+        expect(
+          synchronizeDocument(editor, [
+            cells[0],
+            { ...cells[1], metadata: { largePayload: { toJSON: serialize } } },
+          ])
+        ).toBe(false);
+        expect(serialize).not.toHaveBeenCalled();
+        expect(parse).not.toHaveBeenCalled();
+        expect(editor.state.doc).toBe(original);
+      } finally {
+        parse.mockRestore();
+        editor.destroy();
+      }
+    }
+  );
+  it('updates thinking presentation fields and restores defaults when they are removed', () => {
+    const cells: Cell[] = [
+      markdown('title', '# Notebook'),
+      { id: 'thinking', type: 'thinking', content: '' },
+    ];
+    const editor = new Editor({
+      extensions: getTipTapExtensions('Untitled'),
+      content: convertCellsToHtml(cells),
+    });
+    try {
+      const changed = {
+        ...cells[1],
+        agentName: 'Reviewer',
+        customText: 'Checking',
+        textArray: ['one', 'two'],
+        useWorkflowThinking: true,
+      };
+      expect(synchronizeDocument(editor, [cells[0], changed])).toBe(true);
+      expect(editor.state.doc.child(1).attrs).toMatchObject({
+        agentName: 'Reviewer',
+        customText: 'Checking',
+        textArray: ['one', 'two'],
+        useWorkflowThinking: true,
+      });
+      expect(
+        synchronizeDocument(editor, [
+          cells[0],
+          { ...changed, textArray: ['one', 'two'], metadata: { irrelevant: true } },
+        ])
+      ).toBe(false);
+      expect(synchronizeDocument(editor, cells)).toBe(true);
+      expect(editor.state.doc.child(1).attrs).toMatchObject({
+        agentName: 'AI',
+        customText: null,
+        textArray: [],
+        useWorkflowThinking: false,
+      });
+      const parse = vi.spyOn(ProseMirrorDOMParser.prototype, 'parseSlice');
+      try {
+        expect(synchronizeDocument(editor, cells)).toBe(false);
+        expect(parse).not.toHaveBeenCalled();
+      } finally {
+        parse.mockRestore();
+      }
+    } finally {
+      editor.destroy();
+    }
+  });
   it('does not parse or stringify business metadata in a 1000-cell Markdown notebook', () => {
     const cells = [
       markdown('title', '# Notebook'),

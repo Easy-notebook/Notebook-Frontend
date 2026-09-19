@@ -1,4 +1,5 @@
 import type { Cell } from '@Store/models';
+import { getCellById } from '@Store/models/cellIndex';
 
 function reconcileMetadata(projected: Cell, stored: Cell) {
   return {
@@ -15,10 +16,8 @@ function reconcileMetadata(projected: Cell, stored: Cell) {
  * outputs, and metadata that is not represented by a document node.
  */
 export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
-  const byId = new Map(stored.map((cell) => [cell.id, cell]));
-
   return projected.map((cell) => {
-    const previous = byId.get(cell.id);
+    const previous = getCellById(stored, cell.id);
     if (!previous) return cell;
 
     // A representation change does not create a new cell. Outputs and business
@@ -27,6 +26,11 @@ export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
       return {
         ...previous,
         ...cell,
+        // Hybrid carries mixed Markdown; an outer executable-node default is
+        // not authoritative language metadata for that mixed document.
+        ...(cell.type === 'hybrid' && previous.metadata?.sourceCellType === 'hybrid'
+          ? { language: previous.language }
+          : {}),
         outputs: previous.outputs ?? cell.outputs,
         enableEdit: previous.enableEdit ?? cell.enableEdit,
         metadata: reconcileMetadata(cell, previous),

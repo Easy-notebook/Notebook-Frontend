@@ -5,16 +5,31 @@ import type { Cell } from '@Store/models';
 import { convertCellsToHtml, convertEditorStateToCells } from '@Editor/utils/cellConverters';
 import { Selection } from 'prosemirror-state';
 import { parseSourceCellType } from '../../utils/sourceCellAttributes';
+import { structuralBlockRanges, type BlockReplacementRange } from './structuralBlockRanges';
 
 export const EXTERNAL_CELL_SYNC = 'externalCellSync';
 
 function samePresentation(
   current: ProseMirrorNode | undefined,
-  projected: Cell | undefined,
   cell: Cell,
   isTitle: boolean
 ): boolean {
   if (cell.type === 'code' || cell.type === 'hybrid') return true;
+  // These nodes have no metadata-derived presentation. Business payloads may
+  // be large and must not be traversed just to decide whether to retain a view.
+  if (cell.type === 'raw' || cell.type === 'link' || cell.type === 'image') return true;
+  if (cell.type === 'thinking') {
+    const attrs = current?.attrs;
+    const before: string[] = attrs?.textArray || [];
+    const after: string[] = cell.textArray || [];
+    return (
+      attrs?.agentName === (cell.agentName || 'AI') &&
+      (attrs?.customText || null) === (cell.customText || null) &&
+      attrs?.useWorkflowThinking === (cell.useWorkflowThinking || false) &&
+      (before === after ||
+        (before.length === after.length && before.every((value, index) => value === after[index])))
+    );
+  }
   if (isTitle) {
     return (
       (current?.attrs.cover || null) === (cell.metadata?.cover || null) &&
@@ -31,12 +46,7 @@ function samePresentation(
     }
     return (current?.attrs.phaseId || null) === (cell.phaseId || null);
   }
-  return (
-    !cell.metadata ||
-    Object.keys(cell.metadata).every(
-      (key) => JSON.stringify(cell.metadata?.[key]) === JSON.stringify(projected?.metadata?.[key])
-    )
-  );
+  return true;
 }
 
 function sameProjectedNode(current: ProseMirrorNode, next: ProseMirrorNode): boolean {
@@ -53,49 +63,75 @@ function sameProjectedNode(current: ProseMirrorNode, next: ProseMirrorNode): boo
 
 export function changedBlockRange(
   current: readonly ProseMirrorNode[],
-  next: readonly ProseMirrorNode[]
+  next: readonly ProseMirrorNode[],
+  equal = sameProjectedNode
 ): { start: number; oldEnd: number; newEnd: number } | null {
   let start = 0;
-  while (
-    start < current.length &&
-    start < next.length &&
-    sameProjectedNode(current[start], next[start])
-  ) {
+  while (start < current.length && start < next.length && equal(current[start], next[start])) {
     start++;
   }
   if (start === current.length && start === next.length) return null;
 
   let oldEnd = current.length;
   let newEnd = next.length;
-  while (
-    oldEnd > start &&
-    newEnd > start &&
-    sameProjectedNode(current[oldEnd - 1], next[newEnd - 1])
-  ) {
+  while (oldEnd > start && newEnd > start && equal(current[oldEnd - 1], next[newEnd - 1])) {
     oldEnd--;
     newEnd--;
   }
   return { start, oldEnd, newEnd };
 }
 
-/** Apply external Cell changes at top-level block boundaries in one transaction. */
-export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
-  if (editor.isDestroyed) return false;
+/** Linear changed runs for stable order; ID-based LIS anchors for structural edits. */
+export function changedBlockRanges(
+  current: readonly ProseMirrorNode[],
+  next: readonly ProseMirrorNode[]
+) {
+  if (
+    current.length !== next.length ||
+    current.some((node, index) => node.attrs.cellId !== next[index].attrs.cellId)
+  ) {
+    return structuralBlockRanges(current, next);
+  }
+  const ranges: BlockReplacementRange[] = [];
+  let start = -1;
+  for (let index = 0; index <= current.length; index++) {
+    const changed = index < current.length && !current[index].eq(next[index]);
+    if (changed && start < 0) start = index;
+    if (!changed && start >= 0) {
+      ranges.push({ start, oldEnd: index, newStart: start, newEnd: index });
+      start = -1;
+    }
+  }
+  return ranges;
+}
 
+/** Shared cell projection for external synchronization and undoable source application. */
+export function projectDocumentBlocks(
+  editor: Editor,
+  cells: Cell[],
+  baseline?: readonly Cell[],
+  forceParse?: ReadonlySet<string>
+) {
   const currentBlocks: ProseMirrorNode[] = [];
   const nextBlocks: ProseMirrorNode[] = [];
   editor.state.doc.forEach((node) => currentBlocks.push(node));
-  const nodesById = new Map(currentBlocks.map((node) => [node.attrs.cellId, node]));
-  const projectedById = new Map(convertEditorStateToCells(editor).map((cell) => [cell.id, cell]));
+  const nodesById = new Map<string, ProseMirrorNode>();
+  for (const node of currentBlocks) nodesById.set(node.attrs.cellId, node);
+  const projectedById = new Map<string, Cell>();
+  for (const cell of baseline ?? convertEditorStateToCells(editor))
+    projectedById.set(cell.id, cell);
   const hasTitle = cells[0]?.type === 'markdown' && /^#(?:\s|$)/.test(cells[0].content.trim());
-  const parser = ProseMirrorDOMParser.fromSchema(editor.schema);
-  const container = document.createElement('div');
+  let container: HTMLDivElement | undefined;
+  const parseBlock = (html: string) => {
+    container ??= document.createElement('div');
+    container.innerHTML = html;
+    return ProseMirrorDOMParser.fromSchema(editor.schema).parseSlice(container).content.firstChild!;
+  };
   if (!hasTitle) {
     const title = currentBlocks[0];
     if (title?.type.name === 'title' && title.content.size === 0) nextBlocks.push(title);
     else {
-      container.innerHTML = convertCellsToHtml([]);
-      nextBlocks.push(parser.parseSlice(container).content.firstChild!);
+      nextBlocks.push(parseBlock(convertCellsToHtml([])));
     }
   }
   cells.forEach((cell, index) => {
@@ -107,16 +143,16 @@ export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
       projected?.type === cell.type && (storeOwned || projected.content === cell.content);
     if (
       current &&
+      !forceParse?.has(cell.id) &&
       sameContent &&
-      samePresentation(current, projected, cell, isTitle) &&
+      samePresentation(current, cell, isTitle) &&
       (current.type.name === 'markdownSourceCell') === (cell.metadata?.editorMode === 'source') &&
       (current.type.name === 'title') === isTitle
     ) {
       nextBlocks.push(current);
     } else {
       // Parse only changed cells. Unchanged nodes retain their NodeViews and DOM.
-      container.innerHTML = convertCellsToHtml([cell], isTitle);
-      nextBlocks.push(parser.parseSlice(container).content.firstChild!);
+      nextBlocks.push(parseBlock(convertCellsToHtml([cell], isTitle)));
     }
   });
   const trailing = currentBlocks[currentBlocks.length - 1];
@@ -124,20 +160,25 @@ export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
   if (nextBlocks.length === 1 || hasTrailingParagraph) {
     nextBlocks.push(hasTrailingParagraph ? trailing : editor.schema.nodes.paragraph.create());
   }
+  return { currentBlocks, nextBlocks };
+}
+
+/** Apply external Cell changes at top-level block boundaries in one transaction. */
+export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
+  if (editor.isDestroyed) return false;
+  const { currentBlocks, nextBlocks } = projectDocumentBlocks(editor, cells);
 
   const range = changedBlockRange(currentBlocks, nextBlocks);
   if (!range) return false;
 
-  const from = currentBlocks.slice(0, range.start).reduce((pos, node) => pos + node.nodeSize, 0);
-  const to = currentBlocks
-    .slice(range.start, range.oldEnd)
-    .reduce((pos, node) => pos + node.nodeSize, from);
-  const replacement = Fragment.fromArray(nextBlocks.slice(range.start, range.newEnd));
-  const selectionIndex = editor.state.doc.resolve(editor.state.selection.anchor).index(0);
+  let from = 0;
+  for (let index = 0; index < range.start; index++) from += currentBlocks[index].nodeSize;
+  let to = from;
+  for (let index = range.start; index < range.oldEnd; index++) to += currentBlocks[index].nodeSize;
+  const anchor = editor.state.selection.$anchor;
+  const selectionIndex = anchor.index(0);
   const selectedCellId = currentBlocks[selectionIndex]?.attrs.cellId as string | undefined;
-  const selectedBlockStart = currentBlocks
-    .slice(0, selectionIndex)
-    .reduce((pos, node) => pos + node.nodeSize, 0);
+  const selectedBlockStart = anchor.depth ? anchor.before(1) : anchor.pos;
   const selectedOffset = editor.state.selection.anchor - selectedBlockStart;
   const scroller = editor.view.dom.closest('.tiptap-editor') as HTMLElement | null;
   const scrollTop = scroller?.scrollTop;
@@ -163,7 +204,11 @@ export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
       newBlock.slice(start, end.b + overlap)
     );
   } else {
-    transaction.replaceWith(from, to, replacement);
+    transaction.replaceWith(
+      from,
+      to,
+      Fragment.fromArray(nextBlocks.slice(range.start, range.newEnd))
+    );
   }
   if (
     !sameCell &&
@@ -171,13 +216,14 @@ export function synchronizeDocument(editor: Editor, cells: Cell[]): boolean {
     selectionIndex >= range.start &&
     selectionIndex < range.oldEnd
   ) {
-    const targetIndex = nextBlocks.findIndex((node) => node.attrs.cellId === selectedCellId);
-    if (targetIndex >= 0) {
-      const targetStart = nextBlocks
-        .slice(0, targetIndex)
-        .reduce((pos, node) => pos + node.nodeSize, 0);
-      const position = targetStart + Math.min(selectedOffset, nextBlocks[targetIndex].nodeSize - 1);
-      transaction.setSelection(Selection.near(transaction.doc.resolve(position)));
+    let targetStart = 0;
+    for (const node of nextBlocks) {
+      if (node.attrs.cellId === selectedCellId) {
+        const position = targetStart + Math.min(selectedOffset, node.nodeSize - 1);
+        transaction.setSelection(Selection.near(transaction.doc.resolve(position)));
+        break;
+      }
+      targetStart += node.nodeSize;
     }
   }
   editor.view.dispatch(transaction);

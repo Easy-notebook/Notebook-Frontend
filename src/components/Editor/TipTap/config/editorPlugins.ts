@@ -102,7 +102,7 @@ export const TrailingParagraphExtension = Extension.create({
             if (!paragraph) return null;
             if (!last || last.type !== paragraph) {
               const insertPos = doc.content.size;
-              const nextTr = tr.insert(insertPos, paragraph.create());
+              const nextTr = tr.insert(insertPos, paragraph.create()).setMeta('addToHistory', false);
               return nextTr;
             }
             return null;

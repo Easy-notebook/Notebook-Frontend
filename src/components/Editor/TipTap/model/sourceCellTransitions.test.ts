@@ -3,15 +3,18 @@ import { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Editor } from '@tiptap/core';
 import type { Cell } from '@Store/models';
 import { getTipTapExtensions } from '../config/extensions';
-import { convertCellsToHtml, convertEditorStateToCells } from '../../utils/cellConverters';
+import { convertCellsToHtml, convertEditorStateToCells, serializeMarkdownBlock } from '../../utils/cellConverters';
 import {
   breakCodeBlockFence,
   breakNestedCodeFence,
   editSelectedCellSource,
+  editCodeBlockSource,
   previewMarkdownSource,
 } from './sourceCellTransitions';
 import { reconcileCells } from './reconcileCells';
 import { EXTERNAL_CELL_SYNC, synchronizeDocument } from './documentSync';
+import { handleSourceInputHistory } from '../../utils/sourceInputHistory';
+import type { KeyboardEvent } from 'react';
 
 let editor: Editor;
 const markdown = (id: string, content: string): Cell => ({
@@ -34,6 +37,307 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it('does not add trailing spaces to empty quoted code lines', () => {
+    expect(serializeMarkdownBlock({
+      type: 'blockquote', content: [{ type: 'fencedCodeBlock',
+        attrs: { language: 'python', source: '```python\n\n```' }, content: [],
+      }],
+    })).toBe('> ```python\n>\n> ```');
+  });
+  it.each([
+    '```python\n\n```',
+    '~~~python\n\n~~~',
+    '````c++ custom\nvalue\n`````',
+    '~~~~unknown-language\n中文🐍\n~~~~~',
+    '> ```python\n>\n> ```',
+    '- before\n\n  ~~~python\n\n  ~~~',
+  ])('breaks and repairs edge-case nested fences without losing content: %s', source => {
+    const pos = create(markdown('edge-fence', 'Before\n\n' + source + '\n\nAfter'));
+    let codePos = -1;
+    editor.state.doc.descendants((node, position) => {
+      if (node.type.name === 'fencedCodeBlock') codePos = position;
+    });
+    expect(codePos).toBeGreaterThan(pos);
+    const original = editor.state.doc;
+    const originalCells = convertEditorStateToCells(editor);
+    editor.commands.setTextSelection(codePos + 1);
+    expect(breakNestedCodeFence(editor)).toBe(true);
+    const broken = editor.state.doc.nodeAt(pos)!;
+    expect(broken.attrs.cellId).toBe('edge-fence');
+    const delimiter = source.includes('~~~') ? '~' : '`';
+    const caret = broken.attrs.caret as number;
+    editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, {
+      ...broken.attrs,
+      source: broken.attrs.source.slice(0, caret) + delimiter + broken.attrs.source.slice(caret),
+    }));
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    expect(convertEditorStateToCells(editor)).toEqual(originalCells);
+    expect(editor.state.doc.firstChild).toBe(original.firstChild);
+    expect(editor.state.doc.lastChild).toBe(original.lastChild);
+  });
+  it('does not break a nested fence while IME composition owns the code block', () => {
+    const pos = create(markdown('composing', 'Before\n\n```python\nvalue\n```'));
+    const start = pos + 2 + editor.state.doc.nodeAt(pos)!.firstChild!.nodeSize;
+    editor.commands.setTextSelection(start);
+    const before = editor.state.doc;
+    const composition = vi.spyOn(editor.view, 'composing', 'get').mockReturnValue(true);
+    try {
+      expect(breakNestedCodeFence(editor)).toBe(false);
+      expect(editor.state.doc).toBe(before);
+    } finally {
+      composition.mockRestore();
+    }
+    expect(breakNestedCodeFence(editor)).toBe(true);
+  });
+  it.each(['fencedCodeBlock', 'mermaidBlock'])(
+    'retains original %s wrapper formatting after editing its body', type => {
+      const language = type === 'mermaidBlock' ? 'mermaid' : 'python';
+      const source = `  ~~~~${language} custom  \r\nold\r\n ~~~~~  \t`;
+      const node = {
+        type, attrs: { source, language, code: 'new' },
+        content: [{ type: 'text', text: 'new' }],
+      };
+      expect(serializeMarkdownBlock(node)).toBe(source.replace('old', 'new'));
+    }
+  );
+  it('undoes source indentation independently from preceding and following typing', () => {
+    const pos = create({ ...markdown('indent-history', 'a'), metadata: { editorMode: 'source' } });
+    const update = (source: string) =>
+      editor.view.dispatch(
+        editor.state.tr.setNodeMarkup(pos, undefined, {
+          ...editor.state.doc.nodeAt(pos)!.attrs,
+          source,
+        })
+      );
+    update('ab');
+    const input = document.createElement('textarea');
+    input.value = 'ab';
+    input.setSelectionRange(2, 2);
+    handleSourceInputHistory(
+      {
+        key: ']',
+        ctrlKey: true,
+        currentTarget: input,
+        nativeEvent: {},
+        stopPropagation: vi.fn(),
+        preventDefault: vi.fn(),
+      } as unknown as KeyboardEvent<HTMLTextAreaElement>,
+      editor,
+      update
+    );
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe('  ab');
+    update('  abc');
+    expect(editor.commands.undo()).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe('  ab');
+    expect(editor.commands.undo()).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe('ab');
+    expect(editor.commands.undo()).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe('a');
+  });
+  it.each(['%', '%E0%A4%A', '%ZZ'])(
+    'loads malformed source encoding %s without losing literal text',
+    (source) => {
+      create(markdown('body', 'Body'));
+      expect(() =>
+        editor.commands.setContent(
+          `<h1>Notebook</h1><div data-type="markdown-source-cell" data-cell-id="literal" data-source="${source}"></div><div data-type="mermaid-block" data-code="${source}" data-source="${source}"></div><pre data-type="fenced-code-block" data-source="${source}"><code>safe</code></pre>`
+        )
+      ).not.toThrow();
+      const nodes: ProseMirrorNode[] = [];
+      editor.state.doc.descendants((node) => {
+        if (['markdownSourceCell', 'mermaidBlock', 'fencedCodeBlock'].includes(node.type.name))
+          nodes.push(node);
+      });
+      expect(nodes).toHaveLength(3);
+      for (const node of nodes) expect(node.attrs.source).toBe(source);
+      expect(nodes.find((node) => node.type.name === 'mermaidBlock')!.attrs.code).toBe(source);
+      const html = editor.getHTML();
+      editor.commands.setContent(html);
+      editor.state.doc.descendants((node) => {
+        if (['markdownSourceCell', 'mermaidBlock', 'fencedCodeBlock'].includes(node.type.name))
+          expect(node.attrs.source).toBe(source);
+      });
+    }
+  );
+  it.each(['code', 'hybrid'] as const)(
+    'opens intact %s source using latest content and restores its identity',
+    (type) => {
+      const cell: Cell = {
+        id: 'source-code',
+        type,
+        language: 'python',
+        content: 'old',
+        outputs: [],
+      };
+      const pos = create(cell);
+      const latest: Cell = {
+        ...cell,
+        content: '```\nprint(2)',
+        outputs: [{ type: 'text', content: '2' }],
+      };
+      expect(editCodeBlockSource(editor, pos, latest)).toBe(true);
+      const sourceNode = editor.state.doc.nodeAt(pos)!;
+      expect(sourceNode.attrs.source).toBe(type === 'hybrid' ? latest.content : '````python\n```\nprint(2)\n````');
+      expect(sourceNode.attrs.caret).toBe(type === 'hybrid' ? 0 : '````python\n'.length);
+      const stored = reconcileCells(convertEditorStateToCells(editor), [
+        markdown('title', '# Notebook'),
+        latest,
+        markdown('after', 'Untouched'),
+      ]);
+      expect(editor.commands.undo()).toBe(true);
+      expect(editor.state.doc.nodeAt(pos)!.attrs.code).toBe(encodeURIComponent(latest.content));
+      expect(editor.commands.redo()).toBe(true);
+      expect(previewMarkdownSource(editor, pos)).toBe(true);
+      expect(reconcileCells(convertEditorStateToCells(editor), stored)[1]).toMatchObject(latest);
+    }
+  );
+  it('opens and breaks the actual hybrid fence while retaining surrounding prose', () => {
+    const cell: Cell = { id: 'mixed-hybrid', type: 'hybrid', content: 'Before\n\n~~~python\n  x\n~~~\n\nAfter' };
+    const pos = create(cell);
+    expect(editCodeBlockSource(editor, pos, cell)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe(cell.content);
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.code).toBe(encodeURIComponent(cell.content));
+    expect(breakCodeBlockFence(editor, pos, cell)).toBe(true);
+    const node = editor.state.doc.nodeAt(pos)!;
+    expect(node.attrs.source).toBe(cell.content.replace('~~~python', '~~python'));
+    expect(node.attrs.caret).toBe('Before\n\n~~'.length);
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.originalType).toBe('hybrid');
+    expect(decodeURIComponent(editor.state.doc.nodeAt(pos)!.attrs.code)).toBe(cell.content.replace('~~~python', '~~python'));
+  });
+  it('preserves hybrid language metadata across mixed-source preview', () => {
+    const cell: Cell = { id: 'hybrid-language', type: 'hybrid', language: 'typescript',
+      content: 'Before\n```typescript\nconst x = 1\n```\nAfter' };
+    const pos = create(cell);
+    expect(editCodeBlockSource(editor, pos, cell)).toBe(true);
+    const sourceCells = reconcileCells(convertEditorStateToCells(editor), [
+      markdown('title', '# Notebook'), cell, markdown('after', 'Untouched'),
+    ]);
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    const restored = reconcileCells(convertEditorStateToCells(editor), sourceCells);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.language).toBe('typescript');
+    expect(restored[1]).toMatchObject({ type: 'hybrid', language: 'typescript', content: cell.content });
+  });
+  it('breaks the editable hybrid code fence rather than a preceding Mermaid diagram', () => {
+    const diagram = '```mermaid\ngraph TD; A-->B\n```';
+    const cell: Cell = { id: 'diagram-first', type: 'hybrid', content: diagram + '\n\n```python\nx\n```' };
+    const pos = create(cell);
+    expect(breakCodeBlockFence(editor, pos, cell)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe(diagram + '\n\n``python\nx\n```');
+  });
+  it('rejects a stale fence-break callback without changing the cell at its former position', () => {
+    const current: Cell = {
+      id: 'current',
+      type: 'code',
+      language: 'python',
+      content: 'print(2)',
+      outputs: [],
+    };
+    const pos = create(current);
+    const before = editor.state;
+    const dispatch = vi.spyOn(editor.view, 'dispatch');
+    expect(breakCodeBlockFence(editor, pos, { ...current, id: 'moved', content: 'print(1)' })).toBe(
+      false
+    );
+    expect(breakCodeBlockFence(editor, pos, { ...current, type: 'markdown' })).toBe(false);
+    expect(editor.state).toBe(before);
+    expect(dispatch).not.toHaveBeenCalled();
+    dispatch.mockRestore();
+    expect(breakCodeBlockFence(editor, pos, current)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toContain('print(2)');
+  });
+  it.each([false, true])(
+    'repairs a rich-table fence across undo and reload (nested list: %s)',
+    (nested) => {
+      const code =
+        '<pre data-type="fenced-code-block" data-language="python"><code>print(1)</code></pre>';
+      const pos = create(
+        markdown(
+          'nested-table-code',
+          `<table><tr><td>${nested ? `<ul><li><p>before</p>${code}</li></ul>` : code}</td></tr></table>`
+        )
+      );
+      let codePos = -1;
+      editor.state.doc.descendants((node, position) => {
+        if (node.type.name === 'fencedCodeBlock') codePos = position;
+      });
+      expect(codePos).toBeGreaterThan(pos);
+      editor.commands.setTextSelection(codePos + 1);
+      expect(breakNestedCodeFence(editor)).toBe(true);
+      const attrs = editor.state.doc.nodeAt(pos)!.attrs;
+      expect(attrs.source.slice(attrs.caret - 2, attrs.caret)).toBe('``');
+      const brokenSource = attrs.source;
+      expect(editor.commands.undo()).toBe(true);
+      expect(editor.state.doc.nodeAt(pos)!.type.name).toBe('markdownCell');
+      expect(editor.commands.redo()).toBe(true);
+      expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe(brokenSource);
+      editor.commands.setContent(convertCellsToHtml(convertEditorStateToCells(editor)));
+      const reloaded = editor.state.doc.nodeAt(pos)!;
+      editor.view.dispatch(
+        editor.state.tr.setNodeMarkup(pos, undefined, {
+          ...reloaded.attrs,
+          source: brokenSource.slice(0, attrs.caret) + '`' + brokenSource.slice(attrs.caret),
+        })
+      );
+      expect(previewMarkdownSource(editor, pos)).toBe(true);
+      let restored: ProseMirrorNode | undefined;
+      editor.state.doc.nodeAt(pos)!.descendants((node) => {
+        if (node.type.name === 'fencedCodeBlock') restored = node;
+      });
+      expect(restored).toBeDefined();
+      expect(restored!.textContent).toBe('print(1)');
+      expect(restored!.attrs.language).toBe('python');
+    }
+  );
+  it('preserves merged cells, paragraphs, widths and per-cell alignment through source and reload', () => {
+    const pos = create(markdown('rich-table', '| A | B |\n| --- | --- |\n| x | y |'));
+    const table = editor.state.doc.nodeAt(pos)!.firstChild!;
+    const json = table.toJSON();
+    json.content[0].content[0].attrs.colwidth = [120];
+    json.content[0].content[1].attrs.colwidth = [180];
+    json.content[1].content = [
+      {
+        type: 'tableCell',
+        attrs: { colspan: 2, rowspan: 1, colwidth: [120, 180], textAlign: 'right' },
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'first', marks: [{ type: 'bold' }] }],
+          },
+          { type: 'paragraph' },
+          { type: 'paragraph', content: [{ type: 'text', text: 'second' }] },
+          {
+            type: 'mermaidBlock',
+            attrs: { code: 'graph TD; A-->B', source: '```mermaid\ngraph TD; A-->B\n```' },
+          },
+          {
+            type: 'bulletList',
+            content: [
+              {
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'nested' }] }],
+              },
+            ],
+          },
+          {
+            type: 'fencedCodeBlock',
+            attrs: { language: 'python', source: '```python\na\n\nb\n```' },
+            content: [{ type: 'text', text: 'a\n\nb' }],
+          },
+        ],
+      },
+    ];
+    const original = editor.schema.nodeFromJSON(json);
+    editor.view.dispatch(editor.state.tr.replaceWith(pos + 1, pos + 1 + table.nodeSize, original));
+    editor.commands.setTextSelection(pos + 5);
+    expect(editSelectedCellSource(editor)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.attrs.source).toContain('<table>');
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.firstChild!.toJSON()).toEqual(original.toJSON());
+    editor.commands.setContent(convertCellsToHtml(convertEditorStateToCells(editor)));
+    expect(editor.state.doc.child(1).firstChild!.eq(original)).toBe(true);
+  });
   it.each(['a|b', 'a\\|b', 'a\\\\|b', '`tick` | <tag> &amp; $x$', '中文|值'])(
     'preserves table inline code without splitting columns: %s',
     (text) => {
@@ -344,7 +648,7 @@ describe('source cell transitions', () => {
         id: 'origin',
         type,
         language: 'python',
-        content: 'print(1)',
+        content: type === 'hybrid' ? '```python\nprint(1)\n```' : 'print(1)',
         outputs: [{ type: 'text', content: '1' }],
         metadata: { custom: 'keep' },
       };
@@ -399,7 +703,7 @@ describe('source cell transitions', () => {
   it('clears executable origin when source is deliberately changed into prose', () => {
     const cell: Cell = {
       ...markdown('origin', 'Plain prose'),
-      metadata: { editorMode: 'source', sourceCellType: 'hybrid', custom: 'keep' },
+      metadata: { editorMode: 'source', sourceCellType: 'code', custom: 'keep' },
     };
     const pos = create(cell);
     expect(previewMarkdownSource(editor, pos)).toBe(true);
@@ -492,5 +796,48 @@ describe('source cell transitions', () => {
     previewMarkdownSource(editor, pos);
     expect(editor.state.doc.child(1).firstChild?.type.name).toBe('mermaidBlock');
     expect(convertEditorStateToCells(editor)[1].content).toBe(cell.content);
+  });
+
+  it('converts executable source into a diagram and preserves store data through undo/redo', () => {
+    const cell: Cell = {
+      id: 'code-to-diagram',
+      type: 'code',
+      language: 'python',
+      content: 'print(1)',
+      outputs: [{ type: 'text', content: '1' }],
+      metadata: { custom: 'retained' },
+    };
+    const pos = create(cell);
+    let stored = [markdown('title', '# Notebook'), cell, markdown('after', 'Untouched')];
+    editor.on('update', ({ transaction }) => {
+      if (!transaction.getMeta(EXTERNAL_CELL_SYNC))
+        stored = reconcileCells(convertEditorStateToCells(editor), stored);
+    });
+    expect(editCodeBlockSource(editor, pos, cell)).toBe(true);
+    const source = '```mermaid\nflowchart LR\n A-->B\n```';
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(pos, undefined, {
+        ...editor.state.doc.nodeAt(pos)!.attrs,
+        source,
+      })
+    );
+    expect(previewMarkdownSource(editor, pos)).toBe(true);
+    expect(editor.state.doc.nodeAt(pos)!.firstChild?.type.name).toBe('mermaidBlock');
+    expect(stored[1]).toMatchObject({
+      id: cell.id,
+      type: 'markdown',
+      content: source,
+      outputs: cell.outputs,
+      metadata: { custom: 'retained' },
+    });
+    expect(stored[1].metadata?.editorMode).toBeUndefined();
+    expect(editor.commands.undo()).toBe(true);
+    expect(stored[1].metadata?.editorMode).toBe('source');
+    expect(stored[1].content).toBe(source);
+    expect(editor.commands.redo()).toBe(true);
+    expect(stored[1].content).toBe(source);
+    expect(stored[1].outputs).toBe(cell.outputs);
+    editor.commands.setContent(convertCellsToHtml(JSON.parse(JSON.stringify(stored))));
+    expect(editor.state.doc.nodeAt(pos)!.firstChild?.type.name).toBe('mermaidBlock');
   });
 });

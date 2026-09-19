@@ -1,9 +1,18 @@
 import { BaseExtension } from '../../core/BaseExtension';
 import { CodeBlockView } from './CodeBlockView';
 import { v4 as uuidv4 } from 'uuid';
-import { TextSelection } from 'prosemirror-state';
 import { decodeCodeOutputs } from '../../../utils/codeCellAttributes';
-import { mergeAttributes } from '@tiptap/core';
+import { InputRule, mergeAttributes, type CommandProps } from '@tiptap/core';
+import { commitFenceInput } from '../../../TipTap/model/fenceInput';
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    executableCodeBlock: {
+      setExecutableCodeBlock: (attributes: Record<string, unknown>) => ReturnType;
+      insertExecutableCodeBlock: (attributes: Record<string, unknown>) => ReturnType;
+    };
+  }
+}
 
 export const CodeBlockExtension = BaseExtension.create({
   name: 'executableCodeBlock',
@@ -79,31 +88,15 @@ export const CodeBlockExtension = BaseExtension.create({
     return {
       setExecutableCodeBlock:
         (attributes: Record<string, unknown>) =>
-        ({
-          commands,
-        }: {
-          commands: { setNode: (name: string, attrs: Record<string, unknown>) => boolean };
-        }) => {
-          if (!attributes.cellId) {
-            attributes.cellId = uuidv4();
-          }
-          return commands.setNode(this.name, attributes);
+        ({ commands }: CommandProps) => {
+          return commands.setNode(this.name, { ...attributes, cellId: attributes.cellId || uuidv4() });
         },
       insertExecutableCodeBlock:
         (attributes: Record<string, unknown>) =>
-        ({
-          commands,
-        }: {
-          commands: {
-            insertContent: (content: { type: string; attrs: Record<string, unknown> }) => boolean;
-          };
-        }) => {
-          if (!attributes.cellId) {
-            attributes.cellId = uuidv4();
-          }
+        ({ commands }: CommandProps) => {
           return commands.insertContent({
             type: this.name,
-            attrs: attributes,
+            attrs: { ...attributes, cellId: attributes.cellId || uuidv4() },
           });
         },
     };
@@ -111,6 +104,14 @@ export const CodeBlockExtension = BaseExtension.create({
 
   addKeyboardShortcuts() {
     return {
+      Enter: ({ editor }) => {
+        if (!editor.isEditable || editor.view.composing) return false;
+        const { selection } = editor.state;
+        if (!selection.empty || selection.$from.parentOffset !== selection.$from.parent.content.size) return false;
+        return editor.commands.command(({ state }) => commitFenceInput(
+          state, selection.$from.start(), selection.to, selection.$from.parent.textContent
+        ));
+      },
       Backspace: ({ editor }) => {
         const { selection } = editor.state;
         const { $from } = selection;
@@ -246,124 +247,13 @@ export const CodeBlockExtension = BaseExtension.create({
 
   addInputRules() {
     return [
-      {
-        find: /```(python|javascript|js|typescript|ts|bash|shell)\s*$/,
-        handler: ({
-          state,
-          range,
-          match,
-        }: {
-          state: {
-            doc: {
-              resolve: (pos: number) => {
-                before: (depth: number) => number;
-                after: (depth: number) => number;
-                depth: number;
-              };
-            };
-            selection: { constructor: { near: (pos: unknown) => unknown } };
-          };
-          tr: {
-            replaceWith: (from: number, to: number, node: unknown) => void;
-            setSelection: (sel: unknown) => void;
-            setMeta: (key: string, value: unknown) => unknown;
-            doc: { content: { size: number }; resolve: (pos: number) => unknown };
-          };
-          range: { to: number };
-          match: string[];
-        }) => {
-          const language = match[1] || 'python';
-          const cellId = uuidv4();
-          const { tr } = state;
-
-          const codeBlockNode = this.type.create({
-            language,
-            code: '',
-            cellId,
-            outputs: [],
-            enableEdit: true,
-          });
-
-          const $pos = state.doc.resolve(range.to);
-          const fromBlock = $pos.before($pos.depth);
-          const toBlock = $pos.after($pos.depth);
-          tr.replaceWith(fromBlock, toBlock, codeBlockNode);
-
-          const newDocPos = fromBlock + codeBlockNode.nodeSize;
-          if (newDocPos <= tr.doc.content.size) {
-            tr.setSelection(TextSelection.near(tr.doc.resolve(newDocPos)));
-          }
-
-          tr.setMeta('codeBlockInputRule', true);
-          tr.setMeta('newCodeCellId', cellId);
-          tr.setMeta('codeBlockLanguage', language);
-          return tr;
+      new InputRule({
+        find: /^```([\w+-]*)[ \t]+$/,
+        handler: ({ state, range, match }) => {
+          if (this.editor.isDestroyed || !this.editor.isEditable) return null;
+          if (!commitFenceInput(state, range.from, range.to, match[0])) return null;
         },
-      },
-      {
-        find: /```([a-zA-Z]*)\s*$/,
-        handler: ({
-          state,
-          range,
-          match,
-        }: {
-          state: {
-            doc: {
-              resolve: (pos: number) => {
-                before: (depth: number) => number;
-                after: (depth: number) => number;
-                depth: number;
-              };
-            };
-            selection: { constructor: { near: (pos: unknown) => unknown } };
-          };
-          tr: {
-            replaceWith: (from: number, to: number, node: unknown) => void;
-            setSelection: (sel: unknown) => void;
-            setMeta: (key: string, value: unknown) => unknown;
-            doc: { content: { size: number }; resolve: (pos: number) => unknown };
-          };
-          range: { to: number };
-          match: string[];
-        }) => {
-          const raw = (match[1] || '').toLowerCase();
-          const guess = (lang: string) => {
-            if (!lang) return 'python';
-            if ('python'.startsWith(lang) || ['py', 'pyth', 'pytho'].includes(lang))
-              return 'python';
-            if (['js', 'javascript'].some((x) => x.startsWith(lang))) return 'javascript';
-            if (['ts', 'typescript'].some((x) => x.startsWith(lang))) return 'typescript';
-            if (['bash', 'sh', 'shell'].some((x) => x.startsWith(lang))) return 'bash';
-            return 'python';
-          };
-          const language = guess(raw);
-          const cellId = uuidv4();
-          const { tr } = state;
-
-          const codeBlockNode = this.type.create({
-            language,
-            code: '',
-            cellId,
-            outputs: [],
-            enableEdit: true,
-          });
-
-          const $pos = state.doc.resolve(range.to);
-          const fromBlock = $pos.before($pos.depth);
-          const toBlock = $pos.after($pos.depth);
-          tr.replaceWith(fromBlock, toBlock, codeBlockNode);
-
-          const newDocPos = fromBlock + codeBlockNode.nodeSize;
-          if (newDocPos <= tr.doc.content.size) {
-            tr.setSelection(TextSelection.near(tr.doc.resolve(newDocPos)));
-          }
-
-          tr.setMeta('codeBlockInputRule', true);
-          tr.setMeta('newCodeCellId', cellId);
-          tr.setMeta('codeBlockLanguage', language);
-          return tr;
-        },
-      },
+      }),
     ];
   },
 });

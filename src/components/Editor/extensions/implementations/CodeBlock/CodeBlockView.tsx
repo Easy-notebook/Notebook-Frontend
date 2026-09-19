@@ -5,7 +5,10 @@ import CodeCell from '../../../Cells/CodeCell';
 import HybridCell from '../../../Cells/HybridCell';
 import useStore from '@Store/notebookStore';
 import { getCellById } from '@Store/models/cellIndex';
-import { breakCodeBlockFence } from '../../../TipTap/model/sourceCellTransitions';
+import {
+  breakCodeBlockFence,
+  editCodeBlockSource,
+} from '../../../TipTap/model/sourceCellTransitions';
 import { codeCellFromAttributes } from '../../../utils/codeCellAttributes';
 
 const CodeBlockViewComponent = (props: any) => {
@@ -32,6 +35,21 @@ const CodeBlockViewComponent = (props: any) => {
 
   return (
     <div className="relative my-4">
+      <button
+        type="button"
+        className="text-xs px-2 py-1 disabled:opacity-40"
+        disabled={!editor.isEditable}
+        aria-label="Edit code cell source"
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          const pos = getPos?.();
+          if (typeof pos !== 'number') return;
+          const latest = getCellById(useStore.getState().cells, cellId) || virtualCell;
+          editCodeBlockSource(editor, pos, latest);
+        }}
+      >
+        Source
+      </button>
       <CellComponent
         cell={virtualCell}
         onDelete={handleDelete}

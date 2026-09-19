@@ -2,11 +2,24 @@ import { useEffect, useRef } from 'react';
 import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { previewMarkdownSource } from '../TipTap/model/sourceCellTransitions';
-import { isCompositionInput } from '../utils/compositionInput';
+import { handleSourceInputHistory } from '../utils/sourceInputHistory';
 import { parseSourceCellType } from '../utils/sourceCellAttributes';
+import { decodeTextAttribute } from '../utils/encodedText';
 
 export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes }: NodeViewProps) {
   const input = useRef<HTMLTextAreaElement>(null);
+  const composing = useRef(false);
+  const ownedPosition = () => {
+    if (editor.isDestroyed || !editor.isEditable) return undefined;
+    const pos = getPos();
+    if (typeof pos !== 'number') return undefined;
+    const current = editor.state.doc.nodeAt(pos);
+    // A stable cell ID does not make a stale source buffer authoritative.
+    return current === node ? pos : undefined;
+  };
+  const updateSource = (source: string) => {
+    if (ownedPosition() !== undefined) updateAttributes({ source });
+  };
   useEffect(() => {
     let mounted = true;
     // NodeViews mount during dispatch; focus the nested input after ProseMirror
@@ -15,7 +28,7 @@ export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes 
       if (
         mounted &&
         !editor.isDestroyed &&
-        editor.state.selection.from === getPos() &&
+        editor.state.selection.from === ownedPosition() &&
         editor.view.hasFocus()
       ) {
         input.current?.focus();
@@ -27,8 +40,9 @@ export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes 
     };
   }, [editor, getPos, node.attrs.caret]);
   const preview = () => {
-    const pos = getPos();
-    if (typeof pos !== 'number' || !editor.isEditable) return;
+    if (composing.current) return;
+    const pos = ownedPosition();
+    if (pos === undefined) return;
     previewMarkdownSource(editor, pos);
   };
   return (
@@ -46,18 +60,18 @@ export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes 
         value={node.attrs.source}
         readOnly={!editor.isEditable}
         spellCheck={false}
+        onCompositionStart={() => {
+          composing.current = true;
+        }}
+        onCompositionEnd={() => {
+          composing.current = false;
+        }}
         onChange={(event) => {
-          if (editor.isEditable) updateAttributes({ source: event.target.value });
+          updateSource(event.target.value);
         }}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (!editor.isEditable || isCompositionInput(event.nativeEvent)) return;
-          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
-            event.preventDefault();
-            if (event.shiftKey) editor.commands.redo();
-            else editor.commands.undo();
-          }
-        }}
+        onKeyDown={(event) =>
+          ownedPosition() !== undefined && handleSourceInputHistory(event, editor, updateSource)
+        }
       />
     </NodeViewWrapper>
   );
@@ -87,7 +101,7 @@ export const MarkdownSourceCellExtension = Node.create({
       },
       source: {
         default: '',
-        parseHTML: (element) => decodeURIComponent(element.getAttribute('data-source') || ''),
+        parseHTML: (element) => decodeTextAttribute(element.getAttribute('data-source')),
         renderHTML: (attrs) => ({ 'data-source': encodeURIComponent(attrs.source) }),
       },
     };

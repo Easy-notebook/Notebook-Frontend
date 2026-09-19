@@ -2,7 +2,8 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Editor, EditorEvents } from '@tiptap/react';
 import { convertEditorStateToCells } from '@Editor/utils/cellConverters';
 import useStore from '@Store/notebookStore';
-import { cellsChanged, reconcileCells } from '../model/reconcileCells';
+import { cellsChanged } from '../model/reconcileCells';
+import { reconcileSourceTransaction } from '../model/NotebookSourceStep';
 import { EXTERNAL_CELL_SYNC } from '../model/documentSync';
 
 interface UseEditorEventsProps {
@@ -40,7 +41,11 @@ export function useEditorEvents({ setCurrentEditor, editorRef }: UseEditorEvents
     if (transaction.getMeta(EXTERNAL_CELL_SYNC)) return;
 
     const store = useStore.getState();
-    const next = reconcileCells(convertEditorStateToCells(editor), store.cells);
+    const next = reconcileSourceTransaction(
+      convertEditorStateToCells(editor),
+      store.cells,
+      transaction.steps
+    );
     if (cellsChanged(next, store.cells)) store.setCells(next);
   };
 

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import './types';
+import { isCompositionInput } from '../utils/compositionInput';
 
 interface TipTapCommand {
   id: string;
@@ -347,7 +348,19 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
   // 键盘导航 - 增强事件处理，支持字符输入过滤
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
+      if (!isOpen || !editor || editor.isDestroyed || !editor.isEditable || isCompositionInput(e))
+        return;
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      // Capture listeners run before source inputs can stop propagation. Only
+      // this menu and its rich-text owner may feed commands into this session.
+      const inMenu = menuRef.current?.contains(target);
+      if (
+        !inMenu &&
+        (!editor.view.dom.contains(target) ||
+          target.closest('input, textarea, select, .cm-editor, dialog'))
+      )
+        return;
 
       // 处理导航和控制键
       switch (e.key) {
@@ -478,7 +491,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
                   index === selectedIndex ? 'command-item-selected' : 'text-gray-700'
                 }`}
                 onClick={() => {
-                  if (editor) {
+                  if (editor && !editor.isDestroyed && editor.isEditable) {
                     command.action(editor, query);
                     onClose();
                   }

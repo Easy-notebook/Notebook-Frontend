@@ -7,11 +7,13 @@ import { EXTERNAL_CELL_SYNC } from './documentSync';
 import { DOMParser } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { convertCellsToHtml, serializeMarkdownBlock } from '../../utils/cellConverters';
-import { formatCodeFence, standaloneFence } from '@Utils/markdown/fencedMarkdown';
+import { formatCodeFence, standaloneFence, firstExecutableFence } from '@Utils/markdown/fencedMarkdown';
 import { parseSourceCellType } from '../../utils/sourceCellAttributes';
 
 /** Convert only the owning cell; unrelated cells are neither projected nor replaced. */
 export function breakNestedCodeFence(editor: Editor): boolean {
+  // Replacing the owning cell would detach the DOM currently owned by IME.
+  if (editor.isDestroyed || editor.view.composing) return false;
   const { $from, empty } = editor.state.selection;
   if (
     !editor.isEditable ||
@@ -60,8 +62,25 @@ export function breakNestedCodeFence(editor: Editor): boolean {
 }
 
 export function breakCodeBlockFence(editor: Editor, pos: number, cell: Cell): boolean {
+  return enterCodeSource(editor, pos, cell, true);
+}
+
+export function editCodeBlockSource(editor: Editor, pos: number, cell: Cell): boolean {
+  return enterCodeSource(editor, pos, cell, false);
+}
+
+function enterCodeSource(editor: Editor, pos: number, cell: Cell, breakFence: boolean): boolean {
   const current = editor.state.doc.nodeAt(pos);
-  if (!editor.isEditable || current?.type.name !== 'executableCodeBlock') return false;
+  // A NodeView callback can outlive a move/replacement. Position alone is not
+  // ownership: never replace the different cell now occupying that position.
+  if (
+    editor.isDestroyed ||
+    !editor.isEditable ||
+    current?.type.name !== 'executableCodeBlock' ||
+    current.attrs.cellId !== cell.id ||
+    (cell.type !== 'code' && cell.type !== 'hybrid')
+  )
+    return false;
   const language = normalizeCodeLanguage(cell.language);
   // Refresh the store-backed content before capturing the undo boundary.
   editor.view.dispatch(
@@ -76,14 +95,20 @@ export function breakCodeBlockFence(editor: Editor, pos: number, cell: Cell): bo
       .setMeta('addToHistory', false)
       .setMeta(EXTERNAL_CELL_SYNC, true)
   );
-  const completeSource = formatCodeFence(cell.content, language);
-  const delimiterLength = /^`+/.exec(completeSource)![0].length;
-  const source =
-    completeSource.slice(0, delimiterLength - 1) + completeSource.slice(delimiterLength);
+  const completeSource = cell.type === 'hybrid' ? cell.content : formatCodeFence(cell.content, language);
+  let source = completeSource;
+  let caret = 0;
+  const segment = cell.type === 'hybrid'
+    ? firstExecutableFence(completeSource) : standaloneFence(completeSource);
+  if (segment) {
+    const edge = segment.start + segment.indent.length + segment.length;
+    caret = breakFence ? edge - 1 : segment.start + segment.source.indexOf(segment.newline) + segment.newline.length;
+    if (breakFence) source = completeSource.slice(0, edge - 1) + completeSource.slice(edge);
+  }
   const replacement = editor.schema.nodes.markdownSourceCell.create({
     cellId: cell.id,
     source,
-    caret: delimiterLength - 1,
+    caret,
     sourceCellType: parseSourceCellType(cell.type),
   });
   const tr = closeHistory(editor.state.tr).replaceWith(pos, pos + current.nodeSize, replacement);
@@ -99,7 +124,15 @@ export function previewMarkdownSource(editor: Editor, pos: number): boolean {
   const source = node.attrs.source as string;
   const fence = standaloneFence(source);
   let replacement;
-  if (fence && fence.language !== 'mermaid') {
+  if (node.attrs.sourceCellType === 'hybrid') {
+    replacement = editor.schema.nodes.executableCodeBlock.create({
+      cellId: node.attrs.cellId,
+      language: normalizeCodeLanguage(firstExecutableFence(source)?.language),
+      code: encodeURIComponent(source),
+      outputs: encodeURIComponent('[]'),
+      originalType: 'hybrid',
+    });
+  } else if (fence && fence.language !== 'mermaid') {
     replacement = editor.schema.nodes.executableCodeBlock.create({
       cellId: node.attrs.cellId,
       language: normalizeCodeLanguage(fence.language),
@@ -129,11 +162,18 @@ export function previewMarkdownSource(editor: Editor, pos: number): boolean {
   return true;
 }
 
-export function editSelectedCellSource(editor: Editor): boolean {
+export function canEditSelectedCellSource(editor: Editor): boolean {
+  if (editor.isDestroyed || !editor.isEditable) return false;
   const { $from } = editor.state.selection;
   const pos = $from.depth ? $from.before(1) : $from.pos;
-  const node = editor.state.doc.nodeAt(pos);
-  if (!editor.isEditable || node?.type.name !== 'markdownCell') return false;
+  return editor.state.doc.nodeAt(pos)?.type.name === 'markdownCell';
+}
+
+export function editSelectedCellSource(editor: Editor): boolean {
+  if (!canEditSelectedCellSource(editor)) return false;
+  const { $from } = editor.state.selection;
+  const pos = $from.depth ? $from.before(1) : $from.pos;
+  const node = editor.state.doc.nodeAt(pos)!;
   const blocks: string[] = [];
   node.forEach((block) => blocks.push(serializeMarkdownBlock(block.toJSON())));
   const replacement = editor.schema.nodes.markdownSourceCell.create({

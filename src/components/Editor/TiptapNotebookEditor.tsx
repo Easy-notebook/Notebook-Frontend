@@ -8,7 +8,8 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import useStore from '@Store/notebookStore';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from './utils/cellConverters';
-import { editSelectedCellSource } from './TipTap/model/sourceCellTransitions';
+import { CellSourceButton } from './TipTap/components/CellSourceButton';
+import { NotebookSourceButton } from './TipTap/components/NotebookSourceButton';
 import { EditorReadOnlyContext } from './EditorAccessContext';
 import '@Utils/logger'; // Initialize debug tools
 
@@ -68,6 +69,8 @@ export interface TiptapNotebookEditorRef {
   addRawCell: () => string;
 }
 
+const getCurrentCells = () => useStore.getState().cells;
+
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(
   (
     {
@@ -108,7 +111,7 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
     // Hooks
     const { handleKeyDown } = useKeyboardHandlers();
-    const cellManagement = useCellManagement({ cells, setCells });
+    const cellManagement = useCellManagement({ getCells: getCurrentCells, setCells });
     const editorEvents = useEditorEvents({
       setCurrentEditor,
       editorRef,
@@ -288,19 +291,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             <EditorCover editor={currentEditor} />
 
             <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
-              {!readOnly && (
                 <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="text-sm px-2 py-1"
-                    title="Edit selected Markdown cell source"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => editSelectedCellSource(editor)}
-                  >
-                    Cell source
-                  </button>
+                  {!readOnly && <CellSourceButton editor={editor} />}
+                  <NotebookSourceButton editor={editor} />
                 </div>
-              )}
               <div onClick={handleEditorClick} className="w-full h-full">
                 <EditorBubbleMenu editor={currentEditor} />
                 <EditorContent

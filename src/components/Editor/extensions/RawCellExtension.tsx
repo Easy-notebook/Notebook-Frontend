@@ -5,71 +5,141 @@ import useStore from '@Store/notebookStore';
 import { getCellById } from '@Store/models/cellIndex';
 import { useEditorReadOnly } from '../EditorAccessContext';
 import { isCompositionInput } from '../utils/compositionInput';
+import { EXTERNAL_CELL_SYNC } from '../TipTap/model/documentSync';
 
-export const RawCellView: React.FC<any> = ({ node, updateAttributes, deleteNode }) => {
+export const RawCellView: React.FC<any> = ({
+  node,
+  updateAttributes,
+  deleteNode,
+  editor,
+  getPos,
+}) => {
   const readOnly = useEditorReadOnly();
   const updateCell = useStore((state) => state.updateCell);
   const cellId = node.attrs.cellId;
   const storeCell = useStore((state) => getCellById(state.cells, cellId));
   const contentFromStore = storeCell?.content ?? node.attrs.content ?? '';
-  const [isEditing, setIsEditing] = useState(false);
-  const [temp, setTemp] = useState<string>(contentFromStore);
+  const [draft, setDraft] = useState<{
+    base: string;
+    value: string;
+    storeOwned: boolean;
+    cellId: string | null | undefined;
+    error: string | null;
+  } | null>(null);
+  const isEditing = draft !== null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (isEditing) textareaRef.current?.focus();
+  }, [isEditing]);
 
   // keep node attr and local state in sync with store
   useEffect(() => {
     const next = contentFromStore;
-    if (storeCell && next !== node.attrs.content) {
-      updateAttributes({ content: next, cellId });
+    if (storeCell?.type === 'raw' && next !== node.attrs.content) {
+      editor.commands.command(({ tr }: { tr: import('@tiptap/pm/state').Transaction }) => {
+        const position = getPos();
+        if (typeof position !== 'number') return false;
+        const current = tr.doc.nodeAt(position);
+        if (current?.type.name !== 'rawBlock' || current.attrs.cellId !== cellId) return false;
+        tr.setNodeMarkup(position, undefined, { ...current.attrs, content: next })
+          .setMeta('addToHistory', false)
+          .setMeta(EXTERNAL_CELL_SYNC, true);
+        return true;
+      });
     }
-    if (!isEditing) setTemp(next);
-  }, [contentFromStore, node.attrs.content, cellId, isEditing, storeCell, updateAttributes]);
+  }, [contentFromStore, node.attrs.content, cellId, storeCell, editor, getPos]);
 
   const beginEdit = () => {
     if (readOnly) return;
-    setIsEditing(true);
-    setTimeout(() => textareaRef.current?.focus(), 0);
+    setDraft({
+      base: contentFromStore,
+      value: contentFromStore,
+      storeOwned: !!storeCell,
+      cellId,
+      error: null,
+    });
   };
 
   const save = () => {
-    if (readOnly) {
-      setIsEditing(false);
+    if (!draft) return;
+    if (draft.cellId !== cellId) {
+      setDraft({
+        ...draft,
+        error:
+          'Cell identity changed. Your original draft is retained for copying; press Escape to discard it.',
+      });
       return;
     }
-    const value = temp ?? '';
+    if (readOnly || editor?.isDestroyed || editor?.isEditable === false) {
+      setDraft({
+        ...draft,
+        error:
+          'Editor is not editable. Your draft is retained; copy it or retry when editing is available.',
+      });
+      return;
+    }
+    const latest = getCellById(useStore.getState().cells, cellId);
+    if ((draft.storeOwned && !latest) || (latest && latest.type !== 'raw')) {
+      setDraft({
+        ...draft,
+        error: 'Cell was removed or converted. Your draft is retained for copying.',
+      });
+      return;
+    }
+    const currentContent = latest?.content ?? contentFromStore;
+    const value = draft.value;
+    if (value === draft.base || value === currentContent) {
+      setDraft(null);
+      return;
+    }
+    if (currentContent !== draft.base) {
+      setDraft({
+        ...draft,
+        error:
+          'Content changed while editing. Copy your draft, then press Escape to load the latest content.',
+      });
+      return;
+    }
     if (cellId && updateCell) {
       updateCell(cellId, value);
     }
     updateAttributes({ content: value, cellId });
-    setIsEditing(false);
+    setDraft(null);
   };
 
   return (
     <NodeViewWrapper className="raw-cell-wrapper my-3" data-cell-id={cellId}>
-      {isEditing ? (
-        <textarea
-          ref={textareaRef}
-          className="w-full min-h-[80px] p-2 font-mono text-sm border rounded bg-white text-black"
-          value={temp}
-          readOnly={readOnly}
-          onChange={(e) => {
-            if (!readOnly) setTemp(e.target.value);
-          }}
-          onBlur={save}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            if (isCompositionInput(e.nativeEvent)) return;
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              setIsEditing(false);
-            }
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-              e.preventDefault();
-              save();
-            }
-          }}
-          placeholder="Raw cell content (not interpreted as Markdown)"
-        />
+      {draft ? (
+        <>
+          <textarea
+            ref={textareaRef}
+            className="w-full min-h-[80px] p-2 font-mono text-sm border rounded bg-white text-black"
+            value={draft.value}
+            readOnly={readOnly}
+            onChange={(e) => {
+              if (!readOnly) setDraft({ ...draft, value: e.target.value, error: null });
+            }}
+            onBlur={save}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (isCompositionInput(e.nativeEvent)) return;
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setDraft(null);
+              }
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                save();
+              }
+            }}
+            placeholder="Raw cell content (not interpreted as Markdown)"
+          />
+          {draft.error && (
+            <p role="alert" className="text-sm text-red-600">
+              {draft.error}
+            </p>
+          )}
+        </>
       ) : (
         <div className="raw-cell-display group relative">
           <pre
