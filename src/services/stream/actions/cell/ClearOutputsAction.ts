@@ -15,14 +15,7 @@ export class ClearOutputsAction extends StreamAction {
 
     console.log('🧹 [ClearOutputsAction] 清空所有cell outputs');
 
-    // Clear outputs for all cells
-    let clearedCount = 0;
-    state.cells.forEach((cell) => {
-      if (cell.outputs && cell.outputs.length > 0) {
-        state.updateCellObject(cell.id, { outputs: [] });
-        clearedCount++;
-      }
-    });
+    const clearedCount = state.clearAllOutputs();
 
     console.log('✅ [ClearOutputsAction] 清空完成:', {
       totalCells: state.cells.length,

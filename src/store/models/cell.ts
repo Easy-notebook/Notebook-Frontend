@@ -1,5 +1,6 @@
 // src/store/models/cell.ts
 import { v4 as uuidv4 } from 'uuid';
+import { CellContent } from './CellContent';
 
 export type CellType = 'code' | 'markdown' | 'raw' | 'hybrid' | 'image' | 'thinking' | 'link';
 
@@ -23,11 +24,8 @@ export interface Cell {
   [key: string]: any; // Keep structural compatibility with UI code accessing arbitrary fields
 }
 
-export class CellModel implements Cell {
+export class CellModel extends CellContent implements Cell {
   id: string;
-  type: CellType;
-  content: string;
-  language?: string;
   outputs: OutputItem[];
   enableEdit: boolean;
   phaseId: string | null;
@@ -35,10 +33,8 @@ export class CellModel implements Cell {
   metadata: Record<string, any> | null;
 
   constructor(init: Partial<Cell> & { id?: string; type: CellType }) {
+    super({ type: init.type, content: init.content ?? '', language: init.language });
     this.id = init.id ?? uuidv4();
-    this.type = init.type;
-    this.content = init.content ?? '';
-    this.language = init.language;
     this.outputs = Array.isArray(init.outputs) ? [...init.outputs] : [];
     this.enableEdit = init.enableEdit ?? true;
     this.phaseId = init.phaseId ?? null;
@@ -90,30 +86,6 @@ export class CellModel implements Cell {
 
   setMetadata(metadata: Record<string, any>): this {
     this.metadata = { ...(this.metadata || {}), ...metadata };
-    return this;
-  }
-
-  convertToHybrid(): this {
-    this.type = 'hybrid';
-    return this;
-  }
-
-  convertMarkdownCodeBlockToCode(): this {
-    const lines = this.content.split('\n');
-    const codeFence = /^```(\w+)?$/;
-    for (let i = 0; i < lines.length; i++) {
-      if (codeFence.test(lines[i].trim())) {
-        let codeContent = '';
-        let j = i + 1;
-        while (j < lines.length && !codeFence.test(lines[j].trim())) {
-          codeContent += lines[j] + '\n';
-          j++;
-        }
-        this.type = 'code';
-        this.content = codeContent.trim();
-        break;
-      }
-    }
     return this;
   }
 

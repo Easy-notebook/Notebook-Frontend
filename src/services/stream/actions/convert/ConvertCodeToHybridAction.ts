@@ -6,6 +6,8 @@
 import { StreamAction, registerStreamAction } from '../base';
 import type { StreamActionContext } from '../../types';
 import useStore from '@Store/notebookStore';
+import { CellContent } from '@Store/models/CellContent';
+import { getCellById } from '@Store/models/cellIndex';
 
 export class ConvertCodeToHybridAction extends StreamAction {
   async execute(context: StreamActionContext): Promise<void> {
@@ -16,12 +18,11 @@ export class ConvertCodeToHybridAction extends StreamAction {
     const targetCellId = cellId || state.currentCellId;
 
     if (targetCellId) {
-      const targetCell = state.cells.find((c) => c.id === targetCellId);
+      const targetCell = getCellById(state.cells, targetCellId);
 
       if (targetCell && targetCell.type === 'code') {
-        state.updateCellObject(targetCellId, {
-          type: 'hybrid',
-        });
+        const model = new CellContent(targetCell).convertToHybrid();
+        state.updateCellObject(targetCellId, { type: model.type, content: model.content });
 
         await showToast({
           message: '已转换为 Hybrid Cell',

@@ -4,15 +4,23 @@
  * Tests that all actions are properly registered and can be executed
  */
 
-/* eslint-env jest */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getActionClass, getAllActionTypes } from '../index';
 
 describe('Action System', () => {
   describe('Registration', () => {
-    it('should register all 12 actions', () => {
+    it('registers the complete action protocol, including aliases', () => {
       const actionTypes = getAllActionTypes();
-      expect(actionTypes).toHaveLength(12);
+      expect([...actionTypes].sort()).toEqual([
+        'add', 'add-text', 'new_chapter', 'new_section', 'new_step', 'comment-result',
+        'exec', 'send_code_output', 'set_effect_as_thinking', 'is_thinking', 'finish_thinking',
+        'update_title', 'update_last_text', 'plan_stage', 'complete_workflow_planning',
+        'plan_step', 'update_stage_context', 'complete_stage_planning', 'delegate_task',
+        'complete_step_planning', 'complete_behavior', 'complete_behaviour', 'bug_analysis',
+        'update_code', 'exec_new_version', 'complete_reflection', 'clear_effect_current',
+        'clear_effect_history', 'update-step-focus', 'update_progress', 'update_agent', 'update_location',
+      ].sort());
     });
 
     it('should register all content actions', () => {
@@ -75,12 +83,12 @@ describe('Action System', () => {
 
         // Check if class has execute method
         const mockScriptStore = {
-          addCell: jest.fn(),
-          updateTitle: jest.fn(),
-          updateLastText: jest.fn(),
-          finishThinking: jest.fn(),
-          setEffectAsThinking: jest.fn(),
-          execCodeCell: jest.fn(),
+          addCell: vi.fn(),
+          updateTitle: vi.fn(),
+          updateLastText: vi.fn(),
+          finishThinking: vi.fn(),
+          setEffectAsThinking: vi.fn(),
+          execCodeCell: vi.fn(),
           lastAddedActionId: 'test-id',
         };
 
@@ -121,12 +129,12 @@ describe('Action Execution', () => {
 
   beforeEach(() => {
     mockScriptStore = {
-      addCell: jest.fn(() => 'test-cell-id'),
-      updateTitle: jest.fn(),
-      updateLastText: jest.fn(),
-      finishThinking: jest.fn(),
-      setEffectAsThinking: jest.fn(),
-      execCodeCell: jest.fn(() => Promise.resolve({ success: true })),
+      addCell: vi.fn(() => 'test-cell-id'),
+      updateTitle: vi.fn(),
+      updateLastText: vi.fn(),
+      finishThinking: vi.fn(),
+      setEffectAsThinking: vi.fn(),
+      execCodeCell: vi.fn(() => Promise.resolve({ success: true })),
       lastAddedActionId: 'last-cell-id',
     };
   });

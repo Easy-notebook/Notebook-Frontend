@@ -7,6 +7,7 @@ import { produce } from 'immer';
 
 import {
   parseMarkdownCells,
+  hasSameMarkdownStructure,
   findCellsByPhase,
   findCellsByStep,
   updateCellsPhaseId,
@@ -24,6 +25,13 @@ import {
   type UploadMode,
 } from '@Store/models';
 import type { Task, Phase } from '@Store/models';
+import { getCellById, getCellIndexById } from '@Store/models/cellIndex';
+import { CellContent } from '@Store/models/CellContent';
+import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
+import { startsWithNotebookTitle } from '@Utils/markdown/structureIndex';
+import { bindTaskCellReferences, replaceTaskCellReferences } from '@Store/models/taskCellReferences';
+import { preserveTaskProgress } from '@Store/models/taskProgress';
+import { resolvePhaseOwnership } from '@Utils/markdown/phaseOwnership';
 
 // Re-export model types for backward compatibility
 export type { Cell, CellType, OutputItem, UploadMode } from '@Store/models';
@@ -113,11 +121,11 @@ export interface NotebookStoreActions {
 
   // 单元格管理
   clearCells: () => void;
-  clearAllOutputs: () => void;
+  clearAllOutputs: () => number;
   clearCellOutputs: (cellId: string) => void;
   setCells: (cells: Cell[]) => void;
   updateCurrentCellWithContent: (content: string) => void;
-  addCell: (newCell: Partial<Cell> & { id?: string }, index?: number) => void;
+  addCell: (newCell: Partial<Cell> & { id?: string }, index?: number) => string;
   updateTitle: (title: string) => void;
   updateCurrentCellDescription: (description: string) => void;
   addNewContent2CurrentCellDescription: (content: string) => void;
@@ -212,16 +220,6 @@ const serializeOutput = (output: any): any => {
   return serialized;
 };
 
-const deserializeOutput = (output: any): any => {
-  if (!output) return [];
-  if (Array.isArray(output)) {
-    return output.map(deserializeOutput);
-  }
-  // Remove the JSON parsing logic.
-  // We want to keep content as strings because OutputRenderer expects strings.
-  return output;
-};
-
 /* ------------------------- 辅助函数 ------------------------- */
 /** 修复：不能在 produce(state) 内调用 state 上不存在的函数 */
 const updateCellOutputsHelper = (
@@ -230,26 +228,35 @@ const updateCellOutputsHelper = (
   cellId: string,
   outputs: OutputItem[]
 ) => {
-  const outArr = CellModel.sanitizeOutputs(outputs);
+  const cellIndex = getCellIndexById(get().cells, cellId);
+  if (cellIndex === undefined) return;
+  const outArr: OutputItem[] = serializeOutput(outputs);
   const isErr = get().checkOutputsIsError(outArr);
 
   set(
     produce((state: NotebookStoreState) => {
-      const cell = state.cells.find((c) => c.id === cellId);
-      if (!cell) return;
+      const cell = state.cells[cellIndex];
 
       if (outArr.length > 0) {
         cell.outputs = isErr
           ? [{ type: 'text', content: '[error-message-for-debug]', timestamp: '' }, ...outArr]
-          : [...outArr];
+          : outArr;
       } else {
         cell.outputs = [{ type: 'text', content: '[without-output]', timestamp: '' }, ...outArr];
       }
+      replaceTaskCellReferences(state.tasks, cell);
     })
   );
 };
 
 /* ------------------------- Store 实现 ------------------------- */
+/** Editing re-derives ranges/ownership while retaining progress of surviving identities. */
+function deriveEditedTasks(cells: Cell[], previous: Task[]): Task[] {
+  const tasks = preserveTaskProgress(parseMarkdownCells(cells as any), previous);
+  updateCellsPhaseId(cells as any, tasks);
+  return tasks;
+}
+
 const useStore = create(
   subscribeWithSelector<NotebookStore>((set, get) => {
     return {
@@ -447,22 +454,24 @@ const useStore = create(
         set({ cells: [titleCell], tasks, currentRunningPhaseId: null });
       },
 
-      clearAllOutputs: () =>
-        set(
-          produce((state: NotebookStoreState) => {
-            state.cells.forEach((cell) => {
-              cell.outputs = [];
-            });
-          })
-        ),
+      clearAllOutputs: () => {
+        const state = get();
+        let count = 0;
+        const cells = state.cells.map((cell) => {
+          if (!cell.outputs?.length) return cell;
+          count++;
+          return { ...cell, outputs: [] };
+        });
+        if (count) state.setCells(cells);
+        return count;
+      },
 
-      clearCellOutputs: (cellId: string) =>
-        set(
-          produce((state: NotebookStoreState) => {
-            const cell = state.cells.find((c) => c.id === cellId);
-            if (cell) cell.outputs = [];
-          })
-        ),
+      clearCellOutputs: (cellId: string) => {
+        const state = get();
+        if (getCellById(state.cells, cellId)?.outputs?.length) {
+          state.updateCellObject(cellId, { outputs: [] });
+        }
+      },
 
       setCells: (cells: Cell[]) => {
         if (!Array.isArray(cells)) {
@@ -473,17 +482,27 @@ const useStore = create(
           return;
         }
 
-        const previousById = new Map(get().cells.map((cell) => [cell.id, cell]));
-        let processedCells = cells.map((cell) => ({
-          ...cell,
-          content: typeof cell.content === 'string' ? cell.content : String(cell.content ?? ''),
-          outputs:
-            previousById.get(cell.id) === cell
-              ? cell.outputs
-              : Array.isArray(cell.outputs)
-                ? serializeOutput(cell.outputs)
-                : [],
-        }));
+        const current = get();
+        if (
+          current.isInitialized &&
+          cells.length > 0 &&
+          cells.length === current.cells.length &&
+          (cells === current.cells || cells.every((cell, index) => cell === current.cells[index]))
+        ) return;
+
+        const previousById = new Map<string, Cell>();
+        for (const cell of current.cells) previousById.set(cell.id, cell);
+        const processedCells = cells.map((cell) => {
+          const previous = previousById.get(cell.id);
+          if (previous === cell) return cell;
+          return {
+            ...cell,
+            content: typeof cell.content === 'string' ? cell.content : String(cell.content ?? ''),
+            outputs: previous && cell.outputs === previous.outputs
+              ? previous.outputs
+              : Array.isArray(cell.outputs) ? serializeOutput(cell.outputs) : [],
+          };
+        });
 
         if (processedCells.length === 0) {
           notebookLog.cellOperation('create', 'title', { reason: 'empty cells array' });
@@ -502,17 +521,29 @@ const useStore = create(
           notebookLog.debug('Cells not empty - keeping existing cells');
         }
 
-        const tasks = parseMarkdownCells(processedCells as any);
-        updateCellsPhaseId(processedCells as any, tasks);
-
-        // Phase assignment mutates temporary copies. Retain published identities
-        // when neither the source cell nor its derived phase changed.
-        processedCells = processedCells.map((cell, index) => {
-          const previous = previousById.get(cell.id);
-          return previous && cells[index] === previous && previous.phaseId === cell.phaseId
-            ? (previous as typeof cell)
-            : cell;
-        });
+        const sameStructure = current.isInitialized &&
+          hasSameMarkdownStructure(current.cells, processedCells);
+        let tasks: Task[];
+        if (sameStructure) {
+          // Non-structural edits preserve ranges, progress and unaffected task identities.
+          for (let index = 0; index < processedCells.length; index++) {
+            const cell = processedCells[index];
+            const phaseId = current.cells[index].phaseId;
+            if (cell.phaseId !== phaseId) processedCells[index] = { ...cell, phaseId };
+          }
+          tasks = produce(current.tasks, (draft) => bindTaskCellReferences(draft, processedCells));
+        } else {
+          tasks = preserveTaskProgress(parseMarkdownCells(processedCells as any), current.tasks);
+          const ownership = resolvePhaseOwnership(processedCells.length, tasks);
+          // Copy on ownership change; never mutate shared published cell objects.
+          for (let index = 0; index < processedCells.length; index++) {
+            const cell = processedCells[index];
+            if (cell.phaseId !== ownership[index]) {
+              processedCells[index] = { ...cell, phaseId: ownership[index] };
+            }
+          }
+          bindTaskCellReferences(tasks, processedCells);
+        }
 
         notebookLog.info('setCells final update', {
           finalCellsCount: processedCells.length,
@@ -531,17 +562,20 @@ const useStore = create(
         get().updateCell(currentCellId, content);
       },
 
-      addCell: (newCell: Partial<Cell> & { id?: string }, index?: number) =>
+      addCell: (newCell: Partial<Cell> & { id?: string }, index?: number) => {
+        let publishedId = '';
         set(
           produce((state: NotebookStoreState) => {
             const isNotebookEmpty = state.cells.length === 0;
-            const newIsTitle =
+            let titleRecognition: boolean | undefined;
+            const isNewTitle = () => titleRecognition ??= (
               newCell.type === 'markdown' &&
               typeof newCell.content === 'string' &&
-              newCell.content.trim().startsWith('#');
+              startsWithNotebookTitle(newCell.content)
+            );
 
             // 若 notebook 为空且新插入的并非 H1，则先创建默认标题
-            if (isNotebookEmpty && !newIsTitle) {
+            if (isNotebookEmpty && !isNewTitle()) {
               const titleCell: Cell = {
                 id: uuidv4(),
                 type: 'markdown',
@@ -568,6 +602,9 @@ const useStore = create(
             const cell: Cell = {
               id: newCell.id || uuidv4(),
               type: newCell.type || 'markdown',
+              ...(newCell.type === 'code' || newCell.type === 'hybrid'
+                ? { language: normalizeCodeLanguage(newCell.language) }
+                : {}),
               content:
                 typeof newCell.content === 'string'
                   ? newCell.content
@@ -579,61 +616,47 @@ const useStore = create(
               metadata: newCell.metadata ?? null,
             };
 
-            const isNewCellTitle = cell.type === 'markdown' && cell.content.trim().startsWith('#');
-
             // 若最前是默认标题，且插入位置在它前/相邻且新 cell 是标题，则替换默认标题文本（保留 ID 以便引用）
-            if (hasDefaultTitle && targetIndex <= 1 && isNewCellTitle) {
+            if (hasDefaultTitle && targetIndex <= 1 && isNewTitle()) {
               const defaultCell = state.cells[0];
+              // Normalize the inserted identity before both publication and selection.
+              cell.id = defaultCell.id;
               state.cells[0] = {
                 ...defaultCell,
                 ...cell,
                 metadata: { ...(cell.metadata || {}), isDefaultTitle: false },
-                id: defaultCell.id,
               } as Cell;
             } else {
               state.cells.splice(targetIndex, 0, cell);
             }
 
-            const needsReparse =
-              cell.type === 'markdown' && (cell.content.includes('#') || state.tasks.length === 0);
-
-            if (needsReparse) {
-              const updatedTasks = parseMarkdownCells(state.cells as any) as any;
-              updateCellsPhaseId(state.cells as any, updatedTasks);
-              state.tasks = updatedTasks;
-            } else {
-              notebookLog.debug('Skipping tasks re-parsing for non-title cell');
-            }
+            // Every insertion changes ranges, even when the new cell has no heading.
+            state.tasks = deriveEditedTasks(state.cells, state.tasks);
 
             state.currentCellId = cell.id;
+            publishedId = cell.id;
 
-            if (!state.currentPhaseId) {
-              const firstPhase = state.tasks[0]?.phases[0];
-              if (firstPhase) {
-                state.currentPhaseId = firstPhase.id;
-                state.currentStepIndex = 0;
-              }
-            } else {
-              const currentPhase = state.tasks
-                .flatMap((t) => t.phases)
-                .find((p) => p.id === state.currentPhaseId);
-              if (!currentPhase) {
-                const firstPhase = state.tasks[0]?.phases[0];
-                if (firstPhase) {
-                  state.currentPhaseId = firstPhase.id;
-                  state.currentStepIndex = 0;
-                }
+            let currentPhase: Phase | undefined;
+            if (state.currentPhaseId) {
+              for (const task of state.tasks) {
+                currentPhase = task.phases.find(phase => phase.id === state.currentPhaseId);
+                if (currentPhase) break;
               }
             }
-
-            const currentPhase = state.tasks
-              .flatMap((t) => t.phases)
-              .find((p) => p.id === state.currentPhaseId);
+            if (!currentPhase) {
+              currentPhase = state.tasks[0]?.phases[0];
+              if (currentPhase) {
+                state.currentPhaseId = currentPhase.id;
+                state.currentStepIndex = 0;
+              }
+            }
             if (currentPhase && state.currentStepIndex >= currentPhase.steps.length) {
               state.currentStepIndex = Math.max(0, currentPhase.steps.length - 1);
             }
           })
-        ),
+        );
+        return publishedId;
+      },
 
       updateTitle: (title: string) =>
         set(
@@ -653,10 +676,12 @@ const useStore = create(
               });
             } else {
               const cell = state.cells.find((c) => c.type === 'markdown');
-              if (cell) {
-                cell.content = `# ${title}`;
-              }
+              if (!cell) return;
+              if (cell.content === `# ${title}` && state.notebookTitle === title) return;
+              cell.content = `# ${title}`;
             }
+            state.notebookTitle = title;
+            state.tasks = deriveEditedTasks(state.cells, state.tasks);
           })
         ),
 
@@ -690,9 +715,7 @@ const useStore = create(
 
             state.cells = state.cells.filter((c) => c.id !== cellId);
 
-            const updatedTasks = parseMarkdownCells(state.cells as any) as any;
-            updateCellsPhaseId(state.cells as any, updatedTasks);
-            state.tasks = updatedTasks;
+            state.tasks = deriveEditedTasks(state.cells, state.tasks);
 
             if (cellToDelete && cellToDelete.phaseId === state.currentPhaseId) {
               const phaseCellsResult = findCellsByPhase(state.tasks as any, state.currentPhaseId!);
@@ -725,45 +748,41 @@ const useStore = create(
           })
         ),
 
-      updateCell: (cellId: string, newContent: string) =>
+      updateCell: (cellId: string, newContent: string) => {
+        const content = typeof newContent === 'string' ? newContent : String(newContent ?? '');
+        const cells = get().cells;
+        const cellIndex = getCellIndexById(cells, cellId);
+        if (cellIndex === undefined) return;
+        if (cells[cellIndex].content === content) return;
         set(
           produce((state: NotebookStoreState) => {
-            const cellIndex = state.cells.findIndex((c) => c.id === cellId);
             const cell = state.cells[cellIndex];
+            cell.content = content;
 
-            if (cell) {
-              console.log('🔍 [notebookStore] updateCell', {
-                cellId,
-                outputsCount: cell.outputs?.length,
-                contentLength: newContent.length,
-              });
-              const content =
-                typeof newContent === 'string' ? newContent : String(newContent ?? '');
-              cell.content = content;
-
-              // If it's the first cell, sync with notebookTitle
-              if (cellIndex === 0) {
-                const titleMatch = content.match(/^#\s*(.*)$/m);
-                const title = titleMatch
-                  ? titleMatch[1].trim()
-                  : content.split('\n')[0].replace(/^#\s*/, '').trim();
-                state.notebookTitle = title || 'Untitled';
-              }
+            // If it's the first cell, sync with notebookTitle
+            if (cellIndex === 0) {
+              const titleMatch = content.match(/^#\s*(.*)$/m);
+              const title = titleMatch
+                ? titleMatch[1].trim()
+                : content.split('\n')[0].replace(/^#\s*/, '').trim();
+              state.notebookTitle = title || 'Untitled';
             }
 
-            const updatedTasks = parseMarkdownCells(state.cells as any) as any;
-            state.tasks = updatedTasks;
-            updateCellsPhaseId(state.cells as any, updatedTasks);
+            if (cell.type !== 'markdown' || hasSameMarkdownStructure(cells, state.cells)) {
+              replaceTaskCellReferences(state.tasks, cell);
+            } else {
+              state.tasks = deriveEditedTasks(state.cells, state.tasks);
+            }
           })
-        ),
+        );
+      },
 
       updateCellOutputs: (cellId: string, outputs: OutputItem[]) => {
         console.log('🔍 [notebookStore] updateCellOutputs', {
           cellId,
           outputsCount: outputs.length,
         });
-        const serializedOutputs = serializeOutput(outputs);
-        updateCellOutputsHelper(set, get, cellId, serializedOutputs);
+        updateCellOutputsHelper(set, get, cellId, outputs);
       },
 
       moveCellToIndex: (fromIndex: number, toIndex: number) => {
@@ -784,6 +803,7 @@ const useStore = create(
               0,
               movedCell
             );
+            state.tasks = deriveEditedTasks(state.cells, state.tasks);
 
             notebookLog.cellOperation('move', 'batch', {
               from: fromIndex,
@@ -919,10 +939,8 @@ const useStore = create(
           phaseId: get().currentRunningPhaseId || null,
           description: '',
         });
-        get().addCell(model.toJSON());
-        set({ lastAddedCellId: id });
-        if (enableEdit) set({ editingCellId: id });
-        set({ currentCellId: id });
+        const publishedId = get().addCell(model.toJSON());
+        set({ lastAddedCellId: publishedId, ...(enableEdit ? { editingCellId: publishedId } : {}) });
 
         const state = get();
         if (!state.currentPhaseId) {
@@ -931,7 +949,7 @@ const useStore = create(
         }
 
         showToast({ description: `新建 ${type} 单元格已添加` });
-        return id;
+        return publishedId;
       },
 
       addNewCellWithUniqueIdentifier: (
@@ -973,10 +991,8 @@ const useStore = create(
           },
         });
 
-        get().addCell(model.toJSON());
-        set({ lastAddedCellId: id });
-        if (enableEdit) set({ editingCellId: id });
-        set({ currentCellId: id });
+        const publishedId = get().addCell(model.toJSON());
+        set({ lastAddedCellId: publishedId, ...(enableEdit ? { editingCellId: publishedId } : {}) });
 
         const state = get();
         if (!state.currentPhaseId) {
@@ -985,7 +1001,7 @@ const useStore = create(
         }
 
         showToast({ description: `新建 ${type} 单元格已添加` });
-        return id;
+        return publishedId;
       },
 
       updateCellByUniqueIdentifier: (uniqueIdentifier: string, updates: Partial<Cell>): boolean => {
@@ -1023,8 +1039,8 @@ const useStore = create(
 
         const currentIdx = get().cells.findIndex((c) => c.id === get().currentCellId);
         const insertIndex = currentIdx >= 0 ? currentIdx + 1 : undefined; // 若没有当前 cell，末尾插入
-        get().addCell(model.toJSON(), insertIndex);
-        set({ lastAddedCellId: id, editingCellId: id, currentCellId: id });
+        const publishedId = get().addCell(model.toJSON(), insertIndex);
+        set({ lastAddedCellId: publishedId, editingCellId: publishedId });
 
         const state = get();
         if (!state.currentPhaseId) {
@@ -1124,85 +1140,53 @@ const useStore = create(
       },
 
       updateCellCanEdit: (cellId: string, isEditable: boolean) =>
-        set(
-          produce((state: NotebookStoreState) => {
-            const cell = state.cells.find((c) => c.id === cellId);
-            if (cell) cell.enableEdit = isEditable;
-          })
-        ),
+        get().updateCellObject(cellId, { enableEdit: isEditable }),
 
       updateCellMetadata: (cellId: string, metadata: Record<string, any>) =>
-        set(
-          produce((state: NotebookStoreState) => {
-            const cell = state.cells.find((c) => c.id === cellId);
-            if (cell) {
-              cell.metadata = { ...(cell.metadata || {}), ...metadata };
-            }
-          })
-        ),
+        get().updateCellObject(cellId, { metadata }),
 
-      updateCellObject: (cellId: string, updates: Partial<Cell>) =>
-        set(
-          produce((state: NotebookStoreState) => {
-            const cell = state.cells.find((c) => c.id === cellId);
-            if (cell) {
-              // Merge updates into the cell
-              Object.assign(cell, updates);
+      updateCellObject: (cellId: string, updates: Partial<Cell>) => {
+        const state = get();
+        const index = getCellIndexById(state.cells, cellId);
+        if (index === undefined) return;
+        const cell = state.cells[index];
+        if (Object.keys(updates).every((key) => {
+          if (key === 'metadata' && updates.metadata) {
+            return Object.keys(updates.metadata).every((field) =>
+              cell.metadata != null && Object.prototype.hasOwnProperty.call(cell.metadata, field) &&
+              cell.metadata?.[field] === updates.metadata?.[field]);
+          }
+          return cell[key as keyof Cell] === updates[key as keyof Cell];
+        })) return;
+        const replacement = {
+          ...cell,
+          ...updates,
+          ...(updates.metadata ? { metadata: { ...cell.metadata, ...updates.metadata } } : {}),
+        };
+        const cells = state.cells.slice();
+        cells[index] = replacement;
+        state.setCells(cells);
+      },
 
-              // If metadata is being updated, merge it properly
-              if (updates.metadata) {
-                cell.metadata = { ...(cell.metadata || {}), ...updates.metadata };
-              }
+      convertCurrentCodeCellToHybridCell: () => {
+        const state = get();
+        const currentCell = state.currentCellId ? getCellById(state.cells, state.currentCellId) : undefined;
+        if (!currentCell || currentCell.type !== 'code') return;
+        const model = new CellContent(currentCell).convertToHybrid();
+        state.updateCellObject(currentCell.id, { type: model.type, content: model.content });
+      },
 
-              // If outputs are being updated, ensure they're serialized
-              if (updates.outputs) {
-                cell.outputs = serializeOutput(updates.outputs);
-              }
-            }
-          })
-        ),
-
-      convertCurrentCodeCellToHybridCell: () =>
-        set(
-          produce((state: NotebookStoreState) => {
-            const currentCell = state.cells.find((c) => c.id === state.currentCellId);
-            if (!currentCell) {
-              notebookLog.warn('No current cell found - cannot convert to Hybrid cell');
-              return;
-            }
-            const model = CellModel.fromJSON(currentCell).convertToHybrid();
-            const updated = model.toJSON();
-            Object.assign(currentCell, updated);
-          })
-        ),
-
-      convertToCodeCell: (cellId: string) =>
-        set(
-          produce((state: NotebookStoreState) => {
-            const cell = state.cells.find((c) => c.id === cellId);
-            if (!cell) return;
-            const model = CellModel.fromJSON(cell).convertMarkdownCodeBlockToCode();
-            const updated = model.toJSON();
-            Object.assign(cell, updated);
-
-            const updatedTasks = parseMarkdownCells(state.cells as any) as any;
-            updateCellsPhaseId(state.cells as any, updatedTasks);
-            state.tasks = updatedTasks;
-          })
-        ),
+      convertToCodeCell: (cellId: string) => {
+        const state = get();
+        const cell = getCellById(state.cells, cellId);
+        if (!cell || cell.type === 'code') return;
+        const model = new CellContent(cell).convertMarkdownCodeBlockToCode();
+        if (model.type !== 'code') return;
+        state.updateCellObject(cellId, { type: model.type, content: model.content, language: model.language });
+      },
 
       updateCellType: (cellId: string, newType: CellType) =>
-        set(
-          produce((state: NotebookStoreState) => {
-            const cell = state.cells.find((c) => c.id === cellId);
-            if (cell) {
-              cell.type = newType;
-              const updatedTasks = parseMarkdownCells(state.cells as any) as any;
-              updateCellsPhaseId(state.cells as any, updatedTasks);
-              state.tasks = updatedTasks;
-            }
-          })
-        ),
+        get().updateCellObject(cellId, { type: newType }),
 
       getHistoryCode: (): string => {
         const state = get();
@@ -1276,10 +1260,8 @@ const useStore = create(
           return [];
         }
 
-        return cells.map((cell) => ({
-          ...cell,
-          outputs: Array.isArray(cell.outputs) ? cell.outputs.map(deserializeOutput) : [],
-        }));
+        // Outputs are normalized at publication; query paths share immutable cells.
+        return cells;
       },
 
       getCurrentStepCellsIDs: (): string[] => {
@@ -1302,10 +1284,7 @@ const useStore = create(
         if (!currentCellId || !Array.isArray(cells)) return [];
         const currentIndex = cells.findIndex((cell) => cell.id === currentCellId);
         if (currentIndex === -1) return [];
-        return cells.slice(0, currentIndex).map((cell) => ({
-          ...cell,
-          outputs: Array.isArray(cell.outputs) ? cell.outputs.map(deserializeOutput) : [],
-        }));
+        return cells.slice(0, currentIndex);
       },
 
       getTotalSteps: (): number => {
