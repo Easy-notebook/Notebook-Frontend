@@ -138,9 +138,7 @@ export class NotebookRepository implements INotebookRepository {
     }
   }
 
-  async getNotebookStats(
-    id: string
-  ): Promise<{
+  async getNotebookStats(id: string): Promise<{
     fileCount: number;
     totalSize: number;
     lastActivity: number;

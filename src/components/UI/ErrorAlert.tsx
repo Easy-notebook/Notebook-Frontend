@@ -1,6 +1,6 @@
 // src/components/UI/ErrorAlert.jsx
-import React from 'react'
-import { XCircle } from 'lucide-react'
+import React from 'react';
+import { XCircle } from 'lucide-react';
 
 const ErrorAlert = ({ message, onClose }) => {
   return (
@@ -12,16 +12,13 @@ const ErrorAlert = ({ message, onClose }) => {
           <p className="text-sm mt-1">{message}</p>
         </div>
         {onClose && (
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-red-100 rounded"
-          >
+          <button onClick={onClose} className="p-1 hover:bg-red-100 rounded">
             <XCircle size={16} />
           </button>
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default ErrorAlert
+export default ErrorAlert;

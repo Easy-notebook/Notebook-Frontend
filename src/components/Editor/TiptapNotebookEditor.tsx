@@ -8,6 +8,9 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import useStore from '@Store/notebookStore';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from './utils/cellConverters';
+import { CellSourceButton } from './TipTap/components/CellSourceButton';
+import { NotebookSourceButton } from './TipTap/components/NotebookSourceButton';
+import { EditorReadOnlyContext } from './EditorAccessContext';
 import '@Utils/logger'; // Initialize debug tools
 
 // Hooks
@@ -16,7 +19,6 @@ import { useEditorEvents } from './TipTap/hooks/useEditorEvents';
 import { useEditorSync } from './TipTap/hooks/useEditorSync';
 import { useKeyboardHandlers } from './TipTap/hooks/useKeyboardHandlers';
 import { useLinkHandler } from './TipTap/hooks/useLinkHandler';
-import { useBeforeUnload } from './TipTap/hooks/useBeforeUnload';
 import { useTranslation } from 'react-i18next';
 
 // Config
@@ -33,8 +35,8 @@ import TipTapSlashCommands from './TipTap/TipTapSlashCommands';
 import { useTipTapSlashCommands } from './TipTap/useTipTapSlashCommands';
 import { EditorBubbleMenu } from './TipTap/components/BubbleMenu';
 import { EditorCover } from './TipTap/components/EditorCover';
-import { EditorGlobalStyles } from './EditorGlobalStyles';
 import './editor.css';
+import './editorLayout.css';
 
 // Types
 interface TiptapNotebookEditorProps {
@@ -67,10 +69,12 @@ export interface TiptapNotebookEditorRef {
   addRawCell: () => string;
 }
 
+const getCurrentCells = () => useStore.getState().cells;
+
 const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookEditorProps>(
   (
     {
-      className = 'text-2xl font-bold leading-relaxed',
+      className = 'text-base font-normal leading-relaxed',
       placeholder: _placeholder = 'Untitled',
       readOnly = false,
     },
@@ -80,30 +84,12 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const cells = useStore((state) => state.cells);
     const setCells = useStore((state) => state.setCells);
 
-    // Debug: Log cells changes
-    useEffect(() => {
-      console.log('🔍 [TiptapNotebookEditor] cells changed', {
-        cellsCount: cells.length,
-        cellIds: cells.map((c) => c.id),
-        cellTypes: cells.map((c) => c.type),
-      });
-    }, [cells]);
-
     // Editor state
     const editorRef = useRef<Editor | null>(null);
     const [currentEditor, setCurrentEditor] = useState<Editor | null>(null);
 
-    // Sync refs
-    const isInternalUpdate = useRef<boolean>(false);
-    const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastInsertedCodeCellIdRef = useRef<string | null>(null);
-
     // Calculate initial content once on mount
     const initialContent = useMemo(() => {
-      console.log('🔍 [TiptapNotebookEditor] calculating initialContent', {
-        cellsCount: cells.length,
-        hasOutputs: cells.some((c) => c.outputs && c.outputs.length > 0),
-      });
       return convertCellsToHtml(cells);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty deps - only calculate once
@@ -125,16 +111,10 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
     // Hooks
     const { handleKeyDown } = useKeyboardHandlers();
-    const cellManagement = useCellManagement({ cells, setCells });
+    const cellManagement = useCellManagement({ getCells: getCurrentCells, setCells });
     const editorEvents = useEditorEvents({
-      cells,
-      setCells,
-      isInternalUpdate,
-      syncTimeoutRef,
-      lastInsertedCodeCellIdRef,
       setCurrentEditor,
       editorRef,
-      defaultTitle: localizedPlaceholder,
     });
 
     // TipTap slash commands
@@ -149,7 +129,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
       onDestroy: editorEvents.onDestroy,
       onTransaction: editorEvents.onTransaction,
       onUpdate: editorEvents.onUpdate,
-      onBlur: editorEvents.onBlur,
       editorProps: {
         attributes: {
           class: `tiptap-notebook-editor markdown-cell prose max-w-none focus:outline-none ${className}`,
@@ -165,15 +144,14 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     const { handleEditorClick } = useLinkHandler(editor);
 
     // Editor sync hook
-    useEditorSync({ editor, cells, isInternalUpdate });
+    useEditorSync({ editor, cells });
 
-    // Before unload handler
-    useBeforeUnload({ editor, cells, setCells, isInternalUpdate, syncTimeoutRef });
+    useEffect(() => {
+      if (editor && editor.isEditable === readOnly) editor.setEditable(!readOnly, false);
+    }, [editor, readOnly]);
 
     // Cleanup
     useEffect(() => {
-      const currentSyncTimeout = syncTimeoutRef.current;
-
       const handleMarkdownFocus = (e: Event) => {
         const customEvent = e as CustomEvent;
         const { cellId, direction, sourceCellId } = customEvent.detail;
@@ -260,9 +238,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
 
       return () => {
         window.removeEventListener('markdown-cell-focus', handleMarkdownFocus);
-        if (currentSyncTimeout) {
-          clearTimeout(currentSyncTimeout);
-        }
         if (editorRef.current) {
           editorRef.current.destroy();
           editorRef.current = null;
@@ -306,39 +281,47 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
     }
 
     return (
-      <SimpleDragManager editor={currentEditor}>
-        <div
-          className="tiptap-notebook-editor-container w-full h-full bg-transparent flex flex-col"
-          style={{ minHeight: '500px' }}
-        >
-          {/* Main editor content with drag manager */}
-          <EditorCover editor={currentEditor} />
+      <EditorReadOnlyContext.Provider value={readOnly}>
+        <SimpleDragManager editor={currentEditor}>
+          <div
+            className="tiptap-notebook-editor-container w-full h-full bg-transparent flex flex-col"
+            style={{ minHeight: '500px' }}
+          >
+            {/* Main editor content with drag manager */}
+            <EditorCover editor={currentEditor} />
 
-          <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
-            <div onClick={handleEditorClick} className="w-full h-full">
-              <EditorBubbleMenu editor={currentEditor} />
-              <EditorContent editor={editor} className="w-full h-full focus-within:outline-none" />
+            <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
+                <div className="flex justify-end">
+                  {!readOnly && <CellSourceButton editor={editor} />}
+                  <NotebookSourceButton editor={editor} />
+                </div>
+              <div onClick={handleEditorClick} className="w-full h-full">
+                <EditorBubbleMenu editor={currentEditor} />
+                <EditorContent
+                  editor={editor}
+                  className="w-full h-full focus-within:outline-none"
+                />
+              </div>
+              <div className="h-20 w-full flex-shrink-0"></div>
             </div>
-            <div className="h-20 w-full flex-shrink-0"></div>
+
+            {/* TipTap slash commands menu */}
+            <TipTapSlashCommands
+              editor={currentEditor}
+              isOpen={slashCommands.isMenuOpen}
+              onClose={() => {
+                slashCommands.removeSlashText();
+                slashCommands.closeMenu();
+              }}
+              position={slashCommands.menuPosition}
+              searchQuery={slashCommands.searchQuery}
+              onQueryUpdate={slashCommands.updateSlashQuery}
+            />
+
+            {/* Editor styles */}
           </div>
-
-          {/* TipTap slash commands menu */}
-          <TipTapSlashCommands
-            editor={currentEditor}
-            isOpen={slashCommands.isMenuOpen}
-            onClose={() => {
-              slashCommands.removeSlashText();
-              slashCommands.closeMenu();
-            }}
-            position={slashCommands.menuPosition}
-            searchQuery={slashCommands.searchQuery}
-            onQueryUpdate={slashCommands.updateSlashQuery}
-          />
-
-          {/* Editor styles */}
-          <EditorGlobalStyles />
-        </div>
-      </SimpleDragManager>
+        </SimpleDragManager>
+      </EditorReadOnlyContext.Provider>
     );
   }
 );

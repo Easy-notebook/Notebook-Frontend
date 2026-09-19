@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Editor } from '@tiptap/react';
-import { 
-  Code, 
-  Type, 
-  Heading1, 
-  Heading2, 
+import {
+  Code,
+  Type,
+  Heading1,
+  Heading2,
   Heading3,
   List,
   ListOrdered,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import './types';
+import { isCompositionInput } from '../utils/compositionInput';
 
 interface TipTapCommand {
   id: string;
@@ -43,7 +44,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
   onClose,
   position,
   searchQuery = '',
-  onQueryUpdate
+  onQueryUpdate,
 }) => {
   const [filteredCommands, setFilteredCommands] = useState<TipTapCommand[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -60,7 +61,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['text', 'paragraph', '文本', '段落', 'txt'],
       action: (editor) => {
         editor.chain().focus().setParagraph().run();
-      }
+      },
     },
     {
       id: 'heading1',
@@ -70,7 +71,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['h1', 'heading', 'title', '标题', '大标题'],
       action: (editor) => {
         editor.chain().focus().toggleHeading({ level: 1 }).run();
-      }
+      },
     },
     {
       id: 'heading2',
@@ -80,7 +81,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['h2', 'heading', 'subtitle', '标题', '中标题'],
       action: (editor) => {
         editor.chain().focus().toggleHeading({ level: 2 }).run();
-      }
+      },
     },
     {
       id: 'heading3',
@@ -90,7 +91,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['h3', 'heading', '标题', '小标题'],
       action: (editor) => {
         editor.chain().focus().toggleHeading({ level: 3 }).run();
-      }
+      },
     },
     {
       id: 'bulletlist',
@@ -100,7 +101,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['list', 'bullet', 'ul', '列表', '无序'],
       action: (editor) => {
         editor.chain().focus().toggleBulletList().run();
-      }
+      },
     },
     {
       id: 'orderedlist',
@@ -110,7 +111,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['list', 'numbered', 'ol', '列表', '有序', '编号'],
       action: (editor) => {
         editor.chain().focus().toggleOrderedList().run();
-      }
+      },
     },
     {
       id: 'blockquote',
@@ -120,7 +121,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['quote', 'blockquote', '引用'],
       action: (editor) => {
         editor.chain().focus().toggleBlockquote().run();
-      }
+      },
     },
     {
       id: 'codeblock',
@@ -131,24 +132,34 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       action: (editor) => {
         const newId = uuidv4();
         try {
-          editor.chain().focus().insertExecutableCodeBlock({
-            language: 'python',
-            code: '',
-            cellId: newId,
-            outputs: [],
-            enableEdit: true,
-          }).run();
+          editor
+            .chain()
+            .focus()
+            .insertExecutableCodeBlock({
+              language: 'python',
+              code: '',
+              cellId: newId,
+              outputs: [],
+              enableEdit: true,
+            })
+            .run();
         } catch {
-          editor.chain().focus().insertContent({
-            type: 'executableCodeBlock',
-            attrs: { language: 'python', code: '', cellId: newId, outputs: [], enableEdit: true }
-          }).run();
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'executableCodeBlock',
+              attrs: { language: 'python', code: '', cellId: newId, outputs: [], enableEdit: true },
+            })
+            .run();
         }
         setTimeout(() => {
-          const codeElement = document.querySelector(`[data-cell-id="${newId}"] .cm-editor .cm-content`);
+          const codeElement = document.querySelector(
+            `[data-cell-id="${newId}"] .cm-editor .cm-content`
+          );
           if (codeElement) (codeElement as HTMLElement).focus();
         }, 60);
-      }
+      },
     },
     {
       id: 'table',
@@ -158,7 +169,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['table', 'grid', '表格'],
       action: (editor) => {
         editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-      }
+      },
     },
     {
       id: 'math',
@@ -168,15 +179,19 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['math', 'latex', 'formula', '数学', '公式'],
       action: (editor) => {
         try {
-          editor.chain().focus().setLaTeX({
-            latex: 'E = mc^2',
-            displayMode: true
-          }).run();
+          editor
+            .chain()
+            .focus()
+            .setLaTeX({
+              latex: 'E = mc^2',
+              displayMode: true,
+            })
+            .run();
         } catch {
           // fallback: 插入普通文本
           editor.chain().focus().insertContent('$$E = mc^2$$').run();
         }
-      }
+      },
     },
     {
       id: 'image',
@@ -196,17 +211,21 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
 
         if (url) {
           try {
-            editor.chain().focus().setImage({
-              src: url,
-              alt: '图片',
-              title: '图片'
-            }).run();
+            editor
+              .chain()
+              .focus()
+              .setImage({
+                src: url,
+                alt: '图片',
+                title: '图片',
+              })
+              .run();
           } catch {
             // fallback: 插入普通文本
             editor.chain().focus().insertContent(`![图片](${url})`).run();
           }
         }
-      }
+      },
     },
     {
       id: 'raw',
@@ -216,11 +235,19 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['raw', 'text', 'plain', '原始', '文本'],
       action: (editor) => {
         try {
-          editor.chain().focus().insertContent({ type: 'rawBlock', attrs: { content: '' } }).run();
+          editor
+            .chain()
+            .focus()
+            .insertContent({ type: 'rawBlock', attrs: { content: '' } })
+            .run();
         } catch {
-          editor.chain().focus().insertContent('<div data-type="raw-block" data-content=""></div>').run();
+          editor
+            .chain()
+            .focus()
+            .insertContent('<div data-type="raw-block" data-content=""></div>')
+            .run();
         }
-      }
+      },
     },
     {
       id: 'video',
@@ -232,24 +259,30 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
         // 检查查询中是否已包含URL参数
         const videoMatch = query?.match(/^video\s+(.+)$/);
         let url = videoMatch ? videoMatch[1].trim() : null;
-        
+
         // 如果没有URL参数，弹出输入框
         if (!url) {
           url = prompt('请输入视频URL:');
         }
-        
+
         if (url) {
           // 插入视频HTML
-          editor.chain().focus().insertContent(`
+          editor
+            .chain()
+            .focus()
+            .insertContent(
+              `
             <div class="video-container">
               <video controls style="max-width: 100%; height: auto;">
                 <source src="${url}" type="video/mp4">
                 您的浏览器不支持视频标签。
               </video>
             </div>
-          `).run();
+          `
+            )
+            .run();
         }
-      }
+      },
     },
     {
       id: 'thinking',
@@ -259,19 +292,27 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       keywords: ['ai', 'thinking', 'assistant', 'AI', '思考', '助手'],
       action: (editor) => {
         try {
-          editor.chain().focus().insertThinkingCell({
-            cellId: `thinking-${Date.now()}`,
-            agentName: 'AI',
-            customText: null,
-            textArray: [],
-            useWorkflowThinking: false,
-          }).run();
+          editor
+            .chain()
+            .focus()
+            .insertThinkingCell({
+              cellId: `thinking-${Date.now()}`,
+              agentName: 'AI',
+              customText: null,
+              textArray: [],
+              useWorkflowThinking: false,
+            })
+            .run();
         } catch {
           // fallback: 插入普通文本
-          editor.chain().focus().insertContent('<div class="thinking-placeholder">🤖 AI思考区域</div>').run();
+          editor
+            .chain()
+            .focus()
+            .insertContent('<div class="thinking-placeholder">🤖 AI思考区域</div>')
+            .run();
         }
-      }
-    }
+      },
+    },
   ];
 
   // 处理查询更新
@@ -284,17 +325,17 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
 
   // 过滤命令
   useEffect(() => {
-    const filtered = commands.filter(command => {
+    const filtered = commands.filter((command) => {
       if (!query.trim()) return true;
-      
+
       const searchTerm = query.toLowerCase();
       return (
         command.title.toLowerCase().includes(searchTerm) ||
         command.description.toLowerCase().includes(searchTerm) ||
-        command.keywords.some(keyword => keyword.toLowerCase().includes(searchTerm))
+        command.keywords.some((keyword) => keyword.toLowerCase().includes(searchTerm))
       );
     });
-    
+
     setFilteredCommands(filtered);
     setSelectedIndex(0);
   }, [query]);
@@ -307,7 +348,19 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
   // 键盘导航 - 增强事件处理，支持字符输入过滤
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
+      if (!isOpen || !editor || editor.isDestroyed || !editor.isEditable || isCompositionInput(e))
+        return;
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      // Capture listeners run before source inputs can stop propagation. Only
+      // this menu and its rich-text owner may feed commands into this session.
+      const inMenu = menuRef.current?.contains(target);
+      if (
+        !inMenu &&
+        (!editor.view.dom.contains(target) ||
+          target.closest('input, textarea, select, .cm-editor, dialog'))
+      )
+        return;
 
       // 处理导航和控制键
       switch (e.key) {
@@ -315,7 +368,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
           e.preventDefault();
           e.stopPropagation();
           if (filteredCommands.length > 0) {
-            setSelectedIndex(prev => {
+            setSelectedIndex((prev) => {
               const nextIndex = prev < filteredCommands.length - 1 ? prev + 1 : 0;
               return nextIndex;
             });
@@ -325,7 +378,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
           e.preventDefault();
           e.stopPropagation();
           if (filteredCommands.length > 0) {
-            setSelectedIndex(prev => {
+            setSelectedIndex((prev) => {
               const nextIndex = prev > 0 ? prev - 1 : filteredCommands.length - 1;
               return nextIndex;
             });
@@ -348,9 +401,7 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
           e.preventDefault();
           e.stopPropagation();
           if (filteredCommands.length > 0) {
-            setSelectedIndex(prev => 
-              prev < filteredCommands.length - 1 ? prev + 1 : 0
-            );
+            setSelectedIndex((prev) => (prev < filteredCommands.length - 1 ? prev + 1 : 0));
           }
           break;
         case 'Backspace':
@@ -431,40 +482,42 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
 
       {/* 命令列表 */}
       <div className="max-h-80 overflow-y-auto">
-        {filteredCommands.length === 0 ? (
-          null
-        ) : (
+        {filteredCommands.length === 0 ? null : (
           <div className="py-1">
             {filteredCommands.map((command, index) => (
               <button
                 key={command.id}
                 className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-all duration-200 command-item ${
-                  index === selectedIndex 
-                    ? 'command-item-selected' 
-                    : 'text-gray-700'
+                  index === selectedIndex ? 'command-item-selected' : 'text-gray-700'
                 }`}
                 onClick={() => {
-                  if (editor) {
+                  if (editor && !editor.isDestroyed && editor.isEditable) {
                     command.action(editor, query);
                     onClose();
                   }
                 }}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
-                <div className={`flex-shrink-0 ${
-                  index === selectedIndex ? 'text-theme-600' : 'text-gray-500'
-                }`}>
+                <div
+                  className={`flex-shrink-0 ${
+                    index === selectedIndex ? 'text-theme-600' : 'text-gray-500'
+                  }`}
+                >
                   {command.icon}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={`font-medium text-sm ${
-                    index === selectedIndex ? 'text-theme-900' : 'text-gray-900'
-                  }`}>
+                  <div
+                    className={`font-medium text-sm ${
+                      index === selectedIndex ? 'text-theme-900' : 'text-gray-900'
+                    }`}
+                  >
                     {command.title}
                   </div>
-                  <div className={`text-xs truncate ${
-                    index === selectedIndex ? 'text-theme-600' : 'text-gray-500'
-                  }`}>
+                  <div
+                    className={`text-xs truncate ${
+                      index === selectedIndex ? 'text-theme-600' : 'text-gray-500'
+                    }`}
+                  >
                     {command.description}
                   </div>
                 </div>

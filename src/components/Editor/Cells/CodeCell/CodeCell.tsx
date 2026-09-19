@@ -1,6 +1,8 @@
 import React, { useRef } from 'react';
 import { DISPLAY_MODES } from '@Store/codeStore';
 import { useCodeCellViewModel } from './model/useCodeCellViewModel';
+import { useEditorReadOnly } from '../../EditorAccessContext';
+import { isCompositionInput } from '../../utils/compositionInput';
 
 // Import components
 import { CellToolbar, CodeEditor, OutputDisplay, CompactModeView } from './components';
@@ -14,12 +16,14 @@ import { CodeCellProps, ReactCodeMirrorRef } from './utils/types';
 const CodeCell: React.FC<CodeCellProps> = ({
   cell,
   onDelete,
+  onBreakFence,
   dslcMode = false,
   finished_thinking = false,
   thinkingText = 'finished thinking',
   isInDetachedView = false,
   isDemoMode = false,
 }) => {
+  const readOnly = useEditorReadOnly();
   // ========== Refs ==========
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const codeContainerRef = useRef<HTMLDivElement | null>(null);
@@ -39,11 +43,11 @@ const CodeCell: React.FC<CodeCellProps> = ({
   // ========== Rendering Logic ==========
 
   // DSLC mode visibility
-  const shouldHideToolbar = dslcMode;
+  const shouldHideToolbar = dslcMode || readOnly;
   const shouldHideCode = dslcMode && vm.processedOutputs.length > 0;
 
   // Show compact mode if detached but not in detached view
-  if (vm.isDetached && !isInDetachedView) {
+  if (vm.isDetached && !isInDetachedView && !readOnly) {
     return (
       <CompactModeView
         cell={cell}
@@ -58,8 +62,31 @@ const CodeCell: React.FC<CodeCellProps> = ({
   return (
     <div
       data-cell-id={cell.id}
+      onKeyDownCapture={(event) => {
+        const selection = editorRef.current?.view?.state.selection.main;
+        if (
+          onBreakFence &&
+          !readOnly &&
+          event.key === 'Backspace' &&
+          !isCompositionInput(event.nativeEvent) &&
+          !editorRef.current?.view?.composing &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          selection?.empty &&
+          selection.from === 0 &&
+          !vm.isExecuting &&
+          !dslcMode
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          onBreakFence();
+        }
+      }}
       className={`code-cell-container codeCell ${
-        isInDetachedView ? 'bg-white h-full' : 'bg-white/90 shadow-sm rounded-lg backdrop-blur-sm'
+        isInDetachedView
+          ? 'bg-white dark:bg-gray-900 h-full'
+          : 'bg-white/90 dark:bg-gray-900/90 shadow-sm rounded-lg backdrop-blur-sm'
       }`}
       ref={codeContainerRef}
       style={{
@@ -72,11 +99,11 @@ const CodeCell: React.FC<CodeCellProps> = ({
       <div
         className={`${
           isInDetachedView ? 'h-full flex flex-col' : 'rounded-xl border hover:shadow-md'
-        } backdrop-blur-md transition-all duration-500 ease-out
+        } dark:border-gray-700 backdrop-blur-md transition-all duration-500 ease-out
                     ${
                       vm.isExecuting
-                        ? 'border-yellow-400/50 shadow-lg bg-white/95'
-                        : 'bg-white/90 text-black'
+                        ? 'border-yellow-400/50 shadow-lg bg-white/95 dark:bg-gray-900/95'
+                        : 'bg-white/90 dark:bg-gray-900/90 text-black dark:text-gray-100'
                     }
                     ${isInDetachedView ? '' : 'hover:shadow-md'}
                 `}
@@ -139,8 +166,12 @@ const CodeCell: React.FC<CodeCellProps> = ({
               onHoverChange={(h) => vm.setIsHovering(h)}
               onExpand={vm.handleExpand}
               onCollapse={vm.handleCollapse}
-              onChange={vm.handleChange}
-              onKeyDown={vm.handleKeyDown}
+              onChange={(value) => {
+                if (!readOnly) vm.handleChange(value);
+              }}
+              onKeyDown={(event) => {
+                if (!readOnly) vm.handleKeyDown(event);
+              }}
               onCopyCode={vm.copyCode}
             />
           )}

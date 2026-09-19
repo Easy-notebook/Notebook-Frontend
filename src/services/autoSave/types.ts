@@ -167,7 +167,7 @@ export interface IAutoSaveService {
  * Default auto-save configuration
  */
 export const DEFAULT_AUTOSAVE_CONFIG: AutoSaveConfig = {
-  debounceMs: 25,
+  debounceMs: 250,
   enabled: true,
   maxRetries: 3,
   retryDelayMs: 1000,

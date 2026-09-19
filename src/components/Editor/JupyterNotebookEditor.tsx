@@ -8,6 +8,7 @@ import React, {
   MutableRefObject,
 } from 'react';
 import useStore from '@Store/notebookStore';
+import { getCellIndexById } from '@Store/models/cellIndex';
 import { CodeCell, MarkdownCell, HybridCell, ImageCell, AIThinkingCell, LinkCell } from './Cells';
 import DraggableCellList from './DragAndDrop/DraggableCellList';
 import ShortcutsHelp from './KeyboardShortcuts/ShortcutsHelp';
@@ -20,7 +21,7 @@ import {
   focusCellEditor,
   debouncedFocus,
 } from './utils/cursorPositioning';
-import { EditorGlobalStyles } from './EditorGlobalStyles';
+import './editorLayout.css';
 
 /* --------------------------- Types --------------------------- */
 import type { Cell, CellType, OutputItem } from '@Store/models';
@@ -208,7 +209,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
 
     const handleMoveCell = useCallback(
       (cellId: string, direction: 'up' | 'down') => {
-        const idx = cells.findIndex((c) => c.id === cellId);
+        const idx = getCellIndexById(cells, cellId) ?? -1;
         if (idx === -1) return;
         const target = direction === 'up' ? idx - 1 : idx + 1;
         if (target < 0 || target >= cells.length) return;
@@ -221,7 +222,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
 
     const renderCell = useCallback(
       (cell: Cell) => {
-        const cellIndex = cells.findIndex((c) => c.id === cell.id);
+        const cellIndex = getCellIndexById(cells, cell.id) ?? -1;
         const commonProps = {
           cell,
           readOnly,
@@ -675,7 +676,6 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
         </div>
 
         <ShortcutsHelp isOpen={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
-        <EditorGlobalStyles />
 
         <style>{`
           .jupyter-notebook-editor {

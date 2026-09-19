@@ -8,7 +8,7 @@ interface WorkflowPanelState {
   // State for the "Workflow Update Confirmation" dialog
   showWorkflowConfirm: boolean;
   pendingWorkflowUpdate: any | null; // Stores the data for the pending update
-  
+
   // Handlers to connect the dialog's buttons to the state machine's logic
   onConfirmWorkflowUpdate: (() => void) | null;
   onRejectWorkflowUpdate: (() => void) | null;
@@ -21,9 +21,9 @@ interface WorkflowPanelState {
   setPendingWorkflowUpdate: (update: any | null) => void;
   setOnConfirmWorkflowUpdate: (handler: (() => void) | null) => void;
   setOnRejectWorkflowUpdate: (handler: (() => void) | null) => void;
-  
+
   toggleAutoTracking: () => void;
-  
+
   // Utility methods for UI components to call
   confirmWorkflowUpdate: () => void;
   rejectWorkflowUpdate: () => void;

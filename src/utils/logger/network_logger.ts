@@ -12,7 +12,7 @@ export class NetworkLogger extends Logger {
       enableColors: true,
       groupIcon: '🔌',
       customPrefix: '[NETWORK]',
-      ...config
+      ...config,
     });
   }
 
@@ -22,18 +22,20 @@ export class NetworkLogger extends Logger {
   statusChange(online: boolean, connectionType?: string, effectiveType?: string): void {
     const builder = this.builder()
       .text('Network Status ')
-      .badge(online ? 'ONLINE' : 'OFFLINE', { 
-        backgroundColor: online ? '#10B981' : '#DC2626', 
-        color: '#FFFFFF' 
+      .badge(online ? 'ONLINE' : 'OFFLINE', {
+        backgroundColor: online ? '#10B981' : '#DC2626',
+        color: '#FFFFFF',
       });
 
     if (connectionType) {
-      builder.text(' Type: ')
+      builder
+        .text(' Type: ')
         .badge(connectionType.toUpperCase(), { backgroundColor: '#6366F1', color: '#FFFFFF' });
     }
 
     if (effectiveType) {
-      builder.text(' Speed: ')
+      builder
+        .text(' Speed: ')
         .badge(effectiveType.toUpperCase(), { backgroundColor: '#8B5CF6', color: '#FFFFFF' });
     }
 
@@ -47,13 +49,17 @@ export class NetworkLogger extends Logger {
   /**
    * Log WebSocket connection events
    */
-  websocket(event: 'connect' | 'disconnect' | 'error' | 'message' | 'reconnect', url: string, details?: any): void {
+  websocket(
+    event: 'connect' | 'disconnect' | 'error' | 'message' | 'reconnect',
+    url: string,
+    details?: any
+  ): void {
     const eventColors = {
-      'connect': '#10B981',
-      'disconnect': '#F59E0B',
-      'error': '#DC2626',
-      'message': '#3B82F6',
-      'reconnect': '#8B5CF6'
+      connect: '#10B981',
+      disconnect: '#F59E0B',
+      error: '#DC2626',
+      message: '#3B82F6',
+      reconnect: '#8B5CF6',
     };
 
     const builder = this.builder()
@@ -64,13 +70,14 @@ export class NetworkLogger extends Logger {
 
     if (details) {
       if (event === 'message') {
-        builder.text(' Data: ')
+        builder
+          .text(' Data: ')
           .code(typeof details === 'string' ? details : JSON.stringify(details), 'json');
       } else if (event === 'error') {
-        builder.text(' Error: ')
-          .text(details.message || details);
+        builder.text(' Error: ').text(details.message || details);
       } else if (event === 'reconnect') {
-        builder.text(' Attempt: ')
+        builder
+          .text(' Attempt: ')
           .badge(`#${details.attempt}`, { backgroundColor: '#8B5CF6', color: '#FFFFFF' });
       }
     }
@@ -89,10 +96,10 @@ export class NetworkLogger extends Logger {
    */
   sse(event: 'connect' | 'disconnect' | 'message' | 'error', url: string, data?: any): void {
     const eventColors = {
-      'connect': '#10B981',
-      'disconnect': '#F59E0B',
-      'message': '#3B82F6',
-      'error': '#DC2626'
+      connect: '#10B981',
+      disconnect: '#F59E0B',
+      message: '#3B82F6',
+      error: '#DC2626',
     };
 
     const builder = this.builder()
@@ -103,13 +110,13 @@ export class NetworkLogger extends Logger {
 
     if (data) {
       if (event === 'message') {
-        builder.text(' Event: ')
+        builder
+          .text(' Event: ')
           .badge(data.type || 'message', { backgroundColor: '#6366F1', color: '#FFFFFF' })
           .text(' Data: ')
           .code(data.data || data, 'text');
       } else if (event === 'error') {
-        builder.text(' Error: ')
-          .text(data.message || data);
+        builder.text(' Error: ').text(data.message || data);
       }
     }
 
@@ -127,7 +134,7 @@ export class NetworkLogger extends Logger {
    */
   latency(target: string, latency: number, type: 'ping' | 'api' | 'websocket' = 'ping'): void {
     const latencyColor = latency > 500 ? '#DC2626' : latency > 200 ? '#F59E0B' : '#10B981';
-    
+
     this.info(
       this.builder()
         .text('Latency ')
@@ -154,17 +161,16 @@ export class NetworkLogger extends Logger {
     const builder = this.builder()
       .text('Bandwidth ')
       .text('Download: ')
-      .badge(`${downloadSpeed}${unit}`, { 
-        backgroundColor: getSpeedColor(downloadSpeed), 
-        color: '#FFFFFF' 
+      .badge(`${downloadSpeed}${unit}`, {
+        backgroundColor: getSpeedColor(downloadSpeed),
+        color: '#FFFFFF',
       });
 
     if (uploadSpeed !== undefined) {
-      builder.text(' Upload: ')
-        .badge(`${uploadSpeed}${unit}`, { 
-          backgroundColor: getSpeedColor(uploadSpeed), 
-          color: '#FFFFFF' 
-        });
+      builder.text(' Upload: ').badge(`${uploadSpeed}${unit}`, {
+        backgroundColor: getSpeedColor(uploadSpeed),
+        color: '#FFFFFF',
+      });
     }
 
     this.info(builder);
@@ -182,9 +188,9 @@ export class NetworkLogger extends Logger {
         .text(' IP: ')
         .badge(resolvedIp, { backgroundColor: '#3B82F6', color: '#FFFFFF' })
         .text(' Time: ')
-        .badge(`${resolutionTime}ms`, { 
-          backgroundColor: resolutionTime > 100 ? '#F59E0B' : '#10B981', 
-          color: '#FFFFFF' 
+        .badge(`${resolutionTime}ms`, {
+          backgroundColor: resolutionTime > 100 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
         })
     );
   }
@@ -194,7 +200,8 @@ export class NetworkLogger extends Logger {
    */
   connectionPool(poolName: string, active: number, idle: number, max: number): void {
     const utilizationPercent = ((active + idle) / max) * 100;
-    const utilizationColor = utilizationPercent > 80 ? '#DC2626' : utilizationPercent > 60 ? '#F59E0B' : '#10B981';
+    const utilizationColor =
+      utilizationPercent > 80 ? '#DC2626' : utilizationPercent > 60 ? '#F59E0B' : '#10B981';
 
     this.debug(
       this.builder()
@@ -207,9 +214,9 @@ export class NetworkLogger extends Logger {
         .text(' Max: ')
         .badge(max.toString(), { backgroundColor: '#9CA3AF', color: '#FFFFFF' })
         .text(' Utilization: ')
-        .badge(`${utilizationPercent.toFixed(1)}%`, { 
-          backgroundColor: utilizationColor, 
-          color: '#FFFFFF' 
+        .badge(`${utilizationPercent.toFixed(1)}%`, {
+          backgroundColor: utilizationColor,
+          color: '#FFFFFF',
         })
     );
   }
@@ -219,9 +226,9 @@ export class NetworkLogger extends Logger {
    */
   cache(url: string, status: 'hit' | 'miss' | 'stale', edge?: string, age?: number): void {
     const statusColors = {
-      'hit': '#10B981',
-      'miss': '#F59E0B',
-      'stale': '#DC2626'
+      hit: '#10B981',
+      miss: '#F59E0B',
+      stale: '#DC2626',
     };
 
     const builder = this.builder()
@@ -231,13 +238,11 @@ export class NetworkLogger extends Logger {
       .code(url, 'text');
 
     if (edge) {
-      builder.text(' Edge: ')
-        .badge(edge, { backgroundColor: '#6366F1', color: '#FFFFFF' });
+      builder.text(' Edge: ').badge(edge, { backgroundColor: '#6366F1', color: '#FFFFFF' });
     }
 
     if (age !== undefined) {
-      builder.text(' Age: ')
-        .badge(`${age}s`, { backgroundColor: '#8B5CF6', color: '#FFFFFF' });
+      builder.text(' Age: ').badge(`${age}s`, { backgroundColor: '#8B5CF6', color: '#FFFFFF' });
     }
 
     this.debug(builder);
@@ -246,16 +251,22 @@ export class NetworkLogger extends Logger {
   /**
    * Log network security events
    */
-  security(event: 'ssl_error' | 'cert_invalid' | 'mixed_content' | 'csp_violation', details: string, url?: string): void {
+  security(
+    event: 'ssl_error' | 'cert_invalid' | 'mixed_content' | 'csp_violation',
+    details: string,
+    url?: string
+  ): void {
     const builder = this.builder()
       .text('Security ')
-      .badge(event.replace('_', ' ').toUpperCase(), { backgroundColor: '#DC2626', color: '#FFFFFF' })
+      .badge(event.replace('_', ' ').toUpperCase(), {
+        backgroundColor: '#DC2626',
+        color: '#FFFFFF',
+      })
       .text(' Details: ')
       .text(details);
 
     if (url) {
-      builder.text(' URL: ')
-        .code(url, 'text');
+      builder.text(' URL: ').code(url, 'text');
     }
 
     this.error(builder);
@@ -264,26 +275,34 @@ export class NetworkLogger extends Logger {
   /**
    * Log network throttling
    */
-  throttling(enabled: boolean, downloadKbps?: number, uploadKbps?: number, latencyMs?: number): void {
+  throttling(
+    enabled: boolean,
+    downloadKbps?: number,
+    uploadKbps?: number,
+    latencyMs?: number
+  ): void {
     const builder = this.builder()
       .text('Network Throttling ')
-      .badge(enabled ? 'ENABLED' : 'DISABLED', { 
-        backgroundColor: enabled ? '#F59E0B' : '#10B981', 
-        color: '#FFFFFF' 
+      .badge(enabled ? 'ENABLED' : 'DISABLED', {
+        backgroundColor: enabled ? '#F59E0B' : '#10B981',
+        color: '#FFFFFF',
       });
 
     if (enabled && downloadKbps !== undefined) {
-      builder.text(' Download: ')
+      builder
+        .text(' Download: ')
         .badge(`${downloadKbps}kbps`, { backgroundColor: '#DC2626', color: '#FFFFFF' });
     }
 
     if (enabled && uploadKbps !== undefined) {
-      builder.text(' Upload: ')
+      builder
+        .text(' Upload: ')
         .badge(`${uploadKbps}kbps`, { backgroundColor: '#DC2626', color: '#FFFFFF' });
     }
 
     if (enabled && latencyMs !== undefined) {
-      builder.text(' Latency: ')
+      builder
+        .text(' Latency: ')
         .badge(`+${latencyMs}ms`, { backgroundColor: '#DC2626', color: '#FFFFFF' });
     }
 
@@ -293,13 +312,17 @@ export class NetworkLogger extends Logger {
   /**
    * Log service worker network events
    */
-  serviceWorker(event: 'install' | 'activate' | 'fetch' | 'sync' | 'push', url?: string, details?: any): void {
+  serviceWorker(
+    event: 'install' | 'activate' | 'fetch' | 'sync' | 'push',
+    url?: string,
+    details?: any
+  ): void {
     const eventColors = {
-      'install': '#10B981',
-      'activate': '#3B82F6',
-      'fetch': '#6366F1',
-      'sync': '#8B5CF6',
-      'push': '#F59E0B'
+      install: '#10B981',
+      activate: '#3B82F6',
+      fetch: '#6366F1',
+      sync: '#8B5CF6',
+      push: '#F59E0B',
     };
 
     const builder = this.builder()
@@ -307,12 +330,12 @@ export class NetworkLogger extends Logger {
       .badge(event.toUpperCase(), { backgroundColor: eventColors[event], color: '#FFFFFF' });
 
     if (url) {
-      builder.text(' URL: ')
-        .code(url, 'text');
+      builder.text(' URL: ').code(url, 'text');
     }
 
     if (details) {
-      builder.text(' Details: ')
+      builder
+        .text(' Details: ')
         .code(typeof details === 'string' ? details : JSON.stringify(details), 'json');
     }
 

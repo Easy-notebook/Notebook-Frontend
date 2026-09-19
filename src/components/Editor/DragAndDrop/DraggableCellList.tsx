@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -8,6 +8,7 @@ import {
   useSensors,
   DragEndEvent,
   DragStartEvent,
+  DragCancelEvent,
   DragOverlay,
 } from '@dnd-kit/core';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import DraggableCell from './DraggableCell';
+import { getCellIndexById } from '@Store/models/cellIndex';
 
 interface Cell {
   id: string;
@@ -36,16 +38,34 @@ interface DraggableCellListProps {
   onAddCell?: (type: string, afterIndex: number) => void;
 }
 
-const DraggableCellList: React.FC<DraggableCellListProps> = ({
+const SortableCellList: React.FC<DraggableCellListProps> = ({
   cells,
   onCellsReorder,
   renderCell,
   className = '',
-  disabled = false,
   onAddCell,
 }) => {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [draggedCell, setDraggedCell] = useState<Cell | null>(null);
+  const activeDrag = useRef<string | null>(null);
+  const committed = useRef({ cells, onCellsReorder });
+  useLayoutEffect(() => {
+    committed.current = { cells, onCellsReorder };
+    if (activeDrag.current !== null && getCellIndexById(cells, activeDrag.current) === undefined) {
+      activeDrag.current = null;
+      setActiveId(null);
+    }
+  }, [cells, onCellsReorder]);
+  const mounted = useRef(false);
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      activeDrag.current = null;
+    };
+  }, []);
+  const ids = useMemo(() => cells.map((cell) => cell.id), [cells]);
+  const activePosition = activeId === null ? undefined : getCellIndexById(cells, activeId);
+  const draggedCell = activePosition === undefined ? null : cells[activePosition];
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -59,62 +79,55 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
   );
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (!mounted.current) return;
     const { active } = event;
-    setActiveId(active.id as string);
-
-    // 找到被拖拽的cell
-    const cell = cells.find((c) => c.id === active.id);
-    setDraggedCell(cell || null);
-  };
-
-  const handleDragOver = () => {
-    // 可以在这里添加拖拽过程中的视觉反馈
+    if (
+      typeof active.id !== 'string' ||
+      getCellIndexById(committed.current.cells, active.id) === undefined
+    )
+      return;
+    activeDrag.current = active.id;
+    setActiveId(active.id);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (!mounted.current || activeDrag.current === null || activeDrag.current !== event.active.id)
+      return;
+    // Consume ownership before publishing: duplicate/reentrant end events are no-ops.
+    activeDrag.current = null;
+    setActiveId(null);
+    // Sensor callbacks can outlive a render. Reorder current objects, never a
+    // snapshot captured before streaming/editor updates were committed.
+    const { cells, onCellsReorder } = committed.current;
     const { active, over } = event;
 
     if (active.id !== over?.id) {
-      const oldIndex = cells.findIndex((cell) => cell.id === active.id);
-      const newIndex = cells.findIndex((cell) => cell.id === over?.id);
+      const oldIndex = getCellIndexById(cells, active.id as string);
+      const newIndex = over ? getCellIndexById(cells, over.id as string) : undefined;
 
-      if (oldIndex !== -1 && newIndex !== -1) {
+      if (oldIndex !== undefined && newIndex !== undefined) {
         const newCells = arrayMove(cells, oldIndex, newIndex);
         onCellsReorder(newCells);
       }
     }
-
-    setActiveId(null);
-    setDraggedCell(null);
   };
 
-  const handleDragCancel = () => {
+  const handleDragCancel = (event: DragCancelEvent) => {
+    if (!mounted.current || activeDrag.current !== event.active.id) return;
+    activeDrag.current = null;
     setActiveId(null);
-    setDraggedCell(null);
   };
-
-  if (disabled) {
-    // 如果禁用拖拽，直接渲染普通列表
-    return (
-      <div className={className}>
-        {cells.map((cell) => (
-          <div key={cell.id}>{renderCell(cell)}</div>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
       modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
     >
-      <SortableContext items={cells.map((cell) => cell.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <div className={className}>
           {cells.map((cell, index) => (
             <DraggableCell
@@ -141,6 +154,20 @@ const DraggableCellList: React.FC<DraggableCellListProps> = ({
       </DragOverlay>
     </DndContext>
   );
+};
+
+const DraggableCellList: React.FC<DraggableCellListProps> = (props) => {
+  if (props.disabled) {
+    return (
+      <div className={props.className}>
+        {props.cells.map((cell) => (
+          <div key={cell.id}>{props.renderCell(cell)}</div>
+        ))}
+      </div>
+    );
+  }
+  // Disabling unmounts the sensor/session owner, so re-enabling starts idle.
+  return <SortableCellList {...props} />;
 };
 
 export default DraggableCellList;

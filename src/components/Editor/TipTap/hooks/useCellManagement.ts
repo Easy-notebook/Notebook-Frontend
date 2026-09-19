@@ -8,58 +8,28 @@ import type { Cell } from '@Store/models';
 import { generateCellId } from '@Editor/utils/cellConverters';
 
 interface UseCellManagementProps {
-  cells: Cell[];
+  getCells: () => readonly Cell[];
   setCells: (cells: Cell[]) => void;
 }
 
-export function useCellManagement({ cells, setCells }: UseCellManagementProps) {
-  const addCodeCell = useCallback(() => {
+export function useCellManagement({ getCells, setCells }: UseCellManagementProps) {
+  const addCell = useCallback((type: Cell['type']) => {
     const newCell: Cell = {
       id: generateCellId(),
-      type: 'code',
+      type,
       content: '',
       outputs: [],
-      enableEdit: true,
+      enableEdit: type !== 'thinking',
+      ...(type === 'code' || type === 'hybrid' ? { language: 'python' } : {}),
     };
-    setCells([...cells, newCell]);
+    setCells([...getCells(), newCell]);
     return newCell.id;
-  }, [cells, setCells]);
+  }, [getCells, setCells]);
 
-  const addMarkdownCell = useCallback(() => {
-    const newCell: Cell = {
-      id: generateCellId(),
-      type: 'markdown',
-      content: '',
-      outputs: [],
-      enableEdit: true,
-    };
-    setCells([...cells, newCell]);
-    return newCell.id;
-  }, [cells, setCells]);
-
-  const addHybridCell = useCallback(() => {
-    const newCell: Cell = {
-      id: generateCellId(),
-      type: 'hybrid',
-      content: '',
-      outputs: [],
-      enableEdit: true,
-    };
-    setCells([...cells, newCell]);
-    return newCell.id;
-  }, [cells, setCells]);
-
-  const addRawCell = useCallback(() => {
-    const newCell: Cell = {
-      id: generateCellId(),
-      type: 'raw',
-      content: '',
-      outputs: [],
-      enableEdit: true,
-    };
-    setCells([...cells, newCell]);
-    return newCell.id;
-  }, [cells, setCells]);
+  const addCodeCell = useCallback(() => addCell('code'), [addCell]);
+  const addMarkdownCell = useCallback(() => addCell('markdown'), [addCell]);
+  const addHybridCell = useCallback(() => addCell('hybrid'), [addCell]);
+  const addRawCell = useCallback(() => addCell('raw'), [addCell]);
 
   const addAIThinkingCell = useCallback(
     (
@@ -70,17 +40,9 @@ export function useCellManagement({ cells, setCells }: UseCellManagementProps) {
         useWorkflowThinking: boolean;
       }> = {}
     ) => {
-      const newCell: Cell = {
-        id: generateCellId(),
-        type: 'thinking',
-        content: '',
-        outputs: [],
-        enableEdit: false,
-      };
-      setCells([...cells, newCell]);
-      return newCell.id;
+      return addCell('thinking');
     },
-    [cells, setCells]
+    [addCell]
   );
 
   return {

@@ -1,10 +1,13 @@
 import React from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { python } from '@codemirror/lang-python';
 import { dracula } from '@uiw/codemirror-theme-dracula';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { CodeEditorProps } from '../utils/types';
 import { EXPAND_THRESHOLD } from '../utils';
+import { codeLanguageExtensions } from '../utils/languageSupport';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useEditorReadOnly } from '../../../EditorAccessContext';
+import { useCodeEditorActivation } from '../model/useCodeEditorActivation';
 
 /**
  * Code editor component with CodeMirror
@@ -28,8 +31,16 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onKeyDown,
   onCopyCode,
 }) => {
+  const { resolvedTheme } = useTheme();
+  const readOnly = useEditorReadOnly();
+  const activation = useCodeEditorActivation(cell.id, !!isCurrentCell || !!isInDetachedView);
+  const value =
+    content ?? (typeof cell.content === 'string' ? cell.content : String(cell.content || ''));
   return (
     <div
+      ref={activation.container}
+      onBlurCapture={activation.onInputSettled}
+      onCompositionEndCapture={activation.onInputSettled}
       className={`relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
@@ -63,7 +74,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
         >
           <button
             onClick={onCopyCode}
-            className="px-2 py-1 text-xs text-white rounded hover:bg-gray-600 transition-colors backdrop-blur-sm"
+            className="px-2 py-1 text-xs text-gray-700 dark:text-gray-100 bg-white/70 dark:bg-gray-800/80 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors backdrop-blur-sm"
             title="Copy code"
             style={{
               minWidth: '44px',
@@ -78,28 +89,43 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
           className={`${isInDetachedView ? 'h-full' : 'h-full'} overflow-auto`}
           ref={codeBlockWrapperRef}
         >
-          <CodeMirror
-            value={
-              content !== undefined
-                ? content
-                : typeof cell.content === 'string'
-                  ? cell.content
-                  : String(cell.content || '')
-            }
-            height={isInDetachedView ? '100%' : 'auto'}
-            extensions={[python()]}
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-            theme={dracula}
-            style={{
-              fontSize: '16px',
-              lineHeight: '1.5',
-              height: isInDetachedView ? '100%' : 'auto',
-            }}
-            readOnly={isExecuting || dslcMode}
-            autoFocus={isCurrentCell && !dslcMode}
-            ref={editorRef}
-          />
+          {activation.active ? (
+            <CodeMirror
+              value={value}
+              initialState={activation.initialState(value)}
+              onCreateEditor={activation.onCreateEditor}
+              onUpdate={activation.onUpdate}
+              height={isInDetachedView ? '100%' : 'auto'}
+              extensions={codeLanguageExtensions(cell.language)}
+              onChange={readOnly ? undefined : onChange}
+              onKeyDown={readOnly ? undefined : onKeyDown}
+              theme={resolvedTheme === 'dark' ? dracula : 'light'}
+              style={{
+                fontSize: '16px',
+                lineHeight: '1.5',
+                height: isInDetachedView ? '100%' : 'auto',
+              }}
+              readOnly={readOnly || isExecuting || dslcMode}
+              autoFocus={isCurrentCell && !dslcMode && !readOnly}
+              ref={editorRef}
+            />
+          ) : (
+            <pre
+              className="m-0 px-3 py-1 font-mono whitespace-pre overflow-hidden"
+              style={{
+                fontSize: 16,
+                lineHeight: '24px',
+                minHeight: activation.placeholderHeight ?? 32,
+                height: activation.placeholderHeight,
+              }}
+              tabIndex={0}
+              aria-label="Code preview; focus to activate editor"
+              onFocus={activation.activate}
+              onPointerDown={activation.activate}
+            >
+              {value || ' '}
+            </pre>
+          )}
           {isExecuting && (
             <div className="absolute inset-0 flex items-center justify-center rounded-b-lg">
               <Loader2 className="w-16 h-16 animate-spin text-red-500" />

@@ -6,11 +6,7 @@ interface DragIndicatorProps {
   onDrop?: (e: React.DragEvent) => void;
 }
 
-const DragIndicator: React.FC<DragIndicatorProps> = ({
-  isDragging,
-  onDragOver,
-  onDrop
-}) => {
+const DragIndicator: React.FC<DragIndicatorProps> = ({ isDragging, onDragOver, onDrop }) => {
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [showDropZone, setShowDropZone] = useState(false);
 
@@ -69,9 +65,7 @@ const DragIndicator: React.FC<DragIndicatorProps> = ({
       >
         {showDropZone && (
           <div className="absolute inset-4 border-2 border-dashed border-theme-400 bg-theme-50 bg-opacity-50 rounded-lg flex items-center justify-center">
-            <div className="text-theme-600 text-lg font-medium">
-              拖拽到此处重新排序
-            </div>
+            <div className="text-theme-600 text-lg font-medium">拖拽到此处重新排序</div>
           </div>
         )}
       </div>

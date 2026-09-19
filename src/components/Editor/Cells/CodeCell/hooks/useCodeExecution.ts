@@ -7,7 +7,8 @@ import { Cell } from '../utils/types';
  * Hook to handle code execution logic including execute, cancel, and DSLC commands
  */
 export const useCodeExecution = (cell: Cell, dslcMode: boolean, isDslcCommand: boolean) => {
-  const { updateCell, clearCellOutputs } = useStore();
+  const updateCell = useStore((state) => state.updateCell);
+  const clearCellOutputs = useStore((state) => state.clearCellOutputs);
   const executeCell = useCodeStore((state) => state.executeCell);
   const cancelCellExecution = useCodeStore((state) => state.cancelCellExecution);
 

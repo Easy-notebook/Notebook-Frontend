@@ -3,8 +3,10 @@ import useStore from '@Store/notebookStore';
 import useCodeStore, { DISPLAY_MODES } from '@Store/codeStore';
 import { processOutput } from '../utils/outputProcessing';
 import { EXPAND_THRESHOLD } from '../utils';
-import { debounce } from 'lodash-es';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
+import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
+import { showToast } from '@/components/UI/Toast';
+import { isCompositionInput } from '../../../utils/compositionInput';
 
 export class CodeCellViewModel extends BaseCellViewModel {
   // Properties from props
@@ -26,7 +28,6 @@ export class CodeCellViewModel extends BaseCellViewModel {
   public codeContainerRef: React.RefObject<HTMLDivElement> | null = null;
   private prevContent = '';
   public localContent = '';
-  private debouncedUpdate: (value: string) => void;
 
   constructor(cell: Cell, _dslcMode = false, isDemoMode = false, isInDetachedView = false) {
     super(cell);
@@ -45,9 +46,6 @@ export class CodeCellViewModel extends BaseCellViewModel {
     }
 
     this.localContent = cell.content || '';
-    this.debouncedUpdate = debounce((value: string) => {
-      useStore.getState().updateCell(this.cell.id, value);
-    }, 300);
   }
 
   public updateProps(cell: Cell, isDemoMode: boolean) {
@@ -239,6 +237,14 @@ export class CodeCellViewModel extends BaseCellViewModel {
   };
 
   public execute = () => {
+    if (!canExecuteCodeLanguage(this.cell.language)) {
+      showToast({
+        description:
+          'This notebook runs Python only. Switch the cell language to Python to execute it.',
+        variant: 'destructive',
+      });
+      return;
+    }
     useCodeStore.getState().executeCell(this.cell.id);
   };
 
@@ -258,7 +264,9 @@ export class CodeCellViewModel extends BaseCellViewModel {
 
   public handleChange = (value: string) => {
     this.localContent = value;
-    this.debouncedUpdate(value);
+    // Publish edits immediately; persistence already owns write coalescing.
+    // A delayed cell update can otherwise overwrite a source-mode conversion.
+    useStore.getState().updateCell(this.cell.id, value);
   };
 
   public copyCode = () => {
@@ -313,6 +321,8 @@ export class CodeCellViewModel extends BaseCellViewModel {
 
   // Navigation Logic
   public handleKeyDown = (event: React.KeyboardEvent) => {
+    if (isCompositionInput(event.nativeEvent) || this.editorRef?.current?.view?.composing)
+      return null;
     // Backspace at start of empty code cell
     if (event.key === 'Backspace' && !this.cell.content.trim()) {
       if (this.isCursorAtDocStart()) {
@@ -426,36 +436,5 @@ export class CodeCellViewModel extends BaseCellViewModel {
     const cursorPos = state.selection.main.head;
     const line = state.doc.lineAt(cursorPos);
     return cursorPos === line.to && line.number === state.doc.lines;
-  }
-
-  public focus(direction: 'up' | 'down') {
-    if (!this.editorRef?.current?.view) {
-      console.warn('CodeCellViewModel.focus: No editor view available');
-      return;
-    }
-
-    const view = this.editorRef.current.view;
-    const state = view.state;
-
-    console.log('CodeCellViewModel.focus executing', { direction, docLength: state.doc.length });
-
-    // Focus the editor
-    view.focus();
-
-    // Set cursor position
-    if (direction === 'up') {
-      // Focus at the end (coming from below)
-      const length = state.doc.length;
-      view.dispatch({
-        selection: { anchor: length, head: length },
-        scrollIntoView: true,
-      });
-    } else {
-      // Focus at the start (coming from above)
-      view.dispatch({
-        selection: { anchor: 0, head: 0 },
-        scrollIntoView: true,
-      });
-    }
   }
 }

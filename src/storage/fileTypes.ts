@@ -4,12 +4,19 @@
 /**
  * Supported file types
  */
-export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx' | 'react' | 'doc' | 'docx' | 'javascript' | 'css' | 'markdown' | 'json' | 'python' | 'hex';
+export type FileType = 'image' | 'csv' | 'xlsx' | 'text' | 'pdf' | 'html' | 'jsx' | 'react' | 'doc' | 'docx' | 'javascript' | 'typescript' | 'css' | 'markdown' | 'json' | 'python' | 'hex';
 
 /**
  * Preview mode mapping for different file types
  */
 export type ActivePreviewMode = 'default' | 'csv' | 'jsx' | 'html' | 'image' | 'pdf' | 'text' | 'doc' | 'docx' | 'code' | 'markdown' | 'hex' | null;
+
+/** Inspect the basename only; a leading dot alone denotes a hidden file, not an extension. */
+const fileExtension = (filePath: string): string => {
+  const basenameStart = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')) + 1;
+  const dot = filePath.lastIndexOf('.');
+  return dot > basenameStart ? filePath.slice(dot + 1).toLowerCase() : '';
+};
 
 /**
  * Determine file type from file extension
@@ -19,7 +26,7 @@ export const getFileType = (filePath: string): FileType => {
     return 'text';
   }
   
-  const fileExt = filePath.split('.').pop()?.toLowerCase();
+  const fileExt = fileExtension(filePath);
 
   // Image files
   if (['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(`.${fileExt}`)) {
@@ -57,7 +64,8 @@ export const getFileType = (filePath: string): FileType => {
   }
 
   // JavaScript files
-  if (fileExt === 'js' || fileExt === 'ts' || fileExt === 'mjs') {
+  if (fileExt === 'ts') return 'typescript';
+  if (fileExt === 'js' || fileExt === 'mjs') {
     return 'javascript';
   }
 
@@ -110,6 +118,7 @@ export const getActivePreviewMode = (fileType: FileType): ActivePreviewMode => {
     case 'doc':
       return 'docx';
     case 'javascript':
+    case 'typescript':
     case 'css':
     case 'python':
     case 'json':
@@ -125,6 +134,12 @@ export const getActivePreviewMode = (fileType: FileType): ActivePreviewMode => {
   }
 };
 
+/** Known file extensions determine rendering; extensionless/unknown names retain their declared type. */
+export function getPreviewFileType<T extends string>(name: string, declaredType: T): FileType | T {
+  const detected = getFileType(name);
+  return detected === 'hex' ? declaredType : detected;
+}
+
 /**
  * Create MIME type from file extension
  */
@@ -133,8 +148,7 @@ export const getMimeType = (filePath: string): string => {
     return 'application/octet-stream';
   }
   
-  const baseName = filePath.split('/').pop() || filePath;
-  const ext = baseName.split('.').pop()?.toLowerCase() || '';
+  const ext = fileExtension(filePath);
   
   if (ext === 'svg') return 'image/svg+xml';
   if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {

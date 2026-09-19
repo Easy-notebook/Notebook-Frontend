@@ -32,25 +32,5 @@ export const useCodeCellViewModel = (
     return viewModel.subscribe(() => forceUpdate((n) => n + 1));
   }, [viewModel]);
 
-  // Listen for cell navigation events
-  useEffect(() => {
-    const handleNavigation = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const { targetCellId, direction } = customEvent.detail;
-
-      console.log('Received cell-navigation event', { targetCellId, direction, myCellId: cell.id });
-
-      if (targetCellId === cell.id) {
-        console.log('Focusing cell', cell.id);
-        viewModel.focus(direction);
-      }
-    };
-
-    window.addEventListener('cell-navigation', handleNavigation);
-    return () => {
-      window.removeEventListener('cell-navigation', handleNavigation);
-    };
-  }, [cell.id, viewModel]);
-
   return viewModel;
 };

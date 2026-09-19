@@ -12,6 +12,11 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import TableRow from '@tiptap/extension-table-row';
 import Heading from '@tiptap/extension-heading';
+import { MarkdownCellExtension } from '@Editor/extensions/MarkdownCellExtension';
+import { MarkdownSourceCellExtension } from '@Editor/extensions/MarkdownSourceCellExtension';
+import { FencedCodeBlockExtension } from '@Editor/extensions/FencedCodeBlockExtension';
+import { MermaidBlockExtension } from '@Editor/extensions/MermaidBlockExtension';
+import { ImageCellExtension } from '@Editor/extensions/ImageCellExtension';
 import { Extension as CoreExtension, InputRule } from '@tiptap/core';
 import {
   CodeBlockExtension,
@@ -88,6 +93,11 @@ export function getTipTapExtensions(placeholder: string) {
     WikiLinkInput,
 
     // Custom cell extensions
+    MarkdownCellExtension,
+    MarkdownSourceCellExtension,
+    FencedCodeBlockExtension,
+    ImageCellExtension,
+    MermaidBlockExtension,
     CodeBlockExtension,
     ThinkingCellExtension,
     FileAttachmentExtension,

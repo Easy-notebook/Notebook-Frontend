@@ -3,7 +3,7 @@ import { Cell as StoreCell } from '@Store/models';
 import { MarkdownCellViewModel } from './MarkdownCellViewModel';
 
 export const useMarkdownCellViewModel = (cell: StoreCell) => {
-  const vm = useMemo(() => new MarkdownCellViewModel(cell), []);
+  const vm = useMemo(() => new MarkdownCellViewModel(cell), [cell.id]);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -14,7 +14,10 @@ export const useMarkdownCellViewModel = (cell: StoreCell) => {
     const unsubscribe = vm.subscribe(() => {
       setTick((t) => t + 1);
     });
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      vm.flushPendingChanges();
+    };
   }, [vm]);
 
   return vm;

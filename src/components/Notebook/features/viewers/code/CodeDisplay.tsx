@@ -5,10 +5,11 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Eye, Code, Sun, Moon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { markdownRemarkPlugins, markdownRehypePlugins } from '@Editor/markdownPreviewPlugins';
+import { markdownCodeComponents, markdownSoftLineComponents } from '@Editor/MarkdownCodePreview';
+import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
+
+const markdownComponents = { ...markdownCodeComponents, ...markdownSoftLineComponents };
 
 interface CodeDisplayProps {
   content: string;
@@ -17,27 +18,6 @@ interface CodeDisplayProps {
   onContentChange?: (newContent: string) => void;
   showControls?: boolean;
 }
-
-const getLanguageFromFileType = (fileType: string): string => {
-  switch (fileType) {
-    case 'javascript':
-      return 'javascript';
-    case 'css':
-      return 'css';
-    case 'python':
-      return 'python';
-    case 'json':
-      return 'json';
-    case 'jsx':
-      return 'jsx';
-    case 'html':
-      return 'html';
-    case 'markdown':
-      return 'markdown';
-    default:
-      return 'text';
-  }
-};
 
 const CodeDisplay: React.FC<CodeDisplayProps> = ({
   content,
@@ -50,7 +30,7 @@ const CodeDisplay: React.FC<CodeDisplayProps> = ({
   const isDarkTheme = resolvedTheme === 'dark';
   const [showPreview, setShowPreview] = useState(false);
 
-  const syntaxLanguage = getLanguageFromFileType(language);
+  const syntaxLanguage = normalizeCodeLanguage(language || 'text');
   const theme = isDarkTheme ? tomorrow : prism;
 
   const handleCopy = async () => {
@@ -124,9 +104,8 @@ const CodeDisplay: React.FC<CodeDisplayProps> = ({
         {showPreview && language === 'markdown' ? (
           <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-b-lg overflow-auto">
             <div className="prose dark:prose-invert max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符） */}
-                {content.replace(/(?<!\n)\n(?!\n)/g, '  \n')}
+              <ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins} components={markdownComponents}>
+                {content}
               </ReactMarkdown>
             </div>
           </div>

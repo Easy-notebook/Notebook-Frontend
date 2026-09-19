@@ -37,9 +37,7 @@ export interface INotebookRepository {
   }): Promise<NotebookEntity[]>;
   deleteNotebook(id: string): Promise<boolean>;
   updateAccessTime(id: string): Promise<void>;
-  getNotebookStats(
-    id: string
-  ): Promise<{
+  getNotebookStats(id: string): Promise<{
     fileCount: number;
     totalSize: number;
     lastActivity: number;

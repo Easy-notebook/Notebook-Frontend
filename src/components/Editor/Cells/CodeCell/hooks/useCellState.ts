@@ -7,30 +7,25 @@ import { Cell } from '../utils/types';
  * Hook to manage cell state including execution state, display mode, and detached state
  */
 export const useCellState = (cell: Cell, isDemoMode = false) => {
-  const {
-    currentCellId,
-    detachedCellId,
-    isDetachedCellFullscreen,
-    toggleDetachedCellFullscreen,
-    setDetachedCellId,
-  } = useStore();
+  const isCurrentCell = useStore((state) => state.currentCellId === cell.id);
+  const isDetached = useStore((state) => state.detachedCellId === cell.id);
+  const isDetachedCellFullscreen = useStore((state) => state.isDetachedCellFullscreen);
+  const toggleDetachedCellFullscreen = useStore((state) => state.toggleDetachedCellFullscreen);
+  const setDetachedCellId = useStore((state) => state.setDetachedCellId);
 
-  const getCellExecState = useCodeStore((state) => state.getCellExecState);
+  const cellExec = useCodeStore((state) => state.cellExecStates[cell.id]);
   const setCellMode = useCodeStore((state) => state.setCellMode);
 
   // Cell execution state
-  const cellExec = getCellExecState(cell.id);
-  const isExecuting = cellExec.isExecuting;
-  const isCancelling = cellExec.isCancelling;
-  const elapsedTime = cellExec.elapsedTime || 0;
+  const isExecuting = cellExec?.isExecuting ?? false;
+  const isCancelling = cellExec?.isCancelling ?? false;
+  const elapsedTime = cellExec?.elapsedTime ?? 0;
 
   // Cell display mode
   const defaultMode = isDemoMode ? DISPLAY_MODES.OUTPUT_ONLY : DISPLAY_MODES.COMPLETE;
   const cellMode = useCodeStore((state) => state.cellModes[cell.id]) || defaultMode;
 
   // Detached state
-  const isDetached = detachedCellId === cell.id;
-  const isCurrentCell = currentCellId === cell.id;
 
   // Initialize display mode for demo mode
   useEffect(() => {

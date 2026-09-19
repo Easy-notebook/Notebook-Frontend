@@ -6,9 +6,11 @@
 import { EditorView } from 'prosemirror-view';
 import { Selection } from 'prosemirror-state';
 import { debouncedFocus } from '@Editor/utils/cursorPositioning';
+import { isCompositionInput } from '../../utils/compositionInput';
 
 export function useKeyboardHandlers() {
   const handleKeyDown = (view: EditorView, event: KeyboardEvent): boolean => {
+    if (view.composing || isCompositionInput(event)) return false;
     // Handle Tab key
     if (event.key === 'Tab') {
       event.preventDefault();

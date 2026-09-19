@@ -35,7 +35,7 @@ const NotebookApp = () => {
   const routeStore = useRouteStore();
   const routeView = routeStore.currentView;
   const { navigateToWorkspace, navigateToEmpty } = routeStore;
-  useRouteSync();
+  const { isRouteReady, routeError, retryRoute } = useRouteSync();
 
   // Settings store
   const settingstore = useSettingsStore();
@@ -311,12 +311,21 @@ const NotebookApp = () => {
         {/* Right: Header + MainContainer */}
         <div className="flex-1 flex flex-col">
           {/* Top: Header (56px height) */}
-          <div className="h-14 shrink-0">{renderHeader()}</div>
+          <div className="h-14 shrink-0">{isRouteReady && renderHeader()}</div>
 
           {/* Bottom: Main Content */}
           <main className="flex-1 min-h-0">
             <div className="h-full flex flex-col">
-              <MainContentArea
+              {!isRouteReady ? (
+                <div className="h-full flex flex-col items-center justify-center gap-3">
+                  {routeError ? (
+                    <>
+                      <p role="alert">{routeError}</p>
+                      <button type="button" onClick={retryRoute}>Retry loading</button>
+                    </>
+                  ) : <p role="status">Loading notebook...</p>}
+                </div>
+              ) : <MainContentArea
                 routeView={routeView}
                 viewMode={viewMode}
                 isCollapsed={isCollapsed}
@@ -346,7 +355,7 @@ const NotebookApp = () => {
                 onAgentSelect={handleAgentSelect}
               >
                 {resolveMainContent().component}
-              </MainContentArea>
+              </MainContentArea>}
             </div>
           </main>
         </div>

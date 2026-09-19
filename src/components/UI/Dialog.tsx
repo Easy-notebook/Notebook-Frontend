@@ -10,9 +10,7 @@ interface DialogProps {
 const Dialog = ({ open, children }: DialogProps) => {
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      {children}
-    </div>,
+    <div className="fixed inset-0 z-50 overflow-y-auto">{children}</div>,
     document.body
   );
 };
@@ -23,13 +21,9 @@ interface DialogContentProps {
   className?: string;
 }
 
-const DialogContent = ({ 
-  children, 
-  onClose,
-  className = "" 
-}: DialogContentProps) => {
+const DialogContent = ({ children, onClose, className = '' }: DialogContentProps) => {
   const overlayRef = useRef<HTMLDivElement | null>(null);
-  
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -53,14 +47,9 @@ const DialogContent = ({
   }, [onClose]);
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-    >
+    <div ref={overlayRef} className="fixed inset-0 bg-black/50 backdrop-blur-sm">
       <div className="min-h-full px-4 flex items-center justify-center">
-        <div
-          className={`relative w-full max-w-lg bg-white p-6 rounded-lg shadow-lg ${className}`}
-        >
+        <div className={`relative w-full max-w-lg bg-white p-6 rounded-lg shadow-lg ${className}`}>
           {children}
           <button
             onClick={onClose}
@@ -80,39 +69,26 @@ interface BasicProps {
   [key: string]: any;
 }
 
-const DialogHeader = ({ className = "", ...props }: BasicProps) => (
+const DialogHeader = ({ className = '', ...props }: BasicProps) => (
   <div
     className={`flex flex-col space-y-1.5 text-left border-b border-gray-200 pb-4 mb-4 ${className}`}
     {...props}
   />
 );
 
-const DialogTitle = ({ className = "", ...props }: BasicProps) => (
+const DialogTitle = ({ className = '', ...props }: BasicProps) => (
   <h3
     className={`text-lg font-semibold leading-none tracking-tight text-theme-800 ${className}`}
     {...props}
   />
 );
 
-const DialogDescription = ({ className = "", ...props }: BasicProps) => (
-  <div
-    className={`text-sm text-gray-600 ${className}`}
-    {...props}
-  />
+const DialogDescription = ({ className = '', ...props }: BasicProps) => (
+  <div className={`text-sm text-gray-600 ${className}`} {...props} />
 );
 
-const DialogFooter = ({ className = "", ...props }: BasicProps) => (
-  <div
-    className={`flex justify-end space-x-2 mt-6 ${className}`}
-    {...props}
-  />
+const DialogFooter = ({ className = '', ...props }: BasicProps) => (
+  <div className={`flex justify-end space-x-2 mt-6 ${className}`} {...props} />
 );
 
-export {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-};
+export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter };

@@ -12,7 +12,7 @@ export class UILogger extends Logger {
       enableColors: true,
       groupIcon: '🎨',
       customPrefix: '[UI]',
-      ...config
+      ...config,
     });
   }
 
@@ -25,16 +25,14 @@ export class UILogger extends Logger {
       .badge(componentName, { backgroundColor: '#10B981', color: '#FFFFFF' });
 
     if (renderTime !== undefined) {
-      builder.text(' Render time: ')
-        .badge(`${renderTime}ms`, { 
-          backgroundColor: renderTime > 50 ? '#F59E0B' : '#10B981', 
-          color: '#FFFFFF' 
-        });
+      builder.text(' Render time: ').badge(`${renderTime}ms`, {
+        backgroundColor: renderTime > 50 ? '#F59E0B' : '#10B981',
+        color: '#FFFFFF',
+      });
     }
 
     if (props && Object.keys(props).length > 0) {
-      builder.text(' Props: ')
-        .code(JSON.stringify(props, null, 2), 'json');
+      builder.text(' Props: ').code(JSON.stringify(props, null, 2), 'json');
     }
 
     this.debug(builder);
@@ -49,11 +47,10 @@ export class UILogger extends Logger {
       .badge(componentName, { backgroundColor: '#DC2626', color: '#FFFFFF' });
 
     if (cleanupTime !== undefined) {
-      builder.text(' Cleanup time: ')
-        .badge(`${cleanupTime}ms`, { 
-          backgroundColor: cleanupTime > 10 ? '#F59E0B' : '#10B981', 
-          color: '#FFFFFF' 
-        });
+      builder.text(' Cleanup time: ').badge(`${cleanupTime}ms`, {
+        backgroundColor: cleanupTime > 10 ? '#F59E0B' : '#10B981',
+        color: '#FFFFFF',
+      });
     }
 
     this.debug(builder);
@@ -70,11 +67,10 @@ export class UILogger extends Logger {
       .badge(changedProps.join(', '), { backgroundColor: '#6366F1', color: '#FFFFFF' });
 
     if (renderTime !== undefined) {
-      builder.text(' Render time: ')
-        .badge(`${renderTime}ms`, { 
-          backgroundColor: renderTime > 50 ? '#F59E0B' : '#10B981', 
-          color: '#FFFFFF' 
-        });
+      builder.text(' Render time: ').badge(`${renderTime}ms`, {
+        backgroundColor: renderTime > 50 ? '#F59E0B' : '#10B981',
+        color: '#FFFFFF',
+      });
     }
 
     this.debug(builder);
@@ -91,8 +87,7 @@ export class UILogger extends Logger {
       .code(element, 'text');
 
     if (details && Object.keys(details).length > 0) {
-      builder.text(' Details: ')
-        .code(JSON.stringify(details, null, 2), 'json');
+      builder.text(' Details: ').code(JSON.stringify(details, null, 2), 'json');
     }
 
     this.info(builder);
@@ -111,10 +106,12 @@ export class UILogger extends Logger {
       .text('Metrics:');
 
     Object.entries(metrics).forEach(([key, value]) => {
-      builder.newLine().text(`  ${key}: `)
-        .badge(`${value}${key.includes('time') ? 'ms' : ''}`, { 
-          backgroundColor: '#F59E0B', 
-          color: '#FFFFFF' 
+      builder
+        .newLine()
+        .text(`  ${key}: `)
+        .badge(`${value}${key.includes('time') ? 'ms' : ''}`, {
+          backgroundColor: '#F59E0B',
+          color: '#FFFFFF',
         });
     });
 
@@ -130,11 +127,11 @@ export class UILogger extends Logger {
       .badge(context, { backgroundColor: '#6366F1', color: '#FFFFFF' });
 
     if (source) {
-      builder.text(' Source: ')
-        .badge(source, { backgroundColor: '#9CA3AF', color: '#FFFFFF' });
+      builder.text(' Source: ').badge(source, { backgroundColor: '#9CA3AF', color: '#FFFFFF' });
     }
 
-    builder.newLine()
+    builder
+      .newLine()
       .text('Old: ')
       .code(JSON.stringify(oldValue), 'json')
       .newLine()
@@ -155,11 +152,10 @@ export class UILogger extends Logger {
       .code(to, 'text');
 
     if (duration !== undefined) {
-      builder.text(' Duration: ')
-        .badge(`${duration}ms`, { 
-          backgroundColor: duration > 500 ? '#F59E0B' : '#10B981', 
-          color: '#FFFFFF' 
-        });
+      builder.text(' Duration: ').badge(`${duration}ms`, {
+        backgroundColor: duration > 500 ? '#F59E0B' : '#10B981',
+        color: '#FFFFFF',
+      });
     }
 
     this.info(builder);
@@ -175,27 +171,22 @@ export class UILogger extends Logger {
 
     if (details) {
       if (details.notebookId) {
-        builder.text(' Notebook: ')
-          .code(details.notebookId, 'text');
+        builder.text(' Notebook: ').code(details.notebookId, 'text');
       }
       if (details.from) {
-        builder.text(' From: ')
-          .code(details.from, 'text');
+        builder.text(' From: ').code(details.from, 'text');
       }
       if (details.to) {
-        builder.text(' To: ')
-          .code(details.to, 'text');
+        builder.text(' To: ').code(details.to, 'text');
       }
       if (details.duration !== undefined) {
-        builder.text(' Duration: ')
-          .badge(`${details.duration}ms`, { 
-            backgroundColor: details.duration > 500 ? '#F59E0B' : '#10B981', 
-            color: '#FFFFFF' 
-          });
+        builder.text(' Duration: ').badge(`${details.duration}ms`, {
+          backgroundColor: details.duration > 500 ? '#F59E0B' : '#10B981',
+          color: '#FFFFFF',
+        });
       }
       if (details.trigger) {
-        builder.text(' Trigger: ')
-          .text(details.trigger);
+        builder.text(' Trigger: ').text(details.trigger);
       }
     }
 
@@ -214,8 +205,7 @@ export class UILogger extends Logger {
       .code(modalId, 'text');
 
     if (trigger) {
-      builder.text(' Trigger: ')
-        .text(trigger);
+      builder.text(' Trigger: ').text(trigger);
     }
 
     this.info(builder);
@@ -224,11 +214,16 @@ export class UILogger extends Logger {
   /**
    * Log form operations
    */
-  form(action: 'submit' | 'validate' | 'reset', formId: string, result?: 'success' | 'error', errors?: string[]): void {
+  form(
+    action: 'submit' | 'validate' | 'reset',
+    formId: string,
+    result?: 'success' | 'error',
+    errors?: string[]
+  ): void {
     const actionColors = {
-      'submit': '#3B82F6',
-      'validate': '#F59E0B',
-      'reset': '#6B7280'
+      submit: '#3B82F6',
+      validate: '#F59E0B',
+      reset: '#6B7280',
     };
 
     const builder = this.builder()
@@ -238,16 +233,14 @@ export class UILogger extends Logger {
       .code(formId, 'text');
 
     if (result) {
-      builder.text(' Result: ')
-        .badge(result.toUpperCase(), { 
-          backgroundColor: result === 'success' ? '#10B981' : '#DC2626', 
-          color: '#FFFFFF' 
-        });
+      builder.text(' Result: ').badge(result.toUpperCase(), {
+        backgroundColor: result === 'success' ? '#10B981' : '#DC2626',
+        color: '#FFFFFF',
+      });
     }
 
     if (errors && errors.length > 0) {
-      builder.text(' Errors: ')
-        .code(JSON.stringify(errors), 'json');
+      builder.text(' Errors: ').code(JSON.stringify(errors), 'json');
     }
 
     if (result === 'error') {
@@ -260,7 +253,12 @@ export class UILogger extends Logger {
   /**
    * Log animation or transition
    */
-  animation(type: 'start' | 'end', animationName: string, duration?: number, element?: string): void {
+  animation(
+    type: 'start' | 'end',
+    animationName: string,
+    duration?: number,
+    element?: string
+  ): void {
     const typeColor = type === 'start' ? '#10B981' : '#3B82F6';
     const builder = this.builder()
       .text('Animation ')
@@ -269,12 +267,12 @@ export class UILogger extends Logger {
       .code(animationName, 'text');
 
     if (element) {
-      builder.text(' Element: ')
-        .code(element, 'text');
+      builder.text(' Element: ').code(element, 'text');
     }
 
     if (duration !== undefined) {
-      builder.text(' Duration: ')
+      builder
+        .text(' Duration: ')
         .badge(`${duration}ms`, { backgroundColor: '#8B5CF6', color: '#FFFFFF' });
     }
 
@@ -292,8 +290,7 @@ export class UILogger extends Logger {
       .code(element, 'text');
 
     if (details && Object.keys(details).length > 0) {
-      builder.text(' Details: ')
-        .code(JSON.stringify(details, null, 2), 'json');
+      builder.text(' Details: ').code(JSON.stringify(details, null, 2), 'json');
     }
 
     this.info(builder);
@@ -302,15 +299,19 @@ export class UILogger extends Logger {
   /**
    * Log responsive design changes
    */
-  responsive(breakpoint: string, direction: 'up' | 'down', viewport: { width: number; height: number }): void {
+  responsive(
+    breakpoint: string,
+    direction: 'up' | 'down',
+    viewport: { width: number; height: number }
+  ): void {
     this.debug(
       this.builder()
         .text('Responsive Change ')
         .badge(breakpoint.toUpperCase(), { backgroundColor: '#6366F1', color: '#FFFFFF' })
         .text(' Direction: ')
-        .badge(direction.toUpperCase(), { 
-          backgroundColor: direction === 'up' ? '#10B981' : '#F59E0B', 
-          color: '#FFFFFF' 
+        .badge(direction.toUpperCase(), {
+          backgroundColor: direction === 'up' ? '#10B981' : '#F59E0B',
+          color: '#FFFFFF',
         })
         .text(' Viewport: ')
         .code(`${viewport.width}x${viewport.height}`, 'text')

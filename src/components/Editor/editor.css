@@ -1,262 +1,28 @@
-/* Editor Global Styles */
-
-.tiptap-notebook-editor .is-editor-empty:first-child::before {
-  color: #9ca3af;
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
-/* Title Placeholder Styles */
-.tiptap-notebook-editor .group.is-empty::before {
-  color: #d1d5db; /* gray-300 */
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 1.2;
-  position: absolute;
-  z-index: 1;
-}
-
-/* 可执行代码块样式 */
-.executable-code-block-wrapper {
-  margin: 1.5em 0;
-}
-
-/* AI思考单元格样式 */
-.thinking-cell-wrapper {
-  margin: 1.5em 0;
-  position: relative;
-  width: 100%;
-}
-
-.thinking-cell-container {
-  position: relative;
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 16px;
-}
-
-/* 表格样式 */
-.tiptap-notebook-editor table {
-  border-collapse: collapse;
-  margin: 1em 0;
-  width: 100%;
-}
-
-.tiptap-notebook-editor th,
-.tiptap-notebook-editor td {
-  border: 1px solid #ddd;
-  padding: 0.5em;
-  text-align: left;
-}
-
-.tiptap-notebook-editor th {
-  background-color: #f5f5f5;
-  font-weight: bold;
-}
-
-.tiptap-notebook-editor tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-
-/* 确保编辑器正常工作 */
-.ProseMirror {
-  outline: none !important;
-}
-
-.ProseMirror p.is-editor-empty:first-child::before {
-  color: #adb5bd;
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
-.tiptap-notebook-editor .selectedCell {
-  background-color: #e6f3ff;
-}
-
-/* 基于cell类型的游标样式 */
-.tiptap-notebook-editor .ProseMirror {
-  caret-color: #1f2937;
-  /* 默认深色游标 */
-}
-
-/* H1标题（默认标题）的游标样式 */
-.tiptap-notebook-editor h1 {
-  caret-color: #3b82f6;
-  /* 蓝色游标，在浅色文本上更明显 */
-  position: relative;
-}
-
-.tiptap-notebook-editor h1:focus-within {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-  border-radius: 4px;
-}
-
-/* H2-H6标题的游标样式 */
-.tiptap-notebook-editor h2 {
-  caret-color: #059669;
-}
-
-.tiptap-notebook-editor h3 {
-  caret-color: #dc2626;
-}
-
-.tiptap-notebook-editor h4,
-.tiptap-notebook-editor h5,
-.tiptap-notebook-editor h6 {
-  caret-color: #7c3aed;
-}
-
-/* 段落的游标样式 */
-.tiptap-notebook-editor p {
-  caret-color: #374151;
-}
-
-/* 列表的游标样式 */
-.tiptap-notebook-editor ul li,
-.tiptap-notebook-editor ol li {
-  caret-color: #f59e0b;
-}
-
-/* 引用块的游标样式 */
-.tiptap-notebook-editor blockquote {
-  caret-color: #6b7280;
-}
-
-/* 代码块的游标样式 */
-.tiptap-notebook-editor code {
-  caret-color: #ef4444;
-}
-
-/* 表格的游标样式 */
-.tiptap-notebook-editor table th,
-.tiptap-notebook-editor table td {
-  caret-color: #8b5cf6;
-}
-
-/* 图片和LaTeX扩展样式 */
-.image-markdown-wrapper {
-  margin: 1rem 0;
-}
-
-.image-editor {
-  margin: 0.5rem 0;
-}
-
-.image-display {
-  margin: 1rem 0;
-  position: relative;
-}
-
-.image-placeholder {
-  margin: 1rem 0;
-}
-
-/* LaTeX 扩展样式 */
-.latex-markdown-wrapper {
-  margin: 1rem 0;
-}
-
-.latex-editor {
-  margin: 0.5rem 0;
-}
-
-.latex-display {
-  margin: 1rem 0;
-  position: relative;
-}
-
-.latex-placeholder {
-  margin: 1rem 0;
-}
-
-.katex-rendered {
-  user-select: all;
-}
-
-.katex-display {
-  text-align: center;
-  margin: 1rem 0;
-}
-
-/* LaTeX 文本颜色修复 */
-.latex-preview .katex-rendered {
-  color: inherit !important;
-}
-
-.latex-preview .katex-rendered * {
-  color: inherit !important;
-}
-
-.latex-preview .katex {
-  color: inherit !important;
-}
-
-.latex-preview .katex .base {
-  color: inherit !important;
-}
-
-.latex-preview .katex .mathdefault,
-.latex-preview .katex .mathit,
-.latex-preview .katex .mathrm,
-.latex-preview .katex .mathbf,
-.latex-preview .katex .mathcal,
-.latex-preview .katex .mathfrak,
-.latex-preview .katex .mathscr,
-.latex-preview .katex .mathsf,
-.latex-preview .katex .mathtt {
-  color: inherit !important;
-}
-
-/* 恢复原本的可执行代码块样式 */
-.executable-code-block-wrapper {
-  margin: 1.5em 0;
-}
-
-/* 移除CodeCell输出中的边框样式 */
-.executable-code-block-wrapper pre {
-  border: none !important;
-  border-left: none !important;
-  border-right: none !important;
-  border-top: none !important;
-  border-bottom: none !important;
-  background: transparent !important;
-  padding-left: 0 !important;
-  margin: 0 !important;
-}
-
-/* 移除prose样式对CodeCell输出的影响 */
-.executable-code-block-wrapper .output-container pre {
-  border: none !important;
-  background: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-/* 可点击填充区域样式 */
-.tiptap-notebook-editor-container .cursor-text:hover {
-  background-color: rgba(59, 130, 246, 0.02);
-  transition: background-color 0.2s ease;
-}
-
-.tiptap-notebook-editor-container .cursor-text:active {
-  background-color: rgba(59, 130, 246, 0.05);
-}
-
-/* 确保编辑器容器填满高度 */
 .tiptap-notebook-editor-container {
+  --editor-ink: #1f2937;
+  --editor-muted: #6b7280;
+  --editor-line: #d1d5db;
+  --editor-surface: #fff;
+  --editor-surface-muted: #f7f8fa;
+  --editor-accent: #2563eb;
+  --editor-selection: #e6f3ff;
+  --editor-error: #b42318;
   display: flex;
   flex-direction: column;
   min-height: 500px;
   height: 100%;
+  color: var(--editor-ink);
+}
+
+.dark .tiptap-notebook-editor-container {
+  --editor-ink: #e5e7eb;
+  --editor-muted: #9ca3af;
+  --editor-line: #4b5563;
+  --editor-surface: #1f2937;
+  --editor-surface-muted: #111827;
+  --editor-accent: #60a5fa;
+  --editor-selection: #1e3a5f;
+  --editor-error: #fca5a5;
 }
 
 .tiptap-notebook-editor-container > .flex-1 {
@@ -266,51 +32,232 @@
   height: 100%;
 }
 
-/* ProseMirror编辑器样式 */
-.tiptap-notebook-editor .ProseMirror {
+.tiptap-notebook-editor {
   min-height: 120px;
-  padding: 16px;
-  transition: all 0.2s ease;
-  outline: none !important;
+  outline: none;
+  caret-color: var(--editor-ink);
 }
 
-/* 确保EditorContent填充适当空间 */
+.tiptap-notebook-editor p.is-empty::before {
+  color: var(--editor-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap-notebook-editor .node-title-content[data-empty='true']::before {
+  color: var(--editor-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.tiptap-notebook-editor .selectedCell {
+  background-color: var(--editor-selection);
+}
+
+.tiptap-notebook-editor h1 {
+  caret-color: var(--editor-accent);
+  position: relative;
+}
+
+.tiptap-notebook-editor h1:focus-within {
+  outline: 2px solid var(--editor-selection);
+  border-radius: 4px;
+}
+
+.tiptap-notebook-editor :is(h2, h3, h4, h5, h6, p, li, blockquote, code, th, td) {
+  caret-color: var(--editor-ink);
+}
+
+.tiptap-notebook-editor table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+}
+
+.tiptap-notebook-editor :is(th, td) {
+  border: 1px solid var(--editor-line);
+  padding: 0.5em;
+  text-align: left;
+}
+
+.tiptap-notebook-editor th {
+  background: var(--editor-surface-muted);
+  font-weight: 700;
+}
+
+.tiptap-notebook-editor tr:nth-child(even) {
+  background: var(--editor-surface-muted);
+}
+
+.tiptap-notebook-editor :is(.executable-code-block-wrapper, .thinking-cell-wrapper) {
+  margin: 1.5em 0;
+}
+
+.tiptap-notebook-editor .thinking-cell-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.tiptap-notebook-editor .thinking-cell-container {
+  position: relative;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 16px;
+}
+
+.tiptap-notebook-editor .executable-code-block-wrapper :is(pre, .output-container pre) {
+  border: 0;
+  background: transparent;
+  padding-left: 0;
+  margin: 0;
+}
+
+.tiptap-notebook-editor
+  :is(
+    .image-markdown-wrapper,
+    .image-display,
+    .image-placeholder,
+    .latex-markdown-wrapper,
+    .latex-display,
+    .latex-placeholder,
+    .katex-display
+  ) {
+  margin: 1rem 0;
+}
+
+.tiptap-notebook-editor :is(.image-editor, .latex-editor) {
+  margin: 0.5rem 0;
+}
+
+.tiptap-notebook-editor :is(.image-display, .latex-display) {
+  position: relative;
+}
+
+.tiptap-notebook-editor .katex-display {
+  text-align: center;
+}
+
+.tiptap-notebook-editor .katex-rendered {
+  user-select: all;
+}
+
+.tiptap-notebook-editor .latex-preview .katex {
+  color: inherit;
+}
+
+.tiptap-notebook-editor-container .cursor-text:hover {
+  background: var(--editor-selection);
+}
+
+.tiptap-notebook-editor-container .cursor-text:active {
+  background: var(--editor-selection);
+}
+
 .tiptap-notebook-editor-container .focus-within\:outline-none {
   min-height: 120px;
 }
 
-/* Force Title Size - Global Override */
+.tiptap-notebook-editor h1.node-title-content,
+.tiptap-notebook-editor-container .editor-cover-icon {
+  font-size: 40px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
 .tiptap-notebook-editor h1.node-title-content {
-  font-size: 40px !important;
-  line-height: 1.2 !important;
-  font-weight: 700 !important;
+  margin: 0 0 1rem;
 }
 
-.tiptap-notebook-editor h1.node-title-content * {
-  font-size: inherit !important;
-  line-height: inherit !important;
-  font-weight: inherit !important;
+.tiptap-notebook-editor h1.node-title-content,
+.tiptap-notebook-editor .node-title-content > [data-node-view-content-react] {
+  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 
-/* Force Icon Size - Global Override */
-.editor-cover-icon {
-  font-size: 40px !important;
-  line-height: 1.2 !important;
+.tiptap-notebook-editor .node-title-content * {
+  font-size: inherit;
+  line-height: inherit;
 }
 
-/* Only apply inheritance to direct emoji, not the menu */
-.editor-cover-icon > div:first-child {
-  font-size: inherit !important;
-  line-height: inherit !important;
+.tiptap-notebook-editor-container .editor-cover-icon .absolute {
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
-/* Force menu to have normal text size */
-.editor-cover-icon .absolute {
-  font-size: 14px !important;
-  line-height: 1.5 !important;
+.tiptap-notebook-editor .notebook-mermaid-block {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  margin: 1rem 0;
+  border: 1px solid var(--editor-line);
+  border-radius: 8px;
+  background: var(--editor-surface);
 }
 
-.editor-cover-icon .absolute * {
-  font-size: inherit !important;
-  line-height: inherit !important;
+.tiptap-notebook-editor .notebook-mermaid-label {
+  color: var(--editor-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-toolbar,
+.tiptap-notebook-editor .notebook-mermaid-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-toolbar {
+  justify-content: space-between;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-actions button {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  color: var(--editor-muted);
+  font-size: 0.75rem;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-actions button:hover,
+.tiptap-notebook-editor .notebook-mermaid-actions button[aria-pressed='true'] {
+  color: var(--editor-ink);
+  background: var(--editor-surface-muted);
+}
+
+.tiptap-notebook-editor .notebook-mermaid-copy-status {
+  color: var(--editor-muted);
+  font-size: 0.75rem;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-source {
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  border: 1px solid var(--editor-line);
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: var(--editor-surface-muted);
+  color: var(--editor-ink);
+  font:
+    0.875rem/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.tiptap-notebook-editor .notebook-mermaid-source:focus-visible {
+  outline: 2px solid var(--editor-accent);
+  outline-offset: 2px;
 }

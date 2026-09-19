@@ -1,19 +1,13 @@
 import React, { useMemo, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { markdown } from '@codemirror/lang-markdown';
-import { EditorView } from '@codemirror/view';
-import { syntaxHighlighting } from '@codemirror/language';
 import { Trash2, Eye } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import { markdownRemarkPlugins, markdownRehypePlugins } from '../../markdownPreviewPlugins';
 import useStore from '@Store/notebookStore';
 import type { Cell as StoreCell } from '@Store/models';
 import editorLogger from '@Utils/logger/editor_logger';
 import { useMarkdownCellViewModel } from './model/useMarkdownCellViewModel';
-import { CodeBlock } from './components/CodeBlock';
+import { markdownCodeComponents, markdownSoftLineComponents } from '../../MarkdownCodePreview';
 import {
   MarkdownImage,
   MarkdownTable,
@@ -21,7 +15,7 @@ import {
   MarkdownTableCell,
   MarkdownTableHead,
 } from './components/MarkdownElements';
-import { markdownHighlighting } from './utils/markdownHighlighting';
+import { markdownEditorTheme, useMarkdownEditorExtensions } from './utils/markdownEditorConfig';
 
 interface MarkdownCellProps {
   cell: StoreCell;
@@ -30,43 +24,29 @@ interface MarkdownCellProps {
 
 const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleStyle = false }) => {
   const vm = useMarkdownCellViewModel(cell);
+  const editorExtensions = useMarkdownEditorExtensions(vm.boundaryKeymap);
   const viewMode = useStore((state) => state.viewMode);
-  const cellIndex = useStore((state) => state.cells.findIndex((c) => c.id === cell.id));
+  const isFirstCell = useStore((state) => state.cells[0]?.id === cell.id);
 
   const isDefaultTitle =
-    cellIndex === 0 && cell.metadata?.isDefaultTitle === true && !disableDefaultTitleStyle;
+    isFirstCell && cell.metadata?.isDefaultTitle === true && !disableDefaultTitleStyle;
 
   /** ---------- Markdown 渲染组件 ---------- **/
-  const markdownComponents = useMemo(
+  const markdownComponents = useMemo<Components>(
     () =>
       ({
-        code: CodeBlock,
+        ...markdownCodeComponents,
+        ...markdownSoftLineComponents,
         img: MarkdownImage,
         table: MarkdownTable,
         tr: MarkdownTableRow,
         td: MarkdownTableCell,
         th: MarkdownTableHead,
-        p: ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) => {
-          if (typeof children === 'string') {
-            const processedChildren = children
-              .split('\n')
-              .reduce((acc: React.ReactNode[], part: string, index: number) => {
-                if (index > 0) acc.push(<br key={`br-${index}`} />);
-                acc.push(part);
-                return acc;
-              }, []);
-            return <p {...props}>{processedChildren}</p>;
-          }
-          return <p {...props}>{children}</p>;
-        },
         a: ({
           href = '',
           children,
+          node: _node,
           ...props
-        }: {
-          href?: string;
-          children?: React.ReactNode;
-          [key: string]: unknown;
         }) => (
           <a
             {...props}
@@ -145,12 +125,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
             {children}
           </a>
         ),
-      }) as Record<
-        string,
-        React.ComponentType<
-          React.HTMLAttributes<HTMLElement> & { href?: string; children?: React.ReactNode }
-        >
-      >,
+      }),
     []
   );
 
@@ -184,39 +159,10 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                   onCreateEditor={vm.setEditorRef}
                   value={vm.localContent}
                   height="auto"
-                  extensions={[
-                    markdown(),
-                    EditorView.lineWrapping,
-                    syntaxHighlighting(markdownHighlighting),
-                    vm.boundaryKeymap, // ★ 拦截方向键做跨 cell
-                  ]}
+                  extensions={editorExtensions}
                   onChange={vm.handleChange}
                   className="markdown-editor-codemirror"
-                  theme={EditorView.theme({
-                    '&': {
-                      border: 'none !important',
-                      boxShadow: 'none !important',
-                      backgroundColor: 'transparent !important',
-                      padding: 0,
-                      fontSize: '1rem',
-                      lineHeight: '1.6',
-                    },
-                    '.cm-scroller': {
-                      backgroundColor: 'transparent !important',
-                      padding: 0,
-                    },
-                    '.cm-content': {
-                      padding: 0,
-                      minHeight: 'auto',
-                    },
-                    '.cm-focused': {
-                      outline: 'none !important',
-                    },
-                    '.cm-editor': {
-                      fontSize: '1rem !important',
-                      lineHeight: '1.6 !important',
-                    },
-                  })}
+                  theme={markdownEditorTheme}
                   onKeyDown={vm.handleKeyDown}
                   onBlur={vm.handleBlur}
                   autoFocus
@@ -247,11 +193,11 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                   }
                 >
                   <ReactMarkdown
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
+                    remarkPlugins={markdownRemarkPlugins}
+                    rehypePlugins={markdownRehypePlugins}
                     components={markdownComponents}
                   >
-                    {cell.content.replace(/(?<!\n)\n(?!\n)/g, '  \n')}
+                    {cell.content}
                   </ReactMarkdown>
                 </div>
               )}

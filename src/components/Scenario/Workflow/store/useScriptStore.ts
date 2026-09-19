@@ -293,11 +293,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         cellData.useWorkflowThinking = options.useWorkflowThinking || false;
       }
 
-      useNotebookStore.getState().addCell(cellData);
-      set({ lastAddedActionId: cellId });
+      const publishedId = useNotebookStore.getState().addCell(cellData);
+      set({ lastAddedActionId: publishedId });
 
-      console.log(`[ScriptStore] Added cell: ${cellType} (${cellId})`);
-      return cellId;
+      console.log(`[ScriptStore] Added cell: ${cellType} (${publishedId})`);
+      return publishedId;
     } catch (error) {
       console.error('[ScriptStore] Error adding cell:', error);
       return null;

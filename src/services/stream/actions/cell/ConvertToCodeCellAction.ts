@@ -1,6 +1,8 @@
 import { StreamAction, registerStreamAction } from '../base';
 import type { StreamActionContext } from '../../types';
 import useNotebookStore from '@Store/notebookStore';
+import { getCellIndexById } from '@Store/models/cellIndex';
+import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
 
 export class ConvertToCodeCellAction extends StreamAction {
   static actionType = 'convert_to_code_cell';
@@ -22,16 +24,9 @@ export class ConvertToCodeCellAction extends StreamAction {
 
     console.log(`[ConvertToCodeCellAction] Converting cell ${targetCellId} to code cell`);
 
-    // 1. Update cell type to 'code'
-    notebookStore.updateCellType(targetCellId, 'code');
-
-    // 2. Ensure cell is editable
-    notebookStore.updateCellCanEdit(targetCellId, true);
-
-    // 3. Clean up metadata (optional but recommended to remove "thinking" artifacts)
-    // We use updateCellObject to be safe
-    const cell = notebookStore.cells.find((c) => c.id === targetCellId);
-    if (cell) {
+    const index = getCellIndexById(notebookStore.cells, targetCellId);
+    if (index !== undefined) {
+      const cell = notebookStore.cells[index];
       const newMetadata = { ...cell.metadata };
       // Remove thinking-related metadata if present
       delete newMetadata.agentName;
@@ -39,14 +34,15 @@ export class ConvertToCodeCellAction extends StreamAction {
       delete newMetadata.textArray;
       delete newMetadata.useWorkflowThinking;
 
-      // Ensure language is python (default for code cells)
-      if (!newMetadata.language) {
-        newMetadata.language = 'python';
-      }
-
-      notebookStore.updateCellObject(targetCellId, {
-        metadata: newMetadata,
-      });
+      const language = normalizeCodeLanguage(cell.language ?? newMetadata.language);
+      newMetadata.language = language;
+      if (cell.type === 'code' && cell.enableEdit === true && cell.language === language &&
+        Object.keys(cell.metadata || {}).length === Object.keys(newMetadata).length &&
+        Object.keys(newMetadata).every(key => cell.metadata?.[key] === newMetadata[key])) return;
+      // Replace metadata rather than merging deleted thinking fields back into it.
+      const cells = notebookStore.cells.slice();
+      cells[index] = { ...cell, type: 'code', enableEdit: true, language, metadata: newMetadata };
+      notebookStore.setCells(cells);
     }
   }
 }

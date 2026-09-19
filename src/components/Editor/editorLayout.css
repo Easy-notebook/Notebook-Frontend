@@ -1,0 +1,51 @@
+/* Shared notebook layout constraints; never target editors outside a notebook. */
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container) {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container)
+  :is(.draggable-cell, .cell-wrapper, .output-container, .cell-output) {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container) table {
+  max-width: 100%;
+  table-layout: fixed;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container) pre {
+  max-width: 100%;
+  overflow-x: auto;
+  box-sizing: border-box;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container) img {
+  max-width: 100%;
+  height: auto;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container)
+  :is(.cell-output, .output-container) {
+  overflow-x: auto;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container) .notebook-mermaid-preview {
+  overflow-x: auto;
+  text-align: center;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container) .notebook-mermaid-error {
+  color: var(--editor-error, #b42318);
+  white-space: pre-wrap;
+  font-size: 0.875rem;
+}
+
+:is(.jupyter-notebook-editor, .tiptap-notebook-editor-container) .notebook-mermaid-loading {
+  color: var(--editor-muted, #6b7280);
+  font-size: 0.875rem;
+}

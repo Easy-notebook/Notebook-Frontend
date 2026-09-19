@@ -1,28 +1,24 @@
 import React from 'react';
+import type { ExtraProps } from 'react-markdown';
 
-interface MarkdownImageProps {
-  alt?: string;
-  src?: string;
-  title?: string;
-}
+type MarkdownImageProps = React.ComponentPropsWithoutRef<'img'> & ExtraProps;
 
-export const MarkdownImage: React.FC<MarkdownImageProps> = ({ alt, src, title }) => (
+export const MarkdownImage: React.FC<MarkdownImageProps> = ({
+  node: _node, loading = 'lazy', decoding = 'async', style, ...props
+}) => (
   <span style={{ display: 'block', textAlign: 'center' }}>
     <img
-      src={src}
-      alt={alt}
-      title={title}
-      style={{ maxWidth: '100%', height: 'auto', display: 'inline-block' }}
+      {...props}
+      loading={loading}
+      decoding={decoding}
+      style={{ maxWidth: '100%', height: 'auto', display: 'inline-block', ...style }}
     />
   </span>
 );
 
-interface MarkdownTableProps {
-  children: React.ReactNode;
-  [key: string]: unknown;
-}
-export const MarkdownTable: React.FC<MarkdownTableProps> = ({ children, ...props }) => (
-  <span
+type MarkdownTableProps = React.ComponentPropsWithoutRef<'table'> & ExtraProps;
+export const MarkdownTable: React.FC<MarkdownTableProps> = ({ node: _node, children, ...props }) => (
+  <div
     className="table-container"
     style={{ display: 'block', overflowX: 'auto', margin: '1rem 0' }}
   >
@@ -32,27 +28,21 @@ export const MarkdownTable: React.FC<MarkdownTableProps> = ({ children, ...props
         borderCollapse: 'collapse',
         width: '100%',
         minWidth: '300px',
+        ...props.style,
       }}
     >
       {children}
     </table>
-  </span>
+  </div>
 );
 
-interface MarkdownTableRowProps {
-  children: React.ReactNode;
-  [key: string]: unknown;
-}
-export const MarkdownTableRow: React.FC<MarkdownTableRowProps> = ({ children, ...props }) => (
+type MarkdownTableRowProps = React.ComponentPropsWithoutRef<'tr'> & ExtraProps;
+export const MarkdownTableRow: React.FC<MarkdownTableRowProps> = ({ node: _node, children, ...props }) => (
   <tr {...props}>{children}</tr>
 );
 
-interface MarkdownTableCellProps {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-  [key: string]: unknown;
-}
-export const MarkdownTableCell: React.FC<MarkdownTableCellProps> = ({ children, ...props }) => (
+type MarkdownTableCellProps = React.ComponentPropsWithoutRef<'td'> & ExtraProps;
+export const MarkdownTableCell: React.FC<MarkdownTableCellProps> = ({ node: _node, children, ...props }) => (
   <td
     {...props}
     style={{
@@ -65,12 +55,8 @@ export const MarkdownTableCell: React.FC<MarkdownTableCellProps> = ({ children, 
   </td>
 );
 
-interface MarkdownTableHeadProps {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-  [key: string]: unknown;
-}
-export const MarkdownTableHead: React.FC<MarkdownTableHeadProps> = ({ children, ...props }) => (
+type MarkdownTableHeadProps = React.ComponentPropsWithoutRef<'th'> & ExtraProps;
+export const MarkdownTableHead: React.FC<MarkdownTableHeadProps> = ({ node: _node, children, ...props }) => (
   <th
     {...props}
     style={{

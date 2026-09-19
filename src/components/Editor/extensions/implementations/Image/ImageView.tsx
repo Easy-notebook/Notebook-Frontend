@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NodeViewProps } from '@tiptap/react';
 import { BaseNodeView } from '../../core/BaseNodeView';
 import { ImageModel, ImageContext } from './ImageModel';
 import useStore from '@Store/notebookStore';
+import { getCellById } from '@Store/models/cellIndex';
 import { Upload, X, Edit3, Loader2, Eye, AlignCenter, AlignLeft } from 'lucide-react';
 import { Image } from 'antd';
 import { generateCellId } from '../../../utils/cellConverters';
@@ -18,7 +19,8 @@ interface ImageViewComponentProps extends NodeViewProps {
 const ImageViewComponent = (props: ImageViewComponentProps) => {
   const { node, updateAttributes, deleteNode, fsm } = props;
   const { src, alt, cellId, markdown, displayMode } = node.attrs;
-  const { cells, updateCell, viewMode } = useStore();
+  const updateCell = useStore((state) => state.updateCell);
+  const viewMode = useStore((state) => state.viewMode);
 
   const [tempMarkdown, setTempMarkdown] = useState('');
   const [imageError, setImageError] = useState(false);
@@ -26,7 +28,7 @@ const ImageViewComponent = (props: ImageViewComponentProps) => {
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const textareaRef = useRef<HTMLInputElement>(null);
 
-  const cell = useMemo(() => cells.find((c) => c.id === cellId), [cells, cellId]);
+  const cell = useStore((state) => getCellById(state.cells, cellId));
   const currentState = fsm.getCurrentState();
 
   const cellContent = cell?.content || '';
@@ -568,9 +570,8 @@ const ImageViewComponent = (props: ImageViewComponentProps) => {
 };
 
 export const ImageView = (props: NodeViewProps) => {
-  const { cells } = useStore();
   // We need to pass cell context to FSM creation
-  const cell = cells.find((c) => c.id === props.node.attrs.cellId);
+  const cell = useStore((state) => getCellById(state.cells, props.node.attrs.cellId));
 
   return (
     <BaseNodeView<ImageContext>

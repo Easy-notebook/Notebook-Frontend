@@ -4,6 +4,7 @@ import useStore from '@Store/notebookStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { CodeExecutionService } from '@Services/notebook/CodeExecutionService';
 import { storeLog } from '@Utils/logger';
+import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
 import {
   DISPLAY_MODES,
   type DisplayMode,
@@ -277,6 +278,15 @@ const useCodeStore = create<CodeStore>((set, get) => ({
       return get().cancelCellExecution(cellId);
     }
 
+    const codeCell = useStore.getState().cells.find((cell) => cell.id === cellId);
+    if (!codeCell) return { success: false, error: 'Cell does not exist' };
+    if (!canExecuteCodeLanguage(codeCell.language)) {
+      return {
+        success: false,
+        error: `${codeCell.language} execution is unavailable; the kernel runs Python only`,
+      };
+    }
+
     // 如果内核没就绪，先初始化
     const ok = await get().initializeKernel();
     const notebookId = useStore.getState().notebookId;
@@ -301,14 +311,6 @@ const useCodeStore = create<CodeStore>((set, get) => ({
 
     // 真正发起执行请求
     try {
-      const codeCell = notebookState.cells.find((c) => c.id === cellId);
-      if (!codeCell) {
-        // Cell 不存在
-        get().stopStatusCheck(cellId);
-        get().setCellExecState(cellId, { isExecuting: false });
-        return { success: false, error: 'Cell 不存在' };
-      }
-
       const result = await CodeExecutionService.executeCode(codeCell.content, notebookId!);
 
       // 更新 outputs

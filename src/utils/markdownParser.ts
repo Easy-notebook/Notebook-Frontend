@@ -1,8 +1,17 @@
 // utils/markdownParser.ts
+import { MarkdownStructureIndex } from './markdown/structureIndex';
+import { resolvePhaseOwnership } from './markdown/phaseOwnership';
 import {
     Book,
     LucideIcon
 } from 'lucide-react';
+
+const structureIndex = new MarkdownStructureIndex();
+
+export const hasSameMarkdownStructure = (
+    previous: readonly { id: string; type: string; content: string }[],
+    next: readonly { id: string; type: string; content: string }[],
+): boolean => structureIndex.hasSameStructure(previous, next);
 
 // Type definitions for markdown parser
 interface Cell {
@@ -55,30 +64,12 @@ const DEFAULT_ICONS: IconType[] = [
  * @param tasks - 任务数组
  */
 export function updateCellsPhaseId(cells: Cell[], tasks: Task[]): void {
-    if (!cells || cells.length === 0 || !tasks || tasks.length === 0) return;
-
-    // 为每个 phase 的范围内所有 cell 统一写入 phaseId
-    tasks.forEach(task => {
-        task.phases.forEach(phase => {
-            const phaseId = phase.id;
-            // 遍历该 phase 下的所有 steps（包含 intro step），按 startIndex..endIndex 覆盖 phaseId
-            (phase.steps || []).forEach(step => {
-                const start = typeof step.startIndex === 'number' ? step.startIndex : null;
-                const end = typeof step.endIndex === 'number' ? step.endIndex : null;
-                if (start !== null && end !== null) {
-                    for (let i = start; i <= end && i < cells.length; i++) {
-                        const cell = cells[i];
-                        if (!cell) continue;
-                        const prev = (cell as any).phaseId;
-                        (cell as any).phaseId = phaseId;
-                        if (prev !== phaseId) {
-                            // 仅在调试需要时打印
-                            // console.log('🔄 覆盖cell.phaseId:', { index: i, cellId: cell.id, phaseId });
-                        }
-                    }
-                }
-            });
-        });
+    if (!cells || cells.length === 0) return;
+    const assignments = resolvePhaseOwnership(cells.length, tasks || []);
+    // Assign final values once: clearing first would dirty every Immer cell even
+    // when its derived phase ultimately stayed the same.
+    cells.forEach((cell, index) => {
+        if (cell && cell.phaseId !== assignments[index]) cell.phaseId = assignments[index];
     });
 }
 
@@ -138,37 +129,35 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
         }
     };
 
+    const appendContent = (cell: Cell): void => {
+        const step = currentStep || currentPhase?.currentIntroStep || currentTask?.introPhase?.currentIntroStep;
+        if (!step) return;
+        step.content ??= [];
+        // A cell may contain many Markdown blocks, but owns one content reference per step.
+        if (step.content[step.content.length - 1]?.id !== cell.id) step.content.push(cell);
+    };
+
+    const structures = structureIndex.project(cells);
     // Process cells
     cells.forEach((cell, index) => {
         if (cell.type !== 'markdown') {
-            // Add non-markdown cells to appropriate content array
-            if (currentStep) {
-                currentStep.content = currentStep.content || [];
-                currentStep.content.push(cell);
-            } else if (currentPhase?.currentIntroStep) {
-                currentPhase.currentIntroStep.content = currentPhase.currentIntroStep.content || [];
-                currentPhase.currentIntroStep.content.push(cell);
-            } else if (currentTask?.introPhase?.currentIntroStep) {
-                currentTask.introPhase.currentIntroStep.content = currentTask.introPhase.currentIntroStep.content || [];
-                currentTask.introPhase.currentIntroStep.content.push(cell);
-            }
+            appendContent(cell);
             return;
         }
 
         // Process markdown content
-        const lines: string[] = cell.content.split('\n');
-        for (const line of lines) {
-            const h1Match: RegExpMatchArray | null = line.match(/^# (.+)/);
-            const h2Match: RegExpMatchArray | null = line.match(/^## (.+)/);
-            const h3Match: RegExpMatchArray | null = line.match(/^### (.+)/);
+        // Only top-level block headings own notebook structure. Code, quotes,
+        // lists and tables remain content regardless of heading-like text inside.
+        for (const token of structures[index]) {
+            const heading = token.type === 'heading' ? token : null;
 
             // Handle H1 (Task)
-            if (h1Match) {
+            if (heading?.depth === 1) {
                 // End any current steps or intro steps
                 endcurrentStep(index);
                 endCurrentIntroStep(index);
 
-                const taskTitle: string = h1Match[1].trim();
+                const taskTitle: string = heading.text.trim();
                 currentTask = createTask(taskTitle, tasks.length);
                 tasks.push(currentTask);
 
@@ -188,12 +177,12 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
             }
 
             // Handle H2 (Phase)
-            if (h2Match && currentTask) {
+            if (heading?.depth === 2 && currentTask) {
                 // End any current steps or intro steps
                 endcurrentStep(index);
                 endCurrentIntroStep(index);
 
-                const phaseTitle: string = h2Match[1].trim();
+                const phaseTitle: string = heading.text.trim();
                 currentPhase = createPhase(phaseTitle, cell.id);
                 currentTask.phases.push(currentPhase);
 
@@ -208,12 +197,12 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
             }
 
             // Handle H3 (Step)
-            if (h3Match && currentPhase) {
+            if (heading?.depth === 3 && currentPhase) {
                 // End any current steps or intro steps
                 endcurrentStep(index);
                 endCurrentIntroStep(index);
                 
-                const stepTitle: string = h3Match[1].trim();
+                const stepTitle: string = heading.text.trim();
                 const stepIndex: number = currentPhase.steps.length;
                 currentStep = createStep(stepTitle, stepIndex, currentPhase.id);
                 currentStep.startIndex = index;
@@ -221,19 +210,7 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
                 continue;
             }
 
-            // Handle content lines
-            if (!line.match(/^#{1,3}/)) {
-                if (currentStep) {
-                    currentStep.content = currentStep.content || [];
-                    currentStep.content.push(cell);
-                } else if (currentPhase?.currentIntroStep) {
-                    currentPhase.currentIntroStep.content = currentPhase.currentIntroStep.content || [];
-                    currentPhase.currentIntroStep.content.push(cell);
-                } else if (currentTask?.introPhase?.currentIntroStep) {
-                    currentTask.introPhase.currentIntroStep.content = currentTask.introPhase.currentIntroStep.content || [];
-                    currentTask.introPhase.currentIntroStep.content.push(cell);
-                }
-            }
+            appendContent(cell);
         }
     });
 
@@ -248,7 +225,10 @@ export function parseMarkdownCells(cells: Cell[]): Task[] {
                     step.endIndex = cells.length - 1;
                 }
             });
+            // Construction cursors are not part of the published task model.
+            delete phase.currentIntroStep;
         });
+        delete task.introPhase;
     });
 
     return tasks;

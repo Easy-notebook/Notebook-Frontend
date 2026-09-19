@@ -41,9 +41,18 @@ export function BaseNodeView<TContext>({
   // Sync Tiptap attributes when local state changes
   useEffect(() => {
     if (currentState !== node.attrs.fsmState) {
-      updateAttributes({ fsmState: currentState });
+      props.editor.commands.command(({ tr }) => {
+        const pos = props.getPos();
+        if (typeof pos !== 'number') return false;
+        const current = tr.doc.nodeAt(pos);
+        if (!current || current.attrs.cellId !== node.attrs.cellId) return false;
+        tr.setNodeMarkup(pos, undefined, { ...current.attrs, fsmState: currentState })
+          .setMeta('addToHistory', false)
+          .setMeta('preventUpdate', true);
+        return true;
+      });
     }
-  }, [currentState, node.attrs.fsmState, updateAttributes]);
+  }, [currentState, node.attrs.fsmState, node.attrs.cellId, props.editor, props.getPos]);
 
   // Sync local state from attributes if changed externally (e.g. undo/redo)
   useEffect(() => {

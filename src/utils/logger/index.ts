@@ -46,36 +46,36 @@ class LoggerManager {
     this.config = {
       storage: {
         enabled: true,
-        level: LogLevel.DEBUG
+        level: LogLevel.DEBUG,
       },
       api: {
         enabled: true,
-        level: LogLevel.INFO
+        level: LogLevel.INFO,
       },
       ui: {
         enabled: true,
-        level: LogLevel.DEBUG
+        level: LogLevel.DEBUG,
       },
       network: {
         enabled: true,
-        level: LogLevel.DEBUG
+        level: LogLevel.DEBUG,
       },
       notebook: {
         enabled: true,
-        level: LogLevel.INFO
+        level: LogLevel.INFO,
       },
       store: {
         enabled: true,
-        level: LogLevel.DEBUG
+        level: LogLevel.DEBUG,
       },
       file: {
         enabled: true,
-        level: LogLevel.INFO
+        level: LogLevel.INFO,
       },
       agent: {
         enabled: true,
-        level: LogLevel.INFO
-      }
+        level: LogLevel.INFO,
+      },
     };
 
     this.initializeLoggers();
@@ -111,7 +111,7 @@ class LoggerManager {
    */
   private updateLoggerStates(): void {
     const groupStates: Record<string, boolean> = {};
-    
+
     Object.entries(this.config).forEach(([key, config]) => {
       groupStates[this.getGroupName(key)] = config.enabled;
     });
@@ -124,14 +124,14 @@ class LoggerManager {
    */
   private getGroupName(loggerType: string): string {
     const groupNames: Record<string, string> = {
-      'storage': 'Storage',
-      'api': 'API',
-      'ui': 'UI',
-      'network': 'Network',
-      'notebook': 'Notebook',
-      'store': 'Store',
-      'file': 'File',
-      'agent': 'Agent'
+      storage: 'Storage',
+      api: 'API',
+      ui: 'UI',
+      network: 'Network',
+      notebook: 'Notebook',
+      store: 'Store',
+      file: 'File',
+      agent: 'Agent',
     };
     return groupNames[loggerType] || loggerType;
   }
@@ -143,7 +143,7 @@ class LoggerManager {
     if (this.config[loggerType]) {
       this.config[loggerType] = {
         ...this.config[loggerType],
-        ...config
+        ...config,
       };
       this.updateLoggerStates();
     }
@@ -157,7 +157,7 @@ class LoggerManager {
       if (this.config[loggerType] && config) {
         this.config[loggerType] = {
           ...this.config[loggerType],
-          ...config
+          ...config,
         };
       }
     });
@@ -205,14 +205,14 @@ class LoggerManager {
   public createCustomLogger(name: string, config?: LoggerConfig): Logger {
     const logger = new Logger(name, config);
     this.loggers.set(name, logger);
-    
+
     // Add to configuration
     this.config[name] = {
       enabled: true,
       level: config?.level || LogLevel.DEBUG,
-      config
+      config,
     };
-    
+
     return logger;
   }
 
@@ -235,7 +235,7 @@ class LoggerManager {
       notebook: { enabled: true, level: LogLevel.INFO },
       store: { enabled: true, level: LogLevel.DEBUG },
       file: { enabled: true, level: LogLevel.INFO },
-      agent: { enabled: true, level: LogLevel.INFO }
+      agent: { enabled: true, level: LogLevel.INFO },
     };
     this.updateLoggerStates();
   }
@@ -244,7 +244,7 @@ class LoggerManager {
    * Disable all loggers
    */
   public disableAll(): void {
-    Object.keys(this.config).forEach(key => {
+    Object.keys(this.config).forEach((key) => {
       this.config[key].enabled = false;
     });
     this.updateLoggerStates();
@@ -254,7 +254,7 @@ class LoggerManager {
    * Enable all loggers
    */
   public enableAll(): void {
-    Object.keys(this.config).forEach(key => {
+    Object.keys(this.config).forEach((key) => {
       this.config[key].enabled = true;
     });
     this.updateLoggerStates();
@@ -281,7 +281,7 @@ export const loggerConfig = {
    * @example
    * loggerConfig.configure('storage', { enabled: false, level: LogLevel.ERROR });
    */
-  configure: (loggerType: string, config: Partial<LoggerTypeConfig>) => 
+  configure: (loggerType: string, config: Partial<LoggerTypeConfig>) =>
     loggerManager.configureLogger(loggerType, config),
 
   /**
@@ -292,15 +292,14 @@ export const loggerConfig = {
    *   api: { level: LogLevel.ERROR }
    * });
    */
-  configureAll: (configs: Partial<GlobalLoggerConfig>) => 
-    loggerManager.configureLoggers(configs),
+  configureAll: (configs: Partial<GlobalLoggerConfig>) => loggerManager.configureLoggers(configs),
 
   /**
    * Enable or disable a specific logger
    * @example
    * loggerConfig.setEnabled('storage', false);
    */
-  setEnabled: (loggerType: string, enabled: boolean) => 
+  setEnabled: (loggerType: string, enabled: boolean) =>
     loggerManager.setLoggerEnabled(loggerType, enabled),
 
   /**
@@ -308,7 +307,7 @@ export const loggerConfig = {
    * @example
    * loggerConfig.setLevel('api', LogLevel.ERROR);
    */
-  setLevel: (loggerType: string, level: LogLevel) => 
+  setLevel: (loggerType: string, level: LogLevel) =>
     loggerManager.setLoggerLevel(loggerType, level),
 
   /**
@@ -316,23 +315,21 @@ export const loggerConfig = {
    * @example
    * loggerConfig.setGlobalLevel(LogLevel.WARN);
    */
-  setGlobalLevel: (level: LogLevel) => 
-    loggerManager.setGlobalLevel(level),
+  setGlobalLevel: (level: LogLevel) => loggerManager.setGlobalLevel(level),
 
   /**
    * Set theme for all loggers
    * @example
    * loggerConfig.setTheme('neon');
    */
-  setTheme: (theme: ThemeType) => 
-    loggerManager.setTheme(theme),
+  setTheme: (theme: ThemeType) => loggerManager.setTheme(theme),
 
   /**
    * Create a custom logger
    * @example
    * const myLogger = loggerConfig.createCustomLogger('MyModule');
    */
-  createCustomLogger: (name: string, config?: LoggerConfig) => 
+  createCustomLogger: (name: string, config?: LoggerConfig) =>
     loggerManager.createCustomLogger(name, config),
 
   /**
@@ -353,7 +350,7 @@ export const loggerConfig = {
   /**
    * Enable all loggers
    */
-  enableAll: () => loggerManager.enableAll()
+  enableAll: () => loggerManager.enableAll(),
 };
 
 // Export types and base classes
@@ -377,41 +374,41 @@ import './debug_tools';
 
 /**
  * Usage Examples:
- * 
+ *
  * // Basic usage with pre-configured loggers
  * import { storageLog, apiLog, uiLog, networkLog } from './logger';
- * 
+ *
  * storageLog.writeOperation('user_data', 1024);
  * apiLog.request('GET', '/api/users');
  * uiLog.componentMount('UserProfile');
  * networkLog.statusChange(false);
- * 
+ *
  * // Configuration examples
  * import { loggerConfig, LogLevel } from './logger';
- * 
+ *
  * // Disable storage logs
  * loggerConfig.setEnabled('storage', false);
- * 
+ *
  * // Set API logger to only show errors
  * loggerConfig.setLevel('api', LogLevel.ERROR);
- * 
+ *
  * // Configure multiple loggers
  * loggerConfig.configureAll({
  *   storage: { enabled: false },
  *   api: { level: LogLevel.ERROR },
  *   ui: { enabled: true, level: LogLevel.INFO }
  * });
- * 
+ *
  * // Set global theme
  * loggerConfig.setTheme('neon');
- * 
+ *
  * // Create custom logger
  * const myModuleLog = loggerConfig.createCustomLogger('MyModule');
  * myModuleLog.info('Custom module initialized');
- * 
+ *
  * // Reset all configurations
  * loggerConfig.reset();
- * 
+ *
  * // Disable all logging
  * loggerConfig.disableAll();
  */
