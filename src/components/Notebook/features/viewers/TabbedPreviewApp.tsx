@@ -1,19 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import usePreviewStore, { FileType } from '@Store/previewStore';
+import usePreviewStore from '@Store/previewStore';
+import { getPreviewFileType } from '@/storage/fileTypes';
 import {
   CSVPreviewWrapper,
   DocDisplay,
   ReactLiveSandbox,
   PreviewLoadBoundary,
+  CodeDisplay,
+  HighlightedSource,
 } from './DeferredViewers';
 import ImageDisplay from './image/ImageDisplay';
 import PDFDisplay from './pdf/PDFDisplay';
-import CodeDisplay from './code/CodeDisplay';
 import HexDisplay from './hex/HexDisplay';
 import { Code, Monitor } from 'lucide-react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import IframeViewer from './web/IframeViewer';
-import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '@/contexts/ThemeContext';
 
 // ---------- Main ----------
@@ -63,45 +63,7 @@ const TabbedPreviewApp: React.FC = () => {
       );
     }
 
-    // 兜底矫正：文件类型可能被误识别
-    const isExcelName =
-      activeFile.name.toLowerCase().endsWith('.xlsx') ||
-      activeFile.name.toLowerCase().endsWith('.xls');
-    const isDocxName =
-      activeFile.name.toLowerCase().endsWith('.docx') ||
-      activeFile.name.toLowerCase().endsWith('.doc');
-    const isJsName =
-      activeFile.name.toLowerCase().endsWith('.js') ||
-      activeFile.name.toLowerCase().endsWith('.ts') ||
-      activeFile.name.toLowerCase().endsWith('.mjs');
-    const isCssName =
-      activeFile.name.toLowerCase().endsWith('.css') ||
-      activeFile.name.toLowerCase().endsWith('.scss') ||
-      activeFile.name.toLowerCase().endsWith('.sass');
-    const isMdName =
-      activeFile.name.toLowerCase().endsWith('.md') ||
-      activeFile.name.toLowerCase().endsWith('.markdown');
-    const isPyName =
-      activeFile.name.toLowerCase().endsWith('.py') ||
-      activeFile.name.toLowerCase().endsWith('.pyw');
-    const isJsonName = activeFile.name.toLowerCase().endsWith('.json');
-
-    let effectiveType: FileType | 'notebook' = activeFile.type as FileType;
-    if (isExcelName) {
-      effectiveType = 'xlsx';
-    } else if (isDocxName) {
-      effectiveType = 'docx';
-    } else if (isJsName) {
-      effectiveType = 'javascript';
-    } else if (isCssName) {
-      effectiveType = 'css';
-    } else if (isMdName) {
-      effectiveType = 'markdown';
-    } else if (isPyName) {
-      effectiveType = 'python';
-    } else if (isJsonName) {
-      effectiveType = 'json';
-    }
+    const effectiveType = getPreviewFileType(activeFile.name, activeFile.type);
 
     switch (effectiveType) {
       case 'csv':
@@ -142,6 +104,7 @@ const TabbedPreviewApp: React.FC = () => {
         );
 
       case 'javascript':
+      case 'typescript':
       case 'css':
       case 'python':
       case 'json':
@@ -180,9 +143,9 @@ const TabbedPreviewApp: React.FC = () => {
               {showSource ? (
                 <div className="flex-1 relative bg-gray-800 dark:bg-gray-900 rounded-b-lg overflow-hidden">
                   <div className="h-full overflow-auto">
-                    <SyntaxHighlighter
+                    <HighlightedSource
                       language="html"
-                      style={isDark ? tomorrow : prism}
+                      isDark={isDark}
                       customStyle={{
                         margin: 0,
                         padding: '16px',
@@ -197,7 +160,7 @@ const TabbedPreviewApp: React.FC = () => {
                       wrapLongLines
                     >
                       {activeFile.content}
-                    </SyntaxHighlighter>
+                    </HighlightedSource>
                   </div>
                   <div className="absolute top-2 right-2 z-10">
                     <button

@@ -4,6 +4,8 @@ import { Component, Suspense, lazy, type ReactNode } from 'react';
 export const CSVPreviewWrapper = lazy(() => import('./data-table/DataTable'));
 export const DocDisplay = lazy(() => import('./doc/DocDisplay'));
 export const ReactLiveSandbox = lazy(() => import('./web/ReactLiveSandbox'));
+export const CodeDisplay = lazy(() => import('./code/CodeDisplay'));
+export const HighlightedSource = lazy(() => import('./code/HighlightedSource'));
 
 export class PreviewLoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };

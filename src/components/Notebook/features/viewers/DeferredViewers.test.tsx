@@ -1,9 +1,17 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { lazy } from 'react';
 import { expect, it, vi } from 'vitest';
-import { CSVPreviewWrapper, PreviewLoadBoundary } from './DeferredViewers';
+import { CSVPreviewWrapper, HighlightedSource, PreviewLoadBoundary } from './DeferredViewers';
 
 const loaded = vi.hoisted(() => vi.fn());
+vi.mock('./code/CodeDisplay', () => {
+  loaded('code');
+  return { default: () => null };
+});
+vi.mock('./code/HighlightedSource', () => {
+  loaded('highlight');
+  return { default: ({ children }: { children: string }) => <pre>{children}</pre> };
+});
 vi.mock('./data-table/DataTable', () => {
   loaded('table');
   return { default: () => <div>Spreadsheet ready</div> };
@@ -56,4 +64,13 @@ it('loads only the requested preview and presents its loading lifecycle', async 
   });
   expect(screen.getByText('Spreadsheet ready')).toBeDefined();
   expect(loaded.mock.calls).toEqual([['table']]);
+});
+
+it('loads HTML highlighting only when source preview is requested', async () => {
+  cleanup();
+  loaded.mockClear();
+  render(<PreviewLoadBoundary><HighlightedSource isDark={false} language="html">{'<p>Source</p>'}</HighlightedSource></PreviewLoadBoundary>);
+  await act(async () => { await vi.dynamicImportSettled(); });
+  expect(screen.getByText('<p>Source</p>')).toBeDefined();
+  expect(loaded.mock.calls).toEqual([['highlight']]);
 });

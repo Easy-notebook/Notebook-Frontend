@@ -1,4 +1,5 @@
-import usePreviewStore, { FileType } from '@Store/previewStore';
+import usePreviewStore from '@Store/previewStore';
+import { getPreviewFileType } from '@/storage/fileTypes';
 import useStore from '@Store/notebookStore';
 import { useEffect, useCallback, useState } from 'react';
 import {
@@ -6,14 +7,13 @@ import {
   DocDisplay,
   ReactLiveSandbox,
   PreviewLoadBoundary,
+  CodeDisplay,
+  HighlightedSource,
 } from './DeferredViewers';
 import ImageDisplay from './image/ImageDisplay';
 import PDFDisplay from './pdf/PDFDisplay';
-import CodeDisplay from './code/CodeDisplay';
 import HexDisplay from './hex/HexDisplay';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import IframeViewer from './web/IframeViewer';
-import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Monitor, Code } from 'lucide-react';
 
@@ -69,45 +69,7 @@ const PreviewApp: React.FC = () => {
       );
     }
 
-    // Handle files that might be misidentified
-    const isExcelName =
-      currentFile.name.toLowerCase().endsWith('.xlsx') ||
-      currentFile.name.toLowerCase().endsWith('.xls');
-    const isDocxName =
-      currentFile.name.toLowerCase().endsWith('.docx') ||
-      currentFile.name.toLowerCase().endsWith('.doc');
-    const isJsName =
-      currentFile.name.toLowerCase().endsWith('.js') ||
-      currentFile.name.toLowerCase().endsWith('.ts') ||
-      currentFile.name.toLowerCase().endsWith('.mjs');
-    const isCssName =
-      currentFile.name.toLowerCase().endsWith('.css') ||
-      currentFile.name.toLowerCase().endsWith('.scss') ||
-      currentFile.name.toLowerCase().endsWith('.sass');
-    const isMdName =
-      currentFile.name.toLowerCase().endsWith('.md') ||
-      currentFile.name.toLowerCase().endsWith('.markdown');
-    const isPyName =
-      currentFile.name.toLowerCase().endsWith('.py') ||
-      currentFile.name.toLowerCase().endsWith('.pyw');
-    const isJsonName = currentFile.name.toLowerCase().endsWith('.json');
-
-    let effectiveType: FileType = currentFile.type as FileType;
-    if (isExcelName) {
-      effectiveType = 'xlsx' as FileType;
-    } else if (isDocxName) {
-      effectiveType = 'docx' as FileType;
-    } else if (isJsName) {
-      effectiveType = 'javascript' as FileType;
-    } else if (isCssName) {
-      effectiveType = 'css' as FileType;
-    } else if (isMdName) {
-      effectiveType = 'markdown' as FileType;
-    } else if (isPyName) {
-      effectiveType = 'python' as FileType;
-    } else if (isJsonName) {
-      effectiveType = 'json' as FileType;
-    }
+    const effectiveType = getPreviewFileType(currentFile.name, currentFile.type);
 
     switch (effectiveType) {
       case 'csv':
@@ -148,6 +110,7 @@ const PreviewApp: React.FC = () => {
         );
 
       case 'javascript':
+      case 'typescript':
       case 'css':
       case 'python':
       case 'json':
@@ -219,9 +182,9 @@ const PreviewApp: React.FC = () => {
               {showSource ? (
                 <div className="flex-1 relative bg-gray-800 dark:bg-gray-900 rounded-b-lg overflow-hidden">
                   <div className="h-full overflow-auto">
-                    <SyntaxHighlighter
+                    <HighlightedSource
                       language="html"
-                      style={isDark ? tomorrow : prism}
+                      isDark={isDark}
                       customStyle={{
                         margin: 0,
                         padding: '16px',
@@ -236,7 +199,7 @@ const PreviewApp: React.FC = () => {
                       wrapLongLines
                     >
                       {currentFile.content}
-                    </SyntaxHighlighter>
+                    </HighlightedSource>
                   </div>
                   <div className="absolute top-2 right-2 z-10">
                     <button
