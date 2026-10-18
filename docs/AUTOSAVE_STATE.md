@@ -27,15 +27,14 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave gate passes 79 tests in six files, including seven store
-projection regressions: edits during writes, unrelated notebook loading, partial
-queue discard, failed writes, complete pause publication, reentrant edits and
-initialization failure. Repository tests use transaction doubles; provider tests use
-IndexedDB event doubles. These are not native browser durability/recovery tests.
+The persistence/autosave gate passes 122 tests across nine files. Coverage includes
+atomic repository writes, connection ownership, revision barriers, scoped fair
+scheduling, retry deadlines, shutdown, pause and authoritative store publication.
+Scheduler tests use deferred writes and virtual time; repository/provider tests use
+transaction and IndexedDB event doubles. These are not native browser recovery tests.
 
-Targeted lint completes with zero errors and existing any-type warnings in storage
-interfaces/repositories. Full-project type checking is tracked separately; it is
-not asserted to pass.
+Autosave lint passes without warnings. Full-project type checking still reports
+305 existing diagnostics, none in autosave, persistence or session modules.
 
 ## Per-notebook save state and revision barriers
 
@@ -59,10 +58,6 @@ encountered notebook until discard/clear, plus only pending/latest snapshots and
 live barrier waiters; it does not keep an edit history. Revision numbers are local to
 the service instance and are not persisted or a cross-window concurrency protocol.
 
-The persistence/autosave gate passes 94 tests across eight files, including six
-queue transition tests and new service-level deferred-write barriers and independent
-failure-state checks. Existing pause and multi-notebook writer tests also pass.
-
 ## Graceful service shutdown
 
 The service lifecycle is separate from individual notebook save phases:
@@ -80,11 +75,6 @@ Singleton reset is an explicit asynchronous test teardown:
 it discards pending edits but still waits for in-flight I/O and connection closure.
 It is not the production shutdown policy.
 
-The combined gate passes 102 storage/autosave tests, including eight shutdown cases:
-pending initialization, reads and writes, newer accepted edits, failed save recovery,
-failed connection-close retry, explicit test teardown and notification reentrancy.
-These remain deterministic service doubles, not native application exit tests.
-
 ## Pause admission and scheduling ownership
 
 Scheduling now has its own running/pausing/paused state, independent of the latest
@@ -101,26 +91,30 @@ newer changes. resume during a pending drain rejects instead of racing its compl
 Failure restores the previous scheduling mode and retains pending data. An overlapping
 failed disposal also leaves scheduling recoverable rather than stuck in pausing.
 
-The combined gate passes 108 tests including six pause regressions: edits in the
-writer-to-pause microtask window, loads/manual saves while paused, concurrent pauses,
-failed pause recovery, enqueue observers and overlapping failed shutdown.
+## Shared writer and scoped drains
 
-## Round-based global drains
+NotebookSaveScheduler owns drain requests and the single writer. Each request covers
+one notebook or the whole queue; an empty targeted drain does not write unrelated
+pending notebooks. Among eligible notebooks, the least recently served gets the next
+attempt. Targeted and full drains share this arbitration, so a continually edited
+notebook cannot consume the writer exclusively. One in-flight write is never preempted.
 
-A full drain snapshots pending notebook IDs at the start of each round and attempts
-one revision per notebook. Edits to a notebook already visited wait for the next round;
-new notebooks join the next round. Retry budgets are tracked per notebook and revision,
-so one notebook's successful commit cannot reset another notebook's retry budget.
-Exhausted notebooks retain their pending snapshot while other notebooks finish.
+Retry budgets and readiness deadlines belong to each notebook revision. Waiting for
+A's retry permits B to write. Admission wakes a sleeping scheduler, and a new revision
+bypasses its predecessor's backoff. Overlapping requests share the retry budget;
+exhaustion rejects only requests covering that notebook and retains its snapshot.
+An explicit subsequent request can retry it. Full drains continue other notebooks
+before reporting failure. Debounced admission also participates while a writer is active.
 
-The combined gate passes 111 tests. Added cases verify rotation during repeated edits,
-independent retry exhaustion, and notebooks admitted while a drain is running.
+waitForComplete observes currently active requests, preserving their failures without
+admitting unrelated pending work. Internal teardown waits for the worker itself, wakes
+retry timers and stops further attempts after the current write finishes. Discard and
+normal idle completion release retry timers. The scheduler performs no persistence
+serialization or UI publication; those responsibilities remain in AutoSaveService.
 
 ## Remaining lifecycle work
 
-The writer still needs fairness between concurrent targeted drains, and retry backoff
-currently occupies the shared writer. Pause waits for
-quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
+Pause waits for quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
 application-level producer cancellation remains relevant. Cross-window conflicts,
 native recovery and application/browser exit wiring remain. Browser termination
 cannot guarantee awaiting asynchronous writes. No crash-durability or cross-session

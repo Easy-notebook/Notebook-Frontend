@@ -98,6 +98,48 @@ describe('single-writer autosave', () => {
     expect(writes).toEqual(['a', 'b', 'a']);
   });
 
+  it('admits debounced work while another notebook is waiting to retry', async () => {
+    await AutoSaveService.resetInstance();
+    service = AutoSaveService.getInstance({ debounceMs: 10, maxRetries: 1, retryDelayMs: 1000 });
+    vi.useFakeTimers();
+    try {
+      storage.notebooks.saveNotebookSnapshot.mockRejectedValueOnce(new Error('temporary'));
+      const saving = service.saveNow(snapshot('first', 'a'));
+      await vi.advanceTimersByTimeAsync(0);
+      await service.queueSave(snapshot('second', 'b'));
+      await vi.advanceTimersByTimeAsync(10);
+      expect(
+        storage.notebooks.saveNotebookSnapshot.mock.calls.map(([file]) => file.notebookId)
+      ).toEqual(['a', 'b']);
+      expect(service.getSaveProgress('a')?.phase).toBe('retry_wait');
+      expect(service.getSaveProgress('b')?.phase).toBe('clean');
+      await vi.advanceTimersByTimeAsync(990);
+      await saving;
+      await service.waitForComplete();
+      expect(service.hasPending()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not make a read of another notebook wait for an unrelated retry', async () => {
+    await AutoSaveService.resetInstance();
+    service = AutoSaveService.getInstance({ debounceMs: 60000, maxRetries: 1, retryDelayMs: 1000 });
+    vi.useFakeTimers();
+    try {
+      storage.notebooks.saveNotebookSnapshot.mockRejectedValueOnce(new Error('temporary'));
+      storage.files.getFile.mockResolvedValue(null);
+      const saving = service.saveNow(snapshot('first', 'a'));
+      await vi.advanceTimersByTimeAsync(0);
+      await expect(service.load('b')).resolves.toBeNull();
+      expect(service.getSaveProgress('a')?.phase).toBe('retry_wait');
+      await vi.advanceTimersByTimeAsync(1000);
+      await saving;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('acknowledges an immediate save without waiting for edits accepted during its write', async () => {
     const old = deferred();
     const next = deferred();

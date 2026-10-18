@@ -5,6 +5,7 @@
 
 import { debounce } from 'lodash-es';
 import { NotebookSaveQueue } from './NotebookSaveQueue';
+import { NotebookSaveScheduler } from './NotebookSaveScheduler';
 import { PersistenceService } from '../persistence/PersistenceService';
 import type { IPersistenceService } from '../persistence/interfaces';
 import type { Cell } from '@Store/models';
@@ -59,7 +60,7 @@ export class AutoSaveService implements IAutoSaveService {
   // Save queue management
   private readonly saveQueue = new NotebookSaveQueue();
   private readonly debouncedSave: ReturnType<typeof debounce>;
-  private processing: Promise<void> | null = null;
+  private readonly scheduler: NotebookSaveScheduler;
   private pauseCompletion: Promise<void> | null = null;
   private readonly contentSizes = new WeakMap<Cell, { content: string; bytes: number }>();
 
@@ -76,15 +77,34 @@ export class AutoSaveService implements IAutoSaveService {
     this.state = { ...INITIAL_AUTOSAVE_STATE };
     this.persistence = new PersistenceService();
 
+    this.scheduler = new NotebookSaveScheduler(this.saveQueue, {
+      maxRetries: this.config.maxRetries,
+      retryDelayMs: this.config.retryDelayMs,
+      canRun: () => this.canProcessSaves(),
+      write: (snapshot) => this.performSave(snapshot),
+      committed: (snapshot) =>
+        this.publish(
+          { status: AutoSaveStatus.IDLE, lastSavedAt: Date.now(), error: null },
+          'save_completed',
+          snapshot.notebookId,
+          snapshot.revision
+        ),
+      failed: (snapshot, error) =>
+        this.publish(
+          {
+            status: AutoSaveStatus.IDLE,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'save_failed',
+          snapshot.notebookId,
+          snapshot.revision
+        ),
+    });
+
     // Create debounced save function
     this.debouncedSave = debounce(
       () => {
-        if (
-          this.processing ||
-          this.lifecycle.phase !== 'active' ||
-          this.state.scheduling !== 'running'
-        )
-          return;
+        if (this.lifecycle.phase !== 'active' || this.state.scheduling !== 'running') return;
         void this.processSaveQueue().catch((error) => {
           notebookLog.error('AutoSaveService: Pending changes retained after save failure', {
             error,
@@ -302,6 +322,7 @@ export class AutoSaveService implements IAutoSaveService {
   public clearPending(notebookId: string): void {
     this.assertActive();
     this.saveQueue.discard(notebookId);
+    this.scheduler.changed();
     this.publish({}, 'dirty_changed', notebookId);
 
     if (this.isDevelopment) {
@@ -326,7 +347,7 @@ export class AutoSaveService implements IAutoSaveService {
    * Wait for current SYNCING operation to complete
    */
   public async waitForComplete(): Promise<void> {
-    await this.processing;
+    await this.scheduler.waitForComplete();
   }
 
   /**
@@ -423,7 +444,7 @@ export class AutoSaveService implements IAutoSaveService {
     this.debouncedSave.cancel();
     const completion = Promise.resolve().then(async () => {
       try {
-        if (discard) await this.processing?.catch(() => undefined);
+        if (discard) await this.scheduler.waitForIdle();
         else await this.processSaveQueue();
         await Promise.allSettled([
           ...this.reads,
@@ -453,6 +474,7 @@ export class AutoSaveService implements IAutoSaveService {
       }
     });
     this.lifecycle = { phase: 'closing', completion, discard };
+    this.scheduler.changed();
     this.publish({ lifecycle: 'closing' }, 'lifecycle_changed');
     return completion;
   }
@@ -487,86 +509,15 @@ export class AutoSaveService implements IAutoSaveService {
    */
   private enqueueSnapshot(snapshot: NotebookSnapshot): number {
     const queued = this.saveQueue.enqueue(snapshot);
+    this.scheduler.changed();
     this.publish({ activeNotebookId: snapshot.notebookId }, 'dirty_changed', snapshot.notebookId);
     return queued.revision;
   }
 
   private async processSaveQueue(notebookId?: string): Promise<void> {
     if (!this.canProcessSaves()) return;
-    // All entry points share this writer, including saveNow and targeted flush.
-    while (this.processing) {
-      // The previous caller receives its own failure. A different notebook's
-      // explicit save must still get its turn at the writer.
-      await this.processing.catch(() => undefined);
-    }
-    if (!this.canProcessSaves()) return;
-    if (notebookId ? !this.saveQueue.has(notebookId) : !this.saveQueue.size) return;
-    const operation = this.drainQueue(notebookId);
-    this.processing = operation;
-    try {
-      await operation;
-    } finally {
-      if (this.processing === operation) this.processing = null;
-    }
+    await this.scheduler.drain(notebookId);
     if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size) this.scheduleSave();
-  }
-
-  private async drainQueue(notebookId?: string): Promise<void> {
-    const failures: unknown[] = [];
-    const blocked = new Set<string>();
-    const attempts = new Map<string, { revision: number; retries: number }>();
-    // Snapshot each round's membership. Each notebook gets one attempt before
-    // any notebook can consume another turn, including edits arriving during I/O.
-    while (true) {
-      const ids = [...this.saveQueue.keys()].filter(
-        (id) => (!notebookId || id === notebookId) && !blocked.has(id)
-      );
-      if (!ids.length) break;
-      for (const id of ids) {
-        if (this.isDiscarding()) return;
-        const snapshot = this.saveQueue.get(id);
-        // A completion observer may explicitly discard another queued notebook.
-        if (!snapshot) continue;
-        const previous = attempts.get(id);
-        const retries = previous?.revision === snapshot.revision ? previous.retries : 0;
-        this.saveQueue.begin(snapshot);
-        try {
-          await this.performSave(snapshot);
-          this.saveQueue.acknowledge(snapshot);
-          attempts.delete(id);
-          this.publish(
-            { status: AutoSaveStatus.IDLE, lastSavedAt: Date.now(), error: null },
-            'save_completed',
-            id,
-            snapshot.revision
-          );
-        } catch (error) {
-          this.saveQueue.fail(snapshot, error, retries >= this.config.maxRetries);
-          this.publish(
-            {
-              status: AutoSaveStatus.IDLE,
-              error: error instanceof Error ? error.message : String(error),
-            },
-            'save_failed',
-            id,
-            snapshot.revision
-          );
-          if (this.saveQueue.get(id)?.revision !== snapshot.revision) {
-            attempts.delete(id);
-            continue;
-          }
-          if (this.isDiscarding()) return;
-          if (retries >= this.config.maxRetries) {
-            failures.push(error);
-            blocked.add(id);
-            continue;
-          }
-          attempts.set(id, { revision: snapshot.revision, retries: retries + 1 });
-          await new Promise((resolve) => setTimeout(resolve, this.config.retryDelayMs));
-        }
-      }
-    }
-    if (failures.length) throw failures[0];
   }
 
   /**
