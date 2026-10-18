@@ -6,6 +6,7 @@ import { getAntdTheme } from './theme/antdTheme';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { initializeWorkflowSystem } from './components/Scenario/Workflow/utils/workflowInitializer';
 import { PersistenceProvider } from './services/persistence/PersistenceContext';
+import { useAutoSavePageLifecycle } from './services/autoSave/useAutoSavePageLifecycle';
 import { Toaster } from '@/components/UI/sonner';
 
 function BackgroundLayers() {
@@ -172,6 +173,7 @@ function BackgroundLayers() {
 }
 
 function AppContent(): JSX.Element {
+  useAutoSavePageLifecycle();
   const { resolvedTheme } = useTheme();
   const antdTheme = getAntdTheme(resolvedTheme === 'dark');
 

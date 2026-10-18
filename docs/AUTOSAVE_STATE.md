@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 148 tests across eleven files. Coverage includes
+The persistence/autosave/session gate passes 156 tests across twelve files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -154,10 +154,28 @@ drop commands already accepted through its public API. Seven deferred/concurrent
 regressions cover switch order, pause-before-resume, duplicates, failure recovery,
 return navigation, observer submissions and initialization deduplication.
 
+## Browser page lifecycle
+
+AppContent mounts a disposable AutoSavePageLifecycle binding. Hidden visibility and
+pagehide request an immediate flush of accepted snapshots; edits accepted while
+hidden also request a flush. Concurrent signals share an in-flight flush. A
+beforeunload handler is attached only while authoritative dirty state is true and
+removed after commit/discard. Failed saves retain dirty protection and report errors.
+
+The binding never pauses or disposes storage when a page is hidden or React unmounts.
+It removes only its own listeners, leaving independent unapplied-source-draft guards
+intact. Cleanup cancels a flush not yet started; accepted writes remain owned by the
+service. Eight EventTarget tests cover dirty guard updates, coalescing, failure/retry,
+hidden edits, shutdown admission and cleanup/remount ownership.
+
+The visibility trigger follows [MDN visibilitychange guidance](https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event).
+These tests do not prove native browser dialog behavior, bfcache restoration or
+completion of asynchronous writes during browser/process termination.
+
 ## Remaining lifecycle work
 
 Pause waits for quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
 application-level producer cancellation remains relevant. Cross-window conflicts,
-native recovery and application/browser exit wiring remain. Browser termination
+native recovery, native application close coordination and real-browser exit validation remain. Browser termination
 cannot guarantee awaiting asynchronous writes. No crash-durability or cross-session
 version guarantee is claimed.
