@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 204 tests across seventeen files. Coverage includes
+The storage/persistence/autosave/session gate passes 229 tests across nineteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -65,7 +65,7 @@ transaction and IndexedDB event doubles. These are not native browser recovery t
 Autosave lint passes without warnings. Full-project type checking still reports
 297 existing diagnostics, none in autosave, persistence or session modules.
 
-The final independent whole-project run passes 1,022 tests across 115 files. An initial
+The preceding independent whole-project checkpoint passed 1,022 tests across 115 files. An initial
 run concurrent with a production build had one asynchronous math-rendering timeout;
 the isolated eleven-case suite and the subsequent independent full run both passed.
 Test timeouts were unchanged. A real-manager React integration test covers configuration
@@ -212,14 +212,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs fifty-six isolated Playwright cases against production modules:
+`npm run test:browser` runs fifty-eight isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 204 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 229 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -485,10 +485,24 @@ Its notebook accounting and activity append remain in the same transaction. Nati
 verify history preservation, corrected large-file queries/usage statistics, and complete
 rollback to the original remote revision when commit fails.
 
+## Historical source read lifecycle
+
+LegacyDatabaseReader owns one opening/reading/settled attempt. It reads every matching
+file/cache store in one readonly transaction and publishes only after transaction
+completion. Missing database probes abort creation. Every terminal path clears the
+source deadline and releases its connection; timeouts abort active reads, and late
+opens close without starting reads. Destination writes begin only after a complete
+source read and are awaited without an independent source timeout.
+
+Eight deterministic reader tests cover completion, timeout, late callbacks, blocked
+opens, abort and version change. Native tests verify absent probes leave no database,
+multiple source stores are imported, and historical source records remain unchanged.
+This checkpoint does not establish atomic or conflict-safe destination imports.
+
 ## Remaining lifecycle work
 
-Historical database migration readers still use timeout-based completion; their late
-callbacks and connection cleanup require review alongside the now-wired startup path.
+Historical destination migration still needs atomicity, idempotence and conflict handling.
+forceMigration still deletes destination notebooks before importing and requires redesign.
 
 Retention now enforces cache count, inactivity and an application content budget.
 The production caller audit found no explicit evictable notebook creation. Current editing

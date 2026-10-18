@@ -1951,3 +1951,53 @@ test('application provider initializes configuration before rendering and suppor
     await window.storageHarness.StorageManager.close();
   });
 });
+
+test('probing an absent historical database does not create it', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { LegacyDatabaseReader } = window.storageHarness;
+    const probe = await new LegacyDatabaseReader('absent-history', 'probe', 1000).run();
+    const databases = await indexedDB.databases();
+    return { probe, names: databases.map((database) => database.name) };
+  });
+  expect(result.probe).toEqual({ hasFiles: false, files: [] });
+  expect(result.names).not.toContain('absent-history');
+});
+
+test('historical reads and migration include every matching source store', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { LegacyDatabaseReader, DataMigration, IndexedDBStorageProvider, DB_CONFIG } =
+      window.storageHarness;
+    await new Promise((resolve, reject) => {
+      const open = indexedDB.open('easyremote-file-cache', 1);
+      open.onupgradeneeded = () => {
+        open.result.createObjectStore('aaa_metadata');
+        open.result
+          .createObjectStore('files', { keyPath: 'id' })
+          .put({ id: 'a', notebookId: 'history', path: 'a', name: 'a', content: 'one', size: 3 });
+        open.result
+          .createObjectStore('extra_cache', { keyPath: 'id' })
+          .put({ id: 'b', notebookId: 'history', path: 'b', name: 'b', content: 'two', size: 3 });
+      };
+      open.onsuccess = () => {
+        open.result.close();
+        resolve();
+      };
+      open.onerror = () => reject(open.error);
+    });
+    const probe = await new LegacyDatabaseReader('easyremote-file-cache', 'probe', 1000).run();
+    const read = await new LegacyDatabaseReader('easyremote-file-cache', 'files', 1000).run();
+    const needed = await DataMigration.isMigrationNeeded();
+    const stats = await DataMigration.migrate();
+    const provider = new IndexedDBStorageProvider();
+    const files = await provider.getAll(DB_CONFIG.STORES.FILES_CONTENT);
+    const original = await new LegacyDatabaseReader('easyremote-file-cache', 'files', 1000).run();
+    await provider.close();
+    return { probe, read, needed, stats, files, original };
+  });
+  expect(result.probe.hasFiles).toBe(true);
+  expect(result.read.files.map((file) => file.id).sort()).toEqual(['a', 'b']);
+  expect(result.needed).toBe(true);
+  expect(result.stats).toMatchObject({ notebooksMigrated: 1, filesMigrated: 2, errors: [] });
+  expect(result.files.map((file) => file.content).sort()).toEqual(['one', 'two']);
+  expect(result.original.files).toEqual(result.read.files);
+});

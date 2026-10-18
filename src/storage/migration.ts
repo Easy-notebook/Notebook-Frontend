@@ -3,6 +3,7 @@
 
 import { persistenceService } from '../services/persistence/instance';
 import type { NotebookEntity } from './schema';
+import { LegacyDatabaseReader } from './LegacyDatabaseReader';
 
 /**
  * Legacy database names to check for migration
@@ -12,23 +13,6 @@ const LEGACY_DB_NAMES = [
   'easyremote-file-cache-v2',
   'easyremote-file-cache-v3',
 ];
-
-/**
- * Legacy file object interface
- */
-interface LegacyFileObject {
-  id: string;
-  notebookId: string;
-  path: string;
-  name: string;
-  content: string;
-  type: string;
-  lastModified: string;
-  size: number;
-  cachedAt: number;
-  accessCount: number;
-  lastAccessed: number;
-}
 
 /**
  * Migration statistics
@@ -134,46 +118,7 @@ export class DataMigration {
    * Check if a legacy database has data
    */
   private static async checkLegacyDatabase(dbName: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      const request = indexedDB.open(dbName);
-
-      request.onsuccess = () => {
-        const db = request.result;
-        try {
-          // Check if database has any object stores with data
-          const storeNames = Array.from(db.objectStoreNames);
-          if (storeNames.length === 0) {
-            db.close();
-            resolve(false);
-            return;
-          }
-
-          // Check first store for data
-          const transaction = db.transaction(storeNames, 'readonly');
-          const store = transaction.objectStore(storeNames[0]);
-          const countRequest = store.count();
-
-          countRequest.onsuccess = () => {
-            db.close();
-            resolve(countRequest.result > 0);
-          };
-
-          countRequest.onerror = () => {
-            db.close();
-            resolve(false);
-          };
-        } catch (error) {
-          db.close();
-          resolve(false);
-        }
-      };
-
-      request.onerror = () => resolve(false);
-      request.onblocked = () => resolve(false);
-
-      // Timeout after 5 seconds
-      setTimeout(() => resolve(false), 5000);
-    });
+    return (await new LegacyDatabaseReader(dbName, 'probe', 5000).run()).hasFiles;
   }
 
   /**
@@ -189,135 +134,57 @@ export class DataMigration {
       duration: Date.now(),
     };
 
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(dbName);
-
-      request.onsuccess = async () => {
-        const db = request.result;
-        try {
-          const storeNames = Array.from(db.objectStoreNames);
-
-          // Look for common legacy store names
-          const fileStoreName = storeNames.find(
-            (name) => name.includes('file') || name.includes('cache') || name === 'files'
-          );
-
-          if (!fileStoreName) {
-            db.close();
-            stats.duration = Date.now() - stats.duration;
-            resolve(stats);
-            return;
+    const { files: legacyFiles } = await new LegacyDatabaseReader(dbName, 'files', 30000).run();
+    stats.filesFound = legacyFiles.length;
+    const notebookFiles = new Map<string, typeof legacyFiles>();
+    for (const file of legacyFiles) {
+      if (!file.notebookId) continue;
+      const files = notebookFiles.get(file.notebookId) ?? [];
+      files.push(file);
+      notebookFiles.set(file.notebookId, files);
+    }
+    stats.notebooksFound = notebookFiles.size;
+    // The source transaction has completed and its connection/deadline are released.
+    // Destination writes are awaited directly; no source timeout can report early completion.
+    for (const [notebookId, files] of notebookFiles) {
+      try {
+        const now = Date.now();
+        const notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'> = {
+          id: notebookId,
+          name: `Notebook ${notebookId.slice(0, 8)}`,
+          description: `Migrated notebook with ${files.length} files`,
+          lastAccessedAt: files.reduce(
+            (latest, file) => Math.max(latest, file.lastAccessed || file.cachedAt || now),
+            0
+          ),
+          accessCount: files.reduce((count, file) => Math.max(count, file.accessCount || 0), 0),
+          fileCount: 0,
+          totalSize: 0,
+          cacheEnabled: true,
+        };
+        await persistenceService.notebooks.saveNotebook(notebook);
+        stats.notebooksMigrated++;
+        for (const file of files) {
+          try {
+            await persistenceService.files.saveFile({
+              notebookId: file.notebookId,
+              filePath: file.path,
+              fileName: file.name,
+              content: file.content || '',
+              lastModified: file.lastModified || new Date().toISOString(),
+              size: file.size || 0,
+            });
+            stats.filesMigrated++;
+          } catch (error) {
+            stats.errors.push(`Failed to migrate file ${file.path}: ${error}`);
           }
-
-          // Read all files from legacy store
-          const transaction = db.transaction([fileStoreName], 'readonly');
-          const store = transaction.objectStore(fileStoreName);
-          const request = store.getAll();
-
-          request.onsuccess = async () => {
-            db.close();
-
-            const legacyFiles = request.result as LegacyFileObject[];
-            stats.filesFound = legacyFiles.length;
-
-            if (legacyFiles.length === 0) {
-              stats.duration = Date.now() - stats.duration;
-              resolve(stats);
-              return;
-            }
-
-            // Group files by notebook
-            const notebookFiles = new Map<string, LegacyFileObject[]>();
-
-            for (const file of legacyFiles) {
-              if (!file.notebookId) continue;
-
-              if (!notebookFiles.has(file.notebookId)) {
-                notebookFiles.set(file.notebookId, []);
-              }
-              notebookFiles.get(file.notebookId)!.push(file);
-            }
-
-            stats.notebooksFound = notebookFiles.size;
-
-            // Migrate each notebook
-            for (const [notebookId, files] of notebookFiles) {
-              try {
-                // Create notebook entity
-                const totalSize = files.reduce((sum, f) => sum + (f.size || 0), 0);
-                const lastAccessed = Math.max(
-                  ...files.map((f) => f.lastAccessed || f.cachedAt || Date.now())
-                );
-                const accessCount = Math.max(...files.map((f) => f.accessCount || 0));
-
-                const notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'> = {
-                  id: notebookId,
-                  name: `Notebook ${notebookId.slice(0, 8)}`,
-                  description: `Migrated notebook with ${files.length} files`,
-                  lastAccessedAt: lastAccessed,
-                  accessCount: accessCount,
-                  fileCount: files.length,
-                  totalSize: totalSize,
-                  cacheEnabled: true,
-                };
-
-                await persistenceService.notebooks.saveNotebook(notebook);
-                stats.notebooksMigrated++;
-
-                // Migrate files for this notebook
-                for (const legacyFile of files) {
-                  try {
-                    await persistenceService.files.saveFile({
-                      notebookId: legacyFile.notebookId,
-                      filePath: legacyFile.path,
-                      fileName: legacyFile.name,
-                      content: legacyFile.content || '',
-                      lastModified: legacyFile.lastModified || new Date().toISOString(),
-                      size: legacyFile.size || 0,
-                      remoteUrl: undefined,
-                    });
-
-                    stats.filesMigrated++;
-                  } catch (error) {
-                    const errorMsg = `Failed to migrate file ${legacyFile.path}: ${error}`;
-                    console.warn(errorMsg);
-                    stats.errors.push(errorMsg);
-                  }
-                }
-              } catch (error) {
-                const errorMsg = `Failed to migrate notebook ${notebookId}: ${error}`;
-                console.warn(errorMsg);
-                stats.errors.push(errorMsg);
-              }
-            }
-
-            stats.duration = Date.now() - stats.duration;
-            resolve(stats);
-          };
-
-          request.onerror = () => {
-            db.close();
-            reject(new Error(`Failed to read data from ${fileStoreName}`));
-          };
-        } catch (error) {
-          db.close();
-          reject(error);
         }
-      };
-
-      request.onerror = () => {
-        reject(new Error(`Failed to open legacy database ${dbName}`));
-      };
-
-      request.onblocked = () => {
-        reject(new Error(`Legacy database ${dbName} is blocked`));
-      };
-
-      // Timeout after 30 seconds
-      setTimeout(() => {
-        reject(new Error(`Migration from ${dbName} timed out`));
-      }, 30000);
-    });
+      } catch (error) {
+        stats.errors.push(`Failed to migrate notebook ${notebookId}: ${error}`);
+      }
+    }
+    stats.duration = Date.now() - stats.duration;
+    return stats;
   }
 
   /**

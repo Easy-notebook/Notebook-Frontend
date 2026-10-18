@@ -53,6 +53,8 @@ Coverage:
   failed conversions retain the complete remote revision.
 - The actual React application provider initializes config before rendering, closes through the
   maintenance lifecycle, and can mount again using real IndexedDB.
+- Missing historical database probes do not create databases; migration reads all matching
+  source stores and preserves original source records.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.
