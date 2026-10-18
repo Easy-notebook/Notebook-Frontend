@@ -22,6 +22,8 @@ Coverage:
 - A blocked upgrade rejects, then succeeds after the blocking connection closes.
 - Both database entry points upgrade v2 records without clearing stores and add missing indexes.
 - A conflicting unique index rolls back the upgrade and retains the original version/data.
+- Split-cache clearing preserves unrelated notebooks and a subsequently admitted refresh.
+- Both scoped and whole-cache clearing roll back all deletions on transaction failure.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

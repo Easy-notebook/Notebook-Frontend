@@ -175,7 +175,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs nine isolated Playwright cases against production modules:
+`npm run test:browser` runs twelve isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -198,6 +198,16 @@ previously missing split-files storage and notebook indexes. A conflicting uniqu
 aborts the version upgrade and preserves v2 records; no automatic data-loss repair is
 attempted. Existing raw-handle ORM callers still use the old connection manager and
 must be migrated before connection ownership is fully unified.
+
+## Atomic split-file cache clearing
+
+SplitFileRepository clears one notebook through its notebookId index within one
+readwrite transaction. Whole-cache clearing uses the native store clear operation
+inside one transaction. Neither path enumerates records in one transaction and deletes
+them later through independent transactions. Subsequent writes therefore run after
+the clear transaction, and any failure rolls back the complete clear operation.
+Native cases verify preservation of other notebooks, a concurrently admitted refresh,
+and rollback of both scoped and whole-store deletion.
 
 ## Remaining lifecycle work
 

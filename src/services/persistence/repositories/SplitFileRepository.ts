@@ -33,24 +33,28 @@ export class SplitFileRepository implements ISplitFileRepository {
   }
 
   async clearNotebook(notebookId: string): Promise<void> {
-    // This is inefficient without a proper index query support in IStorageProvider
-    // But for now we can iterate or we need to extend IStorageProvider
-    // Since IStorageProvider has transaction support, we can use that if we want to be efficient
-    // But getAll is simpler for now given the likely small number of split files
-
-    const allFiles = await this.storage.getAll<SplitFileEntity>(DB_STORES.SPLIT_FILES);
-    const notebookFiles = allFiles.filter((f) => f.notebookId === notebookId);
-
-    await Promise.all(notebookFiles.map((f) => this.storage.delete(DB_STORES.SPLIT_FILES, f.id)));
+    await this.storage.transaction([DB_STORES.SPLIT_FILES], 'readwrite', (stores) => {
+      const store = stores[DB_STORES.SPLIT_FILES];
+      return new Promise<void>((resolve, reject) => {
+        const request = store.index('notebookId').openKeyCursor(IDBKeyRange.only(notebookId));
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          store.delete(cursor.primaryKey);
+          cursor.continue();
+        };
+      });
+    });
   }
 
   async clearAll(): Promise<void> {
-    // We need a clear method in IStorageProvider or just iterate and delete
-    // For now, let's assume we can iterate.
-    // Ideally IStorageProvider should have a clearStore method.
-    // Let's just use getAll and delete for now.
-    const allFiles = await this.storage.getAll<SplitFileEntity>(DB_STORES.SPLIT_FILES);
-    await Promise.all(allFiles.map((f) => this.storage.delete(DB_STORES.SPLIT_FILES, f.id)));
+    await this.storage.transaction([DB_STORES.SPLIT_FILES], 'readwrite', async (stores) => {
+      stores[DB_STORES.SPLIT_FILES].clear();
+    });
   }
 
   async getStats(): Promise<{ totalFiles: number; totalSize: number }> {

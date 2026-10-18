@@ -307,3 +307,69 @@ test('an incompatible unique index aborts the upgrade without deleting v2 record
   expect(result.version).toBe(2);
   expect(result.records.map((record) => record.id)).toEqual(['one', 'two']);
 });
+
+test('scoped cache clearing preserves unrelated files and a subsequently admitted refresh', async ({
+  page,
+}) => {
+  const files = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, SplitFileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new SplitFileRepository(provider);
+    const file = (content) => ({
+      name: 'file',
+      content,
+      type: 'text',
+      size: content.length,
+      lastModified: '2026-10-19',
+    });
+    await repository.saveFile('a', 'same', file('old'));
+    await repository.saveFile('a', 'removed', file('remove'));
+    await repository.saveFile('b', 'retained', file('other notebook'));
+    await Promise.all([
+      repository.clearNotebook('a'),
+      repository.saveFile('a', 'same', file('new')),
+    ]);
+    const files = await provider.getAll(DB_CONFIG.STORES.SPLIT_FILES);
+    await repository.clearAll();
+    const empty = await provider.getAll(DB_CONFIG.STORES.SPLIT_FILES);
+    await provider.close();
+    return { files, empty };
+  });
+  expect(files.files.map((file) => [file.id, file.content])).toEqual([
+    ['a::same', 'new'],
+    ['b::retained', 'other notebook'],
+  ]);
+  expect(files.empty).toEqual([]);
+});
+
+for (const operation of ['clearNotebook', 'clearAll']) {
+  test(`${operation} rolls back every cache deletion if its transaction fails`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (operation) => {
+      const { IndexedDBStorageProvider, SplitFileRepository, DB_CONFIG } = window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const store = DB_CONFIG.STORES.SPLIT_FILES;
+      await provider.put(store, { id: 'a::one', notebookId: 'a' });
+      await provider.put(store, { id: 'a::two', notebookId: 'a' });
+      const repository = new SplitFileRepository({
+        transaction: (names, mode, schedule) =>
+          provider.transaction(names, mode, async (stores) => {
+            await schedule(stores);
+            throw new Error('abort after deletion requests');
+          }),
+      });
+      let error;
+      try {
+        await repository[operation]('a');
+      } catch (failure) {
+        error = failure.message;
+      }
+      const records = await provider.getAll(store);
+      await provider.close();
+      return { error, records };
+    }, operation);
+    expect(result.error).toBe('abort after deletion requests');
+    expect(result.records.map((record) => record.id)).toEqual(['a::one', 'a::two']);
+  });
+}
