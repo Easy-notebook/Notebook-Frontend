@@ -1,8 +1,10 @@
 import { DB_STORES, type FileMetadataEntity } from '../../../storage/schema';
+import { NotebookMigrationLedger } from './NotebookMigrationLedger';
 
 /** Cascades notebook-owned records inside the caller's transaction. */
 export class NotebookDeletion {
   static readonly stores = [
+    DB_STORES.MIGRATION_LEDGER,
     DB_STORES.NOTEBOOKS,
     DB_STORES.FILES_METADATA,
     DB_STORES.FILES_CONTENT,
@@ -14,6 +16,7 @@ export class NotebookDeletion {
   constructor(private readonly stores: Record<string, IDBObjectStore>) {}
 
   async delete(id: string): Promise<{ filesDeleted: number; bytesFreed: number }> {
+    const ledger = await NotebookMigrationLedger.load(this.stores[DB_STORES.MIGRATION_LEDGER], id);
     const files = await this.read<FileMetadataEntity[]>(
       this.stores[DB_STORES.FILES_METADATA].index('notebookId').getAll(id)
     );
@@ -30,6 +33,7 @@ export class NotebookDeletion {
     );
     this.stores[DB_STORES.TAB_STATES].delete(id);
     this.stores[DB_STORES.NOTEBOOKS].delete(id);
+    ledger.markDeleted();
     return {
       filesDeleted: files.length,
       bytesFreed: files.reduce((sum, file) => sum + file.size, 0),

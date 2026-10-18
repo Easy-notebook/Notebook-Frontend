@@ -58,7 +58,11 @@ export type NotebookSaveData = Omit<
   Partial<Pick<NotebookEntity, 'fileCount' | 'totalSize'>>;
 
 export interface INotebookRepository {
-  importNotebook(notebook: NotebookSaveData, files: FileSaveData[]): Promise<number>;
+  importNotebook(
+    notebook: NotebookSaveData,
+    files: FileSaveData[],
+    source?: string
+  ): Promise<number>;
   saveNotebookSnapshot(file: FileSaveData, notebook: NotebookSaveData): Promise<FileMetadataEntity>;
   saveNotebook(notebook: NotebookSaveData): Promise<NotebookEntity>;
   getNotebook(id: string): Promise<NotebookEntity | null>;

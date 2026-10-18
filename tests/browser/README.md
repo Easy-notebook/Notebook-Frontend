@@ -20,7 +20,7 @@ Coverage:
 - A native unique-key failure rolls back a multi-store transaction.
 - Closing drains accepted writes and rejects new transaction admission.
 - A blocked upgrade rejects, then succeeds after the blocking connection closes.
-- The shared provider upgrades v2 records without clearing stores and add missing indexes.
+- The shared provider upgrades v2/v3 records without clearing stores and add missing indexes.
 - A conflicting unique index rolls back the upgrade and retains the original version/data.
 - Split-cache clearing preserves unrelated notebooks and a subsequently admitted refresh.
 - Both scoped and whole-cache clearing roll back all deletions on transaction failure.
@@ -61,6 +61,9 @@ Coverage:
   independent valid notebooks, genuine empty bodies and UTF-8 byte accounting are preserved.
 - Matching imported files restore missing notebook ownership with complete totals and access
   history; failed/conflicting repair preserves original orphans, and repeat/empty imports do not write.
+- Migration receipts and deletion markers commit with document writes; failed transactions
+  leave neither partial receipts nor deletion markers. Deleted imports stay deleted across
+  reload and forced retry, including attempts from previously unseen historical sources.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

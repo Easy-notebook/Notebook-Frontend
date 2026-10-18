@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session gate passes 245 tests across twenty files. Coverage includes
+The storage/persistence/autosave/session gate passes 249 tests across twenty-one files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -65,8 +65,8 @@ transaction and IndexedDB event doubles. These are not native browser recovery t
 Autosave lint passes without warnings. Full-project type checking still reports
 297 existing diagnostics, none in autosave, persistence or session modules.
 
-The latest independent whole-project run passes 1,046 tests across 117 files (55.78s).
-The subsequent production build passes in 37.91s; oversized-chunk warnings remain.
+The preceding independent whole-project checkpoint passed 1,046 tests across 117 files (55.78s).
+Its subsequent production build passed in 37.91s; oversized-chunk warnings remain.
 An earlier checkpoint had an asynchronous math-rendering timeout when tests ran alongside
 a production build; its isolated suite and subsequent independent runs passed.
 Test timeouts were unchanged. A real-manager React integration test covers configuration
@@ -213,19 +213,19 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs sixty-two isolated Playwright cases against production modules:
+`npm run test:browser` runs sixty-five isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 245 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 249 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
 
-Database version 3 retains the existing database name and records, and reconciles
+Database version 4 retains the existing database name and records, and reconciles
 missing stores/indexes through NotebookDatabaseSchema in the shared provider.
 Unknown stores are retained; upgrades never delete existing stores. The retired raw
 connection manager and unused TabCache/SplitPreviewCache implementations are removed.
@@ -544,13 +544,36 @@ counted. Migration counters describe additions, not parent-only ownership repair
 This is targeted restoration when source and destination agree, not a general orphan
 recovery scan or permission to invent missing file bodies.
 
+## Durable migration ledger
+
+Version 4 adds migration_ledger without changing the database name or clearing existing
+records. v2 and v3 upgrade tests verify retained data and the added store. Ledger entries
+are keyed by notebook ID and record completed source databases or a deleted terminal state.
+NotebookMigrationLedger owns these transitions inside the caller's IndexedDB transaction.
+
+Source-aware imports read the ledger before checking destination files. Successful imports
+and equal-content acknowledgements record completion in the same transaction; failed
+imports leave no receipt. Each source is treated as a one-time notebook snapshot, not an
+ongoing synchronization feed. Later edits in a completed historical source are not applied.
+Direct repository imports without a source retain their existing behavior.
+
+NotebookDeletion writes a durable deletion marker alongside its cascade. This also covers
+deleting a notebook before any migration. The ledger survives deletion, and its deleted
+state blocks both known and previously unseen historical sources, including forceMigration.
+No timeout or retention job clears these markers. Reload tests confirm deleted migrated
+notebooks remain absent while the original historical database remains intact.
+
+Existing deletions made before this ledger was introduced cannot be inferred retroactively.
+Clearing the entire application database also clears its migration history; no guarantee
+survives that explicit data reset. A user-facing historical recovery action would need an
+explicit policy rather than silently bypassing deletion markers.
+
 ## Remaining lifecycle work
 
 Historical migration conflicts are reported and preserve both sources; there is no conflict
 resolution UI or automatic choice of a winning historical revision. Startup probing is
-repeatable but has no persistent completion journal. Consequently, deleting an imported
-notebook can currently allow it to reappear from retained source data on a later startup;
-a durable import receipt is required to preserve that deletion. General orphan recovery beyond verified source imports remains unimplemented.
+repeatable; completed source snapshots and subsequent deletions are now recorded durably.
+General orphan recovery beyond verified source imports remains unimplemented.
 
 Retention now enforces cache count, inactivity and an application content budget.
 The production caller audit found no explicit evictable notebook creation. Current editing

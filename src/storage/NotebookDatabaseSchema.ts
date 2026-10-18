@@ -9,6 +9,7 @@ interface StoreDefinition {
 /** Shared additive schema migration for every notebook database entry point. */
 export class NotebookDatabaseSchema {
   private static readonly stores: StoreDefinition[] = [
+    { name: DB_STORES.MIGRATION_LEDGER, keyPath: 'notebookId' },
     { name: DB_STORES.NOTEBOOKS, keyPath: 'id', indexes: DB_INDEXES.NOTEBOOKS },
     { name: DB_STORES.FILES_METADATA, keyPath: 'id', indexes: DB_INDEXES.FILES_METADATA },
     { name: DB_STORES.FILES_CONTENT, keyPath: 'fileId' },

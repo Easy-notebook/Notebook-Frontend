@@ -190,66 +190,71 @@ test('unsaved edits trigger a native exit dialog and commit after navigation is 
   expect(restored.cells[0].content).toBe('# Retained notebook');
 });
 
-test('v2 upgrade preserves records and reconciles missing schema', async ({ page }) => {
-  const result = await page.evaluate(async () => {
-    const { DB_CONFIG, IndexedDBStorageProvider } = window.storageHarness;
-    const original = await new Promise((resolve, reject) => {
-      const open = indexedDB.open(DB_CONFIG.NAME, 2);
-      open.onupgradeneeded = () => {
-        open.result
-          .createObjectStore(DB_CONFIG.STORES.NOTEBOOKS, { keyPath: 'id' })
-          .put({ id: 'retained', name: 'Existing notebook' });
-        open.result
-          .createObjectStore(DB_CONFIG.STORES.FILES_CONTENT, { keyPath: 'fileId' })
-          .put({ fileId: 'body', content: 'Existing content' });
-        open.result.createObjectStore('unrelated').put('keep', 'key');
-      };
-      open.onsuccess = () => resolve(open.result);
-      open.onerror = () => reject(open.error);
-    });
-    original.close();
-    const provider = new IndexedDBStorageProvider();
-    await provider.initialize();
-    await provider.close();
-    const upgraded = await new Promise((resolve, reject) => {
-      const open = indexedDB.open(DB_CONFIG.NAME);
-      open.onsuccess = () => resolve(open.result);
-      open.onerror = () => reject(open.error);
-    });
-    const stores = Array.from(upgraded.objectStoreNames);
-    const transaction = upgraded.transaction([
-      DB_CONFIG.STORES.NOTEBOOKS,
-      DB_CONFIG.STORES.FILES_CONTENT,
-      'unrelated',
-    ]);
-    const notebookStore = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
-    const indexes = Array.from(notebookStore.indexNames);
-    const read = (request) =>
-      new Promise((resolve, reject) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
+for (const previousVersion of [2, 3]) {
+  test(`v${previousVersion} upgrade preserves records and reconciles missing schema`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (previousVersion) => {
+      const { DB_CONFIG, IndexedDBStorageProvider } = window.storageHarness;
+      const original = await new Promise((resolve, reject) => {
+        const open = indexedDB.open(DB_CONFIG.NAME, previousVersion);
+        open.onupgradeneeded = () => {
+          open.result
+            .createObjectStore(DB_CONFIG.STORES.NOTEBOOKS, { keyPath: 'id' })
+            .put({ id: 'retained', name: 'Existing notebook' });
+          open.result
+            .createObjectStore(DB_CONFIG.STORES.FILES_CONTENT, { keyPath: 'fileId' })
+            .put({ fileId: 'body', content: 'Existing content' });
+          open.result.createObjectStore('unrelated').put('keep', 'key');
+        };
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => reject(open.error);
       });
-    const records = await Promise.all([
-      read(notebookStore.get('retained')),
-      read(transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT).get('body')),
-      read(transaction.objectStore('unrelated').get('key')),
+      original.close();
+      const provider = new IndexedDBStorageProvider();
+      await provider.initialize();
+      await provider.close();
+      const upgraded = await new Promise((resolve, reject) => {
+        const open = indexedDB.open(DB_CONFIG.NAME);
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => reject(open.error);
+      });
+      const stores = Array.from(upgraded.objectStoreNames);
+      const transaction = upgraded.transaction([
+        DB_CONFIG.STORES.NOTEBOOKS,
+        DB_CONFIG.STORES.FILES_CONTENT,
+        'unrelated',
+      ]);
+      const notebookStore = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
+      const indexes = Array.from(notebookStore.indexNames);
+      const read = (request) =>
+        new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      const records = await Promise.all([
+        read(notebookStore.get('retained')),
+        read(transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT).get('body')),
+        read(transaction.objectStore('unrelated').get('key')),
+      ]);
+      const version = upgraded.version;
+      upgraded.close();
+      return { version, stores, indexes, records };
+    }, previousVersion);
+    expect(result.version).toBe(4);
+    expect(result.stores).toContain('migration_ledger');
+    expect(result.stores).toContain('split_files');
+    expect(result.stores).toContain('tab_states');
+    expect(result.indexes).toEqual(
+      expect.arrayContaining(['lastAccessedAt', 'accessCount', 'updatedAt'])
+    );
+    expect(result.records).toEqual([
+      { id: 'retained', name: 'Existing notebook' },
+      { fileId: 'body', content: 'Existing content' },
+      'keep',
     ]);
-    const version = upgraded.version;
-    upgraded.close();
-    return { version, stores, indexes, records };
   });
-  expect(result.version).toBe(3);
-  expect(result.stores).toContain('split_files');
-  expect(result.stores).toContain('tab_states');
-  expect(result.indexes).toEqual(
-    expect.arrayContaining(['lastAccessedAt', 'accessCount', 'updatedAt'])
-  );
-  expect(result.records).toEqual([
-    { id: 'retained', name: 'Existing notebook' },
-    { fileId: 'body', content: 'Existing content' },
-    'keep',
-  ]);
-});
+}
 
 test('an incompatible unique index aborts the upgrade without deleting v2 records', async ({
   page,
@@ -2332,4 +2337,142 @@ test('matching historical files restore missing notebook ownership atomically wi
   expect(result.after[2]).toHaveLength(result.before[2].length + 1);
   expect(result.empty).toBe(0);
   expect(result.emptyParent).toBeUndefined();
+});
+
+test('migration receipts and deletion tombstones commit atomically with notebook records', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new NotebookRepository(provider);
+    const S = DB_CONFIG.STORES;
+    const notebook = {
+      id: 'receipt',
+      name: 'Receipt',
+      lastAccessedAt: 1,
+      accessCount: 1,
+      cacheEnabled: true,
+    };
+    const file = {
+      notebookId: 'receipt',
+      filePath: 'a',
+      fileName: 'a',
+      content: 'body',
+      size: 4,
+      lastModified: 'old',
+    };
+    const failing = new NotebookRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('ledger abort');
+        }),
+    });
+    let failedImport;
+    try {
+      await failing.importNotebook(notebook, [file], 'source-a');
+    } catch (error) {
+      failedImport = error.message;
+    }
+    const afterFailedImport = await Promise.all([
+      provider.getAll(S.MIGRATION_LEDGER),
+      provider.getAll(S.NOTEBOOKS),
+      provider.getAll(S.FILES_CONTENT),
+    ]);
+    const imported = await repository.importNotebook(notebook, [file], 'source-a');
+    const acknowledged = await repository.importNotebook(notebook, [file], 'source-b');
+    const terminalRetry = await repository.importNotebook(
+      notebook,
+      [{ ...file, content: 'changed old source' }],
+      'source-a'
+    );
+    const receipt = await provider.get(S.MIGRATION_LEDGER, 'receipt');
+    let failedDeletion;
+    try {
+      await failing.deleteNotebook('receipt');
+    } catch (error) {
+      failedDeletion = error.message;
+    }
+    const afterFailedDeletion = await provider.get(S.MIGRATION_LEDGER, 'receipt');
+    const retainedBody = await provider.get(S.FILES_CONTENT, 'receipt::a');
+    await repository.deleteNotebook('receipt');
+    const tombstone = await provider.get(S.MIGRATION_LEDGER, 'receipt');
+    const repeatedSource = await repository.importNotebook(notebook, [file], 'source-a');
+    const unseenSource = await repository.importNotebook(notebook, [file], 'source-c');
+    const deleted = await Promise.all([
+      provider.getAll(S.NOTEBOOKS),
+      provider.getAll(S.FILES_CONTENT),
+    ]);
+    await provider.close();
+    return {
+      failedImport,
+      afterFailedImport,
+      imported,
+      acknowledged,
+      terminalRetry,
+      receipt,
+      failedDeletion,
+      afterFailedDeletion,
+      retainedBody,
+      tombstone,
+      repeatedSource,
+      unseenSource,
+      deleted,
+    };
+  });
+  expect(result.failedImport).toBe('ledger abort');
+  expect(result.afterFailedImport).toEqual([[], [], []]);
+  expect(result.imported).toBe(1);
+  expect(result.acknowledged).toBe(0);
+  expect(result.terminalRetry).toBe(0);
+  expect(result.receipt).toMatchObject({ state: 'imported', sources: ['source-a', 'source-b'] });
+  expect(result.failedDeletion).toBe('ledger abort');
+  expect(result.afterFailedDeletion).toEqual(result.receipt);
+  expect(result.retainedBody.content).toBe('body');
+  expect(result.tombstone).toMatchObject({ state: 'deleted', sources: ['source-a', 'source-b'] });
+  expect(result.repeatedSource).toBe(0);
+  expect(result.unseenSource).toBe(0);
+  expect(result.deleted).toEqual([[], []]);
+});
+
+test('deleted migrated notebooks stay deleted after reload and forced historical retry', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { DataMigration, IndexedDBStorageProvider, NotebookRepository } = window.storageHarness;
+    await new Promise((resolve, reject) => {
+      const open = indexedDB.open('easyremote-file-cache', 1);
+      open.onupgradeneeded = () =>
+        open.result
+          .createObjectStore('files', { keyPath: 'id' })
+          .add({ id: 'a', notebookId: 'history', path: 'a', name: 'a', content: 'old' });
+      open.onsuccess = () => {
+        open.result.close();
+        resolve();
+      };
+      open.onerror = () => reject(open.error);
+    });
+    const stats = await DataMigration.migrate();
+    if (stats.filesMigrated !== 1) throw new Error('Initial migration failed');
+    const provider = new IndexedDBStorageProvider();
+    await new NotebookRepository(provider).deleteNotebook('history');
+    await provider.close();
+  });
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.storageHarness));
+  const result = await page.evaluate(async () => {
+    const { DataMigration, IndexedDBStorageProvider, DB_CONFIG } = window.storageHarness;
+    const stats = await DataMigration.forceMigration();
+    const provider = new IndexedDBStorageProvider();
+    const notebooks = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    const files = await provider.getAll(DB_CONFIG.STORES.FILES_CONTENT);
+    const ledger = await provider.get(DB_CONFIG.STORES.MIGRATION_LEDGER, 'history');
+    await provider.close();
+    return { stats, notebooks, files, ledger };
+  });
+  expect(result.stats).toMatchObject({ notebooksMigrated: 0, filesMigrated: 0, errors: [] });
+  expect(result.notebooks).toEqual([]);
+  expect(result.files).toEqual([]);
+  expect(result.ledger.state).toBe('deleted');
 });

@@ -136,7 +136,7 @@ export class DataMigration {
     // Source data is detached and validated before each atomic destination batch.
     for (const { notebook, files } of plan.batches) {
       try {
-        const imported = await persistenceService.notebooks.importNotebook(notebook, files);
+        const imported = await persistenceService.notebooks.importNotebook(notebook, files, dbName);
         if (imported > 0) stats.notebooksMigrated++;
         stats.filesMigrated += imported;
       } catch (error) {
