@@ -98,70 +98,38 @@ export class NotebookSessionService implements ISessionService {
       }
 
       // Check if notebook is already loaded in store (e.g., just created)
-      const notebookStore = await this.getNotebookStore();
+      let notebookStore = await this.getNotebookStore();
       const alreadyLoaded =
         notebookStore.notebookId === notebookId &&
         notebookStore.isLoaded &&
-        notebookStore.isInitialized;
+        notebookStore.isInitialized &&
+        !notebookStore.error;
 
-      if (alreadyLoaded) {
-        if (this.isDevelopment) {
-          console.log(
-            '🔍 [NotebookSessionService] Notebook already loaded in store, skipping load',
-            {
-              notebookId,
-            }
-          );
-        }
-        // Update session state without reloading
-        this.state.currentNotebookId = notebookId;
-        this.state.error = null;
-        this.setStatus(SessionStatus.CONNECTED);
-        this.emit({
-          type: 'session_loaded',
-          notebookId,
-          timestamp: Date.now(),
-        });
-        return {
-          notebookId,
-          notebookTitle: notebookStore.notebookTitle,
-          cells: notebookStore.cells,
-          tasks: notebookStore.tasks,
-          lastAccessedAt: Date.now(),
-        };
+      if (!alreadyLoaded) {
+        this.setStatus(SessionStatus.LOADING);
+        this.emit({ type: 'session_started', notebookId, timestamp: Date.now() });
+
+        const loaded = await notebookStore.loadFromDatabase(notebookId);
+        // Zustand replaces its state object. The pre-load snapshot is no longer authoritative.
+        notebookStore = await this.getNotebookStore();
+        if (!loaded) throw new Error(notebookStore.error || 'Failed to load notebook');
+      }
+      if (notebookStore.notebookId !== notebookId) {
+        throw new Error('Loaded notebook identity does not match the requested session');
       }
 
-      this.setStatus(SessionStatus.LOADING);
-      this.emit({
-        type: 'session_started',
+      // Capture the validated result before publishing to reentrant observers.
+      const session: NotebookSession = {
         notebookId,
-        timestamp: Date.now(),
-      });
-
-      // Load notebook data into notebookStore
-      const loaded = await notebookStore.loadFromDatabase(notebookId);
-
-      // Update state
+        notebookTitle: notebookStore.notebookTitle,
+        cells: notebookStore.cells,
+        tasks: notebookStore.tasks,
+        lastAccessedAt: Date.now(),
+      };
       this.state.currentNotebookId = notebookId;
       this.state.error = null;
       this.setStatus(SessionStatus.CONNECTED);
-
-      this.emit({
-        type: 'session_loaded',
-        notebookId,
-        timestamp: Date.now(),
-      });
-
-      // Return session data from store
-      const session: NotebookSession | null = loaded
-        ? {
-            notebookId,
-            notebookTitle: notebookStore.notebookTitle,
-            cells: notebookStore.cells,
-            tasks: notebookStore.tasks,
-            lastAccessedAt: Date.now(),
-          }
-        : null;
+      this.emit({ type: 'session_loaded', notebookId, timestamp: Date.now() });
 
       if (this.isDevelopment) {
         console.log('✅ [NotebookSessionService] Connected to notebook', {

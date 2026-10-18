@@ -18,13 +18,14 @@ const mocks = vi.hoisted(() => ({
     tasks: [],
     isLoaded: true,
     isInitialized: true,
+    error: null as string | null,
     loadFromDatabase: vi.fn(),
   },
 }));
 vi.mock('@Services/autoSave', () => ({
   AutoSaveService: { getInstance: () => mocks.autoSave },
 }));
-vi.mock('@Store/notebookStore', () => ({ default: { getState: () => mocks.store } }));
+vi.mock('@Store/notebookStore', () => ({ default: { getState: () => ({ ...mocks.store }) } }));
 let service: NotebookSessionService;
 beforeEach(async () => {
   vi.resetAllMocks();
@@ -35,6 +36,7 @@ beforeEach(async () => {
     cells: [{ id: 'a-cell', content: 'A content' }],
     isLoaded: true,
     isInitialized: true,
+    error: null,
   });
   mocks.autoSave.isPaused.mockReturnValue(false);
   mocks.autoSave.pause.mockResolvedValue(undefined);
@@ -48,6 +50,68 @@ beforeEach(async () => {
 });
 
 describe('session storage ownership', () => {
+  it('returns the post-load snapshot instead of the departing notebook fields', async () => {
+    mocks.store.loadFromDatabase.mockImplementationOnce(async () => {
+      Object.assign(mocks.store, {
+        notebookId: 'b',
+        notebookTitle: 'B',
+        cells: [{ id: 'b-cell', content: 'B content' }],
+      });
+      return true;
+    });
+    const result = await service.connect('b');
+    expect(result).toMatchObject({
+      notebookId: 'b',
+      notebookTitle: 'B',
+      cells: [{ id: 'b-cell', content: 'B content' }],
+    });
+  });
+
+  it('rejects a false load result before publishing success and permits retry', async () => {
+    mocks.store.loadFromDatabase.mockImplementationOnce(async () => {
+      mocks.store.notebookId = 'b'; // A loader may fail after a partial store update.
+      mocks.store.error = 'read failed';
+      return false;
+    });
+    const events: string[] = [];
+    service.subscribe((event) => events.push(event.type));
+    await expect(service.connect('b')).rejects.toThrow('read failed');
+    expect(events).not.toContain('session_loaded');
+    expect(service.getState()).toMatchObject({
+      status: SessionStatus.DISCONNECTED,
+      error: 'read failed',
+    });
+    await service.connect('b');
+    expect(service.getState()).toMatchObject({
+      currentNotebookId: 'b',
+      status: SessionStatus.CONNECTED,
+      error: null,
+    });
+    expect(events.filter((type) => type === 'session_loaded')).toHaveLength(1);
+    expect(mocks.store.loadFromDatabase).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a successful load whose current snapshot belongs to another notebook', async () => {
+    mocks.store.loadFromDatabase.mockResolvedValueOnce(true);
+    const events: string[] = [];
+    service.subscribe((event) => events.push(event.type));
+    await expect(service.connect('b')).rejects.toThrow('identity');
+    expect(events).not.toContain('session_loaded');
+    expect(service.getCurrentNotebookId()).not.toBe('b');
+  });
+
+  it('uses the same success publication for an already loaded notebook without reloading', async () => {
+    Object.assign(mocks.store, { notebookId: 'b', notebookTitle: 'Cached B' });
+    const events: string[] = [];
+    service.subscribe((event) => events.push(event.type));
+    await expect(service.connect('b')).resolves.toMatchObject({
+      notebookId: 'b',
+      notebookTitle: 'Cached B',
+    });
+    expect(mocks.store.loadFromDatabase).not.toHaveBeenCalled();
+    expect(events.filter((type) => type === 'session_loaded')).toHaveLength(1);
+  });
+
   it('flushes only the departing notebook without waiting for unrelated saves', async () => {
     mocks.autoSave.waitForComplete.mockImplementation(() => new Promise(() => {}));
     await service.switchSession('b');
