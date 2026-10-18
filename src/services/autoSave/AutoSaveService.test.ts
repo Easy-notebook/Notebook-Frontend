@@ -195,33 +195,19 @@ describe('single-writer autosave', () => {
     expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
   });
 
-  it('reuses unchanged text byte counts but invalidates in-place content edits', async () => {
-    const NativeBlob = globalThis.Blob;
-    const measured: unknown[] = [];
-    vi.stubGlobal(
-      'Blob',
-      class extends NativeBlob {
-        constructor(parts: BlobPart[] = [], options?: BlobPropertyBag) {
-          super(parts, options);
-          measured.push(parts[0]);
-        }
-      }
-    );
-    try {
-      const data = snapshot('size');
-      data.cells[0].content = '中文 🐍';
-      await service.saveNow(data);
-      await service.saveNow({ ...data, notebookTitle: 'renamed' });
-      expect(measured.filter((value) => value === '中文 🐍')).toHaveLength(1);
-      expect(storage.notebooks.saveNotebookSnapshot.mock.calls[1][1].totalSize).toBe(
-        new NativeBlob(['中文 🐍']).size
-      );
-      data.cells[0].content = 'changed';
-      await service.saveNow(data);
-      expect(measured.filter((value) => value === 'changed')).toHaveLength(1);
-      expect(storage.notebooks.saveNotebookSnapshot.mock.calls[2][1].totalSize).toBe(7);
-    } finally {
-      vi.unstubAllGlobals();
+  it('measures the complete serialized snapshot after in-place content edits', async () => {
+    const data = snapshot('size');
+    data.cells[0].content = '中文 🐍';
+    await service.saveNow(data);
+    data.cells[0].content = 'changed';
+    await service.saveNow(data);
+    const calls = storage.notebooks.saveNotebookSnapshot.mock.calls;
+    expect(JSON.parse(calls[0][0].content).cells[0].content).toBe('中文 🐍');
+    expect(JSON.parse(calls[1][0].content).cells[0].content).toBe('changed');
+    for (const [file, metadata] of calls) {
+      expect(file.size).toBe(new Blob([file.content]).size);
+      expect(metadata).not.toHaveProperty('fileCount');
+      expect(metadata).not.toHaveProperty('totalSize');
     }
   });
   it.each(['', undefined, null])(

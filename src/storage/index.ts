@@ -57,16 +57,9 @@ export const FileCache = {
           description: 'Auto-created notebook',
           lastAccessedAt: Date.now(),
           accessCount: 1,
-          fileCount: 1,
-          totalSize: transformedData.size,
+          fileCount: 0,
+          totalSize: 0,
           cacheEnabled: true,
-        });
-      } else {
-        // Update existing notebook access time
-        await persistenceService.notebooks.saveNotebook({
-          ...existingNotebook,
-          lastAccessedAt: Date.now(),
-          accessCount: existingNotebook.accessCount + 1,
         });
       }
     } catch (error) {

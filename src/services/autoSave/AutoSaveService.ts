@@ -62,7 +62,6 @@ export class AutoSaveService implements IAutoSaveService {
   private readonly debouncedSave: ReturnType<typeof debounce>;
   private readonly scheduler: NotebookSaveScheduler;
   private pauseCompletion: Promise<void> | null = null;
-  private readonly contentSizes = new WeakMap<Cell, { content: string; bytes: number }>();
 
   // Event listeners
   private readonly listeners: Set<AutoSaveEventListener> = new Set();
@@ -541,8 +540,6 @@ export class AutoSaveService implements IAutoSaveService {
         description: '',
         lastAccessedAt: timestamp,
         accessCount: 1,
-        fileCount: cells.length,
-        totalSize: this.calculateContentSize(cells),
         cacheEnabled: true,
       };
 
@@ -702,26 +699,6 @@ export class AutoSaveService implements IAutoSaveService {
       }
     }
     return false;
-  }
-
-  /**
-   * Calculate total content size of cells
-   */
-  private calculateContentSize(cells: Cell[]): number {
-    let totalSize = 0;
-    for (const cell of cells) {
-      const content = cell.content || '';
-      let measured = this.contentSizes.get(cell);
-      if (!measured || measured.content !== content) {
-        measured = { content, bytes: new Blob([content]).size };
-        this.contentSizes.set(cell, measured);
-      }
-      totalSize += measured.bytes;
-      if (cell.outputs?.length) {
-        totalSize += new Blob([JSON.stringify(cell.outputs)]).size;
-      }
-    }
-    return totalSize;
   }
 
   /** Publish one complete transition; observers never reconstruct storage truth. */

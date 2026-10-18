@@ -39,6 +39,8 @@ Coverage:
   stay consistent during concurrent writes, and reject failed read transactions.
 - Content budgets use local/split payload bytes, preserve remote-only caches under byte pressure,
   report protected over-budget content, and roll back failed quota cleanup.
+- Snapshot/metadata saves derive file totals transactionally, preserve other files and access history,
+  and roll back content/counters/retention promotion together on failure.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

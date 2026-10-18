@@ -22,7 +22,15 @@ const file = {
   remoteUrl: '/remote/book',
 };
 
-function setup(existing: unknown = { createdAt: 17 }) {
+function setup(
+  existing: unknown = { createdAt: 17 },
+  files: Array<{ id: string; size: number }> = []
+) {
+  const readFiles = vi.fn(() => {
+    const request = { result: files, onsuccess: undefined as undefined | (() => void) };
+    queueMicrotask(() => request.onsuccess?.());
+    return request;
+  });
   const stores = {
     notebooks: {
       put: vi.fn(),
@@ -37,7 +45,7 @@ function setup(existing: unknown = { createdAt: 17 }) {
       }),
     },
     activities: { put: vi.fn() },
-    files_metadata: { put: vi.fn() },
+    files_metadata: { put: vi.fn(), index: vi.fn(() => ({ getAll: readFiles })) },
     files_content: { put: vi.fn(), delete: vi.fn() },
   };
   const storage = {
@@ -66,7 +74,13 @@ it('commits notebook metadata, activity and a forced-local snapshot through one 
   expect(storage.put).not.toHaveBeenCalled();
   expect(stores.notebooks.get).toHaveBeenCalledExactlyOnceWith('book');
   expect(stores.notebooks.put).toHaveBeenCalledWith(
-    expect.objectContaining({ ...notebook, createdAt: 17 })
+    expect.objectContaining({
+      ...notebook,
+      createdAt: 17,
+      fileCount: 1,
+      totalSize: file.size,
+      lastAccessedAt: expect.any(Number),
+    })
   );
   expect(stores.activities.put).toHaveBeenCalledWith(
     expect.objectContaining({ notebookId: 'book', activityType: 'open' })
@@ -84,7 +98,7 @@ it('keeps standalone notebook saves on the same transaction implementation witho
   const result = await repository.saveNotebook(notebook);
   expect(result.createdAt).toBe(result.updatedAt);
   expect(storage.transaction).toHaveBeenCalledExactlyOnceWith(
-    ['notebooks', 'activities'],
+    ['notebooks', 'activities', 'files_metadata'],
     'readwrite',
     expect.any(Function)
   );
@@ -208,4 +222,31 @@ it('allows explicit cache ownership only when creating a new cache record', asyn
   expect(await repository.saveNotebook({ ...notebook, retention: 'evictable' })).toMatchObject({
     retention: 'evictable',
   });
+});
+
+it('counts a replacement snapshot once while retaining other file sizes', async () => {
+  const { repository, stores } = setup({ ...notebook, accessCount: 12 }, [
+    { id: 'book::notebook_book.json', size: 500 },
+    { id: 'book::attachment', size: 20 },
+  ]);
+  await repository.saveNotebookSnapshot(
+    { ...file, size: 30 },
+    { ...notebook, fileCount: 999, totalSize: 999 }
+  );
+  expect(stores.notebooks.put).toHaveBeenCalledWith(
+    expect.objectContaining({ fileCount: 2, totalSize: 50, accessCount: 12 })
+  );
+});
+
+it('metadata refresh derives totals from current files and retains newer access state', async () => {
+  const { repository, stores } = setup({ ...notebook, lastAccessedAt: 1000, accessCount: 10 }, [
+    { id: 'book::one', size: 7 },
+    { id: 'book::two', size: 8 },
+  ]);
+  await repository.saveNotebook({ ...notebook, fileCount: 999, totalSize: 999 });
+  expect(stores.notebooks.put).toHaveBeenCalledWith(
+    expect.objectContaining({ fileCount: 2, totalSize: 15, lastAccessedAt: 1000, accessCount: 10 })
+  );
+  expect(stores.files_metadata.put).not.toHaveBeenCalled();
+  expect(stores.files_content.put).not.toHaveBeenCalled();
 });

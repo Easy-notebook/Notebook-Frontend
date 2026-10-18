@@ -1,4 +1,9 @@
-import { INotebookRepository, IStorageProvider, type FileSaveData } from '../interfaces';
+import {
+  INotebookRepository,
+  IStorageProvider,
+  type NotebookSaveData,
+  type FileSaveData,
+} from '../interfaces';
 import {
   NotebookEntity,
   NotebookActivityEntity,
@@ -11,16 +16,11 @@ import { FileRecordSet } from './FileRecordSet';
 export class NotebookRepository implements INotebookRepository {
   constructor(private storage: IStorageProvider) {}
 
-  async saveNotebook(
-    notebookData: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
-  ): Promise<NotebookEntity> {
+  async saveNotebook(notebookData: NotebookSaveData): Promise<NotebookEntity> {
     return this.persistNotebook(notebookData);
   }
 
-  async saveNotebookSnapshot(
-    file: FileSaveData,
-    notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
-  ) {
+  async saveNotebookSnapshot(file: FileSaveData, notebook: NotebookSaveData) {
     if (file.notebookId !== notebook.id) throw new Error('Snapshot notebook identity mismatch');
     const records = new FileRecordSet(file, { forceLocal: true });
     await this.persistNotebook(notebook, records);
@@ -28,54 +28,58 @@ export class NotebookRepository implements INotebookRepository {
   }
 
   private async persistNotebook(
-    data: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>,
+    data: NotebookSaveData,
     file?: FileRecordSet
   ): Promise<NotebookEntity> {
-    const names: string[] = [DB_CONFIG.STORES.NOTEBOOKS, DB_CONFIG.STORES.ACTIVITIES];
-    if (file) names.push(DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT);
+    const names: string[] = [
+      DB_CONFIG.STORES.NOTEBOOKS,
+      DB_CONFIG.STORES.ACTIVITIES,
+      DB_CONFIG.STORES.FILES_METADATA,
+    ];
+    if (file) names.push(DB_CONFIG.STORES.FILES_CONTENT);
     let notebook!: NotebookEntity;
-    await this.storage.transaction(
-      names,
-      'readwrite',
-      (stores) =>
-        new Promise<void>((resolve, reject) => {
-          const notebooks = stores[DB_CONFIG.STORES.NOTEBOOKS];
-          const request = notebooks.get(data.id);
-          request.onerror = () => reject(request.error);
-          request.onsuccess = () => {
-            try {
-              const now = Date.now();
-              const existing = request.result as NotebookEntity | undefined;
-              notebook = {
-                ...data,
-                // A document snapshot promotes cache ownership permanently. Metadata refreshes
-                // cannot silently turn an existing document (including unclassified data) into cache.
-                retention:
-                  file || (existing && existing.retention !== 'evictable')
-                    ? 'persistent'
-                    : (data.retention ?? existing?.retention ?? 'persistent'),
-                createdAt: existing?.createdAt ?? now,
-                updatedAt: now,
-              };
-              notebooks.put(notebook);
-              const activity: NotebookActivityEntity = {
-                id: `${data.id}::${now}`,
-                notebookId: data.id,
-                activityType: 'open',
-                timestamp: now,
-              };
-              stores[DB_CONFIG.STORES.ACTIVITIES].put(activity);
-              file?.writeTo(
-                stores[DB_CONFIG.STORES.FILES_METADATA],
-                stores[DB_CONFIG.STORES.FILES_CONTENT]
-              );
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          };
-        })
-    );
+    await this.storage.transaction(names, 'readwrite', async (stores) => {
+      const notebooks = stores[DB_CONFIG.STORES.NOTEBOOKS];
+      const [existing, files] = await Promise.all([
+        this.read<NotebookEntity | undefined>(notebooks.get(data.id)),
+        this.read<FileMetadataEntity[]>(
+          stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(data.id)
+        ),
+      ]);
+      const retained = file ? files.filter((record) => record.id !== file.metadata.id) : files;
+      const now = Date.now();
+      notebook = {
+        ...data,
+        // Metadata inputs can be stale. File-derived counters belong to this transaction.
+        fileCount: retained.length + (file ? 1 : 0),
+        totalSize:
+          retained.reduce((sum, record) => sum + record.size, 0) + (file?.metadata.size ?? 0),
+        accessCount: Math.max(existing?.accessCount ?? 0, data.accessCount),
+        lastAccessedAt: Math.max(
+          existing?.lastAccessedAt ?? 0,
+          data.lastAccessedAt,
+          file ? now : 0
+        ),
+        retention:
+          file || (existing && existing.retention !== 'evictable')
+            ? 'persistent'
+            : (data.retention ?? existing?.retention ?? 'persistent'),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      notebooks.put(notebook);
+      const activity: NotebookActivityEntity = {
+        id: `${data.id}::${now}`,
+        notebookId: data.id,
+        activityType: 'open',
+        timestamp: now,
+      };
+      stores[DB_CONFIG.STORES.ACTIVITIES].put(activity);
+      file?.writeTo(
+        stores[DB_CONFIG.STORES.FILES_METADATA],
+        stores[DB_CONFIG.STORES.FILES_CONTENT]
+      );
+    });
     return notebook;
   }
 

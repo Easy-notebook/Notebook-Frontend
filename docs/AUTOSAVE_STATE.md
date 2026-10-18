@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 191 tests across fifteen files. Coverage includes
+The persistence/autosave/session gate passes 193 tests across fifteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -175,14 +175,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs thirty-seven isolated Playwright cases against production modules:
+`npm run test:browser` runs thirty-nine isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 191 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 193 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -353,10 +353,27 @@ Policy tests cover LRU, emergency targets, invalid budgets and un-reclaimable pr
 Native tests cover multibyte local/split payloads, preview/execute agreement, remote-only
 cache preservation, zero budgets with protected data, and transaction rollback.
 
+## Transaction-owned notebook accounting
+
+Notebook metadata saves derive fileCount and totalSize from notebook-indexed file metadata
+inside the save transaction. Snapshot replacement excludes the old snapshot and includes
+its replacement exactly once; unrelated files remain counted. Callers may pass existing
+metadata objects, but file-derived counters are optional inputs and are never authoritative.
+Access count and recency do not regress when a stale metadata object is saved.
+
+AutoSaveService measures the complete serialized snapshot for its file record and no longer
+computes redundant per-cell size estimates or treats cell count as file count. The obsolete
+WeakMap size cache is removed. FileCache creation starts with no pre-counted file, and its
+existing-notebook read no longer triggers an additional metadata write/access increment.
+Native cases cover create/replace, additional files, concurrent stale refresh and rollback
+of content, counters and retention promotion on failed commit.
+
 ## Remaining lifecycle work
 
 Retention now enforces cache count, inactivity and an application content budget.
-The creation/active-use contract for explicitly evictable caches still requires an audit.
+The production caller audit found no explicit evictable notebook creation. Current editing
+uses persistent documents, so automatic eviction does not require an active-cache lease.
+A future caller opting into eviction must define recoverability and active-use protection.
 Persistent documents are protected regardless of age or count; this does not expand
 browser storage quota or claim remote synchronization.
 A transaction accepted after deletion cannot retroactively protect the deleted notebook.

@@ -1225,3 +1225,128 @@ test('content-budget cleanup abort preserves every measured payload', async ({ p
   expect(result.usage.localContentBytes).toBe(4);
   expect(result.after).toEqual(result.before);
 });
+
+test('snapshot replacement and stale metadata refresh preserve transaction-owned file totals', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, FileRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const notebooks = new NotebookRepository(provider);
+    const files = new FileRepository(provider);
+    const metadata = {
+      id: 'book',
+      name: 'Book',
+      lastAccessedAt: 1,
+      accessCount: 1,
+      fileCount: 99,
+      totalSize: 999,
+      cacheEnabled: true,
+    };
+    const created = await notebooks.saveNotebook(metadata);
+    await files.saveFile({
+      notebookId: 'book',
+      filePath: 'attachment',
+      fileName: 'attachment',
+      content: 'hello',
+      size: 5,
+      lastModified: 'today',
+    });
+    const snapshot = {
+      notebookId: 'book',
+      filePath: 'snapshot',
+      fileName: 'snapshot',
+      content: 'first',
+      size: 5,
+      lastModified: 'today',
+    };
+    await notebooks.saveNotebookSnapshot(snapshot, metadata);
+    const first = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'book');
+    await notebooks.updateAccessTime('book');
+    await notebooks.saveNotebookSnapshot(
+      { ...snapshot, content: 'replacement', size: 11 },
+      metadata
+    );
+    const replaced = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'book');
+    await Promise.all([
+      files.saveFile({
+        ...snapshot,
+        filePath: 'another',
+        fileName: 'another',
+        content: 'ab',
+        size: 2,
+      }),
+      notebooks.saveNotebook({ ...metadata, name: 'Renamed' }),
+    ]);
+    const refreshed = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'book');
+    const actual = await notebooks.getNotebookStats('book');
+    await provider.close();
+    return { created, first, replaced, refreshed, actual };
+  });
+  expect(result.created).toMatchObject({ fileCount: 0, totalSize: 0 });
+  expect(result.first).toMatchObject({ fileCount: 2, totalSize: 10 });
+  expect(result.replaced).toMatchObject({ fileCount: 2, totalSize: 16, accessCount: 2 });
+  expect(result.refreshed).toMatchObject({
+    name: 'Renamed',
+    fileCount: 3,
+    totalSize: 18,
+    accessCount: 2,
+  });
+  expect(result.actual).toMatchObject({ fileCount: 3, totalSize: 18 });
+});
+
+test('failed snapshot commit rolls back content, notebook counters and retention promotion', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    const notebook = {
+      id: 'cache',
+      name: 'Cache',
+      lastAccessedAt: 1,
+      accessCount: 1,
+      fileCount: 1,
+      totalSize: 3,
+      retention: 'evictable',
+      cacheEnabled: true,
+    };
+    await provider.put(S.NOTEBOOKS, notebook);
+    await provider.put(S.FILES_METADATA, { id: 'cache::snapshot', notebookId: 'cache', size: 3 });
+    await provider.put(S.FILES_CONTENT, { fileId: 'cache::snapshot', content: 'old' });
+    const failing = new NotebookRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('snapshot accounting aborted');
+        }),
+    });
+    let error;
+    try {
+      await failing.saveNotebookSnapshot(
+        {
+          notebookId: 'cache',
+          filePath: 'snapshot',
+          fileName: 'snapshot',
+          content: 'new snapshot',
+          size: 12,
+          lastModified: 'today',
+        },
+        notebook
+      );
+    } catch (failure) {
+      error = failure.message;
+    }
+    const stored = await provider.get(S.NOTEBOOKS, 'cache');
+    const content = await provider.get(S.FILES_CONTENT, 'cache::snapshot');
+    const activity = await provider.getAll(S.ACTIVITIES);
+    await provider.close();
+    return { error, stored, content, activity };
+  });
+  expect(result.error).toBe('snapshot accounting aborted');
+  expect(result.stored).toMatchObject({ fileCount: 1, totalSize: 3, retention: 'evictable' });
+  expect(result.content.content).toBe('old');
+  expect(result.activity).toEqual([]);
+});

@@ -50,12 +50,16 @@ export interface IStorageProvider {
   ): Promise<void>;
 }
 
+/** File-derived counters are accepted on metadata objects but computed by the repository. */
+export type NotebookSaveData = Omit<
+  NotebookEntity,
+  'createdAt' | 'updatedAt' | 'fileCount' | 'totalSize'
+> &
+  Partial<Pick<NotebookEntity, 'fileCount' | 'totalSize'>>;
+
 export interface INotebookRepository {
-  saveNotebookSnapshot(
-    file: FileSaveData,
-    notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
-  ): Promise<FileMetadataEntity>;
-  saveNotebook(notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>): Promise<NotebookEntity>;
+  saveNotebookSnapshot(file: FileSaveData, notebook: NotebookSaveData): Promise<FileMetadataEntity>;
+  saveNotebook(notebook: NotebookSaveData): Promise<NotebookEntity>;
   getNotebook(id: string): Promise<NotebookEntity | null>;
   getAllNotebooks(options?: {
     orderBy?: string;
