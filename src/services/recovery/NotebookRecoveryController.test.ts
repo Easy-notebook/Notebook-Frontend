@@ -155,3 +155,74 @@ it('keeps the last created notebook accessible after a stale restore retry', asy
     notice: expect.stringContaining('changed'),
   });
 });
+
+it.each(['restore', 'discard'] as const)(
+  'coalesces refreshes during %s but rereads an invalidated list before publishing',
+  async (action) => {
+    const { repository, controller } = setup();
+    let finish!: (value: NotebookRecoveryRecord[]) => void;
+    let started!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    repository.listDrafts
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+            started();
+          })
+      )
+      .mockResolvedValueOnce([draft(3)]);
+    const observed: NotebookRecoveryRecord[][] = [];
+    controller.subscribe(() => observed.push([...controller.getSnapshot().drafts]));
+    const mutation = controller[action](draft(1));
+    await controller.refresh();
+    await controller.refresh();
+    await reading;
+    expect(repository.listDrafts).toHaveBeenCalledTimes(1);
+    await controller.refresh();
+    await controller.refresh();
+    await controller.restore(draft(2));
+    await controller.discard(draft(2));
+    finish([draft(2)]);
+    await mutation;
+    expect(repository.listDrafts).toHaveBeenCalledTimes(2);
+    expect(repository.restoreDraft).toHaveBeenCalledTimes(action === 'restore' ? 1 : 0);
+    expect(repository.discardDraft).toHaveBeenCalledTimes(action === 'discard' ? 1 : 0);
+    expect(observed).not.toContainEqual([draft(2)]);
+    expect(controller.getSnapshot()).toMatchObject({ phase: 'ready', drafts: [draft(3)] });
+  }
+);
+
+it('honors a queued refresh after a failed list without retrying the committed restore', async () => {
+  const { repository, controller } = setup();
+  let fail!: (error: Error) => void;
+  let started!: () => void;
+  const reading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  repository.restoreDraft.mockResolvedValue({ id: 'copy', name: 'Copy' });
+  repository.listDrafts
+    .mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+          started();
+        })
+    )
+    .mockResolvedValueOnce([draft(2)]);
+  const mutation = controller.restore(draft(1));
+  await reading;
+  await controller.refresh();
+  fail(new Error('old read failed'));
+  await mutation;
+  expect(repository.restoreDraft).toHaveBeenCalledTimes(1);
+  expect(repository.listDrafts).toHaveBeenCalledTimes(2);
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    drafts: [draft(2)],
+    restored: { id: 'copy', name: 'Copy' },
+    error: null,
+  });
+});

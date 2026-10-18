@@ -23,6 +23,7 @@ export class NotebookRecoveryController {
   };
   private readonly listeners = new Set<() => void>();
   private generation = 0;
+  private refreshVersion = 0;
 
   constructor(private readonly repository: INotebookRecoveryRepository) {}
 
@@ -35,6 +36,7 @@ export class NotebookRecoveryController {
   };
 
   async refresh(): Promise<void> {
+    ++this.refreshVersion;
     if (this.busy) return;
     const generation = ++this.generation;
     this.publish({ ...this.state, phase: 'loading', error: null });
@@ -89,11 +91,28 @@ export class NotebookRecoveryController {
       if (generation !== this.generation) return;
       // A committed copy must remain accessible even if refreshing the list fails.
       this.publish({ ...this.state, ...result, restored: result.restored ?? this.state.restored });
-      const drafts = await this.repository.listDrafts();
-      if (generation === this.generation) this.publish({ ...this.state, phase: 'ready', drafts });
+      await this.refreshAfterMutation(generation);
     } catch (error) {
       if (generation === this.generation)
         this.publish({ ...this.state, phase: 'failed', error: this.message(error) });
+    }
+  }
+
+  private async refreshAfterMutation(generation: number): Promise<void> {
+    // Refresh events may arrive after a list transaction captured its snapshot.
+    // Keep mutation admission closed until a read covers every received event.
+    for (;;) {
+      const version = this.refreshVersion;
+      try {
+        const drafts = await this.repository.listDrafts();
+        if (version === this.refreshVersion) {
+          if (generation === this.generation)
+            this.publish({ ...this.state, phase: 'ready', drafts });
+          return;
+        }
+      } catch (error) {
+        if (version === this.refreshVersion) throw error;
+      }
     }
   }
 

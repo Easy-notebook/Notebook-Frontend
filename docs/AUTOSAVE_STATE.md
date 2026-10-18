@@ -676,7 +676,12 @@ messages clear only after that notebook successfully commits.
 
 NotebookRecoveryController owns idle/loading/ready/deleting/restoring/failed UI data transitions.
 Generations suppress delayed read results after a newer refresh or deletion. Accepted deletes
-block duplicate mutations and refresh their final list. A confirmation captures the displayed
+block duplicate mutations and refresh their final list. Refresh notifications received while a
+mutation is busy advance an invalidation version. Notifications before the final read coalesce
+into that read; notifications during it cause another read before publishing. An invalidated
+read failure likewise honors the queued refresh, without retrying the mutation. A read failure
+without a newer notification remains visible and does not automatically retry.
+A confirmation captures the displayed
 record's revision; concurrent replacement causes compare-delete to reject and the newer copy
 to be displayed. Controller snapshots are immutable; React only owns presentation state.
 Refresh is event-driven on mount, opening, window focus and save failure, with subscriptions
