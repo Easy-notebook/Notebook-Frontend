@@ -191,33 +191,19 @@ export class FileRepository implements IFileRepository {
 
   async updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean> {
     const fileId = `${notebookId}::${filePath}`;
-    const size = new Blob([content]).size;
     let updated = false;
     await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
       const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
       const metadata = await this.read<FileMetadataEntity | undefined>(metadataStore.get(fileId));
       if (!metadata) return;
-      const now = Date.now();
-      metadataStore.put({
-        ...metadata,
-        hasLocalContent: true,
-        storageType: 'local',
-        size,
-        lastModified: new Date(now).toISOString(),
-        lastAccessedAt: now,
-      } satisfies FileMetadataEntity);
-      stores[DB_CONFIG.STORES.FILES_CONTENT].put({
-        fileId,
-        content,
-        compressed: false,
-        encoding: 'utf8',
-      } satisfies FileContentEntity);
+      const records = FileRecordSet.localUpdate({ ...metadata, notebookId, filePath }, content);
+      records.writeTo(metadataStore, stores[DB_CONFIG.STORES.FILES_CONTENT]);
       await this.recordMutation(
         stores,
         notebookId,
         filePath,
         0,
-        size - (metadata.size || 0),
+        records.metadata.size - (metadata.size || 0),
         'file_create'
       );
       updated = true;

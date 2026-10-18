@@ -59,3 +59,38 @@ it('prepares bounded preview metadata and an eviction for remote-only storage', 
   expect(content.put).not.toHaveBeenCalled();
   expect(content.delete).toHaveBeenCalledExactlyOnceWith(records.metadata.id);
 });
+
+it('rebuilds local storage state without changing the prior revision or access history', () => {
+  const remote = new FileRecordSet(
+    {
+      notebookId: 'book',
+      filePath: 'file',
+      fileName: 'file',
+      content: 'remote preview',
+      size: 100,
+      remoteUrl: '/remote/file',
+      lastModified: 'old',
+    },
+    { maxFileSize: 10 }
+  );
+  remote.metadata.cachedAt = 17;
+  remote.metadata.accessCount = 9;
+  const local = FileRecordSet.localUpdate(remote.metadata, '你好');
+  expect(local.metadata).toMatchObject({
+    storageType: 'local',
+    hasLocalContent: true,
+    isLargeFile: false,
+    contentPreview: undefined,
+    size: 6,
+    cachedAt: 17,
+    accessCount: 9,
+    remoteUrl: '/remote/file',
+  });
+  expect(local.content?.content).toBe('你好');
+  expect(remote.metadata).toMatchObject({
+    storageType: 'remote',
+    isLargeFile: true,
+    contentPreview: 'remote preview',
+    size: 100,
+  });
+});

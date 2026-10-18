@@ -49,6 +49,8 @@ Coverage:
   collision aborts the file transaction without overwriting history.
 - Writes capture input before asynchronous work: later caller mutations cannot change file/notebook
   identity, content/options, config, nested activity metadata or transaction scope.
+- Remote-to-local content updates clear stale large-file/preview state while preserving access history;
+  failed conversions retain the complete remote revision.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

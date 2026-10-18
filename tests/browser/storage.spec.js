@@ -1830,3 +1830,92 @@ test('the application file-cache facade captures input before its dynamic import
   expect(result.file.content).toBe('first');
   expect(result.other).toBeNull();
 });
+
+test('editing a remote file commits a consistent local revision and preserves access history', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository(provider);
+    const original = await files.saveFile(
+      {
+        notebookId: 'book',
+        filePath: 'large',
+        fileName: 'large',
+        content: 'remote preview',
+        size: 100,
+        remoteUrl: '/remote/large',
+        lastModified: 'old',
+      },
+      { maxFileSize: 1 }
+    );
+    await files.getFile('book', 'large');
+    const before = await provider.get(DB_CONFIG.STORES.FILES_METADATA, original.id);
+    await files.updateFileContent('book', 'large', '你好');
+    const metadata = await provider.get(DB_CONFIG.STORES.FILES_METADATA, original.id);
+    const content = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, original.id);
+    const notebook = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'book');
+    const large = await files.getLargeFiles('book');
+    const usage = await new StorageMaintenanceRepository(provider).getStorageStats();
+    await provider.close();
+    return { before, metadata, content, notebook, large, usage };
+  });
+  expect(result.metadata).toMatchObject({
+    storageType: 'local',
+    hasLocalContent: true,
+    isLargeFile: false,
+    size: 6,
+    remoteUrl: '/remote/large',
+  });
+  expect(result.metadata.contentPreview).toBeUndefined();
+  expect(result.metadata.cachedAt).toBe(result.before.cachedAt);
+  expect(result.metadata.accessCount).toBe(result.before.accessCount);
+  expect(result.content.content).toBe('你好');
+  expect(result.notebook).toMatchObject({ fileCount: 1, totalSize: 6 });
+  expect(result.large).toEqual([]);
+  expect(result.usage).toMatchObject({ largeFilesCount: 0, localContentBytes: 6 });
+});
+
+test('failed remote-to-local conversion retains the complete remote revision', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    const original = await new FileRepository(provider).saveFile(
+      {
+        notebookId: 'book',
+        filePath: 'large',
+        fileName: 'large',
+        content: 'remote preview',
+        size: 100,
+        remoteUrl: '/remote/large',
+        lastModified: 'old',
+      },
+      { maxFileSize: 1 }
+    );
+    const failing = new FileRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('conversion aborted');
+        }),
+    });
+    let error;
+    try {
+      await failing.updateFileContent('book', 'large', 'edited');
+    } catch (failure) {
+      error = failure.message;
+    }
+    const after = await provider.get(S.FILES_METADATA, original.id);
+    const content = await provider.get(S.FILES_CONTENT, original.id);
+    const notebook = await provider.get(S.NOTEBOOKS, 'book');
+    await provider.close();
+    return { error, original, after, content, notebook };
+  });
+  expect(result.error).toBe('conversion aborted');
+  expect(result.after).toEqual(result.original);
+  expect(result.content).toBeUndefined();
+  expect(result.notebook).toMatchObject({ fileCount: 1, totalSize: 100 });
+});

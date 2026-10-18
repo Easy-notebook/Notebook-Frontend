@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 202 tests across sixteen files. Coverage includes
+The persistence/autosave/session gate passes 203 tests across sixteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -175,14 +175,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs fifty-three isolated Playwright cases against production modules:
+`npm run test:browser` runs fifty-five isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 202 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 203 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -434,6 +434,19 @@ Native tests mutate objects immediately after invoking writes and verify cold-pr
 nested values, notebook/file identities and options, snapshot association, config patches,
 activity metadata, transaction scope and the application FileCache facade. Manager unit
 coverage verifies capture before lifecycle deferral.
+
+## Remote-to-local file transitions
+
+FileRecordSet prepares both new files and explicit local content updates. A local update
+writes local storageType, hasLocalContent, cleared isLargeFile/contentPreview and the new
+UTF-8 body together. It preserves cachedAt/accessCount from the transaction's existing
+revision and retains the remote URL as provenance. No remote refetch is required for the
+newly edited content, even if that content exceeds the optional cache threshold.
+
+FileRepository no longer maintains a separate metadata/body construction path for updates.
+Its notebook accounting and activity append remain in the same transaction. Native tests
+verify history preservation, corrected large-file queries/usage statistics, and complete
+rollback to the original remote revision when commit fails.
 
 ## Remaining lifecycle work
 
