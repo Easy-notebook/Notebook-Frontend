@@ -63,10 +63,33 @@ The persistence/autosave gate passes 94 tests across eight files, including six
 queue transition tests and new service-level deferred-write barriers and independent
 failure-state checks. Existing pause and multi-notebook writer tests also pass.
 
+## Graceful service shutdown
+
+The service lifecycle is separate from individual notebook save phases:
+active -> closing -> disposed. dispose() is now awaitable and idempotent while in
+progress. It stops new admission synchronously, cancels automatic scheduling,
+flushes previously accepted edits, waits for accepted reads/initialization and closes
+its persistence connection. Only then does it publish disposed and release observers.
+An accepted save remains valid even when its enqueue observer requests shutdown.
+
+A save or connection-close failure rejects disposal and restores active admission;
+unsaved snapshots are retained for retry. New writes, reads, initialization, pause,
+resume and discard operations cannot enter while closing/disposed. Service
+references remain terminal after disposal, including the singleton reference.
+Singleton reset is an explicit asynchronous test teardown:
+it discards pending edits but still waits for in-flight I/O and connection closure.
+It is not the production shutdown policy.
+
+The combined gate passes 102 storage/autosave tests, including eight shutdown cases:
+pending initialization, reads and writes, newer accepted edits, failed save recovery,
+failed connection-close retry, explicit test teardown and notification reentrancy.
+These remain deterministic service doubles, not native application exit tests.
+
 ## Remaining lifecycle work
 
-Graceful disposal while I/O is active, pause admission fencing, fairness of the global
-writer under continuous edits, cross-window conflicts and native recovery verification
-remain. flush still drains pending work, while flushThrough provides a fixed revision
-boundary; pause currently uses the former and requires a separate admission protocol.
-No crash-durability or cross-session committed-version guarantee is claimed.
+Pause admission fencing, fairness of the global writer under continuous edits,
+cross-window conflicts and native recovery verification remain. flush still drains
+pending work, while flushThrough provides a fixed revision boundary; pause currently
+uses the former and requires a separate admission protocol. Application/browser exit
+wiring is not added by the dispose API; browser termination cannot guarantee awaiting
+asynchronous writes. No crash-durability or cross-session version guarantee is claimed.

@@ -67,6 +67,7 @@ export interface AutoSaveConfig {
  * AutoSave state for store synchronization
  */
 export interface AutoSaveState {
+  lifecycle: 'active' | 'closing' | 'disposed';
   /** Current status of auto-save */
   status: AutoSaveStatus;
   /** Last successful save timestamp */
@@ -94,7 +95,8 @@ export type AutoSaveEventType =
   | 'load_failed'
   | 'dirty_changed'
   | 'error_cleared'
-  | 'initialization_failed';
+  | 'initialization_failed'
+  | 'lifecycle_changed';
 
 /**
  * AutoSave event payload
@@ -183,7 +185,7 @@ export interface IAutoSaveService {
   clearError(): void;
 
   /** Dispose and cleanup resources */
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 /**
@@ -200,6 +202,7 @@ export const DEFAULT_AUTOSAVE_CONFIG: AutoSaveConfig = {
  * Initial auto-save state
  */
 export const INITIAL_AUTOSAVE_STATE: AutoSaveState = {
+  lifecycle: 'active',
   status: AutoSaveStatus.IDLE,
   lastSavedAt: null,
   error: null,

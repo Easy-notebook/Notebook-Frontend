@@ -25,6 +25,11 @@ import {
   INITIAL_AUTOSAVE_STATE,
 } from './types';
 
+type ServiceLifecycle =
+  | { phase: 'active' }
+  | { phase: 'closing'; completion: Promise<void>; discard: boolean }
+  | { phase: 'disposed' };
+
 /**
  * AutoSaveService - Singleton service for managing notebook auto-save
  *
@@ -45,6 +50,8 @@ export class AutoSaveService implements IAutoSaveService {
 
   // Internal state
   private state: AutoSaveState;
+  private lifecycle: ServiceLifecycle = { phase: 'active' };
+  private readonly reads = new Set<Promise<unknown>>();
   private initialized = false;
   private initialization: Promise<void> | null = null;
   private readonly isDevelopment: boolean = import.meta.env.DEV === true;
@@ -71,7 +78,7 @@ export class AutoSaveService implements IAutoSaveService {
     // Create debounced save function
     this.debouncedSave = debounce(
       () => {
-        if (this.processing) return;
+        if (this.processing || this.lifecycle.phase !== 'active') return;
         void this.processSaveQueue().catch((error) => {
           notebookLog.error('AutoSaveService: Pending changes retained after save failure', {
             error,
@@ -100,10 +107,12 @@ export class AutoSaveService implements IAutoSaveService {
   /**
    * Reset singleton instance (for testing)
    */
-  public static resetInstance(): void {
-    if (AutoSaveService.instance) {
-      AutoSaveService.instance.dispose();
-      AutoSaveService.instance = null;
+  public static async resetInstance(): Promise<void> {
+    const instance = AutoSaveService.instance;
+    if (instance) {
+      // Test teardown explicitly discards queued edits, but still drains accepted I/O.
+      await instance.shutdown(true);
+      if (AutoSaveService.instance === instance) AutoSaveService.instance = null;
     }
   }
 
@@ -113,6 +122,11 @@ export class AutoSaveService implements IAutoSaveService {
    * Initialize the service and persistence layer
    */
   public async initialize(): Promise<void> {
+    this.assertActive();
+    await this.initializeStorage();
+  }
+
+  private async initializeStorage(): Promise<void> {
     if (this.initialized) return;
     if (!this.initialization) {
       this.initialization = this.persistence
@@ -159,6 +173,7 @@ export class AutoSaveService implements IAutoSaveService {
    * Queue a save operation (debounced)
    */
   public async queueSave(snapshot: NotebookSnapshot): Promise<void> {
+    this.assertActive();
     // Skip if paused (DISCONNECTED state - e.g., on / route)
     if (this.state.status === AutoSaveStatus.DISCONNECTED) {
       notebookLog.debug('AutoSaveService: Paused (DISCONNECTED), skipping save');
@@ -187,17 +202,18 @@ export class AutoSaveService implements IAutoSaveService {
       });
     }
 
-    // Trigger debounced save
-    this.debouncedSave();
+    // An observer may request shutdown while receiving the accepted edit.
+    if (this.lifecycle.phase === 'active') this.debouncedSave();
   }
 
   /**
    * Save immediately without debouncing
    */
   public async saveNow(snapshot: NotebookSnapshot): Promise<void> {
+    this.assertActive();
     if (!this.validateSnapshot(snapshot)) throw new Error('Invalid notebook snapshot');
     const revision = this.enqueueSnapshot(snapshot);
-    await this.flushThrough(snapshot.notebookId, revision);
+    await this.saveRevision(snapshot.notebookId, revision);
   }
 
   public getSaveProgress(notebookId: string): NotebookSaveProgress | null {
@@ -205,7 +221,12 @@ export class AutoSaveService implements IAutoSaveService {
   }
 
   /** Wait for this accepted revision (or a newer coalesced snapshot) to commit. */
-  public flushThrough(notebookId: string, revision: number): Promise<void> {
+  public async flushThrough(notebookId: string, revision: number): Promise<void> {
+    this.assertActive();
+    await this.saveRevision(notebookId, revision);
+  }
+
+  private saveRevision(notebookId: string, revision: number): Promise<void> {
     const barrier = this.saveQueue.createBarrier(notebookId, revision);
     if (!barrier.pending) return barrier.completion;
     this.debouncedSave.cancel();
@@ -219,15 +240,26 @@ export class AutoSaveService implements IAutoSaveService {
    * Load a notebook from storage
    */
   public async load(notebookId: string): Promise<LoadedNotebook | null> {
+    this.assertActive();
+    const operation = this.loadNotebook(notebookId);
+    this.reads.add(operation);
+    void operation.then(
+      () => this.reads.delete(operation),
+      () => this.reads.delete(operation)
+    );
+    return operation;
+  }
+
+  private async loadNotebook(notebookId: string): Promise<LoadedNotebook | null> {
     if (!notebookId?.trim()) {
       throw new Error('AutoSaveService: Invalid notebook ID');
     }
 
     if (!this.initialized) {
-      await this.initialize();
+      await this.initializeStorage();
     }
 
-    await this.flush(notebookId);
+    await this.processSaveQueue(notebookId);
 
     try {
       this.publish(
@@ -266,6 +298,7 @@ export class AutoSaveService implements IAutoSaveService {
    * Clear pending save for a specific notebook
    */
   public clearPending(notebookId: string): void {
+    this.assertActive();
     this.saveQueue.discard(notebookId);
     this.publish({}, 'dirty_changed', notebookId);
 
@@ -278,12 +311,14 @@ export class AutoSaveService implements IAutoSaveService {
    * Flush all pending saves immediately
    */
   public async flush(notebookId?: string): Promise<void> {
+    this.assertActive();
     // Cancel debounced save
     this.debouncedSave.cancel();
 
     await this.processSaveQueue(notebookId);
     // A targeted flush must not cancel other notebooks' scheduled saves.
-    if (notebookId && this.saveQueue.size) this.debouncedSave();
+    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size)
+      this.debouncedSave();
   }
 
   /**
@@ -299,6 +334,7 @@ export class AutoSaveService implements IAutoSaveService {
    * Will save current notebook first if needed
    */
   public async pause(currentSnapshot?: NotebookSnapshot): Promise<void> {
+    this.assertActive();
     notebookLog.info('AutoSaveService: Pausing...', {
       currentStatus: this.state.status,
       hasSnapshot: !!currentSnapshot,
@@ -309,6 +345,7 @@ export class AutoSaveService implements IAutoSaveService {
       this.enqueueSnapshot(currentSnapshot);
     }
     await this.flush();
+    this.assertActive();
 
     // Step 4: Cancel debounced save
     this.debouncedSave.cancel();
@@ -325,6 +362,7 @@ export class AutoSaveService implements IAutoSaveService {
    * Used when navigating to /workspace route
    */
   public resume(): void {
+    this.assertActive();
     if (this.state.status !== AutoSaveStatus.DISCONNECTED) {
       notebookLog.debug('AutoSaveService: Not in DISCONNECTED state, no need to resume');
       return;
@@ -345,6 +383,7 @@ export class AutoSaveService implements IAutoSaveService {
    * Subscribe to state change events
    */
   public subscribe(listener: AutoSaveEventListener): () => void {
+    if (this.lifecycle.phase === 'disposed') throw new Error('Auto-save service is disposed');
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
@@ -354,17 +393,60 @@ export class AutoSaveService implements IAutoSaveService {
   /**
    * Dispose and cleanup resources
    */
-  public dispose(): void {
-    this.debouncedSave.cancel();
-    this.saveQueue.clear();
-    this.listeners.clear();
-    this.initialized = false;
-    this.state = { ...INITIAL_AUTOSAVE_STATE };
+  public dispose(): Promise<void> {
+    return this.shutdown(false);
+  }
 
-    notebookLog.info('AutoSaveService: Disposed');
+  private shutdown(discard: boolean): Promise<void> {
+    if (this.lifecycle.phase === 'disposed') return Promise.resolve();
+    if (this.lifecycle.phase === 'closing') return this.lifecycle.completion;
+    this.debouncedSave.cancel();
+    const completion = Promise.resolve().then(async () => {
+      try {
+        if (discard) await this.processing?.catch(() => undefined);
+        else await this.processSaveQueue();
+        await Promise.allSettled([
+          ...this.reads,
+          ...(this.initialization ? [this.initialization] : []),
+        ]);
+        await this.persistence.close();
+        this.initialized = false;
+        this.saveQueue.clear();
+        this.lifecycle = { phase: 'disposed' };
+        this.publish(
+          { lifecycle: 'disposed', status: AutoSaveStatus.DISCONNECTED, activeNotebookId: null },
+          'lifecycle_changed'
+        );
+        this.listeners.clear();
+      } catch (error) {
+        this.lifecycle = { phase: 'active' };
+        this.publish(
+          { lifecycle: 'active', error: error instanceof Error ? error.message : String(error) },
+          'lifecycle_changed'
+        );
+        throw error;
+      }
+    });
+    this.lifecycle = { phase: 'closing', completion, discard };
+    this.publish({ lifecycle: 'closing' }, 'lifecycle_changed');
+    return completion;
+  }
+
+  private assertActive(): void {
+    if (this.lifecycle.phase !== 'active')
+      throw new Error(`Auto-save service is ${this.lifecycle.phase}`);
+  }
+
+  private canProcessSaves(): boolean {
+    return this.lifecycle.phase !== 'disposed' && !this.isDiscarding();
+  }
+
+  private isDiscarding(): boolean {
+    return this.lifecycle.phase === 'closing' && this.lifecycle.discard;
   }
 
   public clearError(): void {
+    this.assertActive();
     this.publish({ error: null }, 'error_cleared');
   }
 
@@ -380,12 +462,14 @@ export class AutoSaveService implements IAutoSaveService {
   }
 
   private async processSaveQueue(notebookId?: string): Promise<void> {
+    if (!this.canProcessSaves()) return;
     // All entry points share this writer, including saveNow and targeted flush.
     while (this.processing) {
       // The previous caller receives its own failure. A different notebook's
       // explicit save must still get its turn at the writer.
       await this.processing.catch(() => undefined);
     }
+    if (!this.canProcessSaves()) return;
     if (notebookId ? !this.saveQueue.has(notebookId) : !this.saveQueue.size) return;
     const operation = this.drainQueue(notebookId);
     this.processing = operation;
@@ -394,7 +478,8 @@ export class AutoSaveService implements IAutoSaveService {
     } finally {
       if (this.processing === operation) this.processing = null;
     }
-    if (notebookId && this.saveQueue.size) this.debouncedSave();
+    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size)
+      this.debouncedSave();
   }
 
   private async drainQueue(notebookId?: string): Promise<void> {
@@ -403,6 +488,7 @@ export class AutoSaveService implements IAutoSaveService {
       if (notebookId && id !== notebookId) continue;
       let retries = 0;
       while (this.saveQueue.has(id)) {
+        if (this.isDiscarding()) return;
         const snapshot = this.saveQueue.get(id)!;
         this.saveQueue.begin(snapshot);
         try {
@@ -430,6 +516,7 @@ export class AutoSaveService implements IAutoSaveService {
             retries = 0;
             continue;
           }
+          if (this.isDiscarding()) return;
           if (retries++ >= this.config.maxRetries) {
             failures.push(error);
             break;
@@ -448,7 +535,7 @@ export class AutoSaveService implements IAutoSaveService {
     const { notebookId, notebookTitle, cells, tasks, timestamp } = snapshot;
 
     try {
-      await this.initialize();
+      await this.initializeStorage();
       if (await this.shouldPreventDataLoss(snapshot)) {
         throw new Error('Refusing to overwrite an existing notebook with an empty snapshot');
       }

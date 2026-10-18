@@ -5,12 +5,14 @@ import { AutoSaveStatus, type AutoSaveEvent, type NotebookSnapshot } from './typ
 
 const storage = vi.hoisted(() => ({
   initialize: vi.fn(),
+  close: vi.fn(),
   notebooks: { saveNotebookSnapshot: vi.fn(), getNotebook: vi.fn() },
   files: { getFile: vi.fn() },
 }));
 vi.mock('../persistence/PersistenceService', () => ({
   PersistenceService: class {
     initialize = storage.initialize;
+    close = storage.close;
     notebooks = storage.notebooks;
     files = storage.files;
   },
@@ -33,19 +35,20 @@ function deferred() {
 }
 let service: AutoSaveService;
 let binding: ReturnType<typeof createAutoSaveStore>;
-beforeEach(() => {
-  AutoSaveService.resetInstance();
+beforeEach(async () => {
+  await AutoSaveService.resetInstance();
   vi.resetAllMocks();
   storage.initialize.mockResolvedValue(undefined);
+  storage.close.mockResolvedValue(undefined);
   storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'saved' });
   storage.files.getFile.mockResolvedValue(null);
   storage.notebooks.getNotebook.mockResolvedValue(null);
   service = AutoSaveService.getInstance({ debounceMs: 60000, maxRetries: 0 });
   binding = createAutoSaveStore(service);
 });
-afterEach(() => {
+afterEach(async () => {
   binding.unsubscribe();
-  AutoSaveService.resetInstance();
+  await AutoSaveService.resetInstance();
 });
 
 describe('authoritative autosave projection', () => {

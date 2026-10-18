@@ -4,12 +4,14 @@ import { AutoSaveStatus, type NotebookSnapshot } from './types';
 
 const storage = vi.hoisted(() => ({
   initialize: vi.fn(),
+  close: vi.fn(),
   notebooks: { saveNotebook: vi.fn(), saveNotebookSnapshot: vi.fn(), getNotebook: vi.fn() },
   files: { saveFile: vi.fn(), getFile: vi.fn(), getFilesForNotebook: vi.fn() },
 }));
 vi.mock('../persistence/PersistenceService', () => ({
   PersistenceService: class {
     initialize = storage.initialize;
+    close = storage.close;
     notebooks = storage.notebooks;
     files = storage.files;
   },
@@ -35,6 +37,7 @@ let service: AutoSaveService;
 beforeEach(() => {
   vi.resetAllMocks();
   storage.initialize.mockResolvedValue(undefined);
+  storage.close.mockResolvedValue(undefined);
   storage.notebooks.saveNotebook.mockResolvedValue({});
   storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'file', hasLocalContent: true });
   storage.files.getFilesForNotebook.mockResolvedValue([]);
@@ -346,5 +349,148 @@ describe('single-writer autosave', () => {
     const calls = storage.notebooks.saveNotebookSnapshot.mock.calls;
     expect(JSON.parse(calls[calls.length - 1][0].content).title).toBe('later edit');
     expect(service.isPaused()).toBe(true);
+  });
+});
+
+describe('autosave shutdown ownership', () => {
+  it('finishes an admitted save when an observer requests shutdown during enqueue', async () => {
+    let shutdown: Promise<void> | undefined;
+    service.subscribe((event) => {
+      if (event.type === 'dirty_changed' && !shutdown) shutdown = service.dispose();
+    });
+    await service.saveNow(snapshot('accepted before shutdown'));
+    await shutdown;
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
+    expect(service.getState().lifecycle).toBe('disposed');
+  });
+
+  it('flushes accepted edits, rejects new work, and waits for connection closure', async () => {
+    const closing = deferred();
+    const closeStarted = deferred();
+    storage.close.mockImplementationOnce(async () => {
+      closeStarted.resolve();
+      await closing.promise;
+    });
+    await service.queueSave(snapshot('accepted'));
+    const shutdown = service.dispose();
+    expect(service.dispose()).toBe(shutdown);
+    await expect(service.queueSave(snapshot('late'))).rejects.toThrow('closing');
+    await expect(service.saveNow(snapshot('late'))).rejects.toThrow('closing');
+    await expect(service.load('other')).rejects.toThrow('closing');
+    await closeStarted.promise;
+    expect(JSON.parse(storage.notebooks.saveNotebookSnapshot.mock.calls[0][0].content).title).toBe(
+      'accepted'
+    );
+    expect(service.getState().lifecycle).toBe('closing');
+    closing.resolve();
+    await shutdown;
+    expect(service.getState()).toMatchObject({
+      lifecycle: 'disposed',
+      isDirty: false,
+      activeNotebookId: null,
+    });
+    expect(service.isInitialized()).toBe(false);
+    await expect(service.initialize()).rejects.toThrow('disposed');
+    expect(() => service.resume()).toThrow('disposed');
+    await service.dispose();
+    expect(storage.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('drains both the in-flight and newer accepted revision before closing', async () => {
+    const first = deferred();
+    const started = deferred();
+    storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+      started.resolve();
+      await first.promise;
+      return { id: 'first' };
+    });
+    const saving = service.saveNow(snapshot('first'));
+    await started.promise;
+    await service.queueSave(snapshot('newer'));
+    const shutdown = service.dispose();
+    expect(storage.close).not.toHaveBeenCalled();
+    first.resolve();
+    await Promise.all([saving, shutdown]);
+    expect(
+      storage.notebooks.saveNotebookSnapshot.mock.calls.map(
+        ([file]) => JSON.parse(file.content).title
+      )
+    ).toEqual(['first', 'newer']);
+    expect(storage.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains data and restores admission after shutdown cannot save', async () => {
+    storage.notebooks.saveNotebookSnapshot.mockRejectedValue(new Error('quota'));
+    await service.queueSave(snapshot('retained'));
+    await expect(service.dispose()).rejects.toThrow('quota');
+    expect(service.getState()).toMatchObject({ lifecycle: 'active', isDirty: true });
+    expect(service.getSaveProgress('notebook')?.phase).toBe('blocked');
+    expect(storage.close).not.toHaveBeenCalled();
+    storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'retried' });
+    await service.dispose();
+    expect(service.getState().lifecycle).toBe('disposed');
+  });
+
+  it('waits for opening to settle before closing and never reactivates afterward', async () => {
+    const opening = deferred();
+    storage.initialize.mockReturnValueOnce(opening.promise);
+    const initialized = service.initialize();
+    const shutdown = service.dispose();
+    await Promise.resolve();
+    expect(storage.close).not.toHaveBeenCalled();
+    opening.resolve();
+    await Promise.all([initialized, shutdown]);
+    expect(service.isInitialized()).toBe(false);
+    expect(service.getState().lifecycle).toBe('disposed');
+    expect(storage.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for an accepted load before publishing terminal state', async () => {
+    const read = deferred();
+    const started = deferred();
+    storage.files.getFile.mockImplementationOnce(async () => {
+      started.resolve();
+      await read.promise;
+      return null;
+    });
+    const loading = service.load('notebook');
+    await started.promise;
+    const events: string[] = [];
+    service.subscribe((event) => events.push(`${event.type}:${event.state.lifecycle}`));
+    const shutdown = service.dispose();
+    await Promise.resolve();
+    expect(storage.close).not.toHaveBeenCalled();
+    read.resolve();
+    await Promise.all([loading, shutdown]);
+    expect(events[events.length - 1]).toBe('lifecycle_changed:disposed');
+    expect(service.getState().status).toBe(AutoSaveStatus.DISCONNECTED);
+  });
+
+  it('allows retry when connection release fails', async () => {
+    storage.close.mockRejectedValueOnce(new Error('close failed'));
+    await expect(service.dispose()).rejects.toThrow('close failed');
+    expect(service.getState()).toMatchObject({ lifecycle: 'active', error: 'close failed' });
+    await service.dispose();
+    expect(service.getState().lifecycle).toBe('disposed');
+    expect(storage.close).toHaveBeenCalledTimes(2);
+  });
+
+  it('test reset explicitly discards queued work but waits for the in-flight write', async () => {
+    const writing = deferred();
+    const started = deferred();
+    storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+      started.resolve();
+      await writing.promise;
+      return { id: 'saved' };
+    });
+    const saving = service.saveNow(snapshot('in flight'));
+    await started.promise;
+    await service.queueSave(snapshot('discarded'));
+    const reset = AutoSaveService.resetInstance();
+    writing.resolve();
+    await Promise.all([saving, reset]);
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
+    expect(service.getState().lifecycle).toBe('disposed');
+    expect(AutoSaveService.getInstance()).not.toBe(service);
   });
 });
