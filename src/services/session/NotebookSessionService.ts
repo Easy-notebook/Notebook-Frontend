@@ -29,6 +29,8 @@ export class NotebookSessionService implements ISessionService {
 
   private state: SessionState = { ...INITIAL_SESSION_STATE };
   private listeners: Set<SessionEventListener> = new Set();
+  private readonly notifications: SessionEvent[] = [];
+  private notifying = false;
   private autoSave: AutoSaveService;
   private isInitialized = false;
   private readonly isDevelopment = import.meta.env.DEV === true;
@@ -60,9 +62,12 @@ export class NotebookSessionService implements ISessionService {
       await this.autoSave.initialize();
 
       this.isInitialized = true;
+      this.clearError();
       notebookLog.info('NotebookSessionService initialized');
     } catch (error) {
       notebookLog.error('Failed to initialize NotebookSessionService', { error });
+      this.state.error = error instanceof Error ? error.message : 'Initialization failed';
+      this.emit({ type: 'session_error', error: this.state.error, timestamp: Date.now() });
       throw error;
     }
   }
@@ -72,9 +77,7 @@ export class NotebookSessionService implements ISessionService {
    * Used when navigating to /workspace/:id
    */
   public async connect(notebookId: string): Promise<NotebookSession | null> {
-    if (!notebookId?.trim()) {
-      throw new Error('Invalid notebook ID');
-    }
+    this.validateNotebookId(notebookId);
 
     // If already connected to this notebook, skip
     if (
@@ -127,6 +130,7 @@ export class NotebookSessionService implements ISessionService {
         lastAccessedAt: Date.now(),
       };
       this.state.currentNotebookId = notebookId;
+      this.state.lastSessionTimestamp = session.lastAccessedAt;
       this.state.error = null;
       this.setStatus(SessionStatus.CONNECTED);
       this.emit({ type: 'session_loaded', notebookId, timestamp: Date.now() });
@@ -231,9 +235,7 @@ export class NotebookSessionService implements ISessionService {
    * Handles saving current state and loading new notebook
    */
   public async switchSession(notebookId: string): Promise<NotebookSession | null> {
-    if (!notebookId?.trim()) {
-      throw new Error('Invalid notebook ID');
-    }
+    this.validateNotebookId(notebookId);
 
     const previousNotebookId = this.state.currentNotebookId;
     const previousStatus = this.state.status;
@@ -365,14 +367,37 @@ export class NotebookSessionService implements ISessionService {
   /**
    * Emit event to all listeners
    */
-  private emit(event: SessionEvent): void {
-    this.listeners.forEach((listener) => {
-      try {
-        listener(event);
-      } catch (error) {
-        notebookLog.error('Session event listener error', { error });
+  private emit(event: Omit<SessionEvent, 'state'>): void {
+    this.notifications.push(Object.freeze({ ...event, state: Object.freeze({ ...this.state }) }));
+    if (this.notifying) return;
+    this.notifying = true;
+    try {
+      for (let index = 0; index < this.notifications.length; index++) {
+        for (const listener of [...this.listeners]) {
+          try {
+            listener(this.notifications[index]);
+          } catch (error) {
+            notebookLog.error('Session event listener error', { error });
+          }
+        }
       }
-    });
+    } finally {
+      this.notifications.length = 0;
+      this.notifying = false;
+    }
+  }
+
+  private validateNotebookId(notebookId: string): void {
+    if (notebookId?.trim()) return;
+    const error = new Error('Invalid notebook ID');
+    this.state.error = error.message;
+    this.emit({ type: 'session_error', error: error.message, timestamp: Date.now() });
+    throw error;
+  }
+
+  public clearError(): void {
+    this.state.error = null;
+    this.emit({ type: 'error_cleared', timestamp: Date.now() });
   }
 
   /**

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotebookSessionService } from './NotebookSessionService';
 import { SessionStatus } from './types';
+import { createSessionStore } from './sessionStore';
 
 const mocks = vi.hoisted(() => ({
   autoSave: {
@@ -50,6 +51,69 @@ beforeEach(async () => {
 });
 
 describe('session storage ownership', () => {
+  it('projects cached connections and initial state from the service', async () => {
+    const binding = createSessionStore(service);
+    expect(binding.store.getState()).toMatchObject(service.getState());
+    mocks.store.notebookId = 'b';
+    await binding.store.getState().connect('b');
+    expect(binding.store.getState()).toMatchObject(service.getState());
+    expect(binding.store.getState().currentNotebookId).toBe('b');
+    expect(binding.store.getState().lastSessionTimestamp).not.toBeNull();
+    binding.unsubscribe();
+  });
+
+  it('projects failed connection identity instead of inferring it from the requested ID', async () => {
+    const binding = createSessionStore(service);
+    mocks.store.loadFromDatabase.mockResolvedValueOnce(false);
+    await expect(binding.store.getState().connect('b')).rejects.toThrow();
+    expect(binding.store.getState()).toMatchObject(service.getState());
+    expect(binding.store.getState().currentNotebookId).toBe('a');
+    binding.unsubscribe();
+  });
+
+  it('delivers reentrant error dismissal after the failure snapshot to every observer', async () => {
+    service.subscribe((event) => {
+      if (event.type === 'session_error') service.clearError();
+    });
+    const binding = createSessionStore(service);
+    const errors: Array<string | null> = [];
+    const unsubscribe = binding.store.subscribe((state) => errors.push(state.error));
+    mocks.autoSave.pause.mockRejectedValueOnce(new Error('quota'));
+    await expect(binding.store.getState().disconnect()).rejects.toThrow('quota');
+    expect(errors).toEqual(['quota', null]);
+    expect(binding.store.getState()).toMatchObject(service.getState());
+    expect(service.getState().error).toBeNull();
+    unsubscribe();
+    binding.unsubscribe();
+  });
+
+  it('clears errors in the service and stops projection when unsubscribed', async () => {
+    const binding = createSessionStore(service);
+    await expect(binding.store.getState().connect(' ')).rejects.toThrow('Invalid notebook ID');
+    expect(binding.store.getState().error).toBe('Invalid notebook ID');
+    binding.store.getState().clearError();
+    expect(service.getState().error).toBeNull();
+    binding.unsubscribe();
+    const previous = binding.store.getState();
+    await service.disconnect();
+    expect(binding.store.getState()).toBe(previous);
+  });
+
+  it('publishes initialization errors and immutable event state', async () => {
+    const binding = createSessionStore(service);
+    const states: Readonly<ReturnType<typeof service.getState>>[] = [];
+    service.subscribe((event) => states.push(event.state));
+    mocks.autoSave.initialize.mockRejectedValueOnce(new Error('database unavailable'));
+    await expect(binding.store.getState().initialize()).rejects.toThrow('database unavailable');
+    expect(binding.store.getState()).toMatchObject(service.getState());
+    const failure = states[0];
+    expect(Object.isFrozen(failure)).toBe(true);
+    await binding.store.getState().initialize();
+    expect(binding.store.getState().error).toBeNull();
+    expect(failure.error).toBe('database unavailable');
+    binding.unsubscribe();
+  });
+
   it('returns the post-load snapshot instead of the departing notebook fields', async () => {
     mocks.store.loadFromDatabase.mockImplementationOnce(async () => {
       Object.assign(mocks.store, {

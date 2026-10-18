@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 136 tests across eleven files. Coverage includes
+The persistence/autosave/session gate passes 141 tests across eleven files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -122,11 +122,22 @@ it drains already accepted snapshots without relabeling another notebook's conte
 A failed pause keeps the session identity and reports a session error, allowing a
 subsequent disconnect to retry persistence. A failed departure flush restores the
 previous session phase before loading begins. Successful connection clears stale
-operation errors. Ten session regressions cover ownership, retries and load publication. Connection
+operation errors. Fifteen session regressions cover ownership, retries and load publication. Connection
 success uses a fresh post-load store snapshot and verifies its notebook identity.
 A false loader result rejects before publishing connected/loaded; a partially updated
 store carrying an error is not reused as a successful cached load. Cached and loaded
 connections share one success-publication path.
+
+## Session state projection
+
+Session events carry complete immutable service state, delivered FIFO even when a
+listener clears an error during notification. The Zustand binding copies these
+snapshots instead of reconstructing identity/status from event names. It initializes
+from current service state, exposes explicit unsubscribe and releases its default
+subscription on hot disposal. Commands delegate directly to the service, including
+error dismissal; their rejected promises do not overwrite a newer published state.
+Initialization failure and invalid IDs also publish service-owned errors. A successful
+initialization retry clears the error, and successful connection records its timestamp.
 
 ## Remaining lifecycle work
 

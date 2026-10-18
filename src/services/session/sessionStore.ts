@@ -9,9 +9,8 @@ import { NotebookSessionService } from './NotebookSessionService';
 import {
   SessionStatus,
   type SessionState,
-  type SessionEvent,
+  type ISessionService,
   type NotebookSession,
-  INITIAL_SESSION_STATE,
 } from './types';
 
 /**
@@ -48,135 +47,27 @@ export type SessionStore = SessionState & SessionStoreActions;
 /**
  * Create the session store with service integration
  */
-const useSessionStore = create<SessionStore>()(
-  subscribeWithSelector((set, get) => {
-    // Get service instance
-    const service = NotebookSessionService.getInstance();
-
-    // Subscribe to service events
-    service.subscribe((event: SessionEvent) => {
-      handleServiceEvent(set, event);
-    });
-
-    return {
-      // Initial state
-      ...INITIAL_SESSION_STATE,
-
-      // Actions
-      initialize: async () => {
-        try {
-          await service.initialize();
-          const state = service.getState();
-          set({
-            status: state.status,
-            currentNotebookId: state.currentNotebookId,
-            error: null,
-          });
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Initialization failed',
-          });
-          throw error;
-        }
-      },
-
-      connect: async (notebookId: string) => {
-        try {
-          return await service.connect(notebookId);
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Connection failed',
-          });
-          throw error;
-        }
-      },
-
-      disconnect: async () => {
-        try {
-          await service.disconnect();
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Disconnect failed',
-          });
-          throw error;
-        }
-      },
-
-      switchSession: async (notebookId: string) => {
-        try {
-          return await service.switchSession(notebookId);
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Switch failed',
-          });
-          throw error;
-        }
-      },
-
-      isConnected: () => {
-        return get().status === SessionStatus.CONNECTED;
-      },
-
-      isDisconnected: () => {
-        return get().status === SessionStatus.DISCONNECTED;
-      },
-
-      clearError: () => {
-        set({ error: null });
-      },
-    };
-  })
-);
-
-/**
- * Handle service events and update store state
- */
-function handleServiceEvent(
-  set: (state: Partial<SessionState>) => void,
-  event: SessionEvent
-): void {
-  switch (event.type) {
-    case 'status_changed':
-      set({ status: event.status });
-      break;
-
-    case 'session_started':
-      set({
-        status: SessionStatus.LOADING,
-        currentNotebookId: event.notebookId || null,
-      });
-      break;
-
-    case 'session_loaded':
-      set({
-        status: SessionStatus.CONNECTED,
-        error: null,
-      });
-      break;
-
-    case 'session_ended':
-      set({
-        status: SessionStatus.DISCONNECTED,
-        currentNotebookId: null,
-        error: null,
-      });
-      break;
-
-    case 'session_switched':
-      set({
-        status: SessionStatus.CONNECTED,
-        currentNotebookId: event.notebookId || null,
-        error: null,
-      });
-      break;
-
-    case 'session_error':
-      set({
-        error: event.error || 'Unknown error',
-      });
-      break;
-  }
+export function createSessionStore(service: ISessionService) {
+  const store = create<SessionStore>()(
+    subscribeWithSelector((_set, get) => ({
+      ...service.getState(),
+      initialize: () => service.initialize(),
+      connect: (notebookId: string) => service.connect(notebookId),
+      disconnect: () => service.disconnect(),
+      switchSession: (notebookId: string) => service.switchSession(notebookId),
+      isConnected: () => get().status === SessionStatus.CONNECTED,
+      isDisconnected: () => get().status === SessionStatus.DISCONNECTED,
+      clearError: () => service.clearError(),
+    }))
+  );
+  const unsubscribe = service.subscribe((event) => store.setState(event.state));
+  return { store, unsubscribe };
 }
+
+const binding = createSessionStore(NotebookSessionService.getInstance());
+const useSessionStore = binding.store;
+const hot = (import.meta as ImportMeta & { hot?: { dispose(callback: () => void): void } }).hot;
+hot?.dispose(binding.unsubscribe);
 
 // ==================== Selectors ====================
 
