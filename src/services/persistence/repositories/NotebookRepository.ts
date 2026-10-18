@@ -5,6 +5,7 @@ import {
   FileMetadataEntity,
 } from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
+import { NotebookDeletion } from './NotebookDeletion';
 import { FileRecordSet } from './FileRecordSet';
 
 export class NotebookRepository implements INotebookRepository {
@@ -106,64 +107,9 @@ export class NotebookRepository implements INotebookRepository {
   }
 
   async deleteNotebook(id: string): Promise<boolean> {
-    // This requires a transaction across multiple stores.
-    // I need to implement the complex deletion logic here.
-
-    await this.storage.transaction(
-      [
-        DB_CONFIG.STORES.NOTEBOOKS,
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.FILES_CONTENT,
-        DB_CONFIG.STORES.ACTIVITIES,
-      ],
-      'readwrite',
-      async (stores) => {
-        // 1. Delete notebook
-        stores[DB_CONFIG.STORES.NOTEBOOKS].delete(id);
-
-        // 2. Find and delete files
-        // We need to use an index to find files by notebookId.
-        // IDBObjectStore in the callback is the raw IDB object.
-        const filesMetaStore = stores[DB_CONFIG.STORES.FILES_METADATA];
-        const contentStore = stores[DB_CONFIG.STORES.FILES_CONTENT];
-        const index = filesMetaStore.index('notebookId');
-
-        // We can't await cursor iteration easily inside this callback structure if we want to be purely async.
-        // But we can use getAllKeys if available or just iterate.
-        // Let's try getAllKeys from the index if supported (modern browsers).
-
-        const fileKeysRequest = index.getAllKeys(id);
-
-        await new Promise<void>((resolve, reject) => {
-          fileKeysRequest.onsuccess = () => {
-            const keys = fileKeysRequest.result;
-            keys.forEach((key) => {
-              filesMetaStore.delete(key);
-              contentStore.delete(key);
-            });
-            resolve();
-          };
-          fileKeysRequest.onerror = () => reject(fileKeysRequest.error);
-        });
-
-        // 3. Delete activities
-        const activitiesStore = stores[DB_CONFIG.STORES.ACTIVITIES];
-        const actIndex = activitiesStore.index('notebookId');
-        const actKeysRequest = actIndex.getAllKeys(id);
-
-        await new Promise<void>((resolve, reject) => {
-          actKeysRequest.onsuccess = () => {
-            const keys = actKeysRequest.result;
-            keys.forEach((key) => {
-              activitiesStore.delete(key);
-            });
-            resolve();
-          };
-          actKeysRequest.onerror = () => reject(actKeysRequest.error);
-        });
-      }
-    );
-
+    await this.storage.transaction(NotebookDeletion.stores, 'readwrite', async (stores) => {
+      await new NotebookDeletion(stores).delete(id);
+    });
     return true;
   }
 

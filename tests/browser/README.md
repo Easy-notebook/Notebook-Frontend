@@ -30,6 +30,9 @@ Coverage:
 - Old plain payloads marked compressed remain readable and remote-reference queries avoid boolean IDB keys.
 - Configuration patches preserve concurrent settings; initialization retains existing configuration.
 - Activity retention deletes only expired records; aborted maintenance rolls back all writes.
+- Retention preview/execution agree, remove all excess notebooks, and emergency cleanup retains recent notebooks.
+- Access/file writes admitted before cleanup affect selection; overlapping cleanup does not double-count deletions.
+- Notebook deletion cascades through tab/split caches; retention failure rolls back owned records and configuration.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

@@ -649,3 +649,245 @@ for (const operation of ['updateConfig', 'cleanupActivities']) {
     expect(result.activities).toEqual([{ id: 'expired', timestamp: 0 }]);
   });
 }
+
+test('retention preview and cleanup keep recent notebooks without a deletion cap', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    const now = Date.now();
+    await repository.updateConfig({ maxNotebooks: 2, retentionPeriod: 60_000 });
+    await provider.transaction(
+      [DB_CONFIG.STORES.NOTEBOOKS, DB_CONFIG.STORES.FILES_METADATA],
+      'readwrite',
+      (stores) => {
+        for (let i = 0; i < 70; i++) {
+          stores[DB_CONFIG.STORES.NOTEBOOKS].put({ id: `b${i}`, lastAccessedAt: now - i * 100 });
+          stores[DB_CONFIG.STORES.FILES_METADATA].put({
+            id: `b${i}::file`,
+            notebookId: `b${i}`,
+            size: 10,
+          });
+        }
+        stores[DB_CONFIG.STORES.NOTEBOOKS].put({ id: 'expired', lastAccessedAt: 0 });
+        stores[DB_CONFIG.STORES.FILES_METADATA].put({
+          id: 'expired::file',
+          notebookId: 'expired',
+          size: 20,
+        });
+      }
+    );
+    const preview = await repository.getCleanupCandidates();
+    const stats = await repository.cleanup();
+    const remaining = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    const config = await repository.getConfig();
+    await provider.close();
+    return {
+      inactive: preview.inactive.map((book) => book.id),
+      excess: preview.excess.length,
+      bytes: preview.totalBytesToFree,
+      stats,
+      remaining: remaining.map((book) => book.id),
+      lastCleanup: config.lastCleanup,
+    };
+  });
+  expect(result.inactive).toEqual(['expired']);
+  expect(result.excess).toBe(68);
+  expect(result.bytes).toBe(700);
+  expect(result.stats).toMatchObject({ notebooksDeleted: 69, filesDeleted: 69, bytesFreed: 700 });
+  expect(result.remaining).toEqual(['b0', 'b1']);
+  expect(result.lastCleanup).toBeGreaterThan(0);
+});
+
+test('emergency cleanup preserves the newest notebooks', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    await repository.updateConfig({ maxNotebooks: 3 });
+    for (let i = 0; i < 5; i++)
+      await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: `b${i}`, lastAccessedAt: i });
+    const stats = await repository.cleanup('emergency');
+    const remaining = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    await provider.close();
+    return { stats, ids: remaining.map((book) => book.id) };
+  });
+  expect(result.stats.notebooksDeleted).toBe(3);
+  expect(result.ids).toEqual(['b3', 'b4']);
+});
+
+test('access admitted before cleanup changes retention selection atomically', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const {
+      IndexedDBStorageProvider,
+      StorageMaintenanceRepository,
+      NotebookRepository,
+      DB_CONFIG,
+    } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    await repository.updateConfig({ maxNotebooks: 1, retentionPeriod: 60_000 });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'stale',
+      lastAccessedAt: 0,
+      accessCount: 1,
+    });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'recent',
+      lastAccessedAt: Date.now() - 1000,
+      accessCount: 1,
+    });
+    const preview = await repository.getCleanupCandidates();
+    await Promise.all([
+      new NotebookRepository(provider).updateAccessTime('stale'),
+      repository.cleanup(),
+    ]);
+    const remaining = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    await provider.close();
+    return {
+      preview: preview.inactive.map((book) => book.id),
+      remaining: remaining.map((book) => book.id),
+    };
+  });
+  expect(result.preview).toEqual(['stale']);
+  expect(result.remaining).toEqual(['stale']);
+});
+
+for (const abort of [false, true]) {
+  test(`notebook cleanup ${abort ? 'rolls back' : 'commits'} all owned records and config together`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (abort) => {
+      const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+        window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const repository = new StorageMaintenanceRepository(provider);
+      const S = DB_CONFIG.STORES;
+      await repository.updateConfig({ maxNotebooks: 10, retentionPeriod: 60_000 });
+      await provider.put(S.NOTEBOOKS, { id: 'old', lastAccessedAt: 0 });
+      await provider.put(S.FILES_METADATA, { id: 'old::file', notebookId: 'old', size: 42 });
+      await provider.put(S.FILES_CONTENT, { fileId: 'old::file', content: 'retained on abort' });
+      await provider.put(S.ACTIVITIES, { id: 'old::activity', notebookId: 'old', timestamp: 0 });
+      await provider.put(S.TAB_STATES, { notebookId: 'old', tabList: [] });
+      await provider.put(S.SPLIT_FILES, { id: 'old::split', notebookId: 'old', content: 'split' });
+      const before = await repository.getConfig();
+      const target = abort
+        ? new StorageMaintenanceRepository({
+            transaction: (names, mode, schedule) =>
+              provider.transaction(names, mode, async (stores) => {
+                await schedule(stores);
+                throw new Error('retention commit aborted');
+              }),
+          })
+        : repository;
+      let error;
+      try {
+        await target.cleanup();
+      } catch (failure) {
+        error = failure.message;
+      }
+      const counts = await Promise.all(
+        [
+          S.NOTEBOOKS,
+          S.FILES_METADATA,
+          S.FILES_CONTENT,
+          S.ACTIVITIES,
+          S.TAB_STATES,
+          S.SPLIT_FILES,
+        ].map(async (name) => (await provider.getAll(name)).length)
+      );
+      const after = await repository.getConfig();
+      await provider.close();
+      return { counts, before, after, error };
+    }, abort);
+    expect(result.counts).toEqual(Array(6).fill(abort ? 1 : 0));
+    if (abort) {
+      expect(result.error).toBe('retention commit aborted');
+      expect(result.after).toEqual(result.before);
+    } else {
+      expect(result.after.lastCleanup).toBeGreaterThan(result.before.lastCleanup);
+    }
+  });
+}
+
+test('overlapping cleanup transactions do not count deleted notebooks twice', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    await repository.updateConfig({ maxNotebooks: 0 });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: 'one', lastAccessedAt: Date.now() });
+    const results = await Promise.all([
+      repository.cleanup(),
+      repository.cleanup('emergency'),
+      repository.cleanup(),
+    ]);
+    await provider.close();
+    return results.map((stats) => stats.notebooksDeleted);
+  });
+  expect(result).toEqual([1, 0, 0]);
+});
+
+test('explicit notebook deletion also removes its tab and split cache without touching another notebook', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    for (const id of ['deleted', 'retained']) {
+      await provider.put(S.NOTEBOOKS, { id });
+      await provider.put(S.TAB_STATES, { notebookId: id });
+      await provider.put(S.SPLIT_FILES, { id: `${id}::split`, notebookId: id });
+    }
+    await new NotebookRepository(provider).deleteNotebook('deleted');
+    const tabs = await provider.getAll(S.TAB_STATES);
+    const splits = await provider.getAll(S.SPLIT_FILES);
+    await provider.close();
+    return { tabs, splits };
+  });
+  expect(result.tabs).toEqual([{ notebookId: 'retained' }]);
+  expect(result.splits).toEqual([{ id: 'retained::split', notebookId: 'retained' }]);
+});
+
+test('a committed file write refreshes retention before cleanup selects candidates', async ({
+  page,
+}) => {
+  const ids = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, FileRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const maintenance = new StorageMaintenanceRepository(provider);
+    await maintenance.updateConfig({ maxNotebooks: 1, retentionPeriod: 60_000 });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'writing',
+      lastAccessedAt: 0,
+      fileCount: 0,
+      totalSize: 0,
+    });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'other',
+      lastAccessedAt: Date.now() - 1000,
+    });
+    await Promise.all([
+      new FileRepository(provider).saveFile({
+        notebookId: 'writing',
+        filePath: 'a',
+        fileName: 'a',
+        content: 'saved',
+        size: 5,
+        lastModified: 'today',
+      }),
+      maintenance.cleanup(),
+    ]);
+    const remaining = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    await provider.close();
+    return remaining.map((book) => book.id);
+  });
+  expect(ids).toEqual(['writing']);
+});

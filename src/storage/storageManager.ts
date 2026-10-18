@@ -7,15 +7,8 @@ import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG, NotebookEntity } from './s
 import { DataMigration } from './migration';
 import { storageLog } from '@Utils/logger';
 
-/**
- * Storage cleanup statistics
- */
-export interface CleanupStats {
-  notebooksDeleted: number;
-  filesDeleted: number;
-  bytesFreed: number;
-  duration: number;
-}
+export type { CleanupStats } from './NotebookRetentionPolicy';
+import type { CleanupStats, CleanupMode } from './NotebookRetentionPolicy';
 
 /**
  * Storage usage statistics
@@ -34,7 +27,7 @@ export interface StorageStats {
  * Main storage manager with intelligent cleanup and maintenance
  */
 export class StorageManager {
-  private static cleanupInProgress = false;
+  private static readonly cleanupRequests = new Set<Promise<CleanupStats>>();
   private static readonly lifecycle = new StorageMaintenanceLifecycle({
     initialize: () => StorageManager.doInitialize(),
     close: () => persistenceService.close(),
@@ -169,74 +162,17 @@ export class StorageManager {
    * Clean up old and unused notebooks and files
    */
   private static async doCleanupStorage(force = false): Promise<CleanupStats> {
-    if (this.cleanupInProgress && !force) {
-      throw new Error('Cleanup already in progress');
-    }
+    return this.performCleanup('regular', force);
+  }
 
-    this.cleanupInProgress = true;
-    const startTime = Date.now();
-
+  private static async performCleanup(mode: CleanupMode, force: boolean): Promise<CleanupStats> {
+    if (this.cleanupRequests.size > 0 && !force) throw new Error('Cleanup already in progress');
+    const request = persistenceService.maintenance.cleanup(mode);
+    this.cleanupRequests.add(request);
     try {
-      const config = await persistenceService.maintenance.getConfig();
-      const stats: CleanupStats = {
-        notebooksDeleted: 0,
-        filesDeleted: 0,
-        bytesFreed: 0,
-        duration: 0,
-      };
-
-      // 1. Clean up inactive notebooks
-      const inactiveNotebooks = await persistenceService.notebooks.getInactiveNotebooks(
-        config.retentionPeriod
-      );
-
-      for (const notebook of inactiveNotebooks) {
-        // Get files for size calculation
-        const files = await persistenceService.files.getFilesForNotebook(notebook.id);
-        const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-
-        // Delete notebook and all associated data
-        const deleted = await persistenceService.notebooks.deleteNotebook(notebook.id);
-        if (deleted) {
-          stats.notebooksDeleted++;
-          stats.filesDeleted += files.length;
-          stats.bytesFreed += notebookSize;
-        }
-      }
-
-      // 2. Enforce maximum notebook limit
-      const allNotebooks = await persistenceService.notebooks.getAllNotebooks({
-        orderBy: 'lastAccessedAt',
-        limit: config.maxNotebooks + 50, // Get more than limit to find candidates for deletion
-      });
-
-      if (allNotebooks.length > config.maxNotebooks) {
-        const excessNotebooks = allNotebooks.slice(config.maxNotebooks);
-
-        for (const notebook of excessNotebooks) {
-          const files = await persistenceService.files.getFilesForNotebook(notebook.id);
-          const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-
-          const deleted = await persistenceService.notebooks.deleteNotebook(notebook.id);
-          if (deleted) {
-            stats.notebooksDeleted++;
-            stats.filesDeleted += files.length;
-            stats.bytesFreed += notebookSize;
-          }
-        }
-      }
-
-      // 3. Clean up orphaned activities (older than retention period)
-      await this.cleanupOldActivities(config.retentionPeriod);
-
-      // 4. Update config with last cleanup time
-      await this.doUpdateConfig({ lastCleanup: Date.now() });
-
-      stats.duration = Date.now() - startTime;
-
-      return stats;
+      return await request;
     } finally {
-      this.cleanupInProgress = false;
+      this.cleanupRequests.delete(request);
     }
   }
 
@@ -245,20 +181,8 @@ export class StorageManager {
    */
   private static async doCleanupNotebook(notebookId: string): Promise<boolean> {
     try {
-      // Get files for size calculation
-      const files = await persistenceService.files.getFilesForNotebook(notebookId);
-      const totalSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-
-      // Delete notebook and all associated data
       const deleted = await persistenceService.notebooks.deleteNotebook(notebookId);
-
-      if (deleted) {
-        storageLog.info('Cleaned up notebook', {
-          notebookId,
-          filesCount: files.length,
-          bytesFreed: totalSize,
-        });
-      }
+      if (deleted) storageLog.info('Cleaned up notebook', { notebookId });
 
       return deleted;
     } catch (error) {
@@ -275,77 +199,11 @@ export class StorageManager {
     excess: NotebookEntity[];
     totalBytesToFree: number;
   }> {
-    const config = await persistenceService.maintenance.getConfig();
-
-    // Get inactive notebooks
-    const inactive = await persistenceService.notebooks.getInactiveNotebooks(
-      config.retentionPeriod
-    );
-
-    // Get excess notebooks (over the limit)
-    const allNotebooks = await persistenceService.notebooks.getAllNotebooks({
-      orderBy: 'lastAccessedAt',
-    });
-
-    const excess =
-      allNotebooks.length > config.maxNotebooks ? allNotebooks.slice(config.maxNotebooks) : [];
-
-    // Calculate total bytes to free
-    let totalBytesToFree = 0;
-
-    for (const notebook of [...inactive, ...excess]) {
-      const stats = await persistenceService.notebooks.getNotebookStats(notebook.id);
-      totalBytesToFree += stats.totalSize;
-    }
-
-    return {
-      inactive,
-      excess,
-      totalBytesToFree,
-    };
+    return persistenceService.maintenance.getCleanupCandidates();
   }
 
-  /**
-   * Emergency cleanup when storage is full
-   */
   private static async doEmergencyCleanup(): Promise<CleanupStats> {
-    storageLog.warn('Performing emergency storage cleanup');
-
-    const config = await persistenceService.maintenance.getConfig();
-    const stats: CleanupStats = {
-      notebooksDeleted: 0,
-      filesDeleted: 0,
-      bytesFreed: 0,
-      duration: Date.now(),
-    };
-
-    // Get all notebooks ordered by last access (oldest first)
-    const notebooks = await persistenceService.notebooks.getAllNotebooks({
-      orderBy: 'lastAccessedAt',
-    });
-
-    // Delete oldest notebooks until we're under limits
-    const targetNotebooks = Math.floor(config.maxNotebooks * 0.7); // Keep only 70%
-
-    if (notebooks.length > targetNotebooks) {
-      const notebooksToDelete = notebooks.slice(0, notebooks.length - targetNotebooks);
-
-      for (const notebook of notebooksToDelete) {
-        const files = await persistenceService.files.getFilesForNotebook(notebook.id);
-        const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
-
-        const deleted = await persistenceService.notebooks.deleteNotebook(notebook.id);
-        if (deleted) {
-          stats.notebooksDeleted++;
-          stats.filesDeleted += files.length;
-          stats.bytesFreed += notebookSize;
-        }
-      }
-    }
-
-    stats.duration = Date.now() - stats.duration;
-
-    return stats;
+    return this.performCleanup('emergency', true);
   }
 
   private static async performScheduledCleanup(): Promise<void> {
@@ -362,10 +220,6 @@ export class StorageManager {
    */
   private static async ensureConfig(): Promise<void> {
     await persistenceService.maintenance.ensureConfig();
-  }
-
-  private static async cleanupOldActivities(retentionPeriod: number): Promise<void> {
-    await persistenceService.maintenance.cleanupActivities(retentionPeriod);
   }
 
   /**

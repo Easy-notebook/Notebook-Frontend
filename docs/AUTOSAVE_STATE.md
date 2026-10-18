@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 168 tests across fourteen files. Coverage includes
+The persistence/autosave/session gate passes 178 tests across fifteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -175,14 +175,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs twenty-one isolated Playwright cases against production modules:
+`npm run test:browser` runs twenty-nine isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 168 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 178 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -269,13 +269,35 @@ The manager boundary does not claim to stop independent callers of the shared re
 All manager operations participate in admission/draining, including manual cleanup and
 migration. Internal steps remain part of the admitted operation and can finish during
 shutdown. Destructive cleanup reads configuration strictly; only optional configuration
-display retains default-on-read-error behavior. Nine lifecycle tests and three manager
+display retains default-on-read-error behavior. Nine lifecycle tests and four manager
 integration tests cover timer ownership, admission, draining, retries and config failure.
+
+## Atomic notebook retention
+
+NotebookRetentionPolicy selects disjoint inactive and excess candidates, retaining recent
+notebooks with a deterministic identity tie-break. Emergency cleanup retains the newest
+70% of the configured notebook capacity. Invalid count/retention settings reject cleanup.
+Preview and execution use the same policy, without the former 50-extra-notebook query cap.
+Preview totals count each selected notebook's file metadata once.
+
+Cleanup reads configuration and notebooks, chooses candidates, deletes owned records and
+updates the regular-cleanup timestamp in one readwrite transaction. Native IndexedDB
+serialization makes access or file writes admitted before cleanup visible to selection.
+File mutation refreshes notebook recency. Overlapping forced/emergency requests serialize;
+ordinary cleanup stays excluded while any accepted cleanup remains pending.
+
+NotebookDeletion is shared by explicit deletion and maintenance. It removes file metadata,
+content, activities, tab state and split cache within the caller's transaction. Failed
+cleanup rolls back every store and config update, and reports no committed statistics.
+Reported bytes are file metadata sizes, not a browser quota/physical-disk measurement.
+Native tests cover over-capacity batches, emergency LRU order, refreshed access/write,
+full cascade and rollback, explicit deletion isolation and overlapping cleanup accounting.
 
 ## Remaining lifecycle work
 
-Cleanup candidate selection still requires a separate concurrency/order audit, including
-forced and emergency cleanup overlap and revalidation against concurrent notebook access.
+Retention currently enforces notebook count and inactivity. Byte quotas, policy for
+unsynced offline notebooks and active notebooks require a separate product/storage audit.
+A transaction accepted after deletion cannot retroactively protect the deleted notebook.
 
 Pause waits for quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
 application-level producer cancellation remains relevant. Cross-window conflicts,

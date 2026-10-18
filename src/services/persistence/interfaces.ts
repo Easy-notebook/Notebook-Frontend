@@ -1,4 +1,9 @@
 import type {
+  CleanupMode,
+  CleanupStats,
+  CleanupCandidates,
+} from '../../storage/NotebookRetentionPolicy';
+import type {
   NotebookEntity,
   FileMetadataEntity,
   NotebookActivityEntity,
@@ -111,6 +116,8 @@ export interface ISplitFileRepository {
 }
 
 export interface IStorageMaintenanceRepository {
+  cleanup(mode?: CleanupMode): Promise<CleanupStats>;
+  getCleanupCandidates(): Promise<CleanupCandidates>;
   getConfig(): Promise<StorageConfigEntity>;
   ensureConfig(): Promise<void>;
   updateConfig(patch: Partial<StorageConfigEntity>): Promise<void>;

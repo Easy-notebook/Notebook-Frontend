@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
   ensureConfig: vi.fn(async () => {}),
   updateConfig: vi.fn(async () => {}),
-  cleanupActivities: vi.fn(async () => {}),
+  cleanup: vi.fn(),
   getInactiveNotebooks: vi.fn(async () => []),
   getAllNotebooks: vi.fn(async () => []),
 }));
@@ -19,7 +19,7 @@ vi.mock('../services/persistence/instance', () => ({
       getConfig: mocks.getConfig,
       ensureConfig: mocks.ensureConfig,
       updateConfig: mocks.updateConfig,
-      cleanupActivities: mocks.cleanupActivities,
+      cleanup: mocks.cleanup,
     },
     notebooks: {
       getInactiveNotebooks: mocks.getInactiveNotebooks,
@@ -33,6 +33,12 @@ import { StorageManager } from './storageManager';
 beforeEach(async () => {
   vi.useFakeTimers();
   vi.clearAllMocks();
+  mocks.cleanup.mockResolvedValue({
+    notebooksDeleted: 0,
+    filesDeleted: 0,
+    bytesFreed: 0,
+    duration: 0,
+  });
   mocks.getConfig.mockResolvedValue({ ...DEFAULT_STORAGE_CONFIG });
   await StorageManager.initialize();
 });
@@ -42,9 +48,14 @@ afterEach(async () => {
 });
 
 describe('StorageManager lifecycle integration', () => {
-  it('drains accepted cleanup through its final config write before closing', async () => {
-    let resolve!: (value: typeof DEFAULT_STORAGE_CONFIG) => void;
-    mocks.getConfig.mockReturnValueOnce(
+  it('drains accepted cleanup until its transaction commits before closing', async () => {
+    let resolve!: (value: {
+      notebooksDeleted: number;
+      filesDeleted: number;
+      bytesFreed: number;
+      duration: number;
+    }) => void;
+    mocks.cleanup.mockReturnValueOnce(
       new Promise((accept) => {
         resolve = accept;
       })
@@ -54,24 +65,21 @@ describe('StorageManager lifecycle integration', () => {
     const closing = StorageManager.close();
     await expect(StorageManager.updateConfig({ maxNotebooks: 4 })).rejects.toThrow('closed');
     expect(mocks.close).not.toHaveBeenCalled();
-    resolve({ ...DEFAULT_STORAGE_CONFIG });
+    resolve({ notebooksDeleted: 0, filesDeleted: 0, bytesFreed: 0, duration: 0 });
     await Promise.all([cleanup, closing]);
-    expect(mocks.cleanupActivities).toHaveBeenCalledTimes(1);
-    expect(mocks.updateConfig).toHaveBeenCalledWith({ lastCleanup: expect.any(Number) });
-    expect(mocks.updateConfig.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.close.mock.invocationCallOrder[0]
-    );
+    expect(mocks.cleanup).toHaveBeenCalledExactlyOnceWith('regular');
     expect(vi.getTimerCount()).toBe(0);
   });
 
   it('does not select deletion candidates when maintenance configuration cannot be read', async () => {
     mocks.getConfig.mockRejectedValue(new Error('config unavailable'));
+    mocks.cleanup.mockRejectedValue(new Error('config unavailable'));
     await expect(StorageManager.cleanupStorage()).rejects.toThrow('config unavailable');
     await expect(StorageManager.emergencyCleanup()).rejects.toThrow('config unavailable');
     await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
     expect(mocks.getInactiveNotebooks).not.toHaveBeenCalled();
     expect(mocks.getAllNotebooks).not.toHaveBeenCalled();
-    expect(mocks.cleanupActivities).not.toHaveBeenCalled();
+    expect(mocks.cleanup).toHaveBeenCalledTimes(2);
     expect(mocks.updateConfig).not.toHaveBeenCalled();
     // Optional configuration display retains its existing default behavior.
     await expect(StorageManager.getConfig()).resolves.toEqual(DEFAULT_STORAGE_CONFIG);
@@ -84,6 +92,30 @@ describe('StorageManager lifecycle integration', () => {
     await StorageManager.initialize();
     expect(vi.getTimerCount()).toBe(1);
     await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
-    expect(mocks.cleanupActivities).toHaveBeenCalledTimes(1);
+    expect(mocks.cleanup).toHaveBeenCalledExactlyOnceWith('regular');
+  });
+  it('keeps ordinary cleanup excluded while a forced request remains pending', async () => {
+    const stats = { notebooksDeleted: 0, filesDeleted: 0, bytesFreed: 0, duration: 0 };
+    let finishFirst!: (value: typeof stats) => void;
+    let finishForced!: (value: typeof stats) => void;
+    mocks.cleanup.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishFirst = resolve;
+      })
+    );
+    mocks.cleanup.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishForced = resolve;
+      })
+    );
+    const first = StorageManager.cleanupStorage();
+    const forced = StorageManager.cleanupStorage(true);
+    await Promise.resolve();
+    finishFirst(stats);
+    await first;
+    await expect(StorageManager.cleanupStorage()).rejects.toThrow('already in progress');
+    finishForced(stats);
+    await forced;
+    await expect(StorageManager.cleanupStorage()).resolves.toEqual(stats);
   });
 });

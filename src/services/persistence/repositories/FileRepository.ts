@@ -267,6 +267,7 @@ export class FileRepository implements IFileRepository {
         fileCount: Math.max(0, (notebook.fileCount || 0) + deltaCount),
         totalSize: Math.max(0, (notebook.totalSize || 0) + deltaBytes),
         updatedAt: now,
+        lastAccessedAt: now,
       });
   }
 
