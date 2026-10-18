@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { IPersistenceService } from './interfaces';
 import { persistenceService } from './instance';
+import { StorageManager } from '../../storage/storageManager';
 
 const PersistenceContext = createContext<IPersistenceService | null>(null);
 
@@ -20,7 +21,7 @@ export const PersistenceProvider: React.FC<{ children: React.ReactNode }> = ({ c
         // StrictMode replay and retries must wait for the preceding owner to close.
         await closing.current;
         if (cancelled) return;
-        await service.initialize();
+        await StorageManager.initialize();
         if (!cancelled) setState({ status: 'ready' });
       } catch (error) {
         if (!cancelled) {
@@ -33,7 +34,7 @@ export const PersistenceProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     return () => {
       cancelled = true;
-      closing.current = service.close();
+      closing.current = StorageManager.close();
       // Observe cleanup failures even when the provider will not mount again.
       void closing.current.catch((error: unknown) => {
         console.error('Failed to close persistence service:', error);

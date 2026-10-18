@@ -9,6 +9,8 @@
     <script type="module">
       import { IndexedDBStorageProvider } from '/src/services/persistence/providers/IndexedDBStorageProvider.ts';
       import { IndexedDBConnection } from '/src/services/persistence/providers/IndexedDBConnection.ts';
+      import { mountPersistenceProbe } from './PersistenceProbe.jsx';
+      import { StorageManager } from '/src/storage/storageManager.ts';
       import { FileCache } from '/src/storage/index.ts';
       import { DB_CONFIG } from '/src/storage/database.ts';
       import { StorageMaintenanceRepository } from '/src/services/persistence/repositories/StorageMaintenanceRepository.ts';
@@ -18,6 +20,8 @@
       import { AutoSaveService } from '/src/services/autoSave/AutoSaveService.ts';
       import { AutoSavePageLifecycle } from '/src/services/autoSave/AutoSavePageLifecycle.ts';
       window.storageHarness = {
+        mountPersistenceProbe,
+        StorageManager,
         FileCache,
         IndexedDBStorageProvider,
         SplitFileRepository,

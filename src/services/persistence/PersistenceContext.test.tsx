@@ -5,6 +5,8 @@ import { PersistenceProvider, usePersistence } from './PersistenceContext';
 
 const service = vi.hoisted(() => ({ initialize: vi.fn(), close: vi.fn() }));
 vi.mock('./instance', () => ({ persistenceService: service }));
+const lifecycle = vi.hoisted(() => ({ initialize: vi.fn(), close: vi.fn() }));
+vi.mock('../../storage/storageManager', () => ({ StorageManager: lifecycle }));
 function deferred() {
   let resolve!: () => void;
   let reject!: (error: Error) => void;
@@ -20,8 +22,8 @@ function Content() {
 }
 beforeEach(() => {
   vi.resetAllMocks();
-  service.initialize.mockResolvedValue(undefined);
-  service.close.mockResolvedValue(undefined);
+  lifecycle.initialize.mockResolvedValue(undefined);
+  lifecycle.close.mockResolvedValue(undefined);
 });
 afterEach(() => {
   cleanup();
@@ -31,7 +33,7 @@ afterEach(() => {
 describe('persistence provider lifecycle', () => {
   it('waits for StrictMode cleanup before opening and exposes the initialized owner', async () => {
     const closed = deferred();
-    service.close.mockReturnValueOnce(closed.promise);
+    lifecycle.close.mockReturnValueOnce(closed.promise);
     render(
       <StrictMode>
         <PersistenceProvider>
@@ -42,18 +44,18 @@ describe('persistence provider lifecycle', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(service.initialize).not.toHaveBeenCalled();
+    expect(lifecycle.initialize).not.toHaveBeenCalled();
     expect(screen.getByRole('status')).toHaveTextContent('Opening');
     await act(async () => {
       closed.resolve();
     });
-    expect(service.initialize).toHaveBeenCalledTimes(1);
+    expect(lifecycle.initialize).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Notebook ready')).toBeInTheDocument();
   });
 
   it('does not start opening after unmount while cleanup is pending', async () => {
     const closed = deferred();
-    service.close.mockReturnValue(closed.promise);
+    lifecycle.close.mockReturnValue(closed.promise);
     const view = render(
       <StrictMode>
         <PersistenceProvider>
@@ -65,12 +67,12 @@ describe('persistence provider lifecycle', () => {
     await act(async () => {
       closed.resolve();
     });
-    expect(service.initialize).not.toHaveBeenCalled();
+    expect(lifecycle.initialize).not.toHaveBeenCalled();
   });
 
   it('does not render children from an initialization completing after unmount', async () => {
     const opening = deferred();
-    service.initialize.mockReturnValue(opening.promise);
+    lifecycle.initialize.mockReturnValue(opening.promise);
     const view = render(
       <PersistenceProvider>
         <Content />
@@ -79,18 +81,18 @@ describe('persistence provider lifecycle', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(service.initialize).toHaveBeenCalledTimes(1);
+    expect(lifecycle.initialize).toHaveBeenCalledTimes(1);
     view.unmount();
     await act(async () => {
       opening.resolve();
     });
     expect(screen.queryByText('Notebook ready')).not.toBeInTheDocument();
-    expect(service.close).toHaveBeenCalledTimes(1);
+    expect(lifecycle.close).toHaveBeenCalledTimes(1);
   });
 
   it('shows a failed initialization and waits for cleanup before retrying', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    service.initialize.mockRejectedValueOnce(new Error('blocked'));
+    lifecycle.initialize.mockRejectedValueOnce(new Error('blocked'));
     render(
       <PersistenceProvider>
         <Content />
@@ -98,20 +100,20 @@ describe('persistence provider lifecycle', () => {
     );
     await screen.findByRole('alert');
     const closed = deferred();
-    service.close.mockReturnValueOnce(closed.promise);
+    lifecycle.close.mockReturnValueOnce(closed.promise);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(service.initialize).toHaveBeenCalledTimes(1);
+    expect(lifecycle.initialize).toHaveBeenCalledTimes(1);
     await act(async () => {
       closed.resolve();
     });
-    expect(service.initialize).toHaveBeenCalledTimes(2);
+    expect(lifecycle.initialize).toHaveBeenCalledTimes(2);
     expect(screen.getByText('Notebook ready')).toBeInTheDocument();
   });
 
   it('reports a cleanup failure and retries only after a successful close', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    service.close.mockRejectedValueOnce(new Error('close failed'));
+    lifecycle.close.mockRejectedValueOnce(new Error('close failed'));
     render(
       <StrictMode>
         <PersistenceProvider>
@@ -120,16 +122,16 @@ describe('persistence provider lifecycle', () => {
       </StrictMode>
     );
     await screen.findByRole('alert');
-    expect(service.initialize).not.toHaveBeenCalled();
+    expect(lifecycle.initialize).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await screen.findByText('Notebook ready');
-    expect(service.initialize).toHaveBeenCalledTimes(1);
+    expect(lifecycle.initialize).toHaveBeenCalledTimes(1);
   });
 
   it('observes a cancelled opening rejection without changing the mounted state', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const opening = deferred();
-    service.initialize.mockReturnValueOnce(opening.promise);
+    lifecycle.initialize.mockReturnValueOnce(opening.promise);
     const view = render(
       <PersistenceProvider>
         <Content />

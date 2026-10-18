@@ -1919,3 +1919,35 @@ test('failed remote-to-local conversion retains the complete remote revision', a
   expect(result.content).toBeUndefined();
   expect(result.notebook).toMatchObject({ fileCount: 1, totalSize: 100 });
 });
+
+test('application provider initializes configuration before rendering and supports close/remount', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.unmountPersistenceProbe = window.storageHarness.mountPersistenceProbe();
+  });
+  await expect(page.getByText('Storage probe ready')).toBeVisible();
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageManager, DB_CONFIG } = window.storageHarness;
+    const reader = new IndexedDBStorageProvider();
+    const config = await reader.get(DB_CONFIG.STORES.CONFIG, 'config');
+    await reader.close();
+    window.unmountPersistenceProbe();
+    await StorageManager.close();
+    let error;
+    try {
+      await StorageManager.getConfig();
+    } catch (failure) {
+      error = failure.message;
+    }
+    window.unmountPersistenceProbe = window.storageHarness.mountPersistenceProbe();
+    return { config, error };
+  });
+  expect(result.config).toMatchObject({ id: 'config', maxNotebooks: 50 });
+  expect(result.error).toContain('closed');
+  await expect(page.getByText('Storage probe ready')).toBeVisible();
+  await page.evaluate(async () => {
+    window.unmountPersistenceProbe();
+    await window.storageHarness.StorageManager.close();
+  });
+});

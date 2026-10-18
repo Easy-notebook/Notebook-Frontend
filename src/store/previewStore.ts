@@ -54,7 +54,6 @@ export interface PreviewStoreState {
 export interface PreviewStoreActions {
   changePreviewMode: () => void;
   resetToNotebookMode: () => void;
-  init: () => void;
   clearError: () => void;
   setCurrentPreviewFiles: (files: PreviewFile[]) => void;
   setActiveFile: (file: FileObject | null) => void;
@@ -158,22 +157,6 @@ const usePreviewStore = create<PreviewStore>()(
           activePreviewMode: null,
           currentPreviewFiles: [],
         });
-      },
-
-      // Initialize the store - just initialize persistence service
-      // Route/session service handles notebook loading, not init()
-      init: async () => {
-        try {
-          await persistenceService.initialize();
-
-          // Clear any stale preview files on init - route will load correct ones
-          set({ currentPreviewFiles: [], activeFile: null, activePreviewMode: null });
-
-          storeLog.info('PreviewStore initialized - waiting for route to determine notebook');
-        } catch (error) {
-          storeLog.error('Failed to initialize storage', { error });
-          set({ error: 'Failed to initialize file cache database' });
-        }
       },
 
       // Clear error
@@ -1266,9 +1249,6 @@ const usePreviewStore = create<PreviewStore>()(
     }
   )
 );
-
-// Initialize IndexedDB when the store is first used
-usePreviewStore.getState().init();
 
 // Clean up any stale localStorage data containing invalid file references
 // This is a one-time cleanup for existing users

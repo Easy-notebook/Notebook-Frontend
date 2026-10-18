@@ -6,6 +6,35 @@ be unsubscribed, and the application's binding is released on Vite hot disposal.
 The unused internal `setDirty` action was removed: queued snapshots determine dirty
 state. Error dismissal is a service operation shared by all projections.
 
+## Runtime ownership
+
+```mermaid
+flowchart TD
+  App[React PersistenceProvider] --> Manager[StorageManager lifecycle]
+  Manager --> Shared[Shared PersistenceService]
+  Manager --> Timer[Owned maintenance timer]
+  Session[NotebookSessionService] --> Autosave[AutoSaveService and revision queue]
+  Autosave --> Private[Autosave PersistenceService]
+  Shared --> Repositories[Transactional repositories]
+  Private --> Repositories
+  Repositories --> Provider[IndexedDBStorageProvider]
+  Provider --> Connection[IndexedDBConnection lifecycle]
+  Connection --> DB[(Notebook database)]
+```
+
+The application provider enters the maintenance lifecycle before rendering children:
+configuration initialization and migration checks precede periodic scheduling. It closes
+through the same owner, cancelling the timer and draining admitted manager operations.
+The React context exposes the shared repository service; it does not become a second
+connection lifecycle owner. PreviewStore imports no longer start IndexedDB work or expose
+an unused initialization action. Initial preview values and persisted-state filtering
+already establish its empty preview state.
+
+Autosave intentionally retains its independent service/connection, since hiding or
+unmounting the page binding does not discard accepted saves. Both owners write the same
+database under native transaction serialization. This is not cross-tab revision conflict
+resolution. The existing provider retry/error UI remains the initialization failure boundary.
+
 ## Commit boundary
 
 The current snapshot writer stores notebook metadata, activity, file metadata and
@@ -27,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 203 tests across sixteen files. Coverage includes
+The persistence/autosave/session gate passes 204 tests across seventeen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -35,6 +64,14 @@ transaction and IndexedDB event doubles. These are not native browser recovery t
 
 Autosave lint passes without warnings. Full-project type checking still reports
 297 existing diagnostics, none in autosave, persistence or session modules.
+
+The final independent whole-project run passes 1,022 tests across 115 files. An initial
+run concurrent with a production build had one asynchronous math-rendering timeout;
+the isolated eleven-case suite and the subsequent independent full run both passed.
+Test timeouts were unchanged. A real-manager React integration test covers configuration
+initialization, one periodic timer and unmount cleanup under StrictMode. A native provider
+probe verifies actual IndexedDB configuration before rendering and close/remount behavior.
+
 
 ## Per-notebook save state and revision barriers
 
@@ -175,14 +212,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs fifty-five isolated Playwright cases against production modules:
+`npm run test:browser` runs fifty-six isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 203 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 204 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -449,6 +486,9 @@ verify history preservation, corrected large-file queries/usage statistics, and 
 rollback to the original remote revision when commit fails.
 
 ## Remaining lifecycle work
+
+Historical database migration readers still use timeout-based completion; their late
+callbacks and connection cleanup require review alongside the now-wired startup path.
 
 Retention now enforces cache count, inactivity and an application content budget.
 The production caller audit found no explicit evictable notebook creation. Current editing
