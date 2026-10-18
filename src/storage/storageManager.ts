@@ -1,6 +1,7 @@
 // storage/storageManager.ts
 // Main storage manager with cleanup and maintenance functionality
 
+import { StorageMaintenanceLifecycle } from './StorageMaintenanceLifecycle';
 import { persistenceService } from '../services/persistence/instance';
 import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG, NotebookEntity } from './schema';
 import { DataMigration } from './migration';
@@ -34,39 +35,51 @@ export interface StorageStats {
  */
 export class StorageManager {
   private static cleanupInProgress = false;
-  private static initializationPromise: Promise<void> | null = null;
-  private static isInitialized = false;
+  private static readonly lifecycle = new StorageMaintenanceLifecycle({
+    initialize: () => StorageManager.doInitialize(),
+    close: () => persistenceService.close(),
+    maintain: () => StorageManager.performScheduledCleanup(),
+    onError: (error) => storageLog.error('Scheduled cleanup failed', { error }),
+  });
 
-  /**
-   * Initialize storage system with singleton protection
-   */
-  static async initialize(): Promise<void> {
-    // Return immediately if already initialized
-    if (this.isInitialized) {
-      storageLog.debug('Storage system already initialized, skipping');
-      return;
-    }
+  static initialize(): Promise<void> {
+    return this.lifecycle.initialize();
+  }
 
-    // Return existing promise if initialization is in progress
-    if (this.initializationPromise) {
-      storageLog.debug('Storage initialization in progress, waiting');
-      return this.initializationPromise;
-    }
+  static getConfig(): Promise<StorageConfigEntity> {
+    return this.lifecycle.run(() => this.doGetConfig());
+  }
 
-    // Create and store the initialization promise
-    this.initializationPromise = this.doInitialize();
+  static updateConfig(config: Partial<StorageConfigEntity>): Promise<void> {
+    return this.lifecycle.run(() => this.doUpdateConfig(config));
+  }
 
-    try {
-      await this.initializationPromise;
-      this.isInitialized = true;
-    } catch (error) {
-      // Reset on failure so we can retry
-      this.initializationPromise = null;
-      throw error;
-    } finally {
-      // Clear the promise once complete (success or failure)
-      this.initializationPromise = null;
-    }
+  static getStorageStats(): Promise<StorageStats> {
+    return this.lifecycle.run(() => this.doGetStorageStats());
+  }
+
+  static cleanupStorage(force = false): Promise<CleanupStats> {
+    return this.lifecycle.run(() => this.doCleanupStorage(force));
+  }
+
+  static cleanupNotebook(notebookId: string): Promise<boolean> {
+    return this.lifecycle.run(() => this.doCleanupNotebook(notebookId));
+  }
+
+  static getCleanupCandidates(): Promise<{
+    inactive: NotebookEntity[];
+    excess: NotebookEntity[];
+    totalBytesToFree: number;
+  }> {
+    return this.lifecycle.run(() => this.doGetCleanupCandidates());
+  }
+
+  static emergencyCleanup(): Promise<CleanupStats> {
+    return this.lifecycle.run(() => this.doEmergencyCleanup());
+  }
+
+  static forceMigration(): Promise<void> {
+    return this.lifecycle.run(() => this.doForceMigration());
   }
 
   /**
@@ -84,8 +97,6 @@ export class StorageManager {
       // Check and perform data migration if needed
       await this.checkAndMigrate();
 
-      // Schedule periodic cleanup
-      this.scheduleCleanup();
       storageLog.info('Storage system initialization completed');
     } catch (error) {
       storageLog.error('Storage system initialization failed', { error });
@@ -96,7 +107,7 @@ export class StorageManager {
   /**
    * Get storage configuration
    */
-  static async getConfig(): Promise<StorageConfigEntity> {
+  private static async doGetConfig(): Promise<StorageConfigEntity> {
     try {
       return await persistenceService.maintenance.getConfig();
     } catch (error) {
@@ -105,14 +116,14 @@ export class StorageManager {
     }
   }
 
-  static async updateConfig(config: Partial<StorageConfigEntity>): Promise<void> {
+  private static async doUpdateConfig(config: Partial<StorageConfigEntity>): Promise<void> {
     await persistenceService.maintenance.updateConfig(config);
   }
 
   /**
    * Get comprehensive storage statistics
    */
-  static async getStorageStats(): Promise<StorageStats> {
+  private static async doGetStorageStats(): Promise<StorageStats> {
     const notebooks = await persistenceService.notebooks.getAllNotebooks();
 
     let totalFiles = 0;
@@ -157,7 +168,7 @@ export class StorageManager {
   /**
    * Clean up old and unused notebooks and files
    */
-  static async cleanupStorage(force = false): Promise<CleanupStats> {
+  private static async doCleanupStorage(force = false): Promise<CleanupStats> {
     if (this.cleanupInProgress && !force) {
       throw new Error('Cleanup already in progress');
     }
@@ -166,7 +177,7 @@ export class StorageManager {
     const startTime = Date.now();
 
     try {
-      const config = await this.getConfig();
+      const config = await persistenceService.maintenance.getConfig();
       const stats: CleanupStats = {
         notebooksDeleted: 0,
         filesDeleted: 0,
@@ -219,7 +230,7 @@ export class StorageManager {
       await this.cleanupOldActivities(config.retentionPeriod);
 
       // 4. Update config with last cleanup time
-      await this.updateConfig({ lastCleanup: Date.now() });
+      await this.doUpdateConfig({ lastCleanup: Date.now() });
 
       stats.duration = Date.now() - startTime;
 
@@ -232,7 +243,7 @@ export class StorageManager {
   /**
    * Clean up specific notebook and all its data
    */
-  static async cleanupNotebook(notebookId: string): Promise<boolean> {
+  private static async doCleanupNotebook(notebookId: string): Promise<boolean> {
     try {
       // Get files for size calculation
       const files = await persistenceService.files.getFilesForNotebook(notebookId);
@@ -259,12 +270,12 @@ export class StorageManager {
   /**
    * Get notebooks ready for cleanup (inactive or exceeding limits)
    */
-  static async getCleanupCandidates(): Promise<{
+  private static async doGetCleanupCandidates(): Promise<{
     inactive: NotebookEntity[];
     excess: NotebookEntity[];
     totalBytesToFree: number;
   }> {
-    const config = await this.getConfig();
+    const config = await persistenceService.maintenance.getConfig();
 
     // Get inactive notebooks
     const inactive = await persistenceService.notebooks.getInactiveNotebooks(
@@ -297,10 +308,10 @@ export class StorageManager {
   /**
    * Emergency cleanup when storage is full
    */
-  static async emergencyCleanup(): Promise<CleanupStats> {
+  private static async doEmergencyCleanup(): Promise<CleanupStats> {
     storageLog.warn('Performing emergency storage cleanup');
 
-    const config = await this.getConfig();
+    const config = await persistenceService.maintenance.getConfig();
     const stats: CleanupStats = {
       notebooksDeleted: 0,
       filesDeleted: 0,
@@ -337,31 +348,13 @@ export class StorageManager {
     return stats;
   }
 
-  /**
-   * Schedule periodic cleanup
-   */
-  private static scheduleCleanup(): void {
-    const checkInterval = 60 * 60 * 1000; // Check every hour
-
-    setInterval(async () => {
-      try {
-        const config = await this.getConfig();
-        const timeSinceLastCleanup = Date.now() - (config.lastCleanup || 0);
-
-        if (timeSinceLastCleanup >= config.cleanupInterval) {
-          storageLog.info('Performing scheduled storage cleanup');
-          const stats = await this.cleanupStorage();
-          storageLog.info('Cleanup completed', {
-            notebooksDeleted: stats.notebooksDeleted,
-            filesDeleted: stats.filesDeleted,
-            bytesFreed: stats.bytesFreed,
-            duration: stats.duration,
-          });
-        }
-      } catch (error) {
-        storageLog.error('Scheduled cleanup failed', { error });
-      }
-    }, checkInterval);
+  private static async performScheduledCleanup(): Promise<void> {
+    // Maintenance must not delete data using fallback settings after a read failure.
+    const config = await persistenceService.maintenance.getConfig();
+    if (Date.now() - (config.lastCleanup || 0) >= config.cleanupInterval) {
+      const stats = await this.doCleanupStorage();
+      storageLog.info('Cleanup completed', { ...stats });
+    }
   }
 
   /**
@@ -410,7 +403,7 @@ export class StorageManager {
   /**
    * Force data migration (useful for debugging)
    */
-  static async forceMigration(): Promise<void> {
+  private static async doForceMigration(): Promise<void> {
     try {
       storageLog.info('Forcing data migration');
       const stats = await DataMigration.forceMigration();
@@ -425,6 +418,6 @@ export class StorageManager {
    * Close storage system
    */
   static async close(): Promise<void> {
-    await persistenceService.close();
+    await this.lifecycle.close();
   }
 }

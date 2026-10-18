@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 156 tests across twelve files. Coverage includes
+The persistence/autosave/session gate passes 168 tests across fourteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -182,7 +182,7 @@ profile, and the native unsaved-exit dialog followed by successful save/reload a
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 156 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 168 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -252,11 +252,30 @@ retention, and rollback of configuration/activity writes on transaction failure.
 StorageManager retains defaults for optional configuration reads; repository writes
 and initialization propagate failure.
 
+## Storage maintenance lifecycle
+
+StorageMaintenanceLifecycle owns initialization, manager-operation admission, the periodic
+timer and shutdown. States are idle, initializing, ready, closing, closed and close-failed.
+Repeated initialization shares one attempt. Successful initialization schedules one timer;
+failed initialization can retry. Periodic work schedules its next check after completion,
+so slow checks cannot overlap themselves.
+
+Close immediately cancels the timer and rejects new manager operations, then drains
+initialization and every admitted multi-step operation before closing the provider.
+An initialization finishing during close cannot restart scheduling. Explicit initialization
+after successful close opens a new lifecycle; failed close requires a close retry first.
+The manager boundary does not claim to stop independent callers of the shared repositories.
+
+All manager operations participate in admission/draining, including manual cleanup and
+migration. Internal steps remain part of the admitted operation and can finish during
+shutdown. Destructive cleanup reads configuration strictly; only optional configuration
+display retains default-on-read-error behavior. Nine lifecycle tests and three manager
+integration tests cover timer ownership, admission, draining, retries and config failure.
+
 ## Remaining lifecycle work
 
-StorageManager still needs explicit ownership of its periodic timer and coordination
-between initialization, running maintenance and close. Cleanup candidate selection
-also requires a separate concurrency/order audit.
+Cleanup candidate selection still requires a separate concurrency/order audit, including
+forced and emergency cleanup overlap and revalidation against concurrent notebook access.
 
 Pause waits for quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
 application-level producer cancellation remains relevant. Cross-window conflicts,
