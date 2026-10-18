@@ -67,6 +67,9 @@ Coverage:
 - Empty autosave conditions reject a competing connection's intervening nonempty commit;
   retries remain pending, matching revisions succeed, and orphan bodies are never overwritten
   through an absent-content condition.
+- Two actual pages keep independent edit baselines: own sequential saves succeed, unloaded
+  overwrites and stale nonempty edits reject, retry/load cannot silently rebase pending edits,
+  and the winning persisted body remains intact.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

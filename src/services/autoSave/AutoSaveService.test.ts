@@ -703,3 +703,60 @@ it('retains an empty revision when its commit condition fails', async () => {
   expect(service.hasPending('notebook')).toBe(true);
   expect(service.getSaveProgress('notebook')).toMatchObject({ committedRevision: 0 });
 });
+
+it('conditions nonempty edits on the loaded body and then on its own committed body', async () => {
+  const loaded = JSON.stringify({ cells: [{ id: 'old' }], tasks: [] });
+  storage.files.getFile.mockResolvedValue({ content: loaded });
+  await service.load('notebook');
+  await service.saveNow(snapshot('first'));
+  await service.saveNow(snapshot('second'));
+  const calls = storage.notebooks.saveNotebookSnapshot.mock.calls;
+  expect(calls[0][2]).toEqual({ expectedContent: loaded });
+  expect(calls[1][2]).toEqual({ expectedContent: calls[0][0].content });
+  expect(storage.files.getFile).toHaveBeenCalledTimes(1);
+});
+
+it('never adopts another body while retrying a rejected nonempty edit', async () => {
+  const loaded = JSON.stringify({ cells: [{ id: 'old' }], tasks: [] });
+  storage.files.getFile.mockResolvedValue({ content: loaded });
+  await service.load('notebook');
+  storage.files.getFile.mockResolvedValue({
+    content: JSON.stringify({ cells: [{ id: 'other window' }] }),
+  });
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(
+    new Error('Notebook content changed before snapshot commit')
+  );
+  await expect(service.saveNow(snapshot('local'))).rejects.toThrow('content changed');
+  await expect(service.flush()).rejects.toThrow('content changed');
+  expect(
+    storage.notebooks.saveNotebookSnapshot.mock.calls.every(
+      (call) => call[2]?.expectedContent === loaded
+    )
+  ).toBe(true);
+  expect(storage.files.getFile).toHaveBeenCalledTimes(1);
+  expect(service.hasPending('notebook')).toBe(true);
+});
+
+it.each([false, true])(
+  'rejects a load overtaken by a local edit (committed: %s)',
+  async (commit) => {
+    let resolveRead!: (value: { content: string }) => void;
+    storage.files.getFile.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        })
+    );
+    const loading = service.load('notebook');
+    const rejected = expect(loading).rejects.toThrow('changed while loading');
+    await vi.waitFor(() => expect(storage.files.getFile).toHaveBeenCalledTimes(1));
+    if (commit) await service.saveNow(snapshot('local'));
+    else await service.queueSave(snapshot('local'));
+    resolveRead({ content: JSON.stringify({ cells: [{ id: 'stale' }] }) });
+    await rejected;
+    if (!commit) await service.flush();
+    expect(storage.notebooks.saveNotebookSnapshot.mock.calls[0][2]).toEqual({
+      expectedContent: null,
+    });
+  }
+);

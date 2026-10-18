@@ -6,6 +6,7 @@
 import { debounce } from 'lodash-es';
 import { NotebookSaveQueue } from './NotebookSaveQueue';
 import { NotebookSaveScheduler } from './NotebookSaveScheduler';
+import { NotebookWriteBaseline } from './NotebookWriteBaseline';
 import { PersistenceService } from '../persistence/PersistenceService';
 import type { IPersistenceService, NotebookSnapshotCondition } from '../persistence/interfaces';
 import type { Cell } from '@Store/models';
@@ -53,6 +54,7 @@ export class AutoSaveService implements IAutoSaveService {
   private state: AutoSaveState;
   private lifecycle: ServiceLifecycle = { phase: 'active' };
   private readonly reads = new Set<Promise<unknown>>();
+  private readonly writeBaseline = new NotebookWriteBaseline();
   private initialized = false;
   private initialization: Promise<void> | null = null;
   private readonly isDevelopment: boolean = import.meta.env.DEV === true;
@@ -291,7 +293,10 @@ export class AutoSaveService implements IAutoSaveService {
 
       notebookLog.debug('AutoSaveService: Loading notebook', { notebookId });
 
-      const { notebook: result } = await this.readStoredNotebook(notebookId);
+      const generation = this.writeBaseline.generation(notebookId);
+      const { notebook: result, content } = await this.readStoredNotebook(notebookId);
+      if (this.hasPending(notebookId)) throw new Error('Notebook changed while loading');
+      this.writeBaseline.loaded(notebookId, generation, content);
 
       this.publish({ status: AutoSaveStatus.IDLE, error: null }, 'load_completed', notebookId);
 
@@ -580,6 +585,7 @@ export class AutoSaveService implements IAutoSaveService {
         notebookMetadata,
         condition
       );
+      this.writeBaseline.committed(notebookId, notebookContent);
 
       if (this.isDevelopment) {
         storageLog.debug('AutoSaveService: File save result', {
@@ -689,13 +695,13 @@ export class AutoSaveService implements IAutoSaveService {
   /** Bind empty-save validation to the exact persisted body checked before writing. */
   private async prepareSnapshotCondition(
     snapshot: NotebookSnapshot
-  ): Promise<NotebookSnapshotCondition | undefined> {
-    if (snapshot.cells?.length) return undefined;
+  ): Promise<NotebookSnapshotCondition> {
+    if (snapshot.cells?.length) return this.writeBaseline.condition(snapshot.notebookId);
     const observed = await this.readStoredNotebook(snapshot.notebookId);
     if (observed.notebook?.cells.length) {
       throw new Error('Refusing to overwrite an existing notebook with an empty snapshot');
     }
-    return { expectedContent: observed.content };
+    return this.writeBaseline.condition(snapshot.notebookId, observed.content);
   }
 
   /** Publish one complete transition; observers never reconstruct storage truth. */

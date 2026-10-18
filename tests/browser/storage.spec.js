@@ -2625,3 +2625,118 @@ test('snapshot conditions accept the observed revision and reject orphan bodies 
   expect(result.error).toContain('content changed');
   expect(result.after).toEqual(result.before);
 });
+
+test('two pages retain their edit baselines and reject stale nonempty saves without rebasing', async ({
+  page,
+  baseURL,
+}) => {
+  const second = await page.context().newPage();
+  await openFixture(second, baseURL);
+  try {
+    await page.evaluate(async () => {
+      const service = window.storageHarness.AutoSaveService.getInstance({
+        debounceMs: 60000,
+        maxRetries: 1,
+        retryDelayMs: 0,
+      });
+      await service.saveNow({
+        notebookId: 'shared',
+        notebookTitle: 'Initial',
+        cells: [{ id: 'cell', type: 'markdown', content: 'initial' }],
+        tasks: [],
+        timestamp: Date.now(),
+      });
+    });
+    const unobserved = await second.evaluate(async () => {
+      const service = window.storageHarness.AutoSaveService.getInstance({
+        debounceMs: 60000,
+        maxRetries: 1,
+        retryDelayMs: 0,
+      });
+      let error;
+      try {
+        await service.saveNow({
+          notebookId: 'shared',
+          notebookTitle: 'Unloaded overwrite',
+          cells: [{ id: 'cell', type: 'markdown', content: 'unloaded' }],
+          tasks: [],
+          timestamp: Date.now(),
+        });
+      } catch (failure) {
+        error = failure.message;
+      }
+      await window.storageHarness.AutoSaveService.resetInstance();
+      return error;
+    });
+    expect(unobserved).toContain('content changed');
+    const loaded = await second.evaluate(() =>
+      window.storageHarness.AutoSaveService.getInstance({
+        debounceMs: 60000,
+        maxRetries: 1,
+        retryDelayMs: 0,
+      }).load('shared')
+    );
+    expect(loaded.cells[0].content).toBe('initial');
+    await page.evaluate(async () => {
+      const service = window.storageHarness.AutoSaveService.getInstance();
+      for (const content of ['first update', 'second update']) {
+        await service.saveNow({
+          notebookId: 'shared',
+          notebookTitle: content,
+          cells: [{ id: 'cell', type: 'markdown', content }],
+          tasks: [],
+          timestamp: Date.now(),
+        });
+      }
+    });
+    const rejected = await second.evaluate(async () => {
+      const service = window.storageHarness.AutoSaveService.getInstance();
+      const errors = [];
+      try {
+        await service.saveNow({
+          notebookId: 'shared',
+          notebookTitle: 'Stale edit',
+          cells: [{ id: 'cell', type: 'markdown', content: 'local stale edit' }],
+          tasks: [],
+          timestamp: Date.now(),
+        });
+      } catch (error) {
+        errors.push(error.message);
+      }
+      try {
+        await service.flush();
+      } catch (error) {
+        errors.push(error.message);
+      }
+      try {
+        await service.load('shared');
+      } catch (error) {
+        errors.push(error.message);
+      }
+      return {
+        errors,
+        pending: service.hasPending('shared'),
+        progress: service.getSaveProgress('shared'),
+      };
+    });
+    expect(rejected.errors).toHaveLength(3);
+    expect(rejected.errors.every((error) => error.includes('content changed'))).toBe(true);
+    expect(rejected.pending).toBe(true);
+    expect(rejected.progress.committedRevision).toBe(0);
+    const persisted = await page.evaluate(async () => {
+      const { IndexedDBStorageProvider, DB_CONFIG } = window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const body = await provider.get(
+        DB_CONFIG.STORES.FILES_CONTENT,
+        'shared::notebook_shared.json'
+      );
+      await provider.close();
+      return JSON.parse(body.content);
+    });
+    expect(persisted.cells[0].content).toBe('second update');
+  } finally {
+    await second.evaluate(() => window.storageHarness.AutoSaveService.resetInstance());
+    await page.evaluate(() => window.storageHarness.AutoSaveService.resetInstance());
+    await second.close();
+  }
+});
