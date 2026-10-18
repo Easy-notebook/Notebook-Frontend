@@ -73,6 +73,9 @@ Coverage:
 - Conflicting local snapshots survive page reload in independent recovery records while the
   winning document is unchanged. Draft writes are monotonic per writer, failed transactions
   roll back, stale dismissals cannot delete newer drafts, and notebook deletion retains drafts.
+- Production recovery UI previews and downloads exact stored JSON, requires explicit deletion
+  confirmation, rejects stale confirmations, responds to live conflicts and exposes recovery
+  storage failures when no copy exists. Canonical notebook content stays intact.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

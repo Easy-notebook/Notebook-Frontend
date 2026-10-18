@@ -1,5 +1,5 @@
 import { test, expect, chromium } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -2830,4 +2830,209 @@ test('recovery drafts isolate writers, retain newer revisions and compare-delete
   expect(result.remaining).toHaveLength(1);
   expect(result.remaining[0].writerId).toBe('two');
   expect(result.canonical).toEqual([]);
+});
+
+test('recovery UI previews and downloads copies, and stale confirmation cannot delete a newer copy', async ({
+  page,
+}) => {
+  const content = JSON.stringify({
+    title: 'Recovered local edit',
+    cells: [{ content: 'local draft' }],
+    tasks: [],
+  });
+  await page.evaluate(async (content) => {
+    const {
+      IndexedDBStorageProvider,
+      NotebookRecoveryRepository,
+      NotebookRepository,
+      mountRecoveryProbe,
+    } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    await new NotebookRecoveryRepository(provider).saveDraft({
+      notebookId: 'ui',
+      writerId: 'writer',
+      revision: 1,
+      content,
+      expectedContent: null,
+      reason: 'content_changed',
+    });
+    await new NotebookRepository(provider).saveNotebookSnapshot(
+      {
+        notebookId: 'ui',
+        filePath: 'notebook_ui.json',
+        fileName: 'ui',
+        content: 'winner',
+        size: 6,
+        lastModified: 'now',
+      },
+      { id: 'ui', name: 'Winner', lastAccessedAt: 1, accessCount: 1, cacheEnabled: true }
+    );
+    await provider.close();
+    window.unmountRecovery = mountRecoveryProbe();
+  }, content);
+  await page.getByRole('button', { name: 'Recovery copies (1)', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Recovery copies', exact: true });
+  await expect(dialog.getByText('Recovered local edit', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'View contents' }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Recovery contents' })).toHaveValue(content);
+  await page.screenshot({ path: '/tmp/notebook-recovery-ui.png' });
+  const downloading = page.waitForEvent('download');
+  await dialog.getByRole('button', { name: 'Download JSON' }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe('recovery-ui-1.json');
+  expect(await readFile(await download.path(), 'utf8')).toBe(content);
+  await dialog.getByRole('button', { name: 'Delete recovery copy' }).click();
+  await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRecoveryRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    await new NotebookRecoveryRepository(provider).saveDraft({
+      notebookId: 'ui',
+      writerId: 'writer',
+      revision: 2,
+      content: JSON.stringify({ title: 'Newer local edit', cells: [] }),
+      expectedContent: null,
+      reason: 'content_changed',
+    });
+    await provider.close();
+  });
+  await page
+    .getByRole('dialog', { name: 'Delete this recovery copy?' })
+    .getByRole('button', { name: 'Delete copy', exact: true })
+    .click();
+  await expect(dialog.getByText('Newer local edit', { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByText(
+      'This recovery copy changed or was already removed. Review the refreshed list.'
+    )
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Delete recovery copy' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete this recovery copy?' })
+    .getByRole('button', { name: 'Delete copy', exact: true })
+    .click();
+  await expect(dialog.getByText('No recovery copies.')).toBeVisible();
+  const persisted = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const result = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'ui::notebook_ui.json');
+    await provider.close();
+    window.unmountRecovery();
+    return result;
+  });
+  expect(persisted.content).toBe('winner');
+});
+
+test('a live save conflict makes recovery copies available without reloading the application', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, mountRecoveryProbe } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const content = JSON.stringify({
+      title: 'Saved version',
+      cells: [{ content: 'winner' }],
+      tasks: [],
+    });
+    await new NotebookRepository(provider).saveNotebookSnapshot(
+      {
+        notebookId: 'live',
+        filePath: 'notebook_live.json',
+        fileName: 'live',
+        content,
+        size: content.length,
+        lastModified: 'now',
+      },
+      { id: 'live', name: 'Saved version', lastAccessedAt: 1, accessCount: 1, cacheEnabled: true }
+    );
+    await provider.close();
+    window.unmountRecovery = mountRecoveryProbe();
+  });
+  await expect(page.getByText('Recovery probe ready')).toBeVisible();
+  const error = await page.evaluate(async () => {
+    const service = window.storageHarness.AutoSaveService.getInstance();
+    try {
+      await service.saveNow({
+        notebookId: 'live',
+        notebookTitle: 'Local version',
+        cells: [{ id: 'a', type: 'markdown', content: 'my local edit' }],
+        tasks: [],
+        timestamp: Date.now(),
+      });
+    } catch (failure) {
+      return failure.message;
+    }
+  });
+  expect(error).toContain('content changed');
+  await page.getByRole('button', { name: 'Recovery copies (1)', exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog', { name: 'Recovery copies', exact: true })
+      .getByText('Local version', { exact: true })
+  ).toBeVisible();
+  await page.evaluate(async () => {
+    window.unmountRecovery();
+    await window.storageHarness.AutoSaveService.resetInstance();
+  });
+});
+
+test('recovery write failure remains visible even when no recovery copy was saved', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, mountRecoveryProbe } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    await new NotebookRepository(provider).saveNotebookSnapshot(
+      {
+        notebookId: 'failed-recovery',
+        filePath: 'notebook_failed-recovery.json',
+        fileName: 'saved',
+        content: '{"cells":[{"content":"saved"}]}',
+        size: 30,
+        lastModified: 'now',
+      },
+      {
+        id: 'failed-recovery',
+        name: 'Saved',
+        lastAccessedAt: 1,
+        accessCount: 1,
+        cacheEnabled: true,
+      }
+    );
+    await provider.close();
+    window.unmountRecovery = mountRecoveryProbe();
+  });
+  await expect(page.getByText('Recovery probe ready')).toBeVisible();
+  await page.evaluate(async () => {
+    const { AutoSaveService, NotebookRecoveryRepository } = window.storageHarness;
+    const original = NotebookRecoveryRepository.prototype.saveDraft;
+    NotebookRecoveryRepository.prototype.saveDraft = async () => {
+      throw new Error('Recovery storage unavailable');
+    };
+    try {
+      await AutoSaveService.getInstance().saveNow({
+        notebookId: 'failed-recovery',
+        notebookTitle: 'Unsaved',
+        cells: [{ id: 'a', type: 'markdown', content: 'local' }],
+        tasks: [],
+        timestamp: Date.now(),
+      });
+    } catch {
+      /* Expected conflict plus recovery failure. */
+    } finally {
+      NotebookRecoveryRepository.prototype.saveDraft = original;
+    }
+  });
+  await page.getByRole('button', { name: 'Unsaved edits', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Recovery copies', exact: true });
+  await expect(dialog.getByText('Some edits are still unsaved')).toBeVisible();
+  await expect(
+    dialog.getByText(/conflict recovery could not be saved: Recovery storage unavailable/)
+  ).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Download JSON' })).toHaveCount(0);
+  await page.evaluate(async () => {
+    window.unmountRecovery();
+    await window.storageHarness.AutoSaveService.resetInstance();
+  });
 });

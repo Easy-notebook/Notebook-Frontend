@@ -8,6 +8,7 @@ import { initializeWorkflowSystem } from './components/Scenario/Workflow/utils/w
 import { PersistenceProvider } from './services/persistence/PersistenceContext';
 import { useAutoSavePageLifecycle } from './services/autoSave/useAutoSavePageLifecycle';
 import { Toaster } from '@/components/UI/sonner';
+import { NotebookRecoveryCenter } from './components/Notebook/recovery/NotebookRecoveryCenter';
 
 function BackgroundLayers() {
   return (
@@ -196,6 +197,7 @@ function AppContent(): JSX.Element {
     <ConfigProvider theme={antdTheme}>
       <BackgroundLayers />
       <AppRouter />
+      <NotebookRecoveryCenter />
       <Toaster position="top-right" />
     </ConfigProvider>
   );

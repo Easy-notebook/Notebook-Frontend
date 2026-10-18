@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session gate passes 266 tests across twenty-two files. Coverage includes
+The storage/persistence/autosave/session/recovery gate passes 271 tests across twenty-three files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -65,8 +65,8 @@ transaction and IndexedDB event doubles. These are not native browser recovery t
 Autosave lint passes without warnings. Full-project type checking still reports
 297 existing diagnostics, none in autosave, persistence or session modules.
 
-The latest independent whole-project run passes 1,067 tests across 119 files (57.42s).
-The subsequent production build passes in 15.23s; oversized-chunk warnings remain.
+The preceding independent whole-project checkpoint passed 1,067 tests across 119 files (57.42s).
+The recovery-UI production build passes in 15.37s; oversized-chunk warnings remain.
 An earlier checkpoint had an asynchronous math-rendering timeout when tests ran alongside
 a production build; its isolated suite and subsequent independent runs passed.
 Test timeouts were unchanged. A real-manager React integration test covers configuration
@@ -213,14 +213,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs seventy-one isolated Playwright cases against production modules:
+`npm run test:browser` runs seventy-four isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 266 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 271 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -608,8 +608,8 @@ competing nonempty edits, repeat rejection and preservation of the winner's pers
 Unit tests cover pending/committed edits overtaking loads and baseline ownership transitions.
 This provides optimistic content conflict detection for AutoSaveService clients, not merging,
 a revision history, cross-device coordination or protection from unconditional repository
-callers. Conflict resolution UI remains work; committed conflict snapshots now have the
-separate durable recovery path described below.
+callers. Committed conflict snapshots have the durable recovery path and download/deletion
+entry described below; automatic merging and restore-as-copy remain future work.
 
 ## Terminal save conflicts
 
@@ -652,8 +652,31 @@ transaction abort, invocation-time capture, compare-delete and notebook deletion
 
 Durability begins at recovery transaction completion, not at keystroke admission. Edits
 admitted after recovery capture remain queued and need their own save attempt. This is not
-a guarantee against process termination before commit or disk/power loss. No recovery UI,
-automatic merge or restore-as-copy action is provided by this persistence phase.
+a guarantee against process termination before commit or disk/power loss. The recovery entry below supports viewing/export/deletion; automatic merge and
+restore-as-copy are not implemented.
+
+## Application recovery entry
+
+App mounts NotebookRecoveryCenter inside the existing persistence/theme providers. It
+shows recovery copies when records are available and exposes preview, raw JSON download,
+refresh and explicitly confirmed deletion. Download does not delete a recovery record or
+acknowledge a pending save. Recovery storage failures still expose an Unsaved edits entry
+with the actual failure, even when no downloadable record exists. Per-notebook save failure
+messages clear only after that notebook successfully commits.
+
+NotebookRecoveryController owns idle/loading/ready/deleting/failed UI data transitions.
+Generations suppress delayed read results after a newer refresh or deletion. Accepted deletes
+block duplicate mutations and refresh their final list. A confirmation captures the displayed
+record's revision; concurrent replacement causes compare-delete to reject and the newer copy
+to be displayed. Controller snapshots are immutable; React only owns presentation state.
+Refresh is event-driven on mount, opening, window focus and save failure, with subscriptions
+released on unmount. No polling or main-document overwrite is introduced.
+
+Native UI tests use the production provider and components to inspect a copy, compare the
+actual downloaded bytes, interleave a newer write during deletion confirmation, preserve the
+canonical document, discover a live conflict and report failed recovery writes. Five controller
+tests cover stale reads, mutation races, failures and duplicate admission. The entry is mounted
+in App rather than in the persistence provider, keeping infrastructure independent of UI.
 
 ## Remaining lifecycle work
 
