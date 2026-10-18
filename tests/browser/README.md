@@ -57,6 +57,8 @@ Coverage:
   source stores and preserves original source records.
 - Notebook imports commit atomically, concurrent equal imports become no-ops, conflicts roll
   back the batch, and forced migration preserves edited and unrelated destination documents.
+- Malformed historical records reject their notebook batch without inventing empty files;
+  independent valid notebooks, genuine empty bodies and UTF-8 byte accounting are preserved.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

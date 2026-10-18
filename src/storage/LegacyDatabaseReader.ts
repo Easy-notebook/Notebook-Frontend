@@ -1,20 +1,6 @@
-export interface LegacyFileObject {
-  id: string;
-  notebookId: string;
-  path: string;
-  name: string;
-  content: string;
-  type: string;
-  lastModified: string;
-  size: number;
-  cachedAt: number;
-  accessCount: number;
-  lastAccessed: number;
-}
-
 interface LegacyReadResult {
   hasFiles: boolean;
-  files: LegacyFileObject[];
+  files: unknown[];
 }
 
 /** One read attempt. Terminal callbacks never acquire a connection or publish partial data. */
@@ -92,7 +78,7 @@ export class LegacyDatabaseReader {
           }
           this.state = 'reading';
           transaction = database.transaction(names, 'readonly');
-          const batches: LegacyFileObject[][] = [];
+          const batches: unknown[][] = [];
           let hasFiles = false;
           transaction.onabort = () =>
             finish(transaction?.error ?? new Error(`Legacy read from ${this.name} aborted`));
@@ -108,7 +94,7 @@ export class LegacyDatabaseReader {
               const read = store.getAll();
               read.onsuccess = () => {
                 if (this.state !== 'reading') return;
-                const files = read.result as LegacyFileObject[];
+                const files = read.result as unknown[];
                 hasFiles ||= files.length > 0;
                 batches.push(files);
               };

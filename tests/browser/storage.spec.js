@@ -2161,3 +2161,59 @@ test('forced historical migration preserves destination edits and unrelated note
   expect(result.after.map((book) => book.id).sort()).toEqual(['history', 'unrelated']);
   expect(result.body.content).toBe('edited');
 });
+
+test('historical validation rejects damaged notebook batches without inventing empty content', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { DataMigration, LegacyDatabaseReader, IndexedDBStorageProvider, DB_CONFIG } =
+      window.storageHarness;
+    const records = [
+      { id: 'missing', notebookId: 'damaged', path: 'missing', name: 'missing' },
+      { id: 'companion', notebookId: 'damaged', path: 'good', name: 'good', content: 'good' },
+      { id: 'unicode', notebookId: 'valid', path: 'unicode', name: 'unicode', content: '你好' },
+      {
+        id: 'empty',
+        notebookId: 'valid',
+        path: 'empty',
+        name: 'empty',
+        content: '',
+        cachedAt: 0,
+        lastAccessed: 0,
+      },
+      { id: 'unidentified', content: 'unowned' },
+    ];
+    await new Promise((resolve, reject) => {
+      const open = indexedDB.open('easyremote-file-cache', 1);
+      open.onupgradeneeded = () => {
+        const store = open.result.createObjectStore('files', { keyPath: 'id' });
+        records.forEach((record) => store.add(record));
+      };
+      open.onsuccess = () => {
+        open.result.close();
+        resolve();
+      };
+      open.onerror = () => reject(open.error);
+    });
+    const stats = await DataMigration.migrate();
+    const provider = new IndexedDBStorageProvider();
+    const notebooks = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    const bodies = await provider.getAll(DB_CONFIG.STORES.FILES_CONTENT);
+    const original = await new LegacyDatabaseReader('easyremote-file-cache', 'files', 1000).run();
+    await provider.close();
+    return { stats, notebooks, bodies, original };
+  });
+  expect(result.stats).toMatchObject({
+    filesFound: 5,
+    notebooksFound: 2,
+    notebooksMigrated: 1,
+    filesMigrated: 2,
+  });
+  expect(result.stats.errors).toHaveLength(2);
+  expect(result.stats.errors.join(' ')).toContain('Invalid content');
+  expect(result.notebooks).toHaveLength(1);
+  expect(result.notebooks[0]).toMatchObject({ id: 'valid', fileCount: 2, totalSize: 6 });
+  expect(result.bodies.map((file) => file.content).sort()).toEqual(['', '你好']);
+  expect(result.original.files).toHaveLength(5);
+  expect(result.original.files.find((file) => file.id === 'missing').content).toBeUndefined();
+});

@@ -2,7 +2,7 @@
 // Data migration from legacy storage systems
 
 import { persistenceService } from '../services/persistence/instance';
-import type { NotebookEntity } from './schema';
+import { LegacyMigrationPlan } from './LegacyMigrationPlan';
 import { LegacyDatabaseReader } from './LegacyDatabaseReader';
 
 /**
@@ -129,48 +129,18 @@ export class DataMigration {
     };
 
     const { files: legacyFiles } = await new LegacyDatabaseReader(dbName, 'files', 30000).run();
-    stats.filesFound = legacyFiles.length;
-    const notebookFiles = new Map<string, typeof legacyFiles>();
-    for (const file of legacyFiles) {
-      if (!file.notebookId) continue;
-      const files = notebookFiles.get(file.notebookId) ?? [];
-      files.push(file);
-      notebookFiles.set(file.notebookId, files);
-    }
-    stats.notebooksFound = notebookFiles.size;
-    // The source transaction has completed and its connection/deadline are released.
-    // Destination writes are awaited directly; no source timeout can report early completion.
-    for (const [notebookId, files] of notebookFiles) {
+    const plan = new LegacyMigrationPlan(legacyFiles);
+    stats.filesFound = plan.filesFound;
+    stats.notebooksFound = plan.notebooksFound;
+    stats.errors.push(...plan.errors.map((error) => `${dbName}: ${error}`));
+    // Source data is detached and validated before each atomic destination batch.
+    for (const { notebook, files } of plan.batches) {
       try {
-        const now = Date.now();
-        const notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'> = {
-          id: notebookId,
-          name: `Notebook ${notebookId.slice(0, 8)}`,
-          description: `Migrated notebook with ${files.length} files`,
-          lastAccessedAt: files.reduce(
-            (latest, file) => Math.max(latest, file.lastAccessed || file.cachedAt || now),
-            0
-          ),
-          accessCount: files.reduce((count, file) => Math.max(count, file.accessCount || 0), 0),
-          fileCount: 0,
-          totalSize: 0,
-          cacheEnabled: true,
-        };
-        const imported = await persistenceService.notebooks.importNotebook(
-          notebook,
-          files.map((file) => ({
-            notebookId: file.notebookId,
-            filePath: file.path,
-            fileName: file.name,
-            content: file.content || '',
-            lastModified: file.lastModified || new Date().toISOString(),
-            size: file.size || 0,
-          }))
-        );
+        const imported = await persistenceService.notebooks.importNotebook(notebook, files);
         if (imported > 0) stats.notebooksMigrated++;
         stats.filesMigrated += imported;
       } catch (error) {
-        stats.errors.push(`Failed to migrate notebook ${notebookId}: ${error}`);
+        stats.errors.push(`Failed to migrate notebook ${notebook.id} from ${dbName}: ${error}`);
       }
     }
     stats.duration = Date.now() - stats.duration;

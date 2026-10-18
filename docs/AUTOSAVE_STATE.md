@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session gate passes 229 tests across nineteen files. Coverage includes
+The storage/persistence/autosave/session gate passes 245 tests across twenty files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -212,14 +212,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs sixty isolated Playwright cases against production modules:
+`npm run test:browser` runs sixty-one isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 229 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 245 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -512,12 +512,27 @@ per notebook, not across every historical database; errors remain visible in Mig
 Native tests cover rollback, two concurrent connections, repeat no-op, missing-file merge,
 source/destination conflicts, preserved names and forced migration preservation.
 
+## Historical input boundary
+
+LegacyDatabaseReader returns unknown records, not an unchecked historical interface.
+LegacyMigrationPlan owns validation and notebook grouping before destination admission.
+Identity, path, name and string content are required. Empty content is valid; absent,
+null or non-string content is an error and never becomes an invented empty file.
+A malformed identifiable record rejects its entire notebook batch, while independent
+valid notebooks remain importable. Unidentifiable records are reported explicitly.
+
+Optional numeric metadata defaults only when absent and otherwise must be nonnegative
+safe integers. Zero timestamps/counts remain zero. Missing size is derived from UTF-8
+content bytes; valid historical logical size is preserved. Validation produces detached
+FileSaveData and NotebookSaveData; migration orchestration no longer owns normalization.
+Native coverage verifies mixed valid/damaged records, no partial damaged notebook,
+correct UTF-8 accounting, actual empty content and unchanged historical source records.
+
 ## Remaining lifecycle work
 
 Historical migration conflicts are reported and preserve both sources; there is no conflict
 resolution UI or automatic choice of a winning historical revision. Startup probing is
-repeatable but has no persistent completion journal. Historical input validation and
-orphan-record repair require further review.
+repeatable but has no persistent completion journal. Orphan-record repair requires further review.
 
 Retention now enforces cache count, inactivity and an application content budget.
 The production caller audit found no explicit evictable notebook creation. Current editing
