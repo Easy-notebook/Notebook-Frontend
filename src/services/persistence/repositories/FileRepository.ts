@@ -1,3 +1,4 @@
+import { StorageConfiguration } from '../../../storage/StorageConfiguration';
 import {
   IFileRepository,
   IStorageProvider,
@@ -9,6 +10,7 @@ import {
   FileContentEntity,
   NotebookEntity,
   NotebookActivityEntity,
+  StorageConfigEntity,
 } from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
 import { FileRecordSet } from './FileRecordSet';
@@ -29,24 +31,36 @@ export class FileRepository implements IFileRepository {
   ): Promise<FileMetadataEntity> {
     if (!fileData.notebookId || !fileData.filePath || !fileData.fileName)
       throw new Error('Invalid file data: notebook identity, path and name are required');
-    const records = new FileRecordSet(fileData, options);
-    await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
-      const existing = await this.read<FileMetadataEntity | undefined>(
-        stores[DB_CONFIG.STORES.FILES_METADATA].get(records.metadata.id)
-      );
-      records.writeTo(
-        stores[DB_CONFIG.STORES.FILES_METADATA],
-        stores[DB_CONFIG.STORES.FILES_CONTENT]
-      );
-      await this.recordMutation(
-        stores,
-        fileData.notebookId,
-        fileData.filePath,
-        existing ? 0 : 1,
-        records.metadata.size - (existing?.size || 0),
-        'file_create'
-      );
-    });
+    let records!: FileRecordSet;
+    await this.storage.transaction(
+      [...this.mutationStores, DB_CONFIG.STORES.CONFIG],
+      'readwrite',
+      async (stores) => {
+        const stored = await this.read<StorageConfigEntity | undefined>(
+          stores[DB_CONFIG.STORES.CONFIG].get('config')
+        );
+        const config = new StorageConfiguration(stored).toRecord();
+        records = new FileRecordSet(fileData, {
+          ...options,
+          maxFileSize: options.maxFileSize ?? config.maxFileSize,
+        });
+        const existing = await this.read<FileMetadataEntity | undefined>(
+          stores[DB_CONFIG.STORES.FILES_METADATA].get(records.metadata.id)
+        );
+        records.writeTo(
+          stores[DB_CONFIG.STORES.FILES_METADATA],
+          stores[DB_CONFIG.STORES.FILES_CONTENT]
+        );
+        await this.recordMutation(
+          stores,
+          fileData.notebookId,
+          fileData.filePath,
+          existing ? 0 : 1,
+          records.metadata.size - (existing?.size || 0),
+          'file_create'
+        );
+      }
+    );
     return records.metadata;
   }
 

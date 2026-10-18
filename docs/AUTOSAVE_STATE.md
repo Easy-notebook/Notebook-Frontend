@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 193 tests across fifteen files. Coverage includes
+The persistence/autosave/session gate passes 200 tests across sixteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -175,14 +175,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs forty-three isolated Playwright cases against production modules:
+`npm run test:browser` runs forty-six isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 193 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 200 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -381,6 +381,26 @@ creation and swallowed-failure path are removed. No parent or child write surviv
 aborted initial save. Native tests cover concurrent first writes, orphan content updates,
 complete rollback and non-resurrection during deletion. Existing orphan content is not
 swept automatically; ownership is established only through an explicitly requested write.
+
+## Configuration validation and storage thresholds
+
+StorageConfiguration validates nonnegative safe-integer limits/times, record identity and
+the compression flag. Repository reads and initialization reject malformed saved settings;
+patch updates validate the merged record before writing and can repair an invalid field.
+Retention uses the same validator instead of a separate subset of validation rules.
+Optional manager configuration display keeps its existing logged default behavior.
+
+FileRepository reads configuration in the file-save transaction and applies maxFileSize
+unless an explicit per-save threshold overrides it. Threshold updates admitted before a
+save therefore determine that save's storage mode. FileRecordSet also rejects invalid file
+sizes/explicit thresholds. Only files with a usable remote reference may become remote-only;
+NotebookRepository snapshots retain forced-local content independently of cache configuration.
+The compression flag remains accepted configuration; no compression codec is claimed.
+
+Native tests cover threshold changes, local-content removal on a remote transition, explicit
+overrides, forced-local snapshots, invalid patch rollback and repairing malformed settings
+before cache writes resume. Configuration unit tests cover every numeric field and detached
+default values.
 
 ## Remaining lifecycle work
 

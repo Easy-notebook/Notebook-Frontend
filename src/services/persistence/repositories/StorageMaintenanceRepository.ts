@@ -1,3 +1,4 @@
+import { StorageConfiguration } from '../../../storage/StorageConfiguration';
 import { StorageUsage, type StorageStats } from '../../../storage/StorageUsage';
 import { NotebookDeletion } from './NotebookDeletion';
 import {
@@ -76,18 +77,17 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
   }
 
   async getConfig(): Promise<StorageConfigEntity> {
-    return (
-      (await this.storage.get<StorageConfigEntity>(DB_STORES.CONFIG, 'config')) ?? {
-        ...DEFAULT_STORAGE_CONFIG,
-      }
-    );
+    return new StorageConfiguration(
+      await this.storage.get<StorageConfigEntity>(DB_STORES.CONFIG, 'config')
+    ).toRecord();
   }
 
   async ensureConfig(): Promise<void> {
     await this.storage.transaction([DB_STORES.CONFIG], 'readwrite', async (stores) => {
       const store = stores[DB_STORES.CONFIG];
-      if (!(await this.read<StorageConfigEntity | undefined>(store.get('config'))))
-        store.put({ ...DEFAULT_STORAGE_CONFIG });
+      const existing = await this.read<StorageConfigEntity | undefined>(store.get('config'));
+      const config = new StorageConfiguration(existing).toRecord();
+      if (!existing) store.put(config);
     });
   }
 
@@ -95,7 +95,14 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
     await this.storage.transaction([DB_STORES.CONFIG], 'readwrite', async (stores) => {
       const store = stores[DB_STORES.CONFIG];
       const current = await this.read<StorageConfigEntity | undefined>(store.get('config'));
-      store.put({ ...DEFAULT_STORAGE_CONFIG, ...current, ...patch, id: 'config' });
+      store.put(
+        new StorageConfiguration({
+          ...DEFAULT_STORAGE_CONFIG,
+          ...current,
+          ...patch,
+          id: 'config',
+        }).toRecord()
+      );
     });
   }
 

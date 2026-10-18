@@ -9,13 +9,19 @@ export class FileRecordSet {
   readonly content: FileContentEntity | undefined;
 
   constructor(data: FileSaveData, options: FileSaveOptions = {}) {
+    const maxFileSize = options.maxFileSize ?? DEFAULT_STORAGE_CONFIG.maxFileSize;
+    if (
+      !Number.isSafeInteger(maxFileSize) ||
+      maxFileSize < 0 ||
+      !Number.isSafeInteger(data.size) ||
+      data.size < 0
+    ) {
+      throw new Error('Invalid file size or storage threshold');
+    }
     const fileId = `${data.notebookId}::${data.filePath}`;
     const hasRemoteReference =
       typeof data.remoteUrl === 'string' && data.remoteUrl.trim().length > 0;
-    const isRemote =
-      data.size > (options.maxFileSize ?? DEFAULT_STORAGE_CONFIG.maxFileSize) &&
-      !options.forceLocal &&
-      hasRemoteReference;
+    const isRemote = data.size > maxFileSize && !options.forceLocal && hasRemoteReference;
     const now = Date.now();
     this.metadata = {
       id: fileId,

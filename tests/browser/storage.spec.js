@@ -1454,3 +1454,130 @@ test('deleting an orphan file does not recreate a deleted notebook', async ({ pa
   });
   expect(result).toEqual({ notebooks: [], files: [] });
 });
+
+test('file saves apply committed configuration thresholds while explicit overrides and snapshots stay local', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const {
+      IndexedDBStorageProvider,
+      StorageMaintenanceRepository,
+      FileRepository,
+      NotebookRepository,
+      DB_CONFIG,
+    } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const maintenance = new StorageMaintenanceRepository(provider);
+    const files = new FileRepository(provider);
+    const data = {
+      notebookId: 'book',
+      filePath: 'a',
+      fileName: 'a',
+      content: 'abcde',
+      size: 5,
+      lastModified: 'today',
+      remoteUrl: '/remote/a',
+    };
+    await maintenance.updateConfig({ maxFileSize: 10 });
+    const local = await files.saveFile(data);
+    const [, remote] = await Promise.all([
+      maintenance.updateConfig({ maxFileSize: 1 }),
+      files.saveFile(data),
+    ]);
+    const removed = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'book::a');
+    const override = await files.saveFile(data, { maxFileSize: 10 });
+    const snapshot = await new NotebookRepository(provider).saveNotebookSnapshot(data, {
+      id: 'book',
+      name: 'Book',
+      accessCount: 1,
+      lastAccessedAt: Date.now(),
+      cacheEnabled: true,
+    });
+    const content = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'book::a');
+    await provider.close();
+    return { local, remote, removed, override, snapshot, content };
+  });
+  expect(result.local.storageType).toBe('local');
+  expect(result.remote.storageType).toBe('remote');
+  expect(result.removed).toBeUndefined();
+  expect(result.override.storageType).toBe('local');
+  expect(result.snapshot.storageType).toBe('local');
+  expect(result.content.content).toBe('abcde');
+});
+
+test('invalid configuration patches reject without overwriting the saved configuration', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    await repository.ensureConfig();
+    const before = await repository.getConfig();
+    const errors = [];
+    for (const patch of [
+      { maxFileSize: -1 },
+      { cleanupInterval: NaN },
+      { compressionEnabled: 'true' },
+    ]) {
+      try {
+        await repository.updateConfig(patch);
+      } catch (failure) {
+        errors.push(failure.message);
+      }
+    }
+    const after = await repository.getConfig();
+    await provider.close();
+    return { errors, before, after };
+  });
+  expect(result.errors).toHaveLength(3);
+  expect(result.errors.every((error) => error.includes('Invalid storage configuration'))).toBe(
+    true
+  );
+  expect(result.after).toEqual(result.before);
+});
+
+test('malformed stored config rejects initialization, cleanup and cache writes until repaired', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, FileRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    await repository.ensureConfig();
+    const before = await repository.getConfig();
+    await provider.put(DB_CONFIG.STORES.CONFIG, { ...before, maxFileSize: -1 });
+    const files = new FileRepository(provider);
+    const data = {
+      notebookId: 'book',
+      filePath: 'a',
+      fileName: 'a',
+      content: 'a',
+      size: 1,
+      lastModified: 'today',
+    };
+    const errors = [];
+    for (const operation of [
+      () => repository.ensureConfig(),
+      () => repository.getConfig(),
+      () => repository.cleanup(),
+      () => files.saveFile(data),
+    ]) {
+      try {
+        await operation();
+      } catch (failure) {
+        errors.push(failure.message);
+      }
+    }
+    const pending = await provider.getAll(DB_CONFIG.STORES.FILES_METADATA);
+    await repository.updateConfig({ maxFileSize: before.maxFileSize });
+    const saved = await files.saveFile(data);
+    await provider.close();
+    return { errors, pending, saved };
+  });
+  expect(result.errors).toHaveLength(4);
+  expect(result.errors.every((error) => error.includes('maxFileSize'))).toBe(true);
+  expect(result.pending).toEqual([]);
+  expect(result.saved.hasLocalContent).toBe(true);
+});

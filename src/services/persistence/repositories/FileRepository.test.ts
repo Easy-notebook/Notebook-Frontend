@@ -28,6 +28,7 @@ function setup(
   };
   const contentStore = { get: vi.fn(() => request(content)), put: vi.fn(), delete: vi.fn() };
   const stores = {
+    [DB_CONFIG.STORES.CONFIG]: { get: vi.fn(() => request(undefined)) },
     [DB_CONFIG.STORES.NOTEBOOKS]: { get: vi.fn(() => request(null)), put: vi.fn() },
     [DB_CONFIG.STORES.ACTIVITIES]: { put: vi.fn() },
     [DB_CONFIG.STORES.FILES_METADATA]: metadataStore,

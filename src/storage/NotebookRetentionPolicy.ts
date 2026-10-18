@@ -1,3 +1,4 @@
+import { StorageConfiguration } from './StorageConfiguration';
 import type { ContentUsage } from './StorageUsage';
 import type { NotebookEntity, StorageConfigEntity } from './schema';
 
@@ -22,16 +23,7 @@ export interface CleanupCandidates extends ContentBudgetResult {
 /** Selects disjoint candidates, retaining the most recently accessed notebooks. */
 export class NotebookRetentionPolicy {
   constructor(private readonly config: StorageConfigEntity) {
-    if (
-      !Number.isSafeInteger(config.maxNotebooks) ||
-      config.maxNotebooks < 0 ||
-      !Number.isSafeInteger(config.maxTotalSize) ||
-      config.maxTotalSize < 0 ||
-      !Number.isFinite(config.retentionPeriod) ||
-      config.retentionPeriod < 0
-    ) {
-      throw new Error('Invalid notebook retention configuration');
-    }
+    new StorageConfiguration(config);
   }
 
   select(
