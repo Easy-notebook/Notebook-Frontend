@@ -513,17 +513,27 @@ export class AutoSaveService implements IAutoSaveService {
 
   private async drainQueue(notebookId?: string): Promise<void> {
     const failures: unknown[] = [];
-    for (const id of this.saveQueue.keys()) {
-      if (notebookId && id !== notebookId) continue;
-      let retries = 0;
-      while (this.saveQueue.has(id)) {
+    const blocked = new Set<string>();
+    const attempts = new Map<string, { revision: number; retries: number }>();
+    // Snapshot each round's membership. Each notebook gets one attempt before
+    // any notebook can consume another turn, including edits arriving during I/O.
+    while (true) {
+      const ids = [...this.saveQueue.keys()].filter(
+        (id) => (!notebookId || id === notebookId) && !blocked.has(id)
+      );
+      if (!ids.length) break;
+      for (const id of ids) {
         if (this.isDiscarding()) return;
-        const snapshot = this.saveQueue.get(id)!;
+        const snapshot = this.saveQueue.get(id);
+        // A completion observer may explicitly discard another queued notebook.
+        if (!snapshot) continue;
+        const previous = attempts.get(id);
+        const retries = previous?.revision === snapshot.revision ? previous.retries : 0;
         this.saveQueue.begin(snapshot);
         try {
           await this.performSave(snapshot);
           this.saveQueue.acknowledge(snapshot);
-          retries = 0;
+          attempts.delete(id);
           this.publish(
             { status: AutoSaveStatus.IDLE, lastSavedAt: Date.now(), error: null },
             'save_completed',
@@ -542,14 +552,16 @@ export class AutoSaveService implements IAutoSaveService {
             snapshot.revision
           );
           if (this.saveQueue.get(id)?.revision !== snapshot.revision) {
-            retries = 0;
+            attempts.delete(id);
             continue;
           }
           if (this.isDiscarding()) return;
-          if (retries++ >= this.config.maxRetries) {
+          if (retries >= this.config.maxRetries) {
             failures.push(error);
-            break;
+            blocked.add(id);
+            continue;
           }
+          attempts.set(id, { revision: snapshot.revision, retries: retries + 1 });
           await new Promise((resolve) => setTimeout(resolve, this.config.retryDelayMs));
         }
       }

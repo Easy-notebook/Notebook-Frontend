@@ -105,9 +105,21 @@ The combined gate passes 108 tests including six pause regressions: edits in the
 writer-to-pause microtask window, loads/manual saves while paused, concurrent pauses,
 failed pause recovery, enqueue observers and overlapping failed shutdown.
 
+## Round-based global drains
+
+A full drain snapshots pending notebook IDs at the start of each round and attempts
+one revision per notebook. Edits to a notebook already visited wait for the next round;
+new notebooks join the next round. Retry budgets are tracked per notebook and revision,
+so one notebook's successful commit cannot reset another notebook's retry budget.
+Exhausted notebooks retain their pending snapshot while other notebooks finish.
+
+The combined gate passes 111 tests. Added cases verify rotation during repeated edits,
+independent retry exhaustion, and notebooks admitted while a drain is running.
+
 ## Remaining lifecycle work
 
-The global writer still needs fairness under continuous edits. Pause waits for
+The writer still needs fairness between concurrent targeted drains, and retry backoff
+currently occupies the shared writer. Pause waits for
 quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
 application-level producer cancellation remains relevant. Cross-window conflicts,
 native recovery and application/browser exit wiring remain. Browser termination

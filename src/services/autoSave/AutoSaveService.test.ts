@@ -46,6 +46,58 @@ beforeEach(() => {
 afterEach(() => AutoSaveService.resetInstance());
 
 describe('single-writer autosave', () => {
+  it('gives another notebook a turn before consuming continuous edits to the first', async () => {
+    const writes: string[] = [];
+    let edits = 0;
+    storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
+      writes.push(file.notebookId);
+      return { id: 'saved' };
+    });
+    service.subscribe((event) => {
+      if (event.type === 'save_completed' && event.notebookId === 'a' && edits++ < 3)
+        void service.queueSave(snapshot(`edit ${edits}`, 'a'));
+    });
+    await service.queueSave(snapshot('first', 'a'));
+    await service.queueSave(snapshot('second', 'b'));
+    await service.flush();
+    expect(writes).toEqual(['a', 'b', 'a', 'a', 'a']);
+    expect(service.hasPending()).toBe(false);
+  });
+
+  it('keeps retry budgets per notebook while rotating write attempts', async () => {
+    const writes: string[] = [];
+    storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
+      writes.push(file.notebookId);
+      if (file.notebookId === 'a') throw new Error('quota');
+      return { id: 'saved' };
+    });
+    await service.queueSave(snapshot('first', 'a'));
+    await service.queueSave(snapshot('second', 'b'));
+    await expect(service.flush()).rejects.toThrow('quota');
+    expect(writes).toEqual(['a', 'b', 'a']);
+    expect(service.getSaveProgress('a')?.phase).toBe('blocked');
+    expect(service.getSaveProgress('b')?.phase).toBe('clean');
+  });
+
+  it('includes a newly queued notebook in the next round', async () => {
+    const writes: string[] = [];
+    storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
+      writes.push(file.notebookId);
+      return { id: 'saved' };
+    });
+    let added = false;
+    service.subscribe((event) => {
+      if (event.type === 'save_completed' && !added) {
+        added = true;
+        void service.queueSave(snapshot('new notebook', 'b'));
+        void service.queueSave(snapshot('new edit', 'a'));
+      }
+    });
+    await service.queueSave(snapshot('first', 'a'));
+    await service.flush();
+    expect(writes).toEqual(['a', 'b', 'a']);
+  });
+
   it('acknowledges an immediate save without waiting for edits accepted during its write', async () => {
     const old = deferred();
     const next = deferred();
