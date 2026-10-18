@@ -494,3 +494,109 @@ describe('autosave shutdown ownership', () => {
     expect(AutoSaveService.getInstance()).not.toBe(service);
   });
 });
+
+describe('autosave pause admission', () => {
+  it('restores scheduling when an overlapping pause and disposal both fail', async () => {
+    const writing = deferred();
+    const started = deferred();
+    storage.notebooks.saveNotebookSnapshot.mockImplementation(async () => {
+      started.resolve();
+      await writing.promise;
+      throw new Error('quota');
+    });
+    const pausing = service.pause(snapshot('pending'));
+    const pauseFailed = expect(pausing).rejects.toThrow('quota');
+    await started.promise;
+    const disposeFailed = expect(service.dispose()).rejects.toThrow('quota');
+    writing.resolve();
+    await Promise.all([pauseFailed, disposeFailed]);
+    expect(service.getState()).toMatchObject({
+      lifecycle: 'active',
+      scheduling: 'running',
+      isDirty: true,
+    });
+    storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'recovered' });
+    await service.queueSave(snapshot('new edit'));
+    await service.flush();
+  });
+
+  it('saves a microtask edit arriving after the writer drained and before pause completes', async () => {
+    let edit: Promise<void> | undefined;
+    service.subscribe((event) => {
+      if (event.type === 'save_completed' && event.revision === 1) {
+        queueMicrotask(() => {
+          edit = service.queueSave(snapshot('late accepted edit'));
+        });
+      }
+    });
+    await service.pause(snapshot('initial'));
+    await edit;
+    expect(
+      storage.notebooks.saveNotebookSnapshot.mock.calls.map(
+        ([file]) => JSON.parse(file.content).title
+      )
+    ).toEqual(['initial', 'late accepted edit']);
+    expect(service.getState()).toMatchObject({ scheduling: 'paused', isDirty: false });
+    expect(service.getSaveProgress('notebook')?.committedRevision).toBe(2);
+  });
+
+  it('does not resume automatic admission after a load or a manual save', async () => {
+    await service.pause();
+    await service.load('notebook');
+    expect(service.isPaused()).toBe(true);
+    await service.saveNow(snapshot('manual'));
+    expect(service.isPaused()).toBe(true);
+    await expect(service.queueSave(snapshot('not accepted'))).rejects.toThrow('paused');
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
+    service.resume();
+    await service.queueSave(snapshot('accepted after resume'));
+    await service.flush();
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(2);
+  });
+
+  it('coalesces concurrent pauses and rejects resume until the drain finishes', async () => {
+    const writing = deferred();
+    const started = deferred();
+    storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+      started.resolve();
+      await writing.promise;
+      return { id: 'saved' };
+    });
+    const first = service.pause(snapshot('first'));
+    await started.promise;
+    const second = service.pause(snapshot('second'));
+    expect(service.getState().scheduling).toBe('pausing');
+    expect(() => service.resume()).toThrow('draining');
+    writing.resolve();
+    await Promise.all([first, second]);
+    expect(
+      storage.notebooks.saveNotebookSnapshot.mock.calls.map(
+        ([file]) => JSON.parse(file.content).title
+      )
+    ).toEqual(['first', 'second']);
+    expect(service.isPaused()).toBe(true);
+  });
+
+  it('restores automatic admission after a failed pause and retains the revision', async () => {
+    storage.notebooks.saveNotebookSnapshot.mockRejectedValue(new Error('quota'));
+    await expect(service.pause(snapshot('pending'))).rejects.toThrow('quota');
+    expect(service.getState()).toMatchObject({ scheduling: 'running', isDirty: true });
+    storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'saved' });
+    await service.queueSave(snapshot('new edit'));
+    await service.pause();
+    expect(service.isPaused()).toBe(true);
+  });
+
+  it('preserves newer edits submitted by observers of the supplied pause snapshot', async () => {
+    let edit: Promise<void> | undefined;
+    service.subscribe((event) => {
+      if (event.type === 'dirty_changed' && event.progress?.currentRevision === 1)
+        edit = service.queueSave(snapshot('newer observer edit'));
+    });
+    await service.pause(snapshot('old captured snapshot'));
+    await edit;
+    expect(JSON.parse(storage.notebooks.saveNotebookSnapshot.mock.calls[0][0].content).title).toBe(
+      'newer observer edit'
+    );
+  });
+});

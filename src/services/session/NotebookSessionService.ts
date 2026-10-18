@@ -9,7 +9,7 @@
  * - Managing session state transitions
  */
 
-import { AutoSaveService, AutoSaveStatus } from '@Services/autoSave';
+import { AutoSaveService } from '@Services/autoSave';
 import { notebookLog } from '@Utils/logger';
 import {
   SessionStatus,
@@ -280,7 +280,7 @@ export class NotebookSessionService implements ISessionService {
       await this.autoSave.waitForComplete();
 
       // Save current notebook state if connected
-      if (previousNotebookId && this.autoSave.getState().status !== AutoSaveStatus.DISCONNECTED) {
+      if (previousNotebookId && !this.autoSave.isPaused()) {
         const notebookStore = await this.getNotebookStore();
         if (notebookStore.notebookId === previousNotebookId) {
           await this.autoSave.flush(previousNotebookId);

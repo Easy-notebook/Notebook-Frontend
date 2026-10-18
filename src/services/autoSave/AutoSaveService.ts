@@ -60,6 +60,7 @@ export class AutoSaveService implements IAutoSaveService {
   private readonly saveQueue = new NotebookSaveQueue();
   private readonly debouncedSave: ReturnType<typeof debounce>;
   private processing: Promise<void> | null = null;
+  private pauseCompletion: Promise<void> | null = null;
   private readonly contentSizes = new WeakMap<Cell, { content: string; bytes: number }>();
 
   // Event listeners
@@ -78,7 +79,12 @@ export class AutoSaveService implements IAutoSaveService {
     // Create debounced save function
     this.debouncedSave = debounce(
       () => {
-        if (this.processing || this.lifecycle.phase !== 'active') return;
+        if (
+          this.processing ||
+          this.lifecycle.phase !== 'active' ||
+          this.state.scheduling !== 'running'
+        )
+          return;
         void this.processSaveQueue().catch((error) => {
           notebookLog.error('AutoSaveService: Pending changes retained after save failure', {
             error,
@@ -174,11 +180,7 @@ export class AutoSaveService implements IAutoSaveService {
    */
   public async queueSave(snapshot: NotebookSnapshot): Promise<void> {
     this.assertActive();
-    // Skip if paused (DISCONNECTED state - e.g., on / route)
-    if (this.state.status === AutoSaveStatus.DISCONNECTED) {
-      notebookLog.debug('AutoSaveService: Paused (DISCONNECTED), skipping save');
-      return;
-    }
+    if (this.isPaused()) throw new Error('Auto-save scheduling is paused');
 
     if (!this.config.enabled) {
       notebookLog.debug('AutoSaveService: Auto-save disabled, skipping');
@@ -203,7 +205,7 @@ export class AutoSaveService implements IAutoSaveService {
     }
 
     // An observer may request shutdown while receiving the accepted edit.
-    if (this.lifecycle.phase === 'active') this.debouncedSave();
+    this.scheduleSave();
   }
 
   /**
@@ -317,8 +319,7 @@ export class AutoSaveService implements IAutoSaveService {
 
     await this.processSaveQueue(notebookId);
     // A targeted flush must not cancel other notebooks' scheduled saves.
-    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size)
-      this.debouncedSave();
+    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size) this.scheduleSave();
   }
 
   /**
@@ -335,26 +336,51 @@ export class AutoSaveService implements IAutoSaveService {
    */
   public async pause(currentSnapshot?: NotebookSnapshot): Promise<void> {
     this.assertActive();
-    notebookLog.info('AutoSaveService: Pausing...', {
-      currentStatus: this.state.status,
-      hasSnapshot: !!currentSnapshot,
-    });
-
-    // Register before waiting so newer edits always supersede this snapshot.
-    if (currentSnapshot && currentSnapshot.notebookId) {
-      this.enqueueSnapshot(currentSnapshot);
+    if (currentSnapshot && !this.validateSnapshot(currentSnapshot))
+      throw new Error('Invalid notebook snapshot');
+    if (this.pauseCompletion) {
+      if (currentSnapshot) this.enqueueSnapshot(currentSnapshot);
+      return this.pauseCompletion;
     }
-    await this.flush();
-    this.assertActive();
-
-    // Step 4: Cancel debounced save
+    if (this.isPaused() && !currentSnapshot) return;
+    const previousScheduling = this.state.scheduling;
+    const completion = Promise.resolve().then(async () => {
+      try {
+        // Edits remain accepted during the drain. Recheck after every await:
+        // the last writer may have finished just before another edit arrived.
+        do {
+          this.assertActive();
+          await this.processSaveQueue();
+          this.assertActive();
+        } while (this.saveQueue.size > 0);
+        // No await between the empty check and closing automatic admission.
+        this.debouncedSave.cancel();
+        this.pauseCompletion = null;
+        this.publish(
+          { scheduling: 'paused', status: AutoSaveStatus.DISCONNECTED, activeNotebookId: null },
+          'scheduling_changed'
+        );
+      } catch (error) {
+        if (this.pauseCompletion === completion) this.pauseCompletion = null;
+        if (this.lifecycle.phase !== 'disposed') {
+          this.publish(
+            {
+              scheduling: previousScheduling,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'scheduling_changed'
+          );
+        }
+        throw error;
+      }
+    });
+    this.pauseCompletion = completion;
     this.debouncedSave.cancel();
-
-    // Step 5: Clear queue and enter DISCONNECTED state
-    this.saveQueue.clear();
-    this.publish({ status: AutoSaveStatus.DISCONNECTED, activeNotebookId: null }, 'status_changed');
-
-    notebookLog.info('AutoSaveService: Paused (DISCONNECTED)');
+    // Capture the caller's snapshot before observers can submit newer edits.
+    if (currentSnapshot) this.enqueueSnapshot(currentSnapshot);
+    if (this.lifecycle.phase === 'active')
+      this.publish({ scheduling: 'pausing' }, 'scheduling_changed');
+    return completion;
   }
 
   /**
@@ -363,20 +389,14 @@ export class AutoSaveService implements IAutoSaveService {
    */
   public resume(): void {
     this.assertActive();
-    if (this.state.status !== AutoSaveStatus.DISCONNECTED) {
-      notebookLog.debug('AutoSaveService: Not in DISCONNECTED state, no need to resume');
-      return;
-    }
-
-    this.publish({ status: AutoSaveStatus.IDLE }, 'status_changed');
-    notebookLog.info('AutoSaveService: Resumed (IDLE)');
+    if (this.pauseCompletion) throw new Error('Auto-save pause is still draining');
+    if (!this.isPaused()) return;
+    this.publish({ scheduling: 'running', status: AutoSaveStatus.IDLE }, 'scheduling_changed');
+    if (this.saveQueue.size) this.scheduleSave();
   }
 
-  /**
-   * Check if auto-save is paused (DISCONNECTED)
-   */
   public isPaused(): boolean {
-    return this.state.status === AutoSaveStatus.DISCONNECTED;
+    return this.state.scheduling === 'paused';
   }
 
   /**
@@ -414,7 +434,12 @@ export class AutoSaveService implements IAutoSaveService {
         this.saveQueue.clear();
         this.lifecycle = { phase: 'disposed' };
         this.publish(
-          { lifecycle: 'disposed', status: AutoSaveStatus.DISCONNECTED, activeNotebookId: null },
+          {
+            lifecycle: 'disposed',
+            scheduling: 'paused',
+            status: AutoSaveStatus.DISCONNECTED,
+            activeNotebookId: null,
+          },
           'lifecycle_changed'
         );
         this.listeners.clear();
@@ -430,6 +455,11 @@ export class AutoSaveService implements IAutoSaveService {
     this.lifecycle = { phase: 'closing', completion, discard };
     this.publish({ lifecycle: 'closing' }, 'lifecycle_changed');
     return completion;
+  }
+
+  private scheduleSave(): void {
+    if (this.lifecycle.phase === 'active' && this.state.scheduling === 'running')
+      this.debouncedSave();
   }
 
   private assertActive(): void {
@@ -478,8 +508,7 @@ export class AutoSaveService implements IAutoSaveService {
     } finally {
       if (this.processing === operation) this.processing = null;
     }
-    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size)
-      this.debouncedSave();
+    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size) this.scheduleSave();
   }
 
   private async drainQueue(notebookId?: string): Promise<void> {

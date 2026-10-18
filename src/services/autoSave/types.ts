@@ -68,6 +68,7 @@ export interface AutoSaveConfig {
  */
 export interface AutoSaveState {
   lifecycle: 'active' | 'closing' | 'disposed';
+  scheduling: 'running' | 'pausing' | 'paused';
   /** Current status of auto-save */
   status: AutoSaveStatus;
   /** Last successful save timestamp */
@@ -96,7 +97,8 @@ export type AutoSaveEventType =
   | 'dirty_changed'
   | 'error_cleared'
   | 'initialization_failed'
-  | 'lifecycle_changed';
+  | 'lifecycle_changed'
+  | 'scheduling_changed';
 
 /**
  * AutoSave event payload
@@ -203,6 +205,7 @@ export const DEFAULT_AUTOSAVE_CONFIG: AutoSaveConfig = {
  */
 export const INITIAL_AUTOSAVE_STATE: AutoSaveState = {
   lifecycle: 'active',
+  scheduling: 'running',
   status: AutoSaveStatus.IDLE,
   lastSavedAt: null,
   error: null,

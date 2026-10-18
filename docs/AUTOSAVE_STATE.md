@@ -85,11 +85,31 @@ pending initialization, reads and writes, newer accepted edits, failed save reco
 failed connection-close retry, explicit test teardown and notification reentrancy.
 These remain deterministic service doubles, not native application exit tests.
 
+## Pause admission and scheduling ownership
+
+Scheduling now has its own running/pausing/paused state, independent of the latest
+read/write status and the service lifecycle. Loading or manually saving while paused
+does not resume automatic admission. queueSave rejects while paused instead of silently
+dropping a submitted edit; resume explicitly restores scheduling. Session switching
+and paused UI selectors use this authoritative state rather than the latest I/O status.
+
+pause coalesces concurrent requests and continues accepting newer edits while draining.
+It rechecks the queue after awaiting each drain; once empty, it closes automatic
+admission synchronously without an intervening await. It no longer clears queue/history
+as a substitute for saving. Supplied snapshots are captured before observers can submit
+newer changes. resume during a pending drain rejects instead of racing its completion.
+Failure restores the previous scheduling mode and retains pending data. An overlapping
+failed disposal also leaves scheduling recoverable rather than stuck in pausing.
+
+The combined gate passes 108 tests including six pause regressions: edits in the
+writer-to-pause microtask window, loads/manual saves while paused, concurrent pauses,
+failed pause recovery, enqueue observers and overlapping failed shutdown.
+
 ## Remaining lifecycle work
 
-Pause admission fencing, fairness of the global writer under continuous edits,
-cross-window conflicts and native recovery verification remain. flush still drains
-pending work, while flushThrough provides a fixed revision boundary; pause currently
-uses the former and requires a separate admission protocol. Application/browser exit
-wiring is not added by the dispose API; browser termination cannot guarantee awaiting
-asynchronous writes. No crash-durability or cross-session version guarantee is claimed.
+The global writer still needs fairness under continuous edits. Pause waits for
+quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
+application-level producer cancellation remains relevant. Cross-window conflicts,
+native recovery and application/browser exit wiring remain. Browser termination
+cannot guarantee awaiting asynchronous writes. No crash-durability or cross-session
+version guarantee is claimed.

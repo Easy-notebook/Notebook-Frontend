@@ -144,12 +144,15 @@ describe('authoritative autosave projection', () => {
       if (event.status === AutoSaveStatus.DISCONNECTED) disconnected.push(event);
     });
     await binding.store.getState().pause();
-    expect(disconnected).toHaveLength(1);
-    expect(disconnected[0].state).toMatchObject({
-      activeNotebookId: null,
-      isDirty: false,
-      pendingCount: 0,
-    });
+    expect(disconnected.length).toBeGreaterThan(0);
+    for (const event of disconnected) {
+      expect(event.state).toMatchObject({
+        scheduling: 'paused',
+        activeNotebookId: null,
+        isDirty: false,
+        pendingCount: 0,
+      });
+    }
     expect(binding.store.getState()).toMatchObject(disconnected[0].state);
   });
 

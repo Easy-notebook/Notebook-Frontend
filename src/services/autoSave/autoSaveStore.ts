@@ -128,8 +128,7 @@ export const selectIsIdle = (state: AutoSaveStore) => state.status === AutoSaveS
 /**
  * Select if disconnected (paused)
  */
-export const selectIsDisconnected = (state: AutoSaveStore) =>
-  state.status === AutoSaveStatus.DISCONNECTED;
+export const selectIsDisconnected = (state: AutoSaveStore) => state.scheduling === 'paused';
 
 /**
  * Select if has unsaved changes
