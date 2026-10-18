@@ -2217,3 +2217,119 @@ test('historical validation rejects damaged notebook batches without inventing e
   expect(result.original.files).toHaveLength(5);
   expect(result.original.files.find((file) => file.id === 'missing').content).toBeUndefined();
 });
+
+test('matching historical files restore missing notebook ownership atomically without rewriting files', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, FileRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new NotebookRepository(provider);
+    const S = DB_CONFIG.STORES;
+    const incoming = {
+      notebookId: 'orphan',
+      filePath: 'a',
+      fileName: 'a',
+      content: 'one',
+      size: 3,
+      lastModified: 'old',
+    };
+    const files = new FileRepository(provider);
+    await files.saveFile(incoming);
+    await files.saveFile({ ...incoming, filePath: 'b', fileName: 'b', content: 'second', size: 6 });
+    await provider.delete(S.NOTEBOOKS, 'orphan');
+    const old = await provider.get(S.FILES_METADATA, 'orphan::b');
+    await provider.put(S.FILES_METADATA, {
+      ...old,
+      accessCount: 19,
+      lastAccessedAt: 9999999999999,
+    });
+    const before = await Promise.all([
+      provider.getAll(S.FILES_METADATA),
+      provider.getAll(S.FILES_CONTENT),
+      provider.getAll(S.ACTIVITIES),
+    ]);
+    const notebook = {
+      id: 'orphan',
+      name: 'Restored',
+      lastAccessedAt: 1,
+      accessCount: 1,
+      cacheEnabled: true,
+    };
+    const failing = new NotebookRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('restore aborted');
+        }),
+    });
+    let abort;
+    try {
+      await failing.importNotebook(notebook, [incoming]);
+    } catch (error) {
+      abort = error.message;
+    }
+    const afterAbort = await provider.get(S.NOTEBOOKS, 'orphan');
+    const recordsAfterAbort = await Promise.all([
+      provider.getAll(S.FILES_METADATA),
+      provider.getAll(S.FILES_CONTENT),
+      provider.getAll(S.ACTIVITIES),
+    ]);
+    let conflict;
+    try {
+      await repository.importNotebook(notebook, [{ ...incoming, content: 'different' }]);
+    } catch (error) {
+      conflict = error.message;
+    }
+    const afterConflict = await provider.get(S.NOTEBOOKS, 'orphan');
+    const imported = await repository.importNotebook(notebook, [incoming]);
+    const restored = await provider.get(S.NOTEBOOKS, 'orphan');
+    const repeat = await repository.importNotebook(notebook, [incoming]);
+    const afterRepeat = await provider.get(S.NOTEBOOKS, 'orphan');
+    const after = await Promise.all([
+      provider.getAll(S.FILES_METADATA),
+      provider.getAll(S.FILES_CONTENT),
+      provider.getAll(S.ACTIVITIES),
+    ]);
+    const empty = await repository.importNotebook({ ...notebook, id: 'empty' }, []);
+    const emptyParent = await provider.get(S.NOTEBOOKS, 'empty');
+    await provider.close();
+    return {
+      before,
+      abort,
+      afterAbort,
+      recordsAfterAbort,
+      conflict,
+      afterConflict,
+      imported,
+      restored,
+      repeat,
+      afterRepeat,
+      after,
+      empty,
+      emptyParent,
+    };
+  });
+  expect(result.abort).toBe('restore aborted');
+  expect(result.afterAbort).toBeUndefined();
+  expect(result.recordsAfterAbort).toEqual(result.before);
+  expect(result.conflict).toContain('Destination file conflict');
+  expect(result.afterConflict).toBeUndefined();
+  expect(result.imported).toBe(0);
+  expect(result.restored).toMatchObject({
+    id: 'orphan',
+    name: 'Restored',
+    fileCount: 2,
+    totalSize: 9,
+    accessCount: 19,
+    lastAccessedAt: 9999999999999,
+    retention: 'persistent',
+  });
+  expect(result.repeat).toBe(0);
+  expect(result.afterRepeat).toEqual(result.restored);
+  expect(result.after.slice(0, 2)).toEqual(result.before.slice(0, 2));
+  expect(result.after[2]).toHaveLength(result.before[2].length + 1);
+  expect(result.empty).toBe(0);
+  expect(result.emptyParent).toBeUndefined();
+});

@@ -66,10 +66,23 @@ export class NotebookImport {
             missing.push(file);
           }
         });
-        if (missing.length === 0) return;
+        // Equal file bodies do not establish ownership when their parent is absent.
+        if (incoming.length === 0 || (missing.length === 0 && existing)) return;
         const now = Date.now();
         const notebook: NotebookEntity = {
           ...(existing ?? this.notebook),
+          lastAccessedAt: existing
+            ? existing.lastAccessedAt
+            : current.reduce(
+                (latest, file) => Math.max(latest, file.lastAccessedAt),
+                this.notebook.lastAccessedAt
+              ),
+          accessCount: existing
+            ? existing.accessCount
+            : current.reduce(
+                (count, file) => Math.max(count, file.accessCount),
+                this.notebook.accessCount
+              ),
           retention: 'persistent',
           fileCount: current.length + missing.length,
           totalSize:

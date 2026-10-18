@@ -65,9 +65,10 @@ transaction and IndexedDB event doubles. These are not native browser recovery t
 Autosave lint passes without warnings. Full-project type checking still reports
 297 existing diagnostics, none in autosave, persistence or session modules.
 
-The preceding independent whole-project checkpoint passed 1,022 tests across 115 files. An initial
-run concurrent with a production build had one asynchronous math-rendering timeout;
-the isolated eleven-case suite and the subsequent independent full run both passed.
+The latest independent whole-project run passes 1,046 tests across 117 files (55.78s).
+The subsequent production build passes in 37.91s; oversized-chunk warnings remain.
+An earlier checkpoint had an asynchronous math-rendering timeout when tests ran alongside
+a production build; its isolated suite and subsequent independent runs passed.
 Test timeouts were unchanged. A real-manager React integration test covers configuration
 initialization, one periodic timer and unmount cleanup under StrictMode. A native provider
 probe verifies actual IndexedDB configuration before rendering and close/remount behavior.
@@ -212,7 +213,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs sixty-one isolated Playwright cases against production modules:
+`npm run test:browser` runs sixty-two isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -528,11 +529,28 @@ FileSaveData and NotebookSaveData; migration orchestration no longer owns normal
 Native coverage verifies mixed valid/damaged records, no partial damaged notebook,
 correct UTF-8 accounting, actual empty content and unchanged historical source records.
 
+## Restoring import ownership
+
+An import is a no-op only when both matching files and their parent notebook exist.
+If the parent is missing, the same conflict-checked transaction restores it from the
+import metadata, derives counters from all destination files (including files absent
+from the source batch), and preserves their maximum access time/count. Existing file
+metadata and bodies are not rewritten. A failed commit or source-content conflict
+leaves the original orphan records untouched. Repeating the successful repair adds
+no activity, and an empty batch does not create a notebook.
+
+The import method retains its numeric return contract: only newly inserted files are
+counted. Migration counters describe additions, not parent-only ownership repairs.
+This is targeted restoration when source and destination agree, not a general orphan
+recovery scan or permission to invent missing file bodies.
+
 ## Remaining lifecycle work
 
 Historical migration conflicts are reported and preserve both sources; there is no conflict
 resolution UI or automatic choice of a winning historical revision. Startup probing is
-repeatable but has no persistent completion journal. Orphan-record repair requires further review.
+repeatable but has no persistent completion journal. Consequently, deleting an imported
+notebook can currently allow it to reappear from retained source data on a later startup;
+a durable import receipt is required to preserve that deletion. General orphan recovery beyond verified source imports remains unimplemented.
 
 Retention now enforces cache count, inactivity and an application content budget.
 The production caller audit found no explicit evictable notebook creation. Current editing
