@@ -16,6 +16,7 @@
       import { FileCache } from '/src/storage/index.ts';
       import { DB_CONFIG } from '/src/storage/database.ts';
       import { StorageMaintenanceRepository } from '/src/services/persistence/repositories/StorageMaintenanceRepository.ts';
+      import { NotebookRecoveryRepository } from '/src/services/persistence/repositories/NotebookRecoveryRepository.ts';
       import { FileRepository } from '/src/services/persistence/repositories/FileRepository.ts';
       import { NotebookRepository } from '/src/services/persistence/repositories/NotebookRepository.ts';
       import { SplitFileRepository } from '/src/services/persistence/repositories/SplitFileRepository.ts';
@@ -30,6 +31,7 @@
         IndexedDBStorageProvider,
         SplitFileRepository,
         NotebookRepository,
+        NotebookRecoveryRepository,
         FileRepository,
         StorageMaintenanceRepository,
         IndexedDBConnection,

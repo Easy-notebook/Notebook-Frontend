@@ -145,6 +145,7 @@ export interface IStorageMaintenanceRepository {
 }
 
 export interface IPersistenceService {
+  recovery: INotebookRecoveryRepository;
   maintenance: IStorageMaintenanceRepository;
   notebooks: INotebookRepository;
   files: IFileRepository;
@@ -152,4 +153,25 @@ export interface IPersistenceService {
   splitFiles: ISplitFileRepository;
   initialize(): Promise<void>;
   close(): Promise<void>;
+}
+
+export interface NotebookRecoveryData {
+  notebookId: string;
+  writerId: string;
+  revision: number;
+  content: string;
+  expectedContent: string | null;
+  reason: 'content_changed' | 'empty_overwrite';
+}
+
+export interface NotebookRecoveryRecord extends NotebookRecoveryData {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface INotebookRecoveryRepository {
+  saveDraft(data: NotebookRecoveryData): Promise<NotebookRecoveryRecord>;
+  listDrafts(notebookId?: string): Promise<NotebookRecoveryRecord[]>;
+  discardDraft(id: string, revision: number): Promise<boolean>;
 }

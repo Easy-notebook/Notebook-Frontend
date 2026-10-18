@@ -121,6 +121,7 @@ export interface StorageConfigEntity {
  * Database stores configuration
  */
 export const DB_STORES = {
+  NOTEBOOK_RECOVERY: 'notebook_recovery',
   MIGRATION_LEDGER: 'migration_ledger',
   NOTEBOOKS: 'notebooks',
   FILES_METADATA: 'files_metadata',

@@ -190,7 +190,7 @@ test('unsaved edits trigger a native exit dialog and commit after navigation is 
   expect(restored.cells[0].content).toBe('# Retained notebook');
 });
 
-for (const previousVersion of [2, 3]) {
+for (const previousVersion of [2, 3, 4]) {
   test(`v${previousVersion} upgrade preserves records and reconciles missing schema`, async ({
     page,
   }) => {
@@ -241,7 +241,8 @@ for (const previousVersion of [2, 3]) {
       upgraded.close();
       return { version, stores, indexes, records };
     }, previousVersion);
-    expect(result.version).toBe(4);
+    expect(result.version).toBe(5);
+    expect(result.stores).toContain('notebook_recovery');
     expect(result.stores).toContain('migration_ledger');
     expect(result.stores).toContain('split_files');
     expect(result.stores).toContain('tab_states');
@@ -2734,9 +2735,99 @@ test('two pages retain their edit baselines and reject stale nonempty saves with
       return JSON.parse(body.content);
     });
     expect(persisted.cells[0].content).toBe('second update');
+    await second.reload();
+    await second.waitForFunction(() => Boolean(window.storageHarness));
+    const recovered = await second.evaluate(async () => {
+      const { IndexedDBStorageProvider, NotebookRecoveryRepository } = window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const drafts = await new NotebookRecoveryRepository(provider).listDrafts('shared');
+      await provider.close();
+      return drafts;
+    });
+    expect(recovered).toHaveLength(2);
+    expect(new Set(recovered.map((draft) => draft.writerId)).size).toBe(2);
+    expect(recovered.map((draft) => JSON.parse(draft.content).cells[0].content).sort()).toEqual([
+      'local stale edit',
+      'unloaded',
+    ]);
   } finally {
     await second.evaluate(() => window.storageHarness.AutoSaveService.resetInstance());
     await page.evaluate(() => window.storageHarness.AutoSaveService.resetInstance());
     await second.close();
   }
+});
+
+test('recovery drafts isolate writers, retain newer revisions and compare-delete without touching documents', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRecoveryRepository, NotebookRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new NotebookRecoveryRepository(provider);
+    const data = {
+      notebookId: 'recovery',
+      writerId: 'one',
+      revision: 2,
+      content: 'newer',
+      expectedContent: 'base',
+      reason: 'content_changed',
+    };
+    const pending = repository.saveDraft(data);
+    data.content = 'mutated after invocation';
+    const original = await pending;
+    const repeated = await repository.saveDraft({
+      ...data,
+      content: 'newer',
+      expectedContent: 'later observation',
+    });
+    if (repeated.expectedContent !== 'base') throw new Error('Recovery base was rebased');
+    await repository.saveDraft({ ...data, revision: 1, content: 'stale' });
+    await repository.saveDraft({ ...data, writerId: 'two', content: 'other writer' });
+    let collision;
+    try {
+      await repository.saveDraft({ ...data, revision: 2, content: 'different same revision' });
+    } catch (error) {
+      collision = error.message;
+    }
+    const failing = new NotebookRecoveryRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('recovery aborted');
+        }),
+    });
+    let failure;
+    try {
+      await failing.saveDraft({ ...data, revision: 3, content: 'not committed' });
+    } catch (error) {
+      failure = error.message;
+    }
+    const staleDiscard = await repository.discardDraft(original.id, 1);
+    await new NotebookRepository(provider).deleteNotebook('recovery');
+    const retained = await repository.listDrafts('recovery');
+    const discarded = await repository.discardDraft(original.id, 2);
+    const remaining = await repository.listDrafts();
+    const canonical = await provider.getAll(DB_CONFIG.STORES.FILES_CONTENT);
+    await provider.close();
+    return {
+      original,
+      collision,
+      failure,
+      staleDiscard,
+      retained,
+      discarded,
+      remaining,
+      canonical,
+    };
+  });
+  expect(result.original.content).toBe('newer');
+  expect(result.collision).toBe('Recovery revision content mismatch');
+  expect(result.failure).toBe('recovery aborted');
+  expect(result.staleDiscard).toBe(false);
+  expect(result.retained.map((draft) => draft.content).sort()).toEqual(['newer', 'other writer']);
+  expect(result.discarded).toBe(true);
+  expect(result.remaining).toHaveLength(1);
+  expect(result.remaining[0].writerId).toBe('two');
+  expect(result.canonical).toEqual([]);
 });

@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session gate passes 263 tests across twenty-two files. Coverage includes
+The storage/persistence/autosave/session gate passes 266 tests across twenty-two files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -65,8 +65,8 @@ transaction and IndexedDB event doubles. These are not native browser recovery t
 Autosave lint passes without warnings. Full-project type checking still reports
 297 existing diagnostics, none in autosave, persistence or session modules.
 
-The preceding independent whole-project checkpoint passed 1,046 tests across 117 files (55.78s).
-Its subsequent production build passed in 37.91s; oversized-chunk warnings remain.
+The latest independent whole-project run passes 1,067 tests across 119 files (57.42s).
+The subsequent production build passes in 15.23s; oversized-chunk warnings remain.
 An earlier checkpoint had an asynchronous math-rendering timeout when tests ran alongside
 a production build; its isolated suite and subsequent independent runs passed.
 Test timeouts were unchanged. A real-manager React integration test covers configuration
@@ -213,19 +213,19 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs sixty-nine isolated Playwright cases against production modules:
+`npm run test:browser` runs seventy-one isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 263 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 266 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
 
-Database version 4 retains the existing database name and records, and reconciles
+Database version 5 retains the existing database name and records, and reconciles
 missing stores/indexes through NotebookDatabaseSchema in the shared provider.
 Unknown stores are retained; upgrades never delete existing stores. The retired raw
 connection manager and unused TabCache/SplitPreviewCache implementations are removed.
@@ -547,7 +547,7 @@ recovery scan or permission to invent missing file bodies.
 ## Durable migration ledger
 
 Version 4 adds migration_ledger without changing the database name or clearing existing
-records. v2 and v3 upgrade tests verify retained data and the added store. Ledger entries
+records. Current v2/v3/v4 upgrade tests verify retained data and the added stores. Ledger entries
 are keyed by notebook ID and record completed source databases or a deleted terminal state.
 NotebookMigrationLedger owns these transitions inside the caller's IndexedDB transaction.
 
@@ -608,7 +608,8 @@ competing nonempty edits, repeat rejection and preservation of the winner's pers
 Unit tests cover pending/committed edits overtaking loads and baseline ownership transitions.
 This provides optimistic content conflict detection for AutoSaveService clients, not merging,
 a revision history, cross-device coordination or protection from unconditional repository
-callers. Conflict resolution UI and durable recovery of the losing local edit remain work.
+callers. Conflict resolution UI remains work; committed conflict snapshots now have the
+separate durable recovery path described below.
 
 ## Terminal save conflicts
 
@@ -625,6 +626,34 @@ An explicit later flush can attempt the retained revision, still under the origi
 Deterministic tests verify no retry timer, one write attempt, independent notebook progress,
 barrier rejection and latest-snapshot preservation. Native cross-window tests verify the
 original version conflict is now returned immediately rather than masked by a retry.
+
+## Durable conflict drafts
+
+Version 5 adds notebook_recovery. NotebookSnapshotDocument prepares the existing notebook
+JSON once for a canonical write and supplies the same serialization format for recovery.
+On NotebookConflictError, autosave captures the currently queued snapshot and awaits its
+recovery transaction before publishing the failure. The canonical queue remains pending;
+a saved recovery draft never acknowledges a main-document revision. If recovery also fails,
+the error explicitly includes that failure and the in-memory snapshot remains pending.
+
+Each service instance has a UUID writer identity. NotebookRecoveryRepository owns one row
+per writer/notebook and compares local revision numbers in its transaction. Older writes
+cannot replace newer drafts; an equal revision must have equal content and preserves its
+original comparison baseline. Drafts from separate windows remain independent. Repository
+listDrafts exposes persisted records after reload; discardDraft compares the observed
+revision before deleting so a stale action cannot discard a newer draft.
+
+Recovery records survive notebook deletion and cache cleanup. They are retained until an
+explicit recovery action; even a later successful main save does not silently discard them.
+They are outside the current canonical-file/split-content usage totals. A normal reload test
+retrieves both an unloaded overwrite attempt and a stale-window edit while the canonical
+winning document remains unchanged. Native tests cover monotonic updates, writer isolation,
+transaction abort, invocation-time capture, compare-delete and notebook deletion isolation.
+
+Durability begins at recovery transaction completion, not at keystroke admission. Edits
+admitted after recovery capture remain queued and need their own save attempt. This is not
+a guarantee against process termination before commit or disk/power loss. No recovery UI,
+automatic merge or restore-as-copy action is provided by this persistence phase.
 
 ## Remaining lifecycle work
 

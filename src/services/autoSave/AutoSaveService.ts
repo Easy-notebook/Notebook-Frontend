@@ -4,7 +4,9 @@
  */
 
 import { debounce } from 'lodash-es';
-import { NotebookSaveQueue } from './NotebookSaveQueue';
+import { v4 as uuid } from 'uuid';
+import { NotebookSnapshotDocument } from './NotebookSnapshotDocument';
+import { NotebookSaveQueue, type QueuedSnapshot } from './NotebookSaveQueue';
 import { NotebookSaveScheduler } from './NotebookSaveScheduler';
 import { NotebookWriteBaseline } from './NotebookWriteBaseline';
 import { PersistenceService } from '../persistence/PersistenceService';
@@ -56,6 +58,7 @@ export class AutoSaveService implements IAutoSaveService {
   private lifecycle: ServiceLifecycle = { phase: 'active' };
   private readonly reads = new Set<Promise<unknown>>();
   private readonly writeBaseline = new NotebookWriteBaseline();
+  private readonly writerId = uuid();
   private initialized = false;
   private initialization: Promise<void> | null = null;
   private readonly isDevelopment: boolean = import.meta.env.DEV === true;
@@ -529,65 +532,30 @@ export class AutoSaveService implements IAutoSaveService {
   /**
    * Perform actual save operation
    */
-  private async performSave(snapshot: NotebookSnapshot): Promise<void> {
-    const { notebookId, notebookTitle, cells, tasks, timestamp } = snapshot;
-
+  private async performSave(snapshot: QueuedSnapshot): Promise<void> {
+    const { notebookId, notebookTitle, cells, tasks } = snapshot;
+    let condition: NotebookSnapshotCondition | undefined;
     try {
+      const document = new NotebookSnapshotDocument(snapshot);
       await this.initializeStorage();
-      const condition = await this.prepareSnapshotCondition(snapshot);
+      condition = await this.prepareSnapshotCondition(snapshot);
       this.publish({ status: AutoSaveStatus.SYNCING }, 'save_started', notebookId);
-
-      // Prepare both records before any write: serialization failures must not
-      // leave updated metadata pointing at the previous content revision.
-      const notebookMetadata = {
-        id: notebookId,
-        name: notebookTitle || `Notebook ${notebookId.slice(0, 8)}`,
-        description: '',
-        lastAccessedAt: timestamp,
-        accessCount: 1,
-        cacheEnabled: true,
-      };
-
-      // Preserve the existing notebook JSON format.
-      const notebookContent = JSON.stringify({
-        notebook_id: notebookId,
-        title: notebookTitle,
-        notebookTitle: notebookTitle,
-        cells: cells || [],
-        tasks: tasks || [],
-        saved_at: timestamp,
-        version: '2.0',
-        metadata: {
-          totalCells: cells?.length || 0,
-          hasImages: cells?.some((c) => c.type === 'image') || false,
-          lastSaved: new Date(timestamp).toISOString(),
-        },
-      });
-      const contentSize = new Blob([notebookContent]).size;
 
       if (this.isDevelopment) {
         notebookLog.lifecycleEvent('save', notebookId, {
           title: notebookTitle,
           cellsCount: cells?.length || 0,
           tasksCount: tasks?.length || 0,
-          contentLength: notebookContent.length,
+          contentLength: document.content.length,
         });
       }
 
       const saveResult = await this.persistence.notebooks.saveNotebookSnapshot(
-        {
-          notebookId,
-          filePath: `notebook_${notebookId}.json`,
-          fileName: `${notebookTitle || 'Untitled'}.easynb`,
-          content: notebookContent,
-          lastModified: new Date(timestamp).toISOString(),
-          size: contentSize,
-          remoteUrl: undefined,
-        },
-        notebookMetadata,
+        document.file,
+        document.notebook,
         condition
       );
-      this.writeBaseline.committed(notebookId, notebookContent);
+      this.writeBaseline.committed(notebookId, document.content);
 
       if (this.isDevelopment) {
         storageLog.debug('AutoSaveService: File save result', {
@@ -603,6 +571,27 @@ export class AutoSaveService implements IAutoSaveService {
         cellsCount: cells.length,
       });
     } catch (error) {
+      if (error instanceof NotebookConflictError) {
+        const retained = this.saveQueue.get(notebookId) ?? snapshot;
+        try {
+          await this.persistence.recovery.saveDraft({
+            notebookId,
+            writerId: this.writerId,
+            revision: retained.revision,
+            content: new NotebookSnapshotDocument(retained).content,
+            expectedContent: (condition ?? this.writeBaseline.condition(notebookId))
+              .expectedContent,
+            reason: error.reason,
+          });
+        } catch (recoveryError) {
+          throw new NotebookConflictError(
+            error.notebookId,
+            error.filePath,
+            error.reason,
+            recoveryError
+          );
+        }
+      }
       notebookLog.error('AutoSaveService: Save failed', { notebookId, error });
       throw error;
     }

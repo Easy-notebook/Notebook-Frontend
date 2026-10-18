@@ -4,6 +4,7 @@ import { AutoSaveService } from './AutoSaveService';
 import { AutoSaveStatus, type NotebookSnapshot } from './types';
 
 const storage = vi.hoisted(() => ({
+  recovery: { saveDraft: vi.fn() },
   initialize: vi.fn(),
   close: vi.fn(),
   notebooks: { saveNotebook: vi.fn(), saveNotebookSnapshot: vi.fn(), getNotebook: vi.fn() },
@@ -11,6 +12,7 @@ const storage = vi.hoisted(() => ({
 }));
 vi.mock('../persistence/PersistenceService', () => ({
   PersistenceService: class {
+    recovery = storage.recovery;
     initialize = storage.initialize;
     close = storage.close;
     notebooks = storage.notebooks;
@@ -776,4 +778,61 @@ it('publishes one blocked failure for a typed storage conflict without automatic
     phase: 'blocked',
     committedRevision: 0,
   });
+});
+
+it('awaits durable recovery before reporting the original conflict without acknowledging the edit', async () => {
+  const gate = deferred();
+  const conflict = new NotebookConflictError('notebook', 'notebook_notebook.json');
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(conflict);
+  storage.recovery.saveDraft.mockImplementation(() => gate.promise);
+  const failures: string[] = [];
+  service.subscribe((event) => {
+    if (event.type === 'save_failed') failures.push(event.error!);
+  });
+  const rejected = expect(service.saveNow(snapshot('recover me'))).rejects.toBe(conflict);
+  await vi.waitFor(() => expect(storage.recovery.saveDraft).toHaveBeenCalledTimes(1));
+  expect(failures).toEqual([]);
+  const draft = storage.recovery.saveDraft.mock.calls[0][0];
+  expect(JSON.parse(draft.content).cells[0].content).toBe('# recover me');
+  expect(draft).toMatchObject({
+    notebookId: 'notebook',
+    expectedContent: null,
+    reason: 'content_changed',
+    revision: 1,
+  });
+  gate.resolve();
+  await rejected;
+  expect(service.getSaveProgress('notebook')).toMatchObject({
+    phase: 'blocked',
+    committedRevision: 0,
+  });
+});
+
+it('reports recovery failure and retains the pending edit without retrying the conflict', async () => {
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(
+    new NotebookConflictError('notebook', 'body')
+  );
+  storage.recovery.saveDraft.mockRejectedValue(new Error('recovery quota'));
+  await expect(service.saveNow(snapshot('keep in memory'))).rejects.toThrow(
+    'conflict recovery could not be saved: recovery quota'
+  );
+  expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
+  expect(service.hasPending('notebook')).toBe(true);
+});
+
+it('captures the newest queued revision when the active write discovers a conflict', async () => {
+  const gate = deferred();
+  storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+    await gate.promise;
+    throw new NotebookConflictError('notebook', 'body');
+  });
+  const rejected = expect(service.saveNow(snapshot('older'))).rejects.toThrow('content changed');
+  await vi.waitFor(() => expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1));
+  await service.queueSave(snapshot('newest'));
+  gate.resolve();
+  await rejected;
+  const draft = storage.recovery.saveDraft.mock.calls[0][0];
+  expect(draft.revision).toBe(service.getSaveProgress('notebook')?.currentRevision);
+  expect(JSON.parse(draft.content).cells[0].content).toBe('# newest');
+  expect(service.hasPending('notebook')).toBe(true);
 });

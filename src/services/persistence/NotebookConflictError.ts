@@ -7,12 +7,16 @@ export class NotebookConflictError extends Error {
   constructor(
     readonly notebookId: string,
     readonly filePath: string,
-    readonly reason: NotebookConflictReason = 'content_changed'
+    readonly reason: NotebookConflictReason = 'content_changed',
+    readonly recoveryError?: unknown
   ) {
     super(
       reason === 'content_changed'
         ? 'Notebook content changed before snapshot commit'
         : 'Refusing to overwrite an existing notebook with an empty snapshot'
     );
+    if (recoveryError !== undefined) {
+      this.message += `; conflict recovery could not be saved: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`;
+    }
   }
 }

@@ -20,7 +20,7 @@ Coverage:
 - A native unique-key failure rolls back a multi-store transaction.
 - Closing drains accepted writes and rejects new transaction admission.
 - A blocked upgrade rejects, then succeeds after the blocking connection closes.
-- The shared provider upgrades v2/v3 records without clearing stores and add missing indexes.
+- The shared provider upgrades v2/v3/v4 records without clearing stores and add missing indexes.
 - A conflicting unique index rolls back the upgrade and retains the original version/data.
 - Split-cache clearing preserves unrelated notebooks and a subsequently admitted refresh.
 - Both scoped and whole-cache clearing roll back all deletions on transaction failure.
@@ -70,6 +70,9 @@ Coverage:
 - Two actual pages keep independent edit baselines: own sequential saves succeed, unloaded
   overwrites and stale nonempty edits reject, retry/load cannot silently rebase pending edits,
   and the winning persisted body remains intact.
+- Conflicting local snapshots survive page reload in independent recovery records while the
+  winning document is unchanged. Draft writes are monotonic per writer, failed transactions
+  roll back, stale dismissals cannot delete newer drafts, and notebook deletion retains drafts.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.
