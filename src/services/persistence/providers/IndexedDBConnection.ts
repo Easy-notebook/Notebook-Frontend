@@ -107,6 +107,7 @@ export class IndexedDBConnection {
     mode: IDBTransactionMode,
     schedule: (transaction: IDBTransaction, result: (value: T) => void) => void | Promise<void>
   ): Promise<T> {
+    const storeNames = [...stores];
     const generation = this.generation;
     const opening = this.initialize();
     await opening;
@@ -115,7 +116,7 @@ export class IndexedDBConnection {
       throw new Error('Storage connection closed before transaction admission');
     }
     // No await between admission, transaction creation, and lifetime registration.
-    const tx = state.db.transaction(stores, mode);
+    const tx = state.db.transaction(storeNames, mode);
     let resolve!: (value: T) => void;
     let reject!: (error: unknown) => void;
     let value: T;

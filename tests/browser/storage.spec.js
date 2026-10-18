@@ -1685,3 +1685,148 @@ test('an activity key collision aborts the file transaction instead of overwriti
   expect(result.activity).toEqual([result.original]);
   expect(result.counts).toEqual([0, 0, 0]);
 });
+
+test('a cold provider captures nested write input before opening storage', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const input = { id: 'original', nested: { text: 'before' } };
+    const writing = provider.put(DB_CONFIG.STORES.CONFIG, input);
+    input.id = 'mutated';
+    input.nested.text = 'after';
+    await writing;
+    const records = await provider.getAll(DB_CONFIG.STORES.CONFIG);
+    await provider.close();
+    return records;
+  });
+  expect(result).toEqual([{ id: 'original', nested: { text: 'before' } }]);
+});
+
+test('file and notebook writes retain their admitted identities, payloads and options', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, FileRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const notebooks = new NotebookRepository(provider);
+    const metadata = {
+      id: 'book',
+      name: 'Original',
+      accessCount: 1,
+      lastAccessedAt: 1,
+      cacheEnabled: true,
+    };
+    const savingNotebook = notebooks.saveNotebook(metadata);
+    metadata.id = 'other';
+    metadata.name = 'Later';
+    await savingNotebook;
+    const data = {
+      notebookId: 'book',
+      filePath: 'file',
+      fileName: 'file',
+      content: 'original',
+      size: 8,
+      lastModified: 'today',
+      remoteUrl: '/remote/file',
+    };
+    const options = { maxFileSize: 100 };
+    const savingFile = new FileRepository(provider).saveFile(data, options);
+    data.notebookId = 'other';
+    data.content = 'mutated';
+    options.maxFileSize = 0;
+    await savingFile;
+    const snapshotMetadata = { ...metadata, id: 'book', name: 'Snapshot' };
+    const savingSnapshot = notebooks.saveNotebookSnapshot(
+      { ...data, notebookId: 'book', filePath: 'snapshot', content: 'saved', size: 5 },
+      snapshotMetadata
+    );
+    snapshotMetadata.id = 'other';
+    snapshotMetadata.name = 'Too late';
+    await savingSnapshot;
+    const books = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    const file = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'book::file');
+    const snapshot = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'book::snapshot');
+    await provider.close();
+    return { books, file, snapshot };
+  });
+  expect(result.books).toHaveLength(1);
+  expect(result.books[0]).toMatchObject({
+    id: 'book',
+    name: 'Snapshot',
+    fileCount: 2,
+    totalSize: 13,
+  });
+  expect(result.file.content).toBe('original');
+  expect(result.snapshot.content).toBe('saved');
+});
+
+test('config patches and nested activity metadata capture the invocation-time values', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const {
+      IndexedDBStorageProvider,
+      StorageMaintenanceRepository,
+      NotebookRepository,
+      DB_CONFIG,
+    } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    const patch = { maxNotebooks: 75 };
+    const writing = repository.updateConfig(patch);
+    patch.maxNotebooks = -1;
+    await writing;
+    const metadata = { nested: { version: 1 } };
+    const logging = new NotebookRepository(provider).logActivity(
+      'book',
+      'close',
+      undefined,
+      metadata
+    );
+    metadata.nested.version = 2;
+    await logging;
+    const config = await repository.getConfig();
+    const events = await provider.getAll(DB_CONFIG.STORES.ACTIVITIES);
+    await provider.close();
+    return { config, events };
+  });
+  expect(result.config.maxNotebooks).toBe(75);
+  expect(result.events[0].metadata).toEqual({ nested: { version: 1 } });
+});
+
+test('transaction store scope cannot change while awaiting the connection', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const names = [DB_CONFIG.STORES.CONFIG];
+    const writing = provider.transaction(names, 'readwrite', async (stores) => {
+      stores[DB_CONFIG.STORES.CONFIG].put({ id: 'scope', value: 'original' });
+    });
+    names[0] = DB_CONFIG.STORES.NOTEBOOKS;
+    await writing;
+    const config = await provider.get(DB_CONFIG.STORES.CONFIG, 'scope');
+    await provider.close();
+    return config;
+  });
+  expect(result).toEqual({ id: 'scope', value: 'original' });
+});
+
+test('the application file-cache facade captures input before its dynamic import', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { FileCache } = window.storageHarness;
+    const data = { notebookId: 'book', path: 'file', name: 'file', content: 'first', size: 5 };
+    const writing = FileCache.saveFile(data);
+    data.notebookId = 'other';
+    data.content = 'later';
+    await writing;
+    return {
+      file: await FileCache.getFile('book', 'file'),
+      other: await FileCache.getNotebook('other'),
+    };
+  });
+  expect(result.file.content).toBe('first');
+  expect(result.other).toBeNull();
+});

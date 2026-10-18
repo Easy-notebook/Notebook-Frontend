@@ -92,6 +92,7 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
   }
 
   async updateConfig(patch: Partial<StorageConfigEntity>): Promise<void> {
+    const changes = { ...patch };
     await this.storage.transaction([DB_STORES.CONFIG], 'readwrite', async (stores) => {
       const store = stores[DB_STORES.CONFIG];
       const current = await this.read<StorageConfigEntity | undefined>(store.get('config'));
@@ -99,7 +100,7 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
         new StorageConfiguration({
           ...DEFAULT_STORAGE_CONFIG,
           ...current,
-          ...patch,
+          ...changes,
           id: 'config',
         }).toRecord()
       );

@@ -30,7 +30,9 @@ export class FileRepository implements IFileRepository {
     fileData: T,
     options: FileSaveOptions = {}
   ): Promise<FileMetadataEntity> {
-    if (!fileData.notebookId || !fileData.filePath || !fileData.fileName)
+    const data: FileSaveData = { ...fileData };
+    const settings = { ...options };
+    if (!data.notebookId || !data.filePath || !data.fileName)
       throw new Error('Invalid file data: notebook identity, path and name are required');
     let records!: FileRecordSet;
     await this.storage.transaction(
@@ -41,9 +43,9 @@ export class FileRepository implements IFileRepository {
           stores[DB_CONFIG.STORES.CONFIG].get('config')
         );
         const config = new StorageConfiguration(stored).toRecord();
-        records = new FileRecordSet(fileData, {
-          ...options,
-          maxFileSize: options.maxFileSize ?? config.maxFileSize,
+        records = new FileRecordSet(data, {
+          ...settings,
+          maxFileSize: settings.maxFileSize ?? config.maxFileSize,
         });
         const existing = await this.read<FileMetadataEntity | undefined>(
           stores[DB_CONFIG.STORES.FILES_METADATA].get(records.metadata.id)
@@ -54,8 +56,8 @@ export class FileRepository implements IFileRepository {
         );
         await this.recordMutation(
           stores,
-          fileData.notebookId,
-          fileData.filePath,
+          data.notebookId,
+          data.filePath,
           existing ? 0 : 1,
           records.metadata.size - (existing?.size || 0),
           'file_create'

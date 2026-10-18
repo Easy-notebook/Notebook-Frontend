@@ -37,9 +37,10 @@ export class IndexedDBStorageProvider implements IStorageProvider {
     });
   }
 
-  put<T>(storeName: string, value: T): Promise<void> {
+  async put<T>(storeName: string, value: T): Promise<void> {
+    const snapshot = structuredClone(value);
     return this.connection.runTransaction([storeName], 'readwrite', (tx) => {
-      tx.objectStore(storeName).put(value);
+      tx.objectStore(storeName).put(snapshot);
     });
   }
 
@@ -54,9 +55,10 @@ export class IndexedDBStorageProvider implements IStorageProvider {
     mode: 'readonly' | 'readwrite',
     callback: (stores: Record<string, IDBObjectStore>) => Promise<void>
   ): Promise<void> {
-    return this.connection.runTransaction(storeNames, mode, (tx) => {
+    const names = [...storeNames];
+    return this.connection.runTransaction(names, mode, (tx) => {
       const stores: Record<string, IDBObjectStore> = {};
-      for (const name of storeNames) stores[name] = tx.objectStore(name);
+      for (const name of names) stores[name] = tx.objectStore(name);
       // Requests must be scheduled synchronously or from IndexedDB callbacks.
       // Awaiting unrelated work does not keep an IndexedDB transaction alive.
       return callback(stores);

@@ -249,3 +249,9 @@ describe('IndexedDB transaction acknowledgement', () => {
     }
   );
 });
+
+it('rejects uncloneable write input before opening a connection', async () => {
+  const f = fixture();
+  await expect(f.provider.put('store', { callback: () => {} })).rejects.toThrow();
+  expect(f.open).not.toHaveBeenCalled();
+});

@@ -47,6 +47,8 @@ Coverage:
 - Invalid configuration updates roll back, and malformed saved settings reject maintenance/cache writes until repaired.
 - Same-millisecond notebook/file activities retain distinct identities; an injected activity-key
   collision aborts the file transaction without overwriting history.
+- Writes capture input before asynchronous work: later caller mutations cannot change file/notebook
+  identity, content/options, config, nested activity metadata or transaction scope.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

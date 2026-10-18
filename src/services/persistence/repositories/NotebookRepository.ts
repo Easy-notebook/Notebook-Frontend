@@ -18,13 +18,13 @@ export class NotebookRepository implements INotebookRepository {
   constructor(private storage: IStorageProvider) {}
 
   async saveNotebook(notebookData: NotebookSaveData): Promise<NotebookEntity> {
-    return this.persistNotebook(notebookData);
+    return this.persistNotebook({ ...notebookData });
   }
 
   async saveNotebookSnapshot(file: FileSaveData, notebook: NotebookSaveData) {
     if (file.notebookId !== notebook.id) throw new Error('Snapshot notebook identity mismatch');
     const records = new FileRecordSet(file, { forceLocal: true });
-    await this.persistNotebook(notebook, records);
+    await this.persistNotebook({ ...notebook }, records);
     return records.metadata;
   }
 

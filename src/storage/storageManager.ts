@@ -34,7 +34,8 @@ export class StorageManager {
   }
 
   static updateConfig(config: Partial<StorageConfigEntity>): Promise<void> {
-    return this.lifecycle.run(() => this.doUpdateConfig(config));
+    const changes = { ...config };
+    return this.lifecycle.run(() => this.doUpdateConfig(changes));
   }
 
   static getStorageStats(): Promise<StorageStats> {

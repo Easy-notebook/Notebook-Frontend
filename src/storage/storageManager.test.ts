@@ -118,4 +118,11 @@ describe('StorageManager lifecycle integration', () => {
     await forced;
     await expect(StorageManager.cleanupStorage()).resolves.toEqual(stats);
   });
+  it('captures a config patch before lifecycle admission defers its execution', async () => {
+    const patch = { maxNotebooks: 75 };
+    const saving = StorageManager.updateConfig(patch);
+    patch.maxNotebooks = 0;
+    await saving;
+    expect(mocks.updateConfig).toHaveBeenCalledExactlyOnceWith({ maxNotebooks: 75 });
+  });
 });

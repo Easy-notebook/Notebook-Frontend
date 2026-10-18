@@ -30,17 +30,18 @@ export interface FileObject {
 // Application file-cache API backed by the shared repository.
 export const FileCache = {
   saveFile: async (fileData: any) => {
+    const snapshot = { ...fileData };
     const { persistenceService } = await import('../services/persistence/instance');
 
     // Transform legacy format to new format
     const transformedData = {
-      notebookId: fileData.notebookId,
-      filePath: fileData.path || fileData.filePath, // Support both legacy 'path' and new 'filePath'
-      fileName: fileData.name || fileData.fileName, // Support both legacy 'name' and new 'fileName'
-      content: fileData.content || '',
-      lastModified: fileData.lastModified || new Date().toISOString(),
-      size: fileData.size || 0,
-      remoteUrl: fileData.remoteUrl,
+      notebookId: snapshot.notebookId,
+      filePath: snapshot.path || snapshot.filePath, // Support both legacy 'path' and new 'filePath'
+      fileName: snapshot.name || snapshot.fileName, // Support both legacy 'name' and new 'fileName'
+      content: snapshot.content || '',
+      lastModified: snapshot.lastModified || new Date().toISOString(),
+      size: snapshot.size || 0,
+      remoteUrl: snapshot.remoteUrl,
     };
 
     return persistenceService.files.saveFile(transformedData);

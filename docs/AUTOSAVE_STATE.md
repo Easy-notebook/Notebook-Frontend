@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 200 tests across sixteen files. Coverage includes
+The persistence/autosave/session gate passes 202 tests across sixteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -175,14 +175,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs forty-eight isolated Playwright cases against production modules:
+`npm run test:browser` runs fifty-three isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 200 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 202 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -269,7 +269,7 @@ The manager boundary does not claim to stop independent callers of the shared re
 All manager operations participate in admission/draining, including manual cleanup and
 migration. Internal steps remain part of the admitted operation and can finish during
 shutdown. Destructive cleanup reads configuration strictly; only optional configuration
-display retains default-on-read-error behavior. Nine lifecycle tests and four manager
+display retains default-on-read-error behavior. Nine lifecycle tests and five manager
 integration tests cover timer ownership, admission, draining, retries and config failure.
 
 ## Atomic notebook retention
@@ -415,6 +415,25 @@ of overwriting prior history; file data, notebook counters and activity remain a
 Explicit logActivity now uses the same transactional append contract. A frozen-clock native
 test verifies all fourteen notebook/file events survive, and an injected duplicate key test
 verifies existing history remains intact while the associated file write rolls back.
+
+## Invocation-time write inputs
+
+Repository entry points capture scalar notebook/file/configuration data and file options
+before awaiting configuration or current records. The manager configuration facade and
+FileCache facade capture input before lifecycle deferral or dynamic import. A save cannot
+therefore acquire a different notebook identity or content because its caller reuses an
+object while the operation is pending.
+
+Provider put captures a structured clone before opening storage, and activity records copy
+nested metadata at construction. Unsupported structured values reject without opening a
+connection; there is no JSON conversion fallback. Transaction store-name arrays are also
+copied before asynchronous initialization. Repository callbacks remain responsible for any
+other application-owned values they capture.
+
+Native tests mutate objects immediately after invoking writes and verify cold-provider
+nested values, notebook/file identities and options, snapshot association, config patches,
+activity metadata, transaction scope and the application FileCache facade. Manager unit
+coverage verifies capture before lifecycle deferral.
 
 ## Remaining lifecycle work
 
