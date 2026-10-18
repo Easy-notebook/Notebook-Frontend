@@ -64,6 +64,9 @@ Coverage:
 - Migration receipts and deletion markers commit with document writes; failed transactions
   leave neither partial receipts nor deletion markers. Deleted imports stay deleted across
   reload and forced retry, including attempts from previously unseen historical sources.
+- Empty autosave conditions reject a competing connection's intervening nonempty commit;
+  retries remain pending, matching revisions succeed, and orphan bodies are never overwritten
+  through an absent-content condition.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

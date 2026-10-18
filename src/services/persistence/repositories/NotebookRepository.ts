@@ -4,11 +4,13 @@ import {
   IStorageProvider,
   type NotebookSaveData,
   type FileSaveData,
+  type NotebookSnapshotCondition,
 } from '../interfaces';
 import {
   NotebookEntity,
   NotebookActivityEntity,
   FileMetadataEntity,
+  FileContentEntity,
 } from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
 import { NotebookDeletion } from './NotebookDeletion';
@@ -30,16 +32,21 @@ export class NotebookRepository implements INotebookRepository {
     return this.persistNotebook({ ...notebookData });
   }
 
-  async saveNotebookSnapshot(file: FileSaveData, notebook: NotebookSaveData) {
+  async saveNotebookSnapshot(
+    file: FileSaveData,
+    notebook: NotebookSaveData,
+    condition?: NotebookSnapshotCondition
+  ) {
     if (file.notebookId !== notebook.id) throw new Error('Snapshot notebook identity mismatch');
     const records = new FileRecordSet(file, { forceLocal: true });
-    await this.persistNotebook({ ...notebook }, records);
+    await this.persistNotebook({ ...notebook }, records, condition && { ...condition });
     return records.metadata;
   }
 
   private async persistNotebook(
     data: NotebookSaveData,
-    file?: FileRecordSet
+    file?: FileRecordSet,
+    condition?: NotebookSnapshotCondition
   ): Promise<NotebookEntity> {
     const names: string[] = [
       DB_CONFIG.STORES.NOTEBOOKS,
@@ -56,6 +63,17 @@ export class NotebookRepository implements INotebookRepository {
           stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(data.id)
         ),
       ]);
+      if (file && condition) {
+        const current = await this.read<FileContentEntity | undefined>(
+          stores[DB_CONFIG.STORES.FILES_CONTENT].get(file.metadata.id)
+        );
+        const metadata = files.find((record) => record.id === file.metadata.id);
+        const matches =
+          condition.expectedContent === null
+            ? !metadata && !current
+            : metadata?.hasLocalContent && current?.content === condition.expectedContent;
+        if (!matches) throw new Error('Notebook content changed before snapshot commit');
+      }
       const retained = file ? files.filter((record) => record.id !== file.metadata.id) : files;
       const now = Date.now();
       notebook = {

@@ -2476,3 +2476,152 @@ test('deleted migrated notebooks stay deleted after reload and forced historical
   expect(result.files).toEqual([]);
   expect(result.ledger.state).toBe('deleted');
 });
+
+for (const initiallyPresent of [false, true]) {
+  test(`empty autosave cannot overwrite a competing committed notebook (initially present: ${initiallyPresent})`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (initiallyPresent) => {
+      const { IndexedDBStorageProvider, NotebookRepository, AutoSaveService, DB_CONFIG } =
+        window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const competitor = new NotebookRepository(provider);
+      const notebook = {
+        id: 'race',
+        name: 'Competing edit',
+        lastAccessedAt: 1,
+        accessCount: 1,
+        cacheEnabled: true,
+      };
+      const file = {
+        notebookId: 'race',
+        filePath: 'notebook_race.json',
+        fileName: 'race.easynb',
+        content: JSON.stringify({ cells: [], tasks: [] }),
+        size: 23,
+        lastModified: 'old',
+      };
+      if (initiallyPresent) await competitor.saveNotebookSnapshot(file, notebook);
+      const original = NotebookRepository.prototype.saveNotebookSnapshot;
+      let injected = false;
+      const commitErrors = [];
+      NotebookRepository.prototype.saveNotebookSnapshot = async function (
+        fileData,
+        metadata,
+        condition
+      ) {
+        if (condition && !injected) {
+          injected = true;
+          await original.call(
+            competitor,
+            {
+              ...file,
+              content: JSON.stringify({
+                cells: [{ id: 'kept', content: 'other window' }],
+                tasks: [],
+              }),
+            },
+            notebook
+          );
+        }
+        try {
+          return await original.call(this, fileData, metadata, condition);
+        } catch (failure) {
+          commitErrors.push(failure.message);
+          throw failure;
+        }
+      };
+      const service = AutoSaveService.getInstance({
+        debounceMs: 60000,
+        maxRetries: 1,
+        retryDelayMs: 0,
+      });
+      let error;
+      try {
+        await service.saveNow({
+          notebookId: 'race',
+          notebookTitle: 'Empty overwrite',
+          cells: [],
+          tasks: [],
+          timestamp: Date.now(),
+        });
+      } catch (failure) {
+        error = failure.message;
+      }
+      NotebookRepository.prototype.saveNotebookSnapshot = original;
+      const pending = service.hasPending('race');
+      const progress = service.getSaveProgress('race');
+      const saved = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'race::notebook_race.json');
+      const parent = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'race');
+      await AutoSaveService.resetInstance();
+      await provider.close();
+      return { injected, commitErrors, error, pending, progress, saved, parent };
+    }, initiallyPresent);
+    expect(result.injected).toBe(true);
+    expect(result.commitErrors).toEqual(['Notebook content changed before snapshot commit']);
+    expect(result.error).toContain('Refusing to overwrite');
+    expect(result.pending).toBe(true);
+    expect(result.progress.committedRevision).toBe(0);
+    expect(JSON.parse(result.saved.content).cells[0].content).toBe('other window');
+    expect(result.parent.name).toBe('Competing edit');
+  });
+}
+
+test('snapshot conditions accept the observed revision and reject orphan bodies without changing records', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new NotebookRepository(provider);
+    const S = DB_CONFIG.STORES;
+    const notebook = {
+      id: 'condition',
+      name: 'Initial',
+      lastAccessedAt: 1,
+      accessCount: 1,
+      cacheEnabled: true,
+    };
+    const file = {
+      notebookId: 'condition',
+      filePath: 'body',
+      fileName: 'body',
+      content: '{"cells":[]}',
+      size: 12,
+      lastModified: 'old',
+    };
+    await repository.saveNotebookSnapshot(file, notebook, { expectedContent: null });
+    await repository.saveNotebookSnapshot(
+      { ...file, content: '{"cells":[],"tasks":[]}' },
+      notebook,
+      { expectedContent: file.content }
+    );
+    await provider.put(S.FILES_CONTENT, { fileId: 'condition::orphan', content: 'preserve' });
+    const before = await Promise.all([
+      provider.getAll(S.NOTEBOOKS),
+      provider.getAll(S.FILES_METADATA),
+      provider.getAll(S.FILES_CONTENT),
+      provider.getAll(S.ACTIVITIES),
+    ]);
+    let error;
+    try {
+      await repository.saveNotebookSnapshot(
+        { ...file, filePath: 'orphan' },
+        { ...notebook, name: 'Wrong' },
+        { expectedContent: null }
+      );
+    } catch (failure) {
+      error = failure.message;
+    }
+    const after = await Promise.all([
+      provider.getAll(S.NOTEBOOKS),
+      provider.getAll(S.FILES_METADATA),
+      provider.getAll(S.FILES_CONTENT),
+      provider.getAll(S.ACTIVITIES),
+    ]);
+    await provider.close();
+    return { error, before, after };
+  });
+  expect(result.error).toContain('content changed');
+  expect(result.after).toEqual(result.before);
+});

@@ -7,7 +7,7 @@ import { debounce } from 'lodash-es';
 import { NotebookSaveQueue } from './NotebookSaveQueue';
 import { NotebookSaveScheduler } from './NotebookSaveScheduler';
 import { PersistenceService } from '../persistence/PersistenceService';
-import type { IPersistenceService } from '../persistence/interfaces';
+import type { IPersistenceService, NotebookSnapshotCondition } from '../persistence/interfaces';
 import type { Cell } from '@Store/models';
 import { notebookLog, storageLog } from '@Utils/logger';
 
@@ -291,7 +291,7 @@ export class AutoSaveService implements IAutoSaveService {
 
       notebookLog.debug('AutoSaveService: Loading notebook', { notebookId });
 
-      const result = await this.loadFromPersistence(notebookId);
+      const { notebook: result } = await this.readStoredNotebook(notebookId);
 
       this.publish({ status: AutoSaveStatus.IDLE, error: null }, 'load_completed', notebookId);
 
@@ -527,9 +527,7 @@ export class AutoSaveService implements IAutoSaveService {
 
     try {
       await this.initializeStorage();
-      if (await this.shouldPreventDataLoss(snapshot)) {
-        throw new Error('Refusing to overwrite an existing notebook with an empty snapshot');
-      }
+      const condition = await this.prepareSnapshotCondition(snapshot);
       this.publish({ status: AutoSaveStatus.SYNCING }, 'save_started', notebookId);
 
       // Prepare both records before any write: serialization failures must not
@@ -579,7 +577,8 @@ export class AutoSaveService implements IAutoSaveService {
           size: contentSize,
           remoteUrl: undefined,
         },
-        notebookMetadata
+        notebookMetadata,
+        condition
       );
 
       if (this.isDevelopment) {
@@ -604,7 +603,9 @@ export class AutoSaveService implements IAutoSaveService {
   /**
    * Load notebook from persistence layer
    */
-  private async loadFromPersistence(notebookId: string): Promise<LoadedNotebook | null> {
+  private async readStoredNotebook(
+    notebookId: string
+  ): Promise<{ notebook: LoadedNotebook | null; content: string | null }> {
     // Try to load main notebook file first
     const expectedFilePath = `notebook_${notebookId}.json`;
     const mainFile = await this.persistence.files.getFile(notebookId, expectedFilePath);
@@ -640,9 +641,12 @@ export class AutoSaveService implements IAutoSaveService {
         }
 
         return {
-          notebookTitle: data.title || data.notebookTitle || 'Untitled',
-          cells: loadedCells,
-          tasks: data.tasks ?? [],
+          notebook: {
+            notebookTitle: data.title || data.notebookTitle || 'Untitled',
+            cells: loadedCells,
+            tasks: data.tasks ?? [],
+          },
+          content: mainFile.content,
         };
       } catch (parseError) {
         notebookLog.warn('AutoSaveService: Failed to parse notebook file', {
@@ -660,15 +664,14 @@ export class AutoSaveService implements IAutoSaveService {
 
     if (!notebook) {
       notebookLog.debug('AutoSaveService: Notebook not found', { notebookId });
-      return null;
+      return { notebook: null, content: null };
     }
 
     notebookLog.info('AutoSaveService: Loaded metadata only', { notebookId });
 
     return {
-      notebookTitle: notebook.name,
-      cells: [],
-      tasks: [],
+      notebook: { notebookTitle: notebook.name, cells: [], tasks: [] },
+      content: null,
     };
   }
 
@@ -683,22 +686,16 @@ export class AutoSaveService implements IAutoSaveService {
     return true;
   }
 
-  /**
-   * Check if save should be prevented to avoid data loss
-   */
-  private async shouldPreventDataLoss(snapshot: NotebookSnapshot): Promise<boolean> {
-    if (!snapshot.cells || snapshot.cells.length === 0) {
-      // A failed read must fail the save; the queue retains the revision for retry.
-      const existingData = await this.loadFromPersistence(snapshot.notebookId);
-      if (existingData?.cells && existingData.cells.length > 0) {
-        notebookLog.warn('AutoSaveService: Preventing data loss - empty save blocked', {
-          notebookId: snapshot.notebookId,
-          existingCellsCount: existingData.cells.length,
-        });
-        return true;
-      }
+  /** Bind empty-save validation to the exact persisted body checked before writing. */
+  private async prepareSnapshotCondition(
+    snapshot: NotebookSnapshot
+  ): Promise<NotebookSnapshotCondition | undefined> {
+    if (snapshot.cells?.length) return undefined;
+    const observed = await this.readStoredNotebook(snapshot.notebookId);
+    if (observed.notebook?.cells.length) {
+      throw new Error('Refusing to overwrite an existing notebook with an empty snapshot');
     }
-    return false;
+    return { expectedContent: observed.content };
   }
 
   /** Publish one complete transition; observers never reconstruct storage truth. */

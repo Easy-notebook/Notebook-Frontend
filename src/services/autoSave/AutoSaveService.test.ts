@@ -680,3 +680,26 @@ describe('autosave pause admission', () => {
     );
   });
 });
+
+it.each([null, '{"cells":[],"tasks":[]}'])(
+  'binds empty saves to observed persisted content %j',
+  async (content) => {
+    storage.files.getFile.mockResolvedValue(content === null ? null : { content });
+    await service.saveNow({ ...snapshot('empty'), cells: [] });
+    expect(storage.notebooks.saveNotebookSnapshot.mock.calls[0][2]).toEqual({
+      expectedContent: content,
+    });
+  }
+);
+
+it('retains an empty revision when its commit condition fails', async () => {
+  storage.files.getFile.mockResolvedValue(null);
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(
+    new Error('Notebook content changed before snapshot commit')
+  );
+  await expect(service.saveNow({ ...snapshot('empty'), cells: [] })).rejects.toThrow(
+    'content changed'
+  );
+  expect(service.hasPending('notebook')).toBe(true);
+  expect(service.getSaveProgress('notebook')).toMatchObject({ committedRevision: 0 });
+});

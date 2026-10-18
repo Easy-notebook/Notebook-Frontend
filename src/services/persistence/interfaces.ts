@@ -36,6 +36,11 @@ export interface FileSaveOptions {
   forceLocal?: boolean;
 }
 
+/** Compare the observed body atomically before committing a notebook snapshot. */
+export interface NotebookSnapshotCondition {
+  expectedContent: string | null;
+}
+
 export interface IStorageProvider {
   initialize(): Promise<void>;
   close(): Promise<void>;
@@ -63,7 +68,11 @@ export interface INotebookRepository {
     files: FileSaveData[],
     source?: string
   ): Promise<number>;
-  saveNotebookSnapshot(file: FileSaveData, notebook: NotebookSaveData): Promise<FileMetadataEntity>;
+  saveNotebookSnapshot(
+    file: FileSaveData,
+    notebook: NotebookSaveData,
+    condition?: NotebookSnapshotCondition
+  ): Promise<FileMetadataEntity>;
   saveNotebook(notebook: NotebookSaveData): Promise<NotebookEntity>;
   getNotebook(id: string): Promise<NotebookEntity | null>;
   getAllNotebooks(options?: {

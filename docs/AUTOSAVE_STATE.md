@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session gate passes 249 tests across twenty-one files. Coverage includes
+The storage/persistence/autosave/session gate passes 252 tests across twenty-one files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -213,14 +213,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs sixty-five isolated Playwright cases against production modules:
+`npm run test:browser` runs sixty-eight isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 249 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 252 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -567,6 +567,26 @@ Existing deletions made before this ledger was introduced cannot be inferred ret
 Clearing the entire application database also clears its migration history; no guarantee
 survives that explicit data reset. A user-facing historical recovery action would need an
 explicit policy rather than silently bypassing deletion markers.
+
+## Atomic empty-snapshot protection
+
+The autosave read path returns the decoded document and its exact stored body internally;
+public load results are unchanged. An empty snapshot still rejects nonempty, unavailable or
+malformed stored content. If that semantic check passes, it supplies the observed body
+(or a null absence marker) as a snapshot write condition.
+
+NotebookRepository compares this condition against current metadata/content within the
+same readwrite transaction that commits the snapshot, counters and activity. Absence means
+both metadata and body are absent, so orphan content is not treated as an empty slot.
+An unavailable or changed body rejects the transaction before snapshot mutations.
+The condition is captured at invocation; existing callers may omit it.
+
+Native tests interleave another connection's nonempty commit between the autosave check
+and write, with both missing and initially empty content. The conditional commit rejects,
+the queue retains its revision, and retry rejects the now-nonempty document. Additional
+coverage verifies matching revisions succeed and orphan-body conflicts preserve all stores.
+This protects the empty-save invariant only: nonempty snapshots still need a broader
+cross-window version/conflict protocol, and byte equality is not a durable revision token.
 
 ## Remaining lifecycle work
 
