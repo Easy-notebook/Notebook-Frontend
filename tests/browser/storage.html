@@ -9,7 +9,8 @@
     <script type="module">
       import { IndexedDBStorageProvider } from '/src/services/persistence/providers/IndexedDBStorageProvider.ts';
       import { IndexedDBConnection } from '/src/services/persistence/providers/IndexedDBConnection.ts';
-      import { DB_CONFIG, IndexedDBManager } from '/src/storage/database.ts';
+      import { DB_CONFIG } from '/src/storage/database.ts';
+      import { StorageMaintenanceRepository } from '/src/services/persistence/repositories/StorageMaintenanceRepository.ts';
       import { FileRepository } from '/src/services/persistence/repositories/FileRepository.ts';
       import { NotebookRepository } from '/src/services/persistence/repositories/NotebookRepository.ts';
       import { SplitFileRepository } from '/src/services/persistence/repositories/SplitFileRepository.ts';
@@ -20,9 +21,9 @@
         SplitFileRepository,
         NotebookRepository,
         FileRepository,
+        StorageMaintenanceRepository,
         IndexedDBConnection,
         DB_CONFIG,
-        IndexedDBManager,
         AutoSaveService,
         AutoSavePageLifecycle,
       };

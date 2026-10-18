@@ -190,75 +190,66 @@ test('unsaved edits trigger a native exit dialog and commit after navigation is 
   expect(restored.cells[0].content).toBe('# Retained notebook');
 });
 
-for (const entryPoint of ['provider', 'manager']) {
-  test(`v2 upgrade through ${entryPoint} preserves records and reconciles missing schema`, async ({
-    page,
-  }) => {
-    const result = await page.evaluate(async (entryPoint) => {
-      const { DB_CONFIG, IndexedDBStorageProvider, IndexedDBManager } = window.storageHarness;
-      const original = await new Promise((resolve, reject) => {
-        const open = indexedDB.open(DB_CONFIG.NAME, 2);
-        open.onupgradeneeded = () => {
-          open.result
-            .createObjectStore(DB_CONFIG.STORES.NOTEBOOKS, { keyPath: 'id' })
-            .put({ id: 'retained', name: 'Existing notebook' });
-          open.result
-            .createObjectStore(DB_CONFIG.STORES.FILES_CONTENT, { keyPath: 'fileId' })
-            .put({ fileId: 'body', content: 'Existing content' });
-          open.result.createObjectStore('unrelated').put('keep', 'key');
-        };
-        open.onsuccess = () => resolve(open.result);
-        open.onerror = () => reject(open.error);
-      });
-      original.close();
-      if (entryPoint === 'provider') {
-        const provider = new IndexedDBStorageProvider();
-        await provider.initialize();
-        await provider.close();
-      } else {
-        await IndexedDBManager.initialize();
-        IndexedDBManager.close();
-      }
-      const upgraded = await new Promise((resolve, reject) => {
-        const open = indexedDB.open(DB_CONFIG.NAME);
-        open.onsuccess = () => resolve(open.result);
-        open.onerror = () => reject(open.error);
-      });
-      const stores = Array.from(upgraded.objectStoreNames);
-      const transaction = upgraded.transaction([
-        DB_CONFIG.STORES.NOTEBOOKS,
-        DB_CONFIG.STORES.FILES_CONTENT,
-        'unrelated',
-      ]);
-      const notebookStore = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
-      const indexes = Array.from(notebookStore.indexNames);
-      const read = (request) =>
-        new Promise((resolve, reject) => {
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        });
-      const records = await Promise.all([
-        read(notebookStore.get('retained')),
-        read(transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT).get('body')),
-        read(transaction.objectStore('unrelated').get('key')),
-      ]);
-      const version = upgraded.version;
-      upgraded.close();
-      return { version, stores, indexes, records };
-    }, entryPoint);
-    expect(result.version).toBe(3);
-    expect(result.stores).toContain('split_files');
-    expect(result.stores).toContain('tab_states');
-    expect(result.indexes).toEqual(
-      expect.arrayContaining(['lastAccessedAt', 'accessCount', 'updatedAt'])
-    );
-    expect(result.records).toEqual([
-      { id: 'retained', name: 'Existing notebook' },
-      { fileId: 'body', content: 'Existing content' },
-      'keep',
+test('v2 upgrade preserves records and reconciles missing schema', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { DB_CONFIG, IndexedDBStorageProvider } = window.storageHarness;
+    const original = await new Promise((resolve, reject) => {
+      const open = indexedDB.open(DB_CONFIG.NAME, 2);
+      open.onupgradeneeded = () => {
+        open.result
+          .createObjectStore(DB_CONFIG.STORES.NOTEBOOKS, { keyPath: 'id' })
+          .put({ id: 'retained', name: 'Existing notebook' });
+        open.result
+          .createObjectStore(DB_CONFIG.STORES.FILES_CONTENT, { keyPath: 'fileId' })
+          .put({ fileId: 'body', content: 'Existing content' });
+        open.result.createObjectStore('unrelated').put('keep', 'key');
+      };
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    original.close();
+    const provider = new IndexedDBStorageProvider();
+    await provider.initialize();
+    await provider.close();
+    const upgraded = await new Promise((resolve, reject) => {
+      const open = indexedDB.open(DB_CONFIG.NAME);
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+    const stores = Array.from(upgraded.objectStoreNames);
+    const transaction = upgraded.transaction([
+      DB_CONFIG.STORES.NOTEBOOKS,
+      DB_CONFIG.STORES.FILES_CONTENT,
+      'unrelated',
     ]);
+    const notebookStore = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
+    const indexes = Array.from(notebookStore.indexNames);
+    const read = (request) =>
+      new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    const records = await Promise.all([
+      read(notebookStore.get('retained')),
+      read(transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT).get('body')),
+      read(transaction.objectStore('unrelated').get('key')),
+    ]);
+    const version = upgraded.version;
+    upgraded.close();
+    return { version, stores, indexes, records };
   });
-}
+  expect(result.version).toBe(3);
+  expect(result.stores).toContain('split_files');
+  expect(result.stores).toContain('tab_states');
+  expect(result.indexes).toEqual(
+    expect.arrayContaining(['lastAccessedAt', 'accessCount', 'updatedAt'])
+  );
+  expect(result.records).toEqual([
+    { id: 'retained', name: 'Existing notebook' },
+    { fileId: 'body', content: 'Existing content' },
+    'keep',
+  ]);
+});
 
 test('an incompatible unique index aborts the upgrade without deleting v2 records', async ({
   page,
@@ -576,3 +567,85 @@ test('migrated file reads retain old plain payloads and list remote references w
   expect(result.all.map((file) => file.id)).toEqual(['a::remote', 'b::remote']);
   expect(result.scoped.map((file) => file.id)).toEqual(['a::remote']);
 });
+
+test('configuration patches serialize without losing concurrent settings', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    const defaults = await repository.getConfig();
+    defaults.maxNotebooks = -1;
+    const detachedDefaults = await repository.getConfig();
+    await Promise.all([
+      repository.updateConfig({ maxNotebooks: 75 }),
+      repository.updateConfig({ compressionEnabled: false }),
+      repository.ensureConfig(),
+    ]);
+    await repository.ensureConfig();
+    const config = await repository.getConfig();
+    const rows = await provider.getAll(DB_CONFIG.STORES.CONFIG);
+    await provider.close();
+    return { config, rows, detachedDefaults };
+  });
+  expect(result.detachedDefaults.maxNotebooks).toBe(50);
+  expect(result.config).toMatchObject({
+    id: 'config',
+    maxNotebooks: 75,
+    compressionEnabled: false,
+  });
+  expect(result.rows).toEqual([result.config]);
+});
+
+test('activity retention removes expired entries and preserves recent entries', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    const timestamp = Date.now();
+    await provider.put(DB_CONFIG.STORES.ACTIVITIES, { id: 'old', timestamp: 0 });
+    await provider.put(DB_CONFIG.STORES.ACTIVITIES, { id: 'recent', timestamp });
+    await repository.cleanupActivities(60_000);
+    const records = await provider.getAll(DB_CONFIG.STORES.ACTIVITIES);
+    await provider.close();
+    return records.map((record) => record.id);
+  });
+  expect(result).toEqual(['recent']);
+});
+
+for (const operation of ['updateConfig', 'cleanupActivities']) {
+  test(`${operation} rejects and rolls back when commit fails`, async ({ page }) => {
+    const result = await page.evaluate(async (operation) => {
+      const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+        window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const original = new StorageMaintenanceRepository(provider);
+      await original.ensureConfig();
+      const before = await original.getConfig();
+      await provider.put(DB_CONFIG.STORES.ACTIVITIES, { id: 'expired', timestamp: 0 });
+      const repository = new StorageMaintenanceRepository({
+        transaction: (names, mode, schedule) =>
+          provider.transaction(names, mode, async (stores) => {
+            await schedule(stores);
+            throw new Error('maintenance commit aborted');
+          }),
+      });
+      let error;
+      try {
+        await repository[operation](operation === 'updateConfig' ? { maxNotebooks: 99 } : 1);
+      } catch (failure) {
+        error = failure.message;
+      }
+      const after = await original.getConfig();
+      const activities = await provider.getAll(DB_CONFIG.STORES.ACTIVITIES);
+      await provider.close();
+      return { error, before, after, activities };
+    }, operation);
+    expect(result.error).toBe('maintenance commit aborted');
+    expect(result.after).toEqual(result.before);
+    expect(result.activities).toEqual([{ id: 'expired', timestamp: 0 }]);
+  });
+}

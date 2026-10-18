@@ -1,7 +1,6 @@
 // storage/storageManager.ts
 // Main storage manager with cleanup and maintenance functionality
 
-import { IndexedDBManager, DB_CONFIG } from './database';
 import { persistenceService } from '../services/persistence/instance';
 import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG, NotebookEntity } from './schema';
 import { DataMigration } from './migration';
@@ -35,7 +34,6 @@ export interface StorageStats {
  */
 export class StorageManager {
   private static cleanupInProgress = false;
-  private static lastCleanup = 0;
   private static initializationPromise: Promise<void> | null = null;
   private static isInitialized = false;
 
@@ -77,11 +75,8 @@ export class StorageManager {
   private static async doInitialize(): Promise<void> {
     try {
       storageLog.info('Initializing storage system');
-      await IndexedDBManager.initialize();
+      await persistenceService.initialize();
       storageLog.persistence('IndexedDB', 'init', { success: true });
-
-      // Wait a bit to ensure database is fully ready
-      await new Promise((resolve) => setTimeout(resolve, 100));
 
       await this.ensureConfig();
       storageLog.info('Storage configuration initialized');
@@ -103,115 +98,15 @@ export class StorageManager {
    */
   static async getConfig(): Promise<StorageConfigEntity> {
     try {
-      const db = await IndexedDBManager.getDB();
-
-      return new Promise((resolve, reject) => {
-        try {
-          const transaction = db.transaction([DB_CONFIG.STORES.CONFIG], 'readonly');
-          const store = transaction.objectStore(DB_CONFIG.STORES.CONFIG);
-
-          const request = store.get('config');
-          let resolved = false;
-
-          request.onsuccess = () => {
-            if (!resolved) {
-              resolved = true;
-              const config = request.result as StorageConfigEntity | undefined;
-              resolve(config || DEFAULT_STORAGE_CONFIG);
-            }
-          };
-
-          request.onerror = () => {
-            if (!resolved) {
-              resolved = true;
-              storageLog.warn('Failed to get config from database, using default');
-              resolve(DEFAULT_STORAGE_CONFIG);
-            }
-          };
-
-          transaction.onerror = () => {
-            if (!resolved) {
-              resolved = true;
-              storageLog.warn('Config transaction failed, using default');
-              resolve(DEFAULT_STORAGE_CONFIG);
-            }
-          };
-
-          transaction.onabort = () => {
-            if (!resolved) {
-              resolved = true;
-              storageLog.warn('Config transaction aborted, using default');
-              resolve(DEFAULT_STORAGE_CONFIG);
-            }
-          };
-
-          // Reduced timeout and better error handling
-          setTimeout(() => {
-            if (!resolved) {
-              resolved = true;
-              storageLog.warn('Config get timeout, using default', { timeout: '1000ms' });
-              resolve(DEFAULT_STORAGE_CONFIG);
-            }
-          }, 1000); // Reduced from 3000ms to 1000ms
-        } catch (error) {
-          storageLog.warn('Config transaction creation failed, using default', { error });
-          resolve(DEFAULT_STORAGE_CONFIG);
-        }
-      });
+      return await persistenceService.maintenance.getConfig();
     } catch (error) {
-      storageLog.warn('Failed to get database for config, using default', { error });
-      return DEFAULT_STORAGE_CONFIG;
+      storageLog.warn('Failed to read storage configuration, using defaults', { error });
+      return { ...DEFAULT_STORAGE_CONFIG };
     }
   }
 
-  /**
-   * Update storage configuration
-   */
   static async updateConfig(config: Partial<StorageConfigEntity>): Promise<void> {
-    try {
-      const db = await IndexedDBManager.getDB();
-      const currentConfig = await this.getConfig();
-
-      const updatedConfig: StorageConfigEntity = {
-        ...currentConfig,
-        ...config,
-      };
-
-      return new Promise((resolve, reject) => {
-        try {
-          const transaction = db.transaction([DB_CONFIG.STORES.CONFIG], 'readwrite');
-          const store = transaction.objectStore(DB_CONFIG.STORES.CONFIG);
-
-          const request = store.put(updatedConfig);
-
-          request.onsuccess = () => {
-            storageLog.info('Storage configuration updated successfully');
-            resolve();
-          };
-
-          request.onerror = () => {
-            storageLog.error('Failed to update config', { error: request.error });
-            reject(request.error);
-          };
-
-          transaction.onerror = () => {
-            storageLog.error('Config update transaction failed', { error: transaction.error });
-            reject(transaction.error);
-          };
-
-          setTimeout(() => {
-            storageLog.warn('Config update timeout');
-            reject(new Error('Update config timeout'));
-          }, 5000);
-        } catch (error) {
-          storageLog.error('Failed to create config update transaction', { error });
-          reject(error);
-        }
-      });
-    } catch (error) {
-      storageLog.error('Failed to get database for config update', { error });
-      throw error;
-    }
+    await persistenceService.maintenance.updateConfig(config);
   }
 
   /**
@@ -327,7 +222,6 @@ export class StorageManager {
       await this.updateConfig({ lastCleanup: Date.now() });
 
       stats.duration = Date.now() - startTime;
-      this.lastCleanup = Date.now();
 
       return stats;
     } finally {
@@ -474,53 +368,11 @@ export class StorageManager {
    * Ensure config exists in database
    */
   private static async ensureConfig(): Promise<void> {
-    try {
-      storageLog.debug('Checking storage configuration');
-      const config = await this.getConfig();
-
-      // If config doesn't exist or is default, create it
-      if (!config || config === DEFAULT_STORAGE_CONFIG) {
-        storageLog.info('Creating default storage configuration');
-        await this.updateConfig(DEFAULT_STORAGE_CONFIG);
-        storageLog.info('Default storage configuration created');
-      } else {
-        storageLog.debug('Storage configuration already exists');
-      }
-    } catch (error) {
-      storageLog.warn('Failed to ensure config, using defaults', { error });
-      // Don't throw - we can continue with default config in memory
-    }
+    await persistenceService.maintenance.ensureConfig();
   }
 
-  /**
-   * Clean up old activity records
-   */
   private static async cleanupOldActivities(retentionPeriod: number): Promise<void> {
-    const db = await IndexedDBManager.getDB();
-    const cutoffTime = Date.now() - retentionPeriod;
-
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([DB_CONFIG.STORES.ACTIVITIES], 'readwrite');
-      const store = transaction.objectStore(DB_CONFIG.STORES.ACTIVITIES);
-      const index = store.index('timestamp');
-
-      const range = IDBKeyRange.upperBound(cutoffTime);
-      const request = index.openCursor(range);
-
-      request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
-        if (cursor) {
-          cursor.delete();
-          cursor.continue();
-        } else {
-          resolve();
-        }
-      };
-
-      request.onerror = () => reject(request.error);
-
-      setTimeout(() => resolve(), 10000); // Don't block too long on cleanup
-    });
+    await persistenceService.maintenance.cleanupActivities(retentionPeriod);
   }
 
   /**
@@ -573,7 +425,6 @@ export class StorageManager {
    * Close storage system
    */
   static async close(): Promise<void> {
-    IndexedDBManager.close();
     await persistenceService.close();
   }
 }

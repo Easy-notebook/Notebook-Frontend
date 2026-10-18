@@ -4,6 +4,7 @@ import type {
   NotebookActivityEntity,
   TabStateEntity,
   SplitFileEntity,
+  StorageConfigEntity,
 } from '../../storage/schema';
 export type {
   NotebookEntity,
@@ -11,6 +12,7 @@ export type {
   NotebookActivityEntity,
   TabStateEntity,
   SplitFileEntity,
+  StorageConfigEntity,
 };
 
 export interface FileSaveData {
@@ -108,7 +110,15 @@ export interface ISplitFileRepository {
   getStats(): Promise<{ totalFiles: number; totalSize: number }>;
 }
 
+export interface IStorageMaintenanceRepository {
+  getConfig(): Promise<StorageConfigEntity>;
+  ensureConfig(): Promise<void>;
+  updateConfig(patch: Partial<StorageConfigEntity>): Promise<void>;
+  cleanupActivities(retentionPeriod: number): Promise<void>;
+}
+
 export interface IPersistenceService {
+  maintenance: IStorageMaintenanceRepository;
   notebooks: INotebookRepository;
   files: IFileRepository;
   tabs: ITabRepository;

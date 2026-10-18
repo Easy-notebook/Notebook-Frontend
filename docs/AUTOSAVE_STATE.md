@@ -34,7 +34,7 @@ Scheduler tests use deferred writes and virtual time; repository/provider tests 
 transaction and IndexedDB event doubles. These are not native browser recovery tests.
 
 Autosave lint passes without warnings. Full-project type checking still reports
-299 existing diagnostics, none in autosave, persistence or session modules.
+297 existing diagnostics, none in autosave, persistence or session modules.
 
 ## Per-notebook save state and revision barriers
 
@@ -175,7 +175,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs eighteen isolated Playwright cases against production modules:
+`npm run test:browser` runs twenty-one isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -188,16 +188,14 @@ not claim crash/power-loss durability, bfcache behavior or other browser engines
 ## Non-destructive database upgrades
 
 Database version 3 retains the existing database name and records, and reconciles
-missing stores/indexes through one NotebookDatabaseSchema implementation. Both the
-provider and the existing ORM connection manager use it. Unknown stores are retained;
-upgrades never delete existing stores. The old manager's automatic deletion of other
-historical databases has also been removed. Its connections now release on versionchange.
+missing stores/indexes through NotebookDatabaseSchema in the shared provider.
+Unknown stores are retained; upgrades never delete existing stores. The retired raw
+connection manager and unused TabCache/SplitPreviewCache implementations are removed.
+Historical-data import retains its explicit reads of historical databases.
 
-Native tests seed v2 data and verify preservation through both entry points, including
-previously missing split-files storage and notebook indexes. A conflicting unique index
-aborts the version upgrade and preserves v2 records; no automatic data-loss repair is
-attempted. Remaining raw-handle configuration/cache callers still use the old connection
-manager and must be migrated before connection ownership is fully unified.
+Native tests seed v2 data and verify preservation, including previously missing
+split-files storage and notebook indexes. A conflicting unique index aborts the
+version upgrade and preserves v2 records; no automatic data-loss repair is attempted.
 
 ## Atomic split-file cache clearing
 
@@ -222,8 +220,8 @@ live in the repository. Statistics query notebook-indexed metadata and activitie
 one readonly transaction. Counter updates and recomputation complete only on transaction
 commit; no timeout can turn a pending write into success. Three native cases verify
 concurrent counter increments, notebook-scoped statistics/retention, and rollback of
-failed adjustments/recomputation. Configuration and legacy cache maintenance still require
-migration; this change does not claim all raw connections have been retired.
+failed adjustments/recomputation. Configuration and activity maintenance now share the
+same provider through StorageMaintenanceRepository.
 
 ## File ORM retirement and accounting
 
@@ -241,7 +239,24 @@ Old compression functions were identity operations, so historical payloads remai
 readable as plain content even when marked compressed. Native cases exercise that
 format, remote references, accounting across mutations, and full rollback on failure.
 
+## Configuration and retention transactions
+
+StorageMaintenanceRepository owns configuration initialization, patching and activity
+retention. Each patch reads and writes in one readwrite transaction, preserving
+concurrent disjoint updates. Initialization inserts defaults only when no record
+exists. Activity cleanup uses the timestamp index and acknowledges transaction commit;
+no timer or cursor exhaustion can report success before commit.
+
+Native cases cover concurrent patches, retained settings, detached defaults, selective
+retention, and rollback of configuration/activity writes on transaction failure.
+StorageManager retains defaults for optional configuration reads; repository writes
+and initialization propagate failure.
+
 ## Remaining lifecycle work
+
+StorageManager still needs explicit ownership of its periodic timer and coordination
+between initialization, running maintenance and close. Cleanup candidate selection
+also requires a separate concurrency/order audit.
 
 Pause waits for quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
 application-level producer cancellation remains relevant. Cross-window conflicts,

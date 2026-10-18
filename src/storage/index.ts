@@ -6,16 +6,11 @@ export * from './schema';
 export * from './fileTypes';
 export * from './storageManager';
 export * from './migration';
-export * from './splitPreviewCache';
-export * from './tabCache';
 
 // Re-export main classes and functions for easy access
-export { IndexedDBManager } from './database';
 export { StorageManager, type CleanupStats, type StorageStats } from './storageManager';
 export { DataMigration, type MigrationStats } from './migration';
 export { getFileType, getActivePreviewMode, getMimeType } from './fileTypes';
-export { SplitPreviewCache, type SplitFileData } from './splitPreviewCache';
-export { TabCache, type TabState } from './tabCache';
 
 // Legacy FileObject type for compatibility
 export interface FileObject {
