@@ -169,13 +169,26 @@ service. Eight EventTarget tests cover dirty guard updates, coalescing, failure/
 hidden edits, shutdown admission and cleanup/remount ownership.
 
 The visibility trigger follows [MDN visibilitychange guidance](https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event).
-These tests do not prove native browser dialog behavior, bfcache restoration or
-completion of asynchronous writes during browser/process termination.
+EventTarget tests alone do not prove native dialog behavior. The Chromium suite
+below adds that check; bfcache restoration and asynchronous completion during
+browser/process termination remain unproven.
+
+## Native Chromium verification
+
+`npm run test:browser` runs six isolated Playwright cases against production modules:
+page reload persistence, native multi-store rollback, accepted-transaction draining
+on close, retry after a blocked upgrade, normal browser-process restart with a temporary
+profile, and the native unsaved-exit dialog followed by successful save/reload after
+cancelling navigation. The runner starts its own Vite server and never uses a personal
+browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
+
+These results add real IndexedDB/browser evidence to the 156 Vitest cases; they do
+not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Remaining lifecycle work
 
 Pause waits for quiescence and is not guaranteed to finish under an infinite stream of accepted edits;
 application-level producer cancellation remains relevant. Cross-window conflicts,
-native recovery, native application close coordination and real-browser exit validation remain. Browser termination
+crash recovery, native application close coordination and broader browser lifecycle validation remain. Browser termination
 cannot guarantee awaiting asynchronous writes. No crash-durability or cross-session
 version guarantee is claimed.

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Isolated storage integration fixture</title>
+  </head>
+  <body>
+    <button type="button">Activate test page</button>
+    <script type="module">
+      import { IndexedDBStorageProvider } from '/src/services/persistence/providers/IndexedDBStorageProvider.ts';
+      import { IndexedDBConnection } from '/src/services/persistence/providers/IndexedDBConnection.ts';
+      import { DB_CONFIG } from '/src/storage/database.ts';
+      import { AutoSaveService } from '/src/services/autoSave/AutoSaveService.ts';
+      import { AutoSavePageLifecycle } from '/src/services/autoSave/AutoSavePageLifecycle.ts';
+      window.storageHarness = {
+        IndexedDBStorageProvider,
+        IndexedDBConnection,
+        DB_CONFIG,
+        AutoSaveService,
+        AutoSavePageLifecycle,
+      };
+    </script>
+  </body>
+</html>

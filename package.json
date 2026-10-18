@@ -18,7 +18,8 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "^6.2.4",
@@ -151,6 +152,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.64.1",
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/cli": "^2.2.1",
     "@testing-library/jest-dom": "^6.9.1",
