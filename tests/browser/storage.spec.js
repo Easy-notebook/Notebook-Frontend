@@ -665,14 +665,22 @@ test('retention preview and cleanup keep recent notebooks without a deletion cap
       'readwrite',
       (stores) => {
         for (let i = 0; i < 70; i++) {
-          stores[DB_CONFIG.STORES.NOTEBOOKS].put({ id: `b${i}`, lastAccessedAt: now - i * 100 });
+          stores[DB_CONFIG.STORES.NOTEBOOKS].put({
+            id: `b${i}`,
+            retention: 'evictable',
+            lastAccessedAt: now - i * 100,
+          });
           stores[DB_CONFIG.STORES.FILES_METADATA].put({
             id: `b${i}::file`,
             notebookId: `b${i}`,
             size: 10,
           });
         }
-        stores[DB_CONFIG.STORES.NOTEBOOKS].put({ id: 'expired', lastAccessedAt: 0 });
+        stores[DB_CONFIG.STORES.NOTEBOOKS].put({
+          id: 'expired',
+          retention: 'evictable',
+          lastAccessedAt: 0,
+        });
         stores[DB_CONFIG.STORES.FILES_METADATA].put({
           id: 'expired::file',
           notebookId: 'expired',
@@ -710,7 +718,11 @@ test('emergency cleanup preserves the newest notebooks', async ({ page }) => {
     const repository = new StorageMaintenanceRepository(provider);
     await repository.updateConfig({ maxNotebooks: 3 });
     for (let i = 0; i < 5; i++)
-      await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: `b${i}`, lastAccessedAt: i });
+      await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+        id: `b${i}`,
+        retention: 'evictable',
+        lastAccessedAt: i,
+      });
     const stats = await repository.cleanup('emergency');
     const remaining = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
     await provider.close();
@@ -733,11 +745,13 @@ test('access admitted before cleanup changes retention selection atomically', as
     await repository.updateConfig({ maxNotebooks: 1, retentionPeriod: 60_000 });
     await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
       id: 'stale',
+      retention: 'evictable',
       lastAccessedAt: 0,
       accessCount: 1,
     });
     await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
       id: 'recent',
+      retention: 'evictable',
       lastAccessedAt: Date.now() - 1000,
       accessCount: 1,
     });
@@ -768,7 +782,7 @@ for (const abort of [false, true]) {
       const repository = new StorageMaintenanceRepository(provider);
       const S = DB_CONFIG.STORES;
       await repository.updateConfig({ maxNotebooks: 10, retentionPeriod: 60_000 });
-      await provider.put(S.NOTEBOOKS, { id: 'old', lastAccessedAt: 0 });
+      await provider.put(S.NOTEBOOKS, { id: 'old', retention: 'evictable', lastAccessedAt: 0 });
       await provider.put(S.FILES_METADATA, { id: 'old::file', notebookId: 'old', size: 42 });
       await provider.put(S.FILES_CONTENT, { fileId: 'old::file', content: 'retained on abort' });
       await provider.put(S.ACTIVITIES, { id: 'old::activity', notebookId: 'old', timestamp: 0 });
@@ -821,7 +835,11 @@ test('overlapping cleanup transactions do not count deleted notebooks twice', as
     const provider = new IndexedDBStorageProvider();
     const repository = new StorageMaintenanceRepository(provider);
     await repository.updateConfig({ maxNotebooks: 0 });
-    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: 'one', lastAccessedAt: Date.now() });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'one',
+      retention: 'evictable',
+      lastAccessedAt: Date.now(),
+    });
     const results = await Promise.all([
       repository.cleanup(),
       repository.cleanup('emergency'),
@@ -866,12 +884,14 @@ test('a committed file write refreshes retention before cleanup selects candidat
     await maintenance.updateConfig({ maxNotebooks: 1, retentionPeriod: 60_000 });
     await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
       id: 'writing',
+      retention: 'evictable',
       lastAccessedAt: 0,
       fileCount: 0,
       totalSize: 0,
     });
     await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
       id: 'other',
+      retention: 'evictable',
       lastAccessedAt: Date.now() - 1000,
     });
     await Promise.all([
@@ -890,4 +910,75 @@ test('a committed file write refreshes retention before cleanup selects candidat
     return remaining.map((book) => book.id);
   });
   expect(ids).toEqual(['writing']);
+});
+
+test('local autosave and historical documents survive automatic cleanup and reload', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, AutoSaveService, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const maintenance = new StorageMaintenanceRepository(provider);
+    await maintenance.updateConfig({ maxNotebooks: 0, retentionPeriod: 0 });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: 'historical', lastAccessedAt: 0 });
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'cache',
+      lastAccessedAt: 0,
+      retention: 'evictable',
+    });
+    // A local snapshot must promote a previously disposable cache before acknowledging save.
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'document',
+      lastAccessedAt: 0,
+      retention: 'evictable',
+    });
+    const service = AutoSaveService.getInstance();
+    await service.saveNow({
+      notebookId: 'document',
+      notebookTitle: 'Only local copy',
+      cells: [{ id: 'text', type: 'markdown', content: 'Keep this content', outputs: [] }],
+      tasks: [],
+      timestamp: Date.now(),
+    });
+    const preview = await maintenance.getCleanupCandidates();
+    const regular = await maintenance.cleanup();
+    const emergency = await maintenance.cleanup('emergency');
+    const records = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    await service.dispose();
+    await provider.close();
+    return {
+      preview: [...preview.inactive, ...preview.excess].map((book) => book.id),
+      regular,
+      emergency,
+      records,
+    };
+  });
+  expect(result.preview).toEqual(['cache']);
+  expect(result.regular.notebooksDeleted).toBe(1);
+  expect(result.emergency.notebooksDeleted).toBe(0);
+  expect(result.records.map((book) => book.id)).toEqual(['document', 'historical']);
+  expect(result.records[0].retention).toBe('persistent');
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.storageHarness));
+  const content = await page.evaluate(async () => {
+    const service = window.storageHarness.AutoSaveService.getInstance();
+    const restored = await service.load('document');
+    await service.dispose();
+    return restored.cells[0].content;
+  });
+  expect(content).toBe('Keep this content');
+});
+
+test('explicit user deletion can remove a persistent document', async ({ page }) => {
+  const remaining = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: 'document', retention: 'persistent' });
+    await new NotebookRepository(provider).deleteNotebook('document');
+    const records = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    await provider.close();
+    return records;
+  });
+  expect(remaining).toEqual([]);
 });

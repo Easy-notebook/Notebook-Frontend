@@ -17,6 +17,8 @@ export interface NotebookEntity {
   totalSize: number; // Total size of associated files in bytes
   // Settings
   cacheEnabled: boolean;
+  /** Missing identity is persistent. Automatic cleanup requires explicit evictable ownership. */
+  retention?: 'persistent' | 'evictable';
   maxCacheSize?: number; // Max cache size for this notebook in MB
 }
 

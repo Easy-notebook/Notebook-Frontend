@@ -12,6 +12,7 @@ const book = (id: string, lastAccessedAt: number): NotebookEntity => ({
   fileCount: 0,
   totalSize: 0,
   cacheEnabled: true,
+  retention: 'evictable',
 });
 
 describe('NotebookRetentionPolicy', () => {
@@ -38,6 +39,23 @@ describe('NotebookRetentionPolicy', () => {
       new NotebookRetentionPolicy({ ...config, maxNotebooks: 0 }).select(input, 100).excess
     ).toHaveLength(2);
   });
+
+  it.each(['regular', 'emergency'] as const)(
+    'retains persistent and unclassified documents during %s cleanup',
+    (mode) => {
+      const config = { ...DEFAULT_STORAGE_CONFIG, maxNotebooks: 0, retentionPeriod: 0 };
+      const result = new NotebookRetentionPolicy(config).select(
+        [
+          { ...book('document', 0), retention: 'persistent' },
+          { ...book('unclassified', 0), retention: undefined },
+          book('cache', 0),
+        ],
+        100,
+        mode
+      );
+      expect([...result.inactive, ...result.excess].map((item) => item.id)).toEqual(['cache']);
+    }
+  );
 
   it.each([-1, NaN, Infinity, 1.5])(
     'rejects invalid capacity %s before selecting deletions',

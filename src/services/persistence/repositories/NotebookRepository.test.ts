@@ -183,3 +183,29 @@ it('does not acknowledge a snapshot before commit and rejects an aborted commit'
   await expect(saving).rejects.toThrow('commit aborted');
   await observed;
 });
+
+it('promotes an evictable cache to persistent when committing a document snapshot', async () => {
+  const { repository, stores } = setup({ ...notebook, retention: 'evictable' });
+  await repository.saveNotebookSnapshot(file, { ...notebook, retention: 'evictable' });
+  expect(stores.notebooks.put).toHaveBeenCalledWith(
+    expect.objectContaining({ retention: 'persistent' })
+  );
+});
+
+it.each(['persistent', undefined])(
+  'does not downgrade an existing %s document through metadata refresh',
+  async (retention) => {
+    const { repository, stores } = setup({ ...notebook, retention });
+    await repository.saveNotebook({ ...notebook, retention: 'evictable' });
+    expect(stores.notebooks.put).toHaveBeenCalledWith(
+      expect.objectContaining({ retention: 'persistent' })
+    );
+  }
+);
+
+it('allows explicit cache ownership only when creating a new cache record', async () => {
+  const { repository } = setup(null);
+  expect(await repository.saveNotebook({ ...notebook, retention: 'evictable' })).toMatchObject({
+    retention: 'evictable',
+  });
+});

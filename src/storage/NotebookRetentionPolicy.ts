@@ -27,9 +27,9 @@ export class NotebookRetentionPolicy {
   }
 
   select(notebooks: NotebookEntity[], now: number, mode: CleanupMode = 'regular') {
-    const ordered = [...notebooks].sort(
-      (a, b) => b.lastAccessedAt - a.lastAccessedAt || a.id.localeCompare(b.id)
-    );
+    const ordered = notebooks
+      .filter((book) => book.retention === 'evictable')
+      .sort((a, b) => b.lastAccessedAt - a.lastAccessedAt || a.id.localeCompare(b.id));
     const inactive =
       mode === 'regular'
         ? ordered.filter((book) => book.lastAccessedAt <= now - this.config.retentionPeriod)

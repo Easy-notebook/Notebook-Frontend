@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 178 tests across fifteen files. Coverage includes
+The persistence/autosave/session gate passes 184 tests across fifteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -175,14 +175,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs twenty-nine isolated Playwright cases against production modules:
+`npm run test:browser` runs thirty-one isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 178 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 184 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -274,8 +274,8 @@ integration tests cover timer ownership, admission, draining, retries and config
 
 ## Atomic notebook retention
 
-NotebookRetentionPolicy selects disjoint inactive and excess candidates, retaining recent
-notebooks with a deterministic identity tie-break. Emergency cleanup retains the newest
+NotebookRetentionPolicy selects disjoint inactive and excess candidates from explicitly
+evictable caches, retaining recent notebooks with a deterministic identity tie-break. Emergency cleanup retains the newest
 70% of the configured notebook capacity. Invalid count/retention settings reject cleanup.
 Preview and execution use the same policy, without the former 50-extra-notebook query cap.
 Preview totals count each selected notebook's file metadata once.
@@ -293,10 +293,31 @@ Reported bytes are file metadata sizes, not a browser quota/physical-disk measur
 Native tests cover over-capacity batches, emergency LRU order, refreshed access/write,
 full cascade and rollback, explicit deletion isolation and overlapping cleanup accounting.
 
+## Persistent document protection
+
+Notebook retention identity is `persistent` or `evictable`. Missing identity is treated as
+persistent: neither cacheEnabled nor a remote URL proves that document content can be
+recovered. Current autosave writes local-only content, not a confirmed remote replica.
+Automatic regular/emergency cleanup therefore selects only explicitly evictable caches;
+protected documents do not consume this cache-count allowance.
+
+Snapshot persistence atomically promotes its notebook to persistent with the content write.
+Metadata refresh cannot downgrade an existing persistent or unclassified notebook. A new
+explicit cache may opt into eviction; current application document creation stays persistent.
+No database version change is needed for this optional record field. Historical content
+remains protected without a destructive classification migration. Explicit notebook deletion
+retains its behavior and can remove a persistent document and its owned records.
+
+Native coverage saves a document over an evictable record, runs both cleanup modes with
+zero capacity/retention, reloads the page and reads the only local content successfully.
+Unclassified historical records survive the same cleanup; an explicit cache is removed.
+
 ## Remaining lifecycle work
 
-Retention currently enforces notebook count and inactivity. Byte quotas, policy for
-unsynced offline notebooks and active notebooks require a separate product/storage audit.
+Retention currently enforces cache count and inactivity. Byte quota accounting and the
+creation/active-use contract for explicitly evictable caches require a separate audit.
+Persistent documents are protected regardless of age or count; this does not expand
+browser storage quota or claim remote synchronization.
 A transaction accepted after deletion cannot retroactively protect the deleted notebook.
 
 Pause waits for quiescence and is not guaranteed to finish under an infinite stream of accepted edits;

@@ -46,7 +46,17 @@ export class NotebookRepository implements INotebookRepository {
             try {
               const now = Date.now();
               const existing = request.result as NotebookEntity | undefined;
-              notebook = { ...data, createdAt: existing?.createdAt ?? now, updatedAt: now };
+              notebook = {
+                ...data,
+                // A document snapshot promotes cache ownership permanently. Metadata refreshes
+                // cannot silently turn an existing document (including unclassified data) into cache.
+                retention:
+                  file || (existing && existing.retention !== 'evictable')
+                    ? 'persistent'
+                    : (data.retention ?? existing?.retention ?? 'persistent'),
+                createdAt: existing?.createdAt ?? now,
+                updatedAt: now,
+              };
               notebooks.put(notebook);
               const activity: NotebookActivityEntity = {
                 id: `${data.id}::${now}`,
