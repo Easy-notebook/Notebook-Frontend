@@ -189,3 +189,121 @@ test('unsaved edits trigger a native exit dialog and commit after navigation is 
   expect(restored.notebookTitle).toBe('Retained notebook');
   expect(restored.cells[0].content).toBe('# Retained notebook');
 });
+
+for (const entryPoint of ['provider', 'manager']) {
+  test(`v2 upgrade through ${entryPoint} preserves records and reconciles missing schema`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (entryPoint) => {
+      const { DB_CONFIG, IndexedDBStorageProvider, IndexedDBManager } = window.storageHarness;
+      const original = await new Promise((resolve, reject) => {
+        const open = indexedDB.open(DB_CONFIG.NAME, 2);
+        open.onupgradeneeded = () => {
+          open.result
+            .createObjectStore(DB_CONFIG.STORES.NOTEBOOKS, { keyPath: 'id' })
+            .put({ id: 'retained', name: 'Existing notebook' });
+          open.result
+            .createObjectStore(DB_CONFIG.STORES.FILES_CONTENT, { keyPath: 'fileId' })
+            .put({ fileId: 'body', content: 'Existing content' });
+          open.result.createObjectStore('unrelated').put('keep', 'key');
+        };
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => reject(open.error);
+      });
+      original.close();
+      if (entryPoint === 'provider') {
+        const provider = new IndexedDBStorageProvider();
+        await provider.initialize();
+        await provider.close();
+      } else {
+        await IndexedDBManager.initialize();
+        IndexedDBManager.close();
+      }
+      const upgraded = await new Promise((resolve, reject) => {
+        const open = indexedDB.open(DB_CONFIG.NAME);
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => reject(open.error);
+      });
+      const stores = Array.from(upgraded.objectStoreNames);
+      const transaction = upgraded.transaction([
+        DB_CONFIG.STORES.NOTEBOOKS,
+        DB_CONFIG.STORES.FILES_CONTENT,
+        'unrelated',
+      ]);
+      const notebookStore = transaction.objectStore(DB_CONFIG.STORES.NOTEBOOKS);
+      const indexes = Array.from(notebookStore.indexNames);
+      const read = (request) =>
+        new Promise((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      const records = await Promise.all([
+        read(notebookStore.get('retained')),
+        read(transaction.objectStore(DB_CONFIG.STORES.FILES_CONTENT).get('body')),
+        read(transaction.objectStore('unrelated').get('key')),
+      ]);
+      const version = upgraded.version;
+      upgraded.close();
+      return { version, stores, indexes, records };
+    }, entryPoint);
+    expect(result.version).toBe(3);
+    expect(result.stores).toContain('split_files');
+    expect(result.stores).toContain('tab_states');
+    expect(result.indexes).toEqual(
+      expect.arrayContaining(['lastAccessedAt', 'accessCount', 'updatedAt'])
+    );
+    expect(result.records).toEqual([
+      { id: 'retained', name: 'Existing notebook' },
+      { fileId: 'body', content: 'Existing content' },
+      'keep',
+    ]);
+  });
+}
+
+test('an incompatible unique index aborts the upgrade without deleting v2 records', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { DB_CONFIG, IndexedDBStorageProvider } = window.storageHarness;
+    const seed = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_CONFIG.NAME, 2);
+      request.onupgradeneeded = () => {
+        const store = request.result.createObjectStore(DB_CONFIG.STORES.FILES_METADATA, {
+          keyPath: 'id',
+        });
+        store.put({ id: 'one', notebookId: 'same', filePath: 'same' });
+        store.put({ id: 'two', notebookId: 'same', filePath: 'same' });
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    seed.close();
+    const provider = new IndexedDBStorageProvider();
+    let failed = false;
+    try {
+      await provider.initialize();
+    } catch {
+      failed = true;
+    }
+    await provider.close();
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_CONFIG.NAME);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const version = db.version;
+    const records = await new Promise((resolve, reject) => {
+      const request = db
+        .transaction(DB_CONFIG.STORES.FILES_METADATA)
+        .objectStore(DB_CONFIG.STORES.FILES_METADATA)
+        .getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return { failed, version, records };
+  });
+  expect(result.failed).toBe(true);
+  expect(result.version).toBe(2);
+  expect(result.records.map((record) => record.id)).toEqual(['one', 'two']);
+});

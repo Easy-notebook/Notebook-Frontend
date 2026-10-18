@@ -1,4 +1,5 @@
 import type { IStorageProvider } from '../interfaces';
+import { NotebookDatabaseSchema } from '../../../storage/NotebookDatabaseSchema';
 import { DB_CONFIG } from '../../../storage/database';
 import { IndexedDBConnection } from './IndexedDBConnection';
 
@@ -9,7 +10,7 @@ export class IndexedDBStorageProvider implements IStorageProvider {
     this.connection = new IndexedDBConnection(
       DB_CONFIG.NAME,
       DB_CONFIG.VERSION,
-      (db) => this.upgrade(db),
+      (db, transaction) => NotebookDatabaseSchema.upgrade(db, transaction),
       factory
     );
   }
@@ -60,71 +61,5 @@ export class IndexedDBStorageProvider implements IStorageProvider {
       // Awaiting unrelated work does not keep an IndexedDB transaction alive.
       return callback(stores);
     });
-  }
-
-  private upgrade(db: IDBDatabase): void {
-    // Create notebooks store
-    if (!db.objectStoreNames.contains(DB_CONFIG.STORES.NOTEBOOKS)) {
-      const notebooksStore = db.createObjectStore(DB_CONFIG.STORES.NOTEBOOKS, {
-        keyPath: 'id',
-      });
-      notebooksStore.createIndex('lastAccessedAt', 'lastAccessedAt', { unique: false });
-      notebooksStore.createIndex('accessCount', 'accessCount', { unique: false });
-      notebooksStore.createIndex('updatedAt', 'updatedAt', { unique: false });
-    }
-
-    // Create files metadata store
-    if (!db.objectStoreNames.contains(DB_CONFIG.STORES.FILES_METADATA)) {
-      const filesMetaStore = db.createObjectStore(DB_CONFIG.STORES.FILES_METADATA, {
-        keyPath: 'id',
-      });
-      filesMetaStore.createIndex('notebookId', 'notebookId', { unique: false });
-      filesMetaStore.createIndex('notebookPath', ['notebookId', 'filePath'], { unique: true });
-      filesMetaStore.createIndex('lastAccessedAt', 'lastAccessedAt', { unique: false });
-      filesMetaStore.createIndex('storageType', 'storageType', { unique: false });
-      filesMetaStore.createIndex('isLargeFile', 'isLargeFile', { unique: false });
-      filesMetaStore.createIndex('cachedAt', 'cachedAt', { unique: false });
-    }
-
-    // Create files content store
-    if (!db.objectStoreNames.contains(DB_CONFIG.STORES.FILES_CONTENT)) {
-      db.createObjectStore(DB_CONFIG.STORES.FILES_CONTENT, { keyPath: 'fileId' });
-    }
-
-    // Create activities store
-    if (!db.objectStoreNames.contains(DB_CONFIG.STORES.ACTIVITIES)) {
-      const activitiesStore = db.createObjectStore(DB_CONFIG.STORES.ACTIVITIES, {
-        keyPath: 'id',
-      });
-      activitiesStore.createIndex('notebookId', 'notebookId', { unique: false });
-      activitiesStore.createIndex('timestamp', 'timestamp', { unique: false });
-      activitiesStore.createIndex('notebookTimestamp', ['notebookId', 'timestamp'], {
-        unique: false,
-      });
-      activitiesStore.createIndex('activityType', 'activityType', { unique: false });
-    }
-
-    // Create config store
-    if (!db.objectStoreNames.contains(DB_CONFIG.STORES.CONFIG)) {
-      db.createObjectStore(DB_CONFIG.STORES.CONFIG, { keyPath: 'id' });
-    }
-
-    // Create tab states store
-    if (!db.objectStoreNames.contains(DB_CONFIG.STORES.TAB_STATES)) {
-      const tabStatesStore = db.createObjectStore(DB_CONFIG.STORES.TAB_STATES, {
-        keyPath: 'notebookId',
-      });
-      tabStatesStore.createIndex('lastUpdated', 'lastUpdated', { unique: false });
-    }
-
-    // Create split files store
-    if (!db.objectStoreNames.contains(DB_CONFIG.STORES.SPLIT_FILES)) {
-      const splitFilesStore = db.createObjectStore(DB_CONFIG.STORES.SPLIT_FILES, {
-        keyPath: 'id',
-      });
-      splitFilesStore.createIndex('notebookId', 'notebookId', { unique: false });
-      splitFilesStore.createIndex('filePath', 'filePath', { unique: false });
-      splitFilesStore.createIndex('cachedAt', 'cachedAt', { unique: false });
-    }
   }
 }

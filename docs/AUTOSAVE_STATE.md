@@ -34,7 +34,7 @@ Scheduler tests use deferred writes and virtual time; repository/provider tests 
 transaction and IndexedDB event doubles. These are not native browser recovery tests.
 
 Autosave lint passes without warnings. Full-project type checking still reports
-305 existing diagnostics, none in autosave, persistence or session modules.
+301 existing diagnostics, none in autosave, persistence or session modules.
 
 ## Per-notebook save state and revision barriers
 
@@ -175,7 +175,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs six isolated Playwright cases against production modules:
+`npm run test:browser` runs nine isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -184,6 +184,20 @@ browser profile. Setup and exact limits are in [the browser test README](../test
 
 These results add real IndexedDB/browser evidence to the 156 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
+
+## Non-destructive database upgrades
+
+Database version 3 retains the existing database name and records, and reconciles
+missing stores/indexes through one NotebookDatabaseSchema implementation. Both the
+provider and the existing ORM connection manager use it. Unknown stores are retained;
+upgrades never delete existing stores. The old manager's automatic deletion of other
+historical databases has also been removed. Its connections now release on versionchange.
+
+Native tests seed v2 data and verify preservation through both entry points, including
+previously missing split-files storage and notebook indexes. A conflicting unique index
+aborts the version upgrade and preserves v2 records; no automatic data-loss repair is
+attempted. Existing raw-handle ORM callers still use the old connection manager and
+must be migrated before connection ownership is fully unified.
 
 ## Remaining lifecycle work
 

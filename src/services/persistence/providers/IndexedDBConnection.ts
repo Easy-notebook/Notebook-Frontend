@@ -14,7 +14,7 @@ export class IndexedDBConnection {
   constructor(
     private readonly name: string,
     private readonly version: number,
-    private readonly upgrade: (db: IDBDatabase) => void,
+    private readonly upgrade: (db: IDBDatabase, transaction: IDBTransaction) => void,
     private readonly factory?: IDBFactory
   ) {}
 
@@ -49,7 +49,8 @@ export class IndexedDBConnection {
           return;
         }
         try {
-          this.upgrade(request.result);
+          if (!request.transaction) throw new Error('Missing database upgrade transaction');
+          this.upgrade(request.result, request.transaction);
         } catch (error) {
           fail(error instanceof Error ? error : new Error(String(error)));
           request.transaction?.abort();
