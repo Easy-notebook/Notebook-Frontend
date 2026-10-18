@@ -1046,6 +1046,10 @@ test('usage distinguishes logical remote sizes from stored local, split and orph
     localContentBytes: 14,
     splitContentBytes: 7,
     orphanContentBytes: 8,
+    recoveryCopies: 0,
+    recoveryContentBytes: 0,
+    recoveryBaselineBytes: 0,
+    totalContentBytes: 21,
   });
   expect(result.notebook.accessCount).toBe(2);
   expect(result.notebook.lastAccessedAt).toBe(23);
@@ -1103,6 +1107,10 @@ test('empty storage usage has explicit zero totals and timestamps', async ({ pag
     localContentBytes: 0,
     splitContentBytes: 0,
     orphanContentBytes: 0,
+    recoveryCopies: 0,
+    recoveryContentBytes: 0,
+    recoveryBaselineBytes: 0,
+    totalContentBytes: 0,
   });
 });
 
@@ -3208,4 +3216,152 @@ test('recovery UI restores a separate notebook and exposes its new-tab link', as
     notebookTitle: 'Recovered work (Recovered)',
     cells: [{ content: 'local contents' }],
   });
+});
+
+test('content budgets include recovery text while regular and emergency cleanup preserve it', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const {
+      IndexedDBStorageProvider,
+      NotebookRecoveryRepository,
+      NotebookRepository,
+      FileRepository,
+      StorageMaintenanceRepository,
+    } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const recovery = new NotebookRecoveryRepository(provider);
+    const maintenance = new StorageMaintenanceRepository(provider);
+    await new NotebookRepository(provider).saveNotebook({
+      id: 'cache',
+      name: 'Cache',
+      retention: 'evictable',
+      lastAccessedAt: Date.now(),
+      accessCount: 1,
+      cacheEnabled: true,
+    });
+    await new FileRepository(provider).saveFile({
+      notebookId: 'cache',
+      filePath: 'cache',
+      fileName: 'cache',
+      content: 'cache',
+      size: 5,
+      lastModified: 'now',
+    });
+    const record = await recovery.saveDraft({
+      notebookId: 'cache',
+      writerId: 'writer',
+      revision: 1,
+      content: '你好',
+      expectedContent: '😀',
+      reason: 'content_changed',
+    });
+    await recovery.saveDraft({
+      notebookId: 'other',
+      writerId: 'writer',
+      revision: 1,
+      content: '',
+      expectedContent: null,
+      reason: 'content_changed',
+    });
+    await maintenance.updateConfig({ maxTotalSize: 8, maxNotebooks: 100 });
+    const before = await maintenance.getStorageStats();
+    const preview = await maintenance.getCleanupCandidates();
+    const regular = await maintenance.cleanup();
+    const after = await maintenance.getStorageStats();
+    const emergency = await maintenance.cleanup('emergency');
+    const retained = await recovery.listDrafts();
+    await recovery.discardDraft(record.id, record.revision);
+    const discarded = await maintenance.getStorageStats();
+    await provider.close();
+    return { before, preview, regular, after, emergency, retained, discarded };
+  });
+  expect(result.before).toMatchObject({
+    totalSize: 5,
+    localContentBytes: 5,
+    recoveryCopies: 2,
+    recoveryContentBytes: 6,
+    recoveryBaselineBytes: 4,
+    totalContentBytes: 15,
+    orphanContentBytes: 0,
+  });
+  expect(result.preview).toMatchObject({
+    contentBytesFreed: 5,
+    remainingContentBytes: 10,
+    overBudgetBytes: 2,
+  });
+  expect(result.regular).toMatchObject({
+    notebooksDeleted: 1,
+    contentBytesFreed: 5,
+    remainingContentBytes: 10,
+    overBudgetBytes: 2,
+  });
+  expect(result.after).toMatchObject({
+    totalNotebooks: 0,
+    localContentBytes: 0,
+    recoveryCopies: 2,
+    totalContentBytes: 10,
+    orphanContentBytes: 0,
+  });
+  expect(result.emergency).toMatchObject({
+    notebooksDeleted: 0,
+    remainingContentBytes: 10,
+    overBudgetBytes: 5,
+  });
+  expect(result.retained).toHaveLength(2);
+  expect(result.discarded).toMatchObject({ recoveryCopies: 1, totalContentBytes: 0 });
+});
+
+test('usage observes an atomic transfer from recovery draft to restored notebook content', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRecoveryRepository, StorageMaintenanceRepository } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const recovery = new NotebookRecoveryRepository(provider, () => 'restored-usage');
+    const maintenance = new StorageMaintenanceRepository(provider);
+    const content = JSON.stringify({
+      notebook_id: 'source',
+      title: 'Copy',
+      cells: [{ id: 'a', type: 'markdown', content: '你好' }],
+      tasks: [],
+    });
+    const draft = await recovery.saveDraft({
+      notebookId: 'source',
+      writerId: 'writer',
+      revision: 1,
+      content,
+      expectedContent: 'base',
+      reason: 'content_changed',
+    });
+    const before = await maintenance.getStorageStats();
+    const [restored, concurrent] = await Promise.all([
+      recovery.restoreDraft(draft.id, draft.revision),
+      maintenance.getStorageStats(),
+    ]);
+    const after = await maintenance.getStorageStats();
+    await provider.close();
+    return {
+      before,
+      concurrent,
+      after,
+      restored,
+      sourceBytes: new TextEncoder().encode(content).byteLength + 4,
+    };
+  });
+  expect(result.before).toMatchObject({
+    totalFiles: 0,
+    recoveryCopies: 1,
+    totalContentBytes: result.sourceBytes,
+  });
+  expect(result.after).toMatchObject({
+    totalFiles: 1,
+    recoveryCopies: 0,
+    recoveryContentBytes: 0,
+    recoveryBaselineBytes: 0,
+    localContentBytes: result.restored.totalSize,
+    totalContentBytes: result.restored.totalSize,
+  });
+  expect([result.before, result.after]).toContainEqual(result.concurrent);
 });

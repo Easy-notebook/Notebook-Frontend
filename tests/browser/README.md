@@ -79,6 +79,9 @@ Coverage:
 - Restore-as-new atomically creates a persistent notebook and consumes the reviewed draft;
   stale revisions, collisions and aborted commits retain recovery data. Concurrent restores
   create one copy. The UI provides a new-tab link and the copy loads through normal autosave.
+- Usage counts recovery snapshots and comparison bases as protected UTF-8 content. Cleanup
+  preserves them even after evicting their source notebook, reports unreclaimable over-budget
+  bytes, and observes complete before/after snapshots during restoration or dismissal.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

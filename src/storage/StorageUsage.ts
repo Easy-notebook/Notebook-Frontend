@@ -24,6 +24,12 @@ export interface StorageStats {
   splitContentBytes: number;
   /** Subset of the two content totals with no associated notebook/metadata. */
   orphanContentBytes: number;
+  recoveryCopies: number;
+  /** UTF-8 payload bytes; recovery copies are independent of notebook eviction. */
+  recoveryContentBytes: number;
+  recoveryBaselineBytes: number;
+  /** Canonical, split and recovery text, excluding indexes/record metadata overhead. */
+  totalContentBytes: number;
 }
 
 /** Aggregates one transaction snapshot without trusting denormalized notebook counters. */
@@ -32,7 +38,7 @@ export class StorageUsage {
   private readonly fileOwners: Map<string, string>;
   private readonly contentBytesByNotebook = new Map<string, number>();
   private readonly encoder = new TextEncoder();
-  private readonly stats: StorageStats;
+  private readonly stats: Omit<StorageStats, 'totalContentBytes'>;
 
   constructor(notebooks: NotebookEntity[], files: FileMetadataEntity[]) {
     this.notebookIds = new Set(notebooks.map((book) => book.id));
@@ -65,6 +71,9 @@ export class StorageUsage {
       localContentBytes: 0,
       splitContentBytes: 0,
       orphanContentBytes: 0,
+      recoveryCopies: 0,
+      recoveryContentBytes: 0,
+      recoveryBaselineBytes: 0,
     };
   }
 
@@ -83,6 +92,29 @@ export class StorageUsage {
     else this.recordOwnedBytes(content.notebookId, bytes);
   }
 
+  addRecoveryContent(record: { content: string; expectedContent: string | null }): void {
+    if (
+      typeof record.content !== 'string' ||
+      (record.expectedContent !== null && typeof record.expectedContent !== 'string')
+    ) {
+      throw new Error('Invalid recovery content while measuring storage');
+    }
+    this.stats.recoveryCopies++;
+    this.stats.recoveryContentBytes += this.encoder.encode(record.content).byteLength;
+    this.stats.recoveryBaselineBytes +=
+      record.expectedContent === null ? 0 : this.encoder.encode(record.expectedContent).byteLength;
+    // Recovery survives deleting its original notebook; do not credit its bytes to eviction.
+  }
+
+  private get totalContentBytes(): number {
+    return (
+      this.stats.localContentBytes +
+      this.stats.splitContentBytes +
+      this.stats.recoveryContentBytes +
+      this.stats.recoveryBaselineBytes
+    );
+  }
+
   private recordOwnedBytes(notebookId: string, bytes: number): void {
     this.contentBytesByNotebook.set(
       notebookId,
@@ -92,12 +124,12 @@ export class StorageUsage {
 
   toContentUsage(): ContentUsage {
     return {
-      totalBytes: this.stats.localContentBytes + this.stats.splitContentBytes,
+      totalBytes: this.totalContentBytes,
       bytesByNotebook: new Map(this.contentBytesByNotebook),
     };
   }
 
   toStats(): StorageStats {
-    return { ...this.stats };
+    return { ...this.stats, totalContentBytes: this.totalContentBytes };
   }
 }

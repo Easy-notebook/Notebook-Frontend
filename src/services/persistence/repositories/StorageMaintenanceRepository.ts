@@ -7,7 +7,11 @@ import {
   type CleanupStats,
   type CleanupCandidates,
 } from '../../../storage/NotebookRetentionPolicy';
-import type { IStorageProvider, IStorageMaintenanceRepository } from '../interfaces';
+import type {
+  IStorageProvider,
+  IStorageMaintenanceRepository,
+  NotebookRecoveryRecord,
+} from '../interfaces';
 import {
   DB_STORES,
   DEFAULT_STORAGE_CONFIG,
@@ -20,17 +24,19 @@ import {
 
 /** Configuration and retention maintenance use the same transaction owner as content. */
 export class StorageMaintenanceRepository implements IStorageMaintenanceRepository {
+  private static readonly usageStores = [
+    DB_STORES.NOTEBOOKS,
+    DB_STORES.FILES_METADATA,
+    DB_STORES.FILES_CONTENT,
+    DB_STORES.SPLIT_FILES,
+    DB_STORES.NOTEBOOK_RECOVERY,
+  ];
   constructor(private readonly storage: IStorageProvider) {}
 
   async getStorageStats(): Promise<StorageStats> {
     let usage!: StorageUsage;
     await this.storage.transaction(
-      [
-        DB_STORES.NOTEBOOKS,
-        DB_STORES.FILES_METADATA,
-        DB_STORES.FILES_CONTENT,
-        DB_STORES.SPLIT_FILES,
-      ],
+      [...StorageMaintenanceRepository.usageStores],
       'readonly',
       async (stores) => {
         usage = (await this.readUsage(stores)).usage;
@@ -51,6 +57,9 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
       ),
       this.visit<SplitFileEntity>(stores[DB_STORES.SPLIT_FILES], (content) =>
         usage.addSplitContent(content)
+      ),
+      this.visit<NotebookRecoveryRecord>(stores[DB_STORES.NOTEBOOK_RECOVERY], (record) =>
+        usage.addRecoveryContent(record)
       ),
     ]);
     return { notebooks, files, usage };
@@ -110,13 +119,7 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
   async getCleanupCandidates(): Promise<CleanupCandidates> {
     let result!: CleanupCandidates;
     await this.storage.transaction(
-      [
-        DB_STORES.CONFIG,
-        DB_STORES.NOTEBOOKS,
-        DB_STORES.FILES_METADATA,
-        DB_STORES.FILES_CONTENT,
-        DB_STORES.SPLIT_FILES,
-      ],
+      [DB_STORES.CONFIG, ...StorageMaintenanceRepository.usageStores],
       'readonly',
       async (stores) => {
         const [config, { notebooks, files, usage }] = await Promise.all([
@@ -153,7 +156,13 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
       overBudgetBytes: 0,
     };
     await this.storage.transaction(
-      [DB_STORES.CONFIG, ...NotebookDeletion.stores],
+      [
+        ...new Set([
+          DB_STORES.CONFIG,
+          ...NotebookDeletion.stores,
+          ...StorageMaintenanceRepository.usageStores,
+        ]),
+      ],
       'readwrite',
       async (stores) => {
         const [stored, { notebooks, usage }] = await Promise.all([

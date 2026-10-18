@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session/recovery gate passes 285 tests across twenty-four files. Coverage includes
+The storage/persistence/autosave/session/recovery gate passes 289 tests across twenty-five files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -213,14 +213,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs seventy-six isolated Playwright cases against production modules:
+`npm run test:browser` runs seventy-eight isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 285 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 289 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -353,30 +353,40 @@ Unclassified historical records survive the same cleanup; an explicit cache is r
 ## Storage usage snapshot
 
 StorageManager delegates usage statistics to one readonly transaction over notebooks,
-file metadata, file content and split content. Logical totals retain the existing meaning:
+file metadata, file content, split content and recovery records. Logical totals retain the existing meaning:
 file metadata sizes for existing notebooks, including remote references. Denormalized
 notebook counters and unrelated activity logs are not used to calculate these totals.
 
-Additional localContentBytes and splitContentBytes count UTF-8 bytes of stored strings.
-Content is consumed through cursors rather than materializing both content stores in
-memory. orphanContentBytes is a subset of those totals: file payloads without metadata
-or an existing notebook, plus split payloads without an existing notebook. Reporting
-orphans never deletes them. None of these fields includes IndexedDB record/index overhead
-or claims to measure physical disk usage. Empty stores report zero timestamps and totals.
+localContentBytes and splitContentBytes count UTF-8 bytes of canonical/split strings.
+recoveryCopies counts independent draft records; recoveryContentBytes and
+recoveryBaselineBytes count their snapshot and comparison-base strings separately.
+totalContentBytes sums all four payload byte categories. Null bases cost zero; equal
+strings in distinct records are counted separately because both records store them.
 
-Native cases verify multibyte text, remote logical sizes, orphan/split accounting,
-unchanged access metadata, consistent snapshots during concurrent writes, empty stores
-and rejection instead of partial results when the transaction fails.
+Content is consumed through cursors rather than materializing all payload stores in memory.
+orphanContentBytes remains a subset of canonical/split totals: bodies without associated
+metadata/notebook and splits without notebooks. Recovery has independent ownership and is
+not an orphan just because its original notebook was deleted. None of these fields includes
+record/index overhead or claims to measure physical disk usage. Malformed recovery payloads
+reject measurement rather than silently undercounting. Empty stores report explicit zeros.
+
+Reporting, preview and cleanup share one declared usage store scope. Recovery saves,
+restorations and dismissals therefore serialize with these snapshots, including when a
+recovery record is atomically consumed to create canonical content. Native cases verify
+multibyte text, baseline bytes, unchanged legacy logical sizes, empty records, orphan
+classification, protected over-budget bytes and complete snapshots during restoration.
 
 ## Content budget enforcement
 
-Regular cleanup applies maxTotalSize to UTF-8 local-plus-split content bytes. Emergency
+Regular cleanup applies maxTotalSize to UTF-8 canonical, split, recovery and baseline text bytes. Emergency
 cleanup targets 70% of that allowance, alongside its cache-count target. Age/count
 candidates are accounted first, then the oldest remaining payload-bearing evictable
 notebooks are selected until the target is met or no reclaimable content remains.
 Zero-byte/remote-only caches are not deleted merely because other content exceeds
-the byte budget. Persistent documents and orphan payloads are included in usage but
-are never selected for automatic deletion.
+the byte budget. Persistent documents, orphan payloads and recovery records are included in usage but
+are never selected for automatic deletion. Recovery bytes are not credited to any notebook
+eviction: even deleting their original notebook leaves them retained. Unreclaimable recovery
+bytes remain in remainingContentBytes and overBudgetBytes.
 
 Usage reading is shared by reporting, preview and cleanup. Cleanup measures/selects/deletes
 within the same readwrite transaction. Both preview and committed results expose
@@ -645,7 +655,7 @@ revision before deleting so a stale action cannot discard a newer draft.
 
 Recovery records survive notebook deletion and cache cleanup. They are retained until an
 explicit recovery action; even a later successful main save does not silently discard them.
-They are outside the current canonical-file/split-content usage totals. A normal reload test
+Their body/base bytes are measured independently and included in total content budgeting. A normal reload test
 retrieves both an unloaded overwrite attempt and a stale-window edit while the canonical
 winning document remains unchanged. Native tests cover monotonic updates, writer isolation,
 transaction abort, invocation-time capture, compare-delete and notebook deletion isolation.
