@@ -34,7 +34,7 @@ Scheduler tests use deferred writes and virtual time; repository/provider tests 
 transaction and IndexedDB event doubles. These are not native browser recovery tests.
 
 Autosave lint passes without warnings. Full-project type checking still reports
-300 existing diagnostics, none in autosave, persistence or session modules.
+299 existing diagnostics, none in autosave, persistence or session modules.
 
 ## Per-notebook save state and revision barriers
 
@@ -175,7 +175,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs fifteen isolated Playwright cases against production modules:
+`npm run test:browser` runs eighteen isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -196,7 +196,7 @@ historical databases has also been removed. Its connections now release on versi
 Native tests seed v2 data and verify preservation through both entry points, including
 previously missing split-files storage and notebook indexes. A conflicting unique index
 aborts the version upgrade and preserves v2 records; no automatic data-loss repair is
-attempted. Remaining raw-handle file/configuration/cache callers still use the old connection
+attempted. Remaining raw-handle configuration/cache callers still use the old connection
 manager and must be migrated before connection ownership is fully unified.
 
 ## Atomic split-file cache clearing
@@ -222,8 +222,24 @@ live in the repository. Statistics query notebook-indexed metadata and activitie
 one readonly transaction. Counter updates and recomputation complete only on transaction
 commit; no timeout can turn a pending write into success. Three native cases verify
 concurrent counter increments, notebook-scoped statistics/retention, and rollback of
-failed adjustments/recomputation. FileORM and configuration maintenance still require
+failed adjustments/recomputation. Configuration and legacy cache maintenance still require
 migration; this change does not claim all raw connections have been retired.
+
+## File ORM retirement and accounting
+
+All internal file ORM callers now use FileRepository; the duplicate fileOrm module
+and its exports are removed. Storage maintenance/imports reuse the existing persistence
+singleton, and the extra storage composition instance is removed. Application FileCache
+helpers retain their callable shape. Save inputs require file fields while allowing
+callers to carry additional preview properties.
+
+File creation/replacement, content changes and deletion commit metadata, content,
+notebook counts/bytes and activity together. Reads update file/notebook access state
+and activity under the same transaction. Large-file queries use the notebook index
+when scoped and filter flags after reading; they never use invalid boolean IDB keys.
+Old compression functions were identity operations, so historical payloads remain
+readable as plain content even when marked compressed. Native cases exercise that
+format, remote references, accounting across mutations, and full rollback on failure.
 
 ## Remaining lifecycle work
 

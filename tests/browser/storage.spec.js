@@ -454,3 +454,125 @@ for (const operation of ['adjustNotebookStats', 'recalcNotebookStats']) {
     expect(result.notebook).toEqual({ id: 'a', fileCount: 3, totalSize: 30 });
   });
 }
+
+test('file create, replace, edit and delete maintain notebook totals atomically', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new FileRepository(provider);
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
+      id: 'a',
+      fileCount: 0,
+      totalSize: 0,
+      accessCount: 0,
+    });
+    const data = {
+      notebookId: 'a',
+      filePath: 'file',
+      fileName: 'file',
+      content: 'one',
+      size: 3,
+      lastModified: '2026-10-19',
+    };
+    await repository.saveFile(data);
+    await repository.saveFile({ ...data, content: 'second', size: 6 });
+    const replaced = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a');
+    await repository.updateFileContent('a', 'file', '中文');
+    const read = await repository.getFile('a', 'file');
+    const edited = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a');
+    await repository.deleteFile('a', 'file');
+    const deleted = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a');
+    const missing = await repository.getFile('a', 'file');
+    await provider.close();
+    return { replaced, edited, deleted, read, missing };
+  });
+  expect(result.replaced).toMatchObject({ fileCount: 1, totalSize: 6 });
+  expect(result.edited).toMatchObject({ fileCount: 1, totalSize: 6, accessCount: 1 });
+  expect(result.read.content).toBe('中文');
+  expect(result.deleted).toMatchObject({ fileCount: 0, totalSize: 0 });
+  expect(result.missing).toBeNull();
+});
+
+test('file accounting failure rolls back metadata and content together', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: 'a', fileCount: 0, totalSize: 0 });
+    const repository = new FileRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('atomic file commit rejected');
+        }),
+    });
+    let error;
+    try {
+      await repository.saveFile({
+        notebookId: 'a',
+        filePath: 'file',
+        fileName: 'file',
+        content: 'new',
+        size: 3,
+        lastModified: '2026-10-19',
+      });
+    } catch (failure) {
+      error = failure.message;
+    }
+    const notebook = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a');
+    const files = await provider.getAll(DB_CONFIG.STORES.FILES_METADATA);
+    const content = await provider.getAll(DB_CONFIG.STORES.FILES_CONTENT);
+    const activities = await provider.getAll(DB_CONFIG.STORES.ACTIVITIES);
+    await provider.close();
+    return { error, notebook, files, content, activities };
+  });
+  expect(result).toEqual({
+    error: 'atomic file commit rejected',
+    notebook: { id: 'a', fileCount: 0, totalSize: 0 },
+    files: [],
+    content: [],
+    activities: [],
+  });
+});
+
+test('migrated file reads retain old plain payloads and list remote references without boolean keys', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new FileRepository(provider);
+    await provider.put(DB_CONFIG.STORES.FILES_METADATA, {
+      id: 'a::old',
+      notebookId: 'a',
+      filePath: 'old',
+      hasLocalContent: true,
+      accessCount: 0,
+    });
+    await provider.put(DB_CONFIG.STORES.FILES_CONTENT, {
+      fileId: 'a::old',
+      content: 'old plain payload',
+      compressed: true,
+    });
+    const old = await repository.getFile('a', 'old');
+    const data = {
+      notebookId: 'a',
+      filePath: 'remote',
+      fileName: 'remote',
+      content: 'preview',
+      size: 100,
+      remoteUrl: '/file',
+      lastModified: '2026-10-19',
+    };
+    await repository.saveFile(data, { maxFileSize: 10 });
+    await repository.saveFile({ ...data, notebookId: 'b' }, { maxFileSize: 10 });
+    const all = await repository.getLargeFiles();
+    const scoped = await repository.getLargeFiles('a');
+    await provider.close();
+    return { old, all, scoped };
+  });
+  expect(result.old.content).toBe('old plain payload');
+  expect(result.all.map((file) => file.id)).toEqual(['a::remote', 'b::remote']);
+  expect(result.scoped.map((file) => file.id)).toEqual(['a::remote']);
+});

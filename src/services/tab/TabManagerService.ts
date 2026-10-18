@@ -1,7 +1,7 @@
 import { persistenceService } from '@Services/persistence/instance';
 import { PreviewFile, FileType } from '@Store/models';
 import { storeLog } from '@Utils/logger';
-import { FileORM, getFileType } from '@Storage/index';
+import { getFileType } from '@Storage/index';
 import { FileService } from '@Services/notebook/FileService';
 import { validateFileForTab } from '@Utils/fileValidation';
 
@@ -120,7 +120,7 @@ export class TabManagerService {
       // 📂 Get files from storage (only for current notebook)
       let files: any[] = [];
       try {
-        const fileResults = await FileORM.getFilesForNotebook(notebookId, false); // Don't load content for tabs
+        const fileResults = await persistenceService.files.getFilesForNotebook(notebookId, false); // Don't load content for tabs
 
         // 🔍 Filter out notebook main files and invalid files
         const filteredResults = fileResults.filter((result) => {

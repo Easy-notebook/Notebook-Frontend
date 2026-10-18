@@ -78,7 +78,11 @@ export interface INotebookRepository {
 }
 
 export interface IFileRepository {
-  saveFile(fileData: any, options?: any): Promise<FileMetadataEntity>;
+  saveFile<T extends FileSaveData>(
+    fileData: T,
+    options?: FileSaveOptions
+  ): Promise<FileMetadataEntity>;
+  getLargeFiles(notebookId?: string): Promise<FileMetadataEntity[]>;
   getFile(
     notebookId: string,
     filePath: string

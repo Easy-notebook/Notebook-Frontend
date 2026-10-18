@@ -26,6 +26,8 @@ Coverage:
 - Both scoped and whole-cache clearing roll back all deletions on transaction failure.
 - Notebook maintenance preserves concurrent counter increments and scopes statistics/retention correctly.
 - Aborted counter adjustment and recomputation retain previous notebook statistics.
+- File mutations atomically update notebook totals; failed commits roll back all related stores.
+- Old plain payloads marked compressed remain readable and remote-reference queries avoid boolean IDB keys.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

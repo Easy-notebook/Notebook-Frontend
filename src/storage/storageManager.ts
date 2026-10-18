@@ -2,8 +2,7 @@
 // Main storage manager with cleanup and maintenance functionality
 
 import { IndexedDBManager, DB_CONFIG } from './database';
-import { storagePersistence } from './persistence';
-import { FileORM } from './fileOrm';
+import { persistenceService } from '../services/persistence/instance';
 import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG, NotebookEntity } from './schema';
 import { DataMigration } from './migration';
 import { storageLog } from '@Utils/logger';
@@ -219,7 +218,7 @@ export class StorageManager {
    * Get comprehensive storage statistics
    */
   static async getStorageStats(): Promise<StorageStats> {
-    const notebooks = await storagePersistence.notebooks.getAllNotebooks();
+    const notebooks = await persistenceService.notebooks.getAllNotebooks();
 
     let totalFiles = 0;
     let totalSize = 0;
@@ -230,12 +229,12 @@ export class StorageManager {
     let maxAccess = 0;
 
     for (const notebook of notebooks) {
-      const stats = await storagePersistence.notebooks.getNotebookStats(notebook.id);
+      const stats = await persistenceService.notebooks.getNotebookStats(notebook.id);
       totalFiles += stats.fileCount;
       totalSize += stats.totalSize;
 
       // Get large files count for this notebook
-      const largeFiles = await FileORM.getLargeFiles(notebook.id);
+      const largeFiles = await persistenceService.files.getLargeFiles(notebook.id);
       largeFilesCount += largeFiles.length;
 
       // Track oldest/newest
@@ -281,17 +280,17 @@ export class StorageManager {
       };
 
       // 1. Clean up inactive notebooks
-      const inactiveNotebooks = await storagePersistence.notebooks.getInactiveNotebooks(
+      const inactiveNotebooks = await persistenceService.notebooks.getInactiveNotebooks(
         config.retentionPeriod
       );
 
       for (const notebook of inactiveNotebooks) {
         // Get files for size calculation
-        const files = await FileORM.getFilesForNotebook(notebook.id);
+        const files = await persistenceService.files.getFilesForNotebook(notebook.id);
         const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
 
         // Delete notebook and all associated data
-        const deleted = await storagePersistence.notebooks.deleteNotebook(notebook.id);
+        const deleted = await persistenceService.notebooks.deleteNotebook(notebook.id);
         if (deleted) {
           stats.notebooksDeleted++;
           stats.filesDeleted += files.length;
@@ -300,7 +299,7 @@ export class StorageManager {
       }
 
       // 2. Enforce maximum notebook limit
-      const allNotebooks = await storagePersistence.notebooks.getAllNotebooks({
+      const allNotebooks = await persistenceService.notebooks.getAllNotebooks({
         orderBy: 'lastAccessedAt',
         limit: config.maxNotebooks + 50, // Get more than limit to find candidates for deletion
       });
@@ -309,10 +308,10 @@ export class StorageManager {
         const excessNotebooks = allNotebooks.slice(config.maxNotebooks);
 
         for (const notebook of excessNotebooks) {
-          const files = await FileORM.getFilesForNotebook(notebook.id);
+          const files = await persistenceService.files.getFilesForNotebook(notebook.id);
           const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
 
-          const deleted = await storagePersistence.notebooks.deleteNotebook(notebook.id);
+          const deleted = await persistenceService.notebooks.deleteNotebook(notebook.id);
           if (deleted) {
             stats.notebooksDeleted++;
             stats.filesDeleted += files.length;
@@ -342,11 +341,11 @@ export class StorageManager {
   static async cleanupNotebook(notebookId: string): Promise<boolean> {
     try {
       // Get files for size calculation
-      const files = await FileORM.getFilesForNotebook(notebookId);
+      const files = await persistenceService.files.getFilesForNotebook(notebookId);
       const totalSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
 
       // Delete notebook and all associated data
-      const deleted = await storagePersistence.notebooks.deleteNotebook(notebookId);
+      const deleted = await persistenceService.notebooks.deleteNotebook(notebookId);
 
       if (deleted) {
         storageLog.info('Cleaned up notebook', {
@@ -374,12 +373,12 @@ export class StorageManager {
     const config = await this.getConfig();
 
     // Get inactive notebooks
-    const inactive = await storagePersistence.notebooks.getInactiveNotebooks(
+    const inactive = await persistenceService.notebooks.getInactiveNotebooks(
       config.retentionPeriod
     );
 
     // Get excess notebooks (over the limit)
-    const allNotebooks = await storagePersistence.notebooks.getAllNotebooks({
+    const allNotebooks = await persistenceService.notebooks.getAllNotebooks({
       orderBy: 'lastAccessedAt',
     });
 
@@ -390,7 +389,7 @@ export class StorageManager {
     let totalBytesToFree = 0;
 
     for (const notebook of [...inactive, ...excess]) {
-      const stats = await storagePersistence.notebooks.getNotebookStats(notebook.id);
+      const stats = await persistenceService.notebooks.getNotebookStats(notebook.id);
       totalBytesToFree += stats.totalSize;
     }
 
@@ -416,7 +415,7 @@ export class StorageManager {
     };
 
     // Get all notebooks ordered by last access (oldest first)
-    const notebooks = await storagePersistence.notebooks.getAllNotebooks({
+    const notebooks = await persistenceService.notebooks.getAllNotebooks({
       orderBy: 'lastAccessedAt',
     });
 
@@ -427,10 +426,10 @@ export class StorageManager {
       const notebooksToDelete = notebooks.slice(0, notebooks.length - targetNotebooks);
 
       for (const notebook of notebooksToDelete) {
-        const files = await FileORM.getFilesForNotebook(notebook.id);
+        const files = await persistenceService.files.getFilesForNotebook(notebook.id);
         const notebookSize = files.reduce((sum, file) => sum + file.metadata.size, 0);
 
-        const deleted = await storagePersistence.notebooks.deleteNotebook(notebook.id);
+        const deleted = await persistenceService.notebooks.deleteNotebook(notebook.id);
         if (deleted) {
           stats.notebooksDeleted++;
           stats.filesDeleted += files.length;
@@ -575,6 +574,6 @@ export class StorageManager {
    */
   static async close(): Promise<void> {
     IndexedDBManager.close();
-    await storagePersistence.close();
+    await persistenceService.close();
   }
 }

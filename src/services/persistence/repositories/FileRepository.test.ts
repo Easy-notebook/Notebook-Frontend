@@ -12,9 +12,11 @@ function setup(
     queueMicrotask(() => value.onsuccess?.());
     return value;
   };
-  const metadataStore = { get: vi.fn(() => request(metadata)), put: vi.fn() };
+  const metadataStore = { get: vi.fn(() => request(metadata)), put: vi.fn(), delete: vi.fn() };
   const contentStore = { get: vi.fn(() => request(content)), put: vi.fn(), delete: vi.fn() };
   const stores = {
+    [DB_CONFIG.STORES.NOTEBOOKS]: { get: vi.fn(() => request(null)), put: vi.fn() },
+    [DB_CONFIG.STORES.ACTIVITIES]: { put: vi.fn() },
     [DB_CONFIG.STORES.FILES_METADATA]: metadataStore,
     [DB_CONFIG.STORES.FILES_CONTENT]: contentStore,
   };
@@ -110,7 +112,12 @@ it('reads the file and updates access statistics in a single transaction', async
   const { repository, storage, metadataStore, contentStore } = setup();
   const result = await repository.getFile('book', 'note.json');
   expect(storage.transaction).toHaveBeenCalledExactlyOnceWith(
-    [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
+    [
+      DB_CONFIG.STORES.FILES_METADATA,
+      DB_CONFIG.STORES.FILES_CONTENT,
+      DB_CONFIG.STORES.NOTEBOOKS,
+      DB_CONFIG.STORES.ACTIVITIES,
+    ],
     'readwrite',
     expect.any(Function)
   );
@@ -190,7 +197,12 @@ it('updates metadata and content from the same transaction revision', async () =
   expect(await repository.updateFileContent('book', 'note.json', '中文')).toBe(true);
   expect(storage.get).not.toHaveBeenCalled();
   expect(storage.transaction).toHaveBeenCalledExactlyOnceWith(
-    [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
+    [
+      DB_CONFIG.STORES.FILES_METADATA,
+      DB_CONFIG.STORES.FILES_CONTENT,
+      DB_CONFIG.STORES.NOTEBOOKS,
+      DB_CONFIG.STORES.ACTIVITIES,
+    ],
     'readwrite',
     expect.any(Function)
   );

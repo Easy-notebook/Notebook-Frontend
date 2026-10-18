@@ -1,8 +1,7 @@
 // storage/migration.ts
 // Data migration from legacy storage systems
 
-import { storagePersistence } from './persistence';
-import { FileORM } from './fileOrm';
+import { persistenceService } from '../services/persistence/instance';
 import type { NotebookEntity } from './schema';
 
 /**
@@ -53,7 +52,7 @@ export class DataMigration {
   static async isMigrationNeeded(): Promise<boolean> {
     try {
       // Check if we have any notebooks in the new system
-      const notebooks = await storagePersistence.notebooks.getAllNotebooks({ limit: 1 });
+      const notebooks = await persistenceService.notebooks.getAllNotebooks({ limit: 1 });
       if (notebooks.length > 0) {
         return false; // Already have data in new system
       }
@@ -262,13 +261,13 @@ export class DataMigration {
                   cacheEnabled: true,
                 };
 
-                await storagePersistence.notebooks.saveNotebook(notebook);
+                await persistenceService.notebooks.saveNotebook(notebook);
                 stats.notebooksMigrated++;
 
                 // Migrate files for this notebook
                 for (const legacyFile of files) {
                   try {
-                    await FileORM.saveFile({
+                    await persistenceService.files.saveFile({
                       notebookId: legacyFile.notebookId,
                       filePath: legacyFile.path,
                       fileName: legacyFile.name,
@@ -329,9 +328,9 @@ export class DataMigration {
 
     try {
       // Clear all data in new database
-      const notebooks = await storagePersistence.notebooks.getAllNotebooks();
+      const notebooks = await persistenceService.notebooks.getAllNotebooks();
       for (const notebook of notebooks) {
-        await storagePersistence.notebooks.deleteNotebook(notebook.id);
+        await persistenceService.notebooks.deleteNotebook(notebook.id);
       }
 
       // Now perform migration

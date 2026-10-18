@@ -4,7 +4,6 @@
 export * from './database';
 export * from './schema';
 export * from './fileTypes';
-export * from './fileOrm';
 export * from './storageManager';
 export * from './migration';
 export * from './splitPreviewCache';
@@ -12,7 +11,6 @@ export * from './tabCache';
 
 // Re-export main classes and functions for easy access
 export { IndexedDBManager } from './database';
-export { FileORM, type FileData, type FileResult } from './fileOrm';
 export { StorageManager, type CleanupStats, type StorageStats } from './storageManager';
 export { DataMigration, type MigrationStats } from './migration';
 export { getFileType, getActivePreviewMode, getMimeType } from './fileTypes';
@@ -34,11 +32,10 @@ export interface FileObject {
   lastAccessed: number;
 }
 
-// Legacy compatibility - map old FileCache to new FileORM
+// Application file-cache API backed by the shared repository.
 export const FileCache = {
   saveFile: async (fileData: any) => {
-    const { FileORM } = await import('./fileOrm');
-    const { storagePersistence } = await import('./persistence');
+    const { persistenceService } = await import('../services/persistence/instance');
 
     // Transform legacy format to new format
     const transformedData = {
@@ -53,13 +50,13 @@ export const FileCache = {
 
     // Ensure notebook exists before saving file
     try {
-      const existingNotebook = await storagePersistence.notebooks.getNotebook(
+      const existingNotebook = await persistenceService.notebooks.getNotebook(
         transformedData.notebookId
       );
 
       if (!existingNotebook) {
         // Create new notebook if it doesn't exist
-        await storagePersistence.notebooks.saveNotebook({
+        await persistenceService.notebooks.saveNotebook({
           id: transformedData.notebookId,
           name: `Notebook ${transformedData.notebookId.slice(0, 8)}`, // Use first 8 chars as default name
           description: 'Auto-created notebook',
@@ -71,7 +68,7 @@ export const FileCache = {
         });
       } else {
         // Update existing notebook access time
-        await storagePersistence.notebooks.saveNotebook({
+        await persistenceService.notebooks.saveNotebook({
           ...existingNotebook,
           lastAccessedAt: Date.now(),
           accessCount: existingNotebook.accessCount + 1,
@@ -82,12 +79,12 @@ export const FileCache = {
       // Continue with file save even if notebook creation fails
     }
 
-    return FileORM.saveFile(transformedData);
+    return persistenceService.files.saveFile(transformedData);
   },
 
   getFile: async (notebookId: string, filePath: string) => {
-    const { FileORM } = await import('./fileOrm');
-    const result = await FileORM.getFile(notebookId, filePath);
+    const { persistenceService } = await import('../services/persistence/instance');
+    const result = await persistenceService.files.getFile(notebookId, filePath);
     if (!result) return null;
 
     // Return legacy format
@@ -107,13 +104,13 @@ export const FileCache = {
   },
 
   deleteFile: async (notebookId: string, filePath: string) => {
-    const { FileORM } = await import('./fileOrm');
-    return FileORM.deleteFile(notebookId, filePath);
+    const { persistenceService } = await import('../services/persistence/instance');
+    return persistenceService.files.deleteFile(notebookId, filePath);
   },
 
   getFilesForNotebook: async (notebookId: string) => {
-    const { FileORM } = await import('./fileOrm');
-    const results = await FileORM.getFilesForNotebook(notebookId, true);
+    const { persistenceService } = await import('../services/persistence/instance');
+    const results = await persistenceService.files.getFilesForNotebook(notebookId, true);
 
     // Return legacy format
     return results.map((result) => ({
@@ -138,14 +135,14 @@ export const FileCache = {
 
   // Get all cached notebooks
   getAllNotebooks: async () => {
-    const { storagePersistence } = await import('./persistence');
-    return storagePersistence.notebooks.getAllNotebooks();
+    const { persistenceService } = await import('../services/persistence/instance');
+    return persistenceService.notebooks.getAllNotebooks();
   },
 
   // Get specific notebook
   getNotebook: async (notebookId: string) => {
-    const { storagePersistence } = await import('./persistence');
-    return storagePersistence.notebooks.getNotebook(notebookId);
+    const { persistenceService } = await import('../services/persistence/instance');
+    return persistenceService.notebooks.getNotebook(notebookId);
   },
 };
 
