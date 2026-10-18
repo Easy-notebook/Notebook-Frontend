@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session/recovery gate passes 289 tests across twenty-five files. Coverage includes
+The storage/persistence/autosave/session/recovery gate passes 299 tests across twenty-five files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -196,15 +196,23 @@ return navigation, observer submissions and initialization deduplication.
 
 AppContent mounts a disposable AutoSavePageLifecycle binding. Hidden visibility and
 pagehide request an immediate flush of accepted snapshots; edits accepted while
-hidden also request a flush. Concurrent signals share an in-flight flush. A
+hidden also request a flush. Concurrent signals share an in-flight flush. The binding tracks
+accepted-edit notifications separately from hide/unload signals and discarded queue entries.
+Edits admitted after a flush starts request one follow-up if the page is still hidden and dirty,
+even when the original flush fails while persisting a conflict copy. Edits admitted before the
+flush starts are already covered. No further retry occurs without a new edit or lifecycle trigger.
+A
 beforeunload handler is attached only while authoritative dirty state is true and
 removed after commit/discard. Failed saves retain dirty protection and report errors.
 
 The binding never pauses or disposes storage when a page is hidden or React unmounts.
 It removes only its own listeners, leaving independent unapplied-source-draft guards
 intact. Cleanup cancels a flush not yet started; accepted writes remain owned by the
-service. Eight EventTarget tests cover dirty guard updates, coalescing, failure/retry,
-hidden edits, shutdown admission and cleanup/remount ownership.
+service. Fifteen EventTarget tests cover dirty guard updates, coalescing, failure/retry,
+hidden edits, in-flight edit admission, shutdown admission and cleanup/remount ownership. A native
+IndexedDB regression holds a conflict-recovery write open, admits a newer edit, then verifies
+the follow-up persists that latest recovery copy while preserving the canonical notebook and
+the pending-save guard.
 
 The visibility trigger follows [MDN visibilitychange guidance](https://developer.mozilla.org/en-US/docs/Web/API/Document/visibilitychange_event).
 EventTarget tests alone do not prove native dialog behavior. The Chromium suite
@@ -213,14 +221,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs seventy-eight isolated Playwright cases against production modules:
+`npm run test:browser` runs seventy-nine isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 289 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 299 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades

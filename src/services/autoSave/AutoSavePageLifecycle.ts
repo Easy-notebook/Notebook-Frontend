@@ -8,6 +8,7 @@ export class AutoSavePageLifecycle {
   private guarding = false;
   private disposed = false;
   private flushing: Promise<void> | null = null;
+  private editVersion = 0;
 
   constructor(
     private readonly service: PageSaveService,
@@ -20,7 +21,10 @@ export class AutoSavePageLifecycle {
   ) {
     this.unsubscribe = service.subscribe((event) => {
       this.updateGuard();
-      if (event.type === 'dirty_changed' && this.page.visibilityState === 'hidden') this.flush();
+      if (event.type === 'dirty_changed') {
+        if (event.progress) ++this.editVersion;
+        if (this.page.visibilityState === 'hidden') this.flush();
+      }
     });
     this.page.addEventListener('visibilitychange', this.visibilityChanged);
     this.host.addEventListener('pagehide', this.pageHidden);
@@ -62,14 +66,20 @@ export class AutoSavePageLifecycle {
     const state = this.service.getState();
     if (this.disposed || this.flushing || !state.isDirty || state.lifecycle !== 'active') return;
     // Install ownership before calling the service, which may synchronously notify.
+    let startedVersion = this.editVersion;
     this.flushing = Promise.resolve()
       .then(() => {
+        startedVersion = this.editVersion;
         if (!this.disposed && this.service.getState().lifecycle === 'active')
           return this.service.flush();
       })
       .catch(this.onError)
       .finally(() => {
         this.flushing = null;
+        // A failed drain may retain edits admitted while its recovery write was pending.
+        // Only new edit notifications justify another attempt, not repeated hide events.
+        if (startedVersion !== this.editVersion && this.page.visibilityState === 'hidden')
+          this.flush();
       });
   }
 }

@@ -3365,3 +3365,101 @@ test('usage observes an atomic transfer from recovery draft to restored notebook
   });
   expect([result.before, result.after]).toContainEqual(result.concurrent);
 });
+
+test('hidden edits arriving during conflict recovery are persisted by a follow-up flush', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const {
+      AutoSaveService,
+      AutoSavePageLifecycle,
+      IndexedDBStorageProvider,
+      NotebookRepository,
+      NotebookRecoveryRepository,
+    } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const notebooks = new NotebookRepository(provider);
+    const recovery = new NotebookRecoveryRepository(provider);
+    const content = JSON.stringify({ title: 'Winner', cells: [{ content: 'winner' }], tasks: [] });
+    await notebooks.saveNotebookSnapshot(
+      {
+        notebookId: 'hidden-conflict',
+        filePath: 'notebook_hidden-conflict.json',
+        fileName: 'Winner',
+        content,
+        size: content.length,
+        lastModified: 'now',
+      },
+      {
+        id: 'hidden-conflict',
+        name: 'Winner',
+        lastAccessedAt: 1,
+        accessCount: 1,
+        cacheEnabled: true,
+      }
+    );
+    const service = AutoSaveService.getInstance({ debounceMs: 60000, maxRetries: 0 });
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    let captured;
+    const firstCaptured = new Promise((resolve) => {
+      captured = resolve;
+    });
+    const original = NotebookRecoveryRepository.prototype.saveDraft;
+    let writes = 0;
+    NotebookRecoveryRepository.prototype.saveDraft = async function (data) {
+      const saved = await original.call(this, data);
+      if (++writes === 1) {
+        captured();
+        await gate;
+      }
+      return saved;
+    };
+    let completed;
+    const reported = new Promise((resolve) => {
+      completed = resolve;
+    });
+    let errors = 0;
+    const hidden = Object.assign(new EventTarget(), { visibilityState: 'hidden' });
+    const binding = new AutoSavePageLifecycle(service, hidden, new EventTarget(), () => {
+      if (++errors === 2) completed();
+    });
+    const snapshot = (text) => ({
+      notebookId: 'hidden-conflict',
+      notebookTitle: 'Local',
+      cells: [{ id: 'a', type: 'markdown', content: text }],
+      tasks: [],
+      timestamp: Date.now(),
+    });
+    try {
+      await service.queueSave(snapshot('first'));
+      await firstCaptured;
+      await service.queueSave(snapshot('latest'));
+      release();
+      await reported;
+      const drafts = await recovery.listDrafts('hidden-conflict');
+      return {
+        writes,
+        errors,
+        text: JSON.parse(drafts[0].content).cells[0].content,
+        pending: service.hasPending('hidden-conflict'),
+        canonical: (await notebooks.getNotebook('hidden-conflict')).name,
+      };
+    } finally {
+      release();
+      binding.dispose();
+      NotebookRecoveryRepository.prototype.saveDraft = original;
+      await AutoSaveService.resetInstance();
+      await provider.close();
+    }
+  });
+  expect(result).toEqual({
+    writes: 2,
+    errors: 2,
+    text: 'latest',
+    pending: true,
+    canonical: 'Winner',
+  });
+});

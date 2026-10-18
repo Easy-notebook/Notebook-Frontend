@@ -30,13 +30,24 @@ function setup(dirty = false, initiallyHidden = false) {
     return binding;
   };
   const binding = bind();
-  const publish = (updates: Partial<AutoSaveState>) => {
+  let revision = 0;
+  const publish = (updates: Partial<AutoSaveState>, hasProgress = true) => {
     state = { ...state, ...updates };
     listeners.forEach((listener) =>
       listener({
         type: 'dirty_changed',
         state,
-        progress: null,
+        progress:
+          hasProgress && state.isDirty
+            ? {
+                notebookId: 'test',
+                currentRevision: ++revision,
+                committedRevision: 0,
+                inFlightRevision: null,
+                phase: 'scheduled',
+                error: null,
+              }
+            : null,
         status: state.status,
         timestamp: 0,
       })
@@ -110,6 +121,80 @@ describe('autosave page lifecycle', () => {
     await settle();
     expect(service.flush).toHaveBeenCalledTimes(2);
   });
+
+  it('flushes edits admitted during a failed hidden flush without repeating the failure forever', async () => {
+    const { service, publish, hide, onError } = setup(true);
+    let fail!: (error: Error) => void;
+    service.flush
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            fail = reject;
+          })
+      )
+      .mockRejectedValue(new Error('still conflicted'));
+    hide();
+    await settle();
+    publish({ isDirty: true });
+    publish({ isDirty: true });
+    expect(service.flush).toHaveBeenCalledTimes(1);
+    fail(new Error('conflict'));
+    await settle();
+    await settle();
+    expect(service.flush).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledTimes(2);
+    await settle();
+    expect(service.flush).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not treat discarding another notebook as a newly accepted edit', async () => {
+    const { service, publish, hide } = setup(true);
+    let finish!: () => void;
+    service.flush.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+    hide();
+    await settle();
+    publish({ isDirty: true }, false);
+    finish();
+    await settle();
+    expect(service.flush).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes edits arriving before flush starts without a redundant follow-up', async () => {
+    const { service, publish, hide } = setup(true);
+    hide();
+    publish({ isDirty: true });
+    await settle();
+    expect(service.flush).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['clean', 'visible', 'disposed', 'closing'] as const)(
+    'suppresses a queued hidden flush when the binding becomes %s',
+    async (transition) => {
+      const { service, publish, hide, page, binding } = setup(true);
+      let finish!: () => void;
+      service.flush.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      );
+      hide();
+      await settle();
+      publish({ isDirty: true });
+      if (transition === 'clean') publish({ isDirty: false });
+      if (transition === 'visible') page.visibilityState = 'visible';
+      if (transition === 'disposed') binding.dispose();
+      if (transition === 'closing') publish({ lifecycle: 'closing' });
+      finish();
+      await settle();
+      expect(service.flush).toHaveBeenCalledTimes(1);
+    }
+  );
 
   it('does not admit saves during service shutdown', async () => {
     const { publish, hide, service, unload } = setup(true);
