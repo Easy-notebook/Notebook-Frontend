@@ -171,6 +171,7 @@ export interface NotebookRecoveryRecord extends NotebookRecoveryData {
 }
 
 export interface INotebookRecoveryRepository {
+  restoreDraft(id: string, revision: number): Promise<NotebookEntity | null>;
   saveDraft(data: NotebookRecoveryData): Promise<NotebookRecoveryRecord>;
   listDrafts(notebookId?: string): Promise<NotebookRecoveryRecord[]>;
   discardDraft(id: string, revision: number): Promise<boolean>;

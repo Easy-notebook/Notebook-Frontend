@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session/recovery gate passes 271 tests across twenty-three files. Coverage includes
+The storage/persistence/autosave/session/recovery gate passes 285 tests across twenty-four files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -66,7 +66,7 @@ Autosave lint passes without warnings. Full-project type checking still reports
 297 existing diagnostics, none in autosave, persistence or session modules.
 
 The preceding independent whole-project checkpoint passed 1,067 tests across 119 files (57.42s).
-The recovery-UI production build passes in 15.37s; oversized-chunk warnings remain.
+The restore-as-copy production build passes in 13.95s; oversized-chunk warnings remain.
 An earlier checkpoint had an asynchronous math-rendering timeout when tests ran alongside
 a production build; its isolated suite and subsequent independent runs passed.
 Test timeouts were unchanged. A real-manager React integration test covers configuration
@@ -213,14 +213,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs seventy-four isolated Playwright cases against production modules:
+`npm run test:browser` runs seventy-six isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 271 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 285 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -609,7 +609,7 @@ Unit tests cover pending/committed edits overtaking loads and baseline ownership
 This provides optimistic content conflict detection for AutoSaveService clients, not merging,
 a revision history, cross-device coordination or protection from unconditional repository
 callers. Committed conflict snapshots have the durable recovery path and download/deletion
-entry described below; automatic merging and restore-as-copy remain future work.
+entry described below, including atomic restore-as-copy. Automatic merging remains future work.
 
 ## Terminal save conflicts
 
@@ -652,8 +652,8 @@ transaction abort, invocation-time capture, compare-delete and notebook deletion
 
 Durability begins at recovery transaction completion, not at keystroke admission. Edits
 admitted after recovery capture remain queued and need their own save attempt. This is not
-a guarantee against process termination before commit or disk/power loss. The recovery entry below supports viewing/export/deletion; automatic merge and
-restore-as-copy are not implemented.
+a guarantee against process termination before commit or disk/power loss. The recovery entry below supports viewing/export/deletion and atomic restore-as-copy;
+automatic merging is not implemented.
 
 ## Application recovery entry
 
@@ -664,7 +664,7 @@ acknowledge a pending save. Recovery storage failures still expose an Unsaved ed
 with the actual failure, even when no downloadable record exists. Per-notebook save failure
 messages clear only after that notebook successfully commits.
 
-NotebookRecoveryController owns idle/loading/ready/deleting/failed UI data transitions.
+NotebookRecoveryController owns idle/loading/ready/deleting/restoring/failed UI data transitions.
 Generations suppress delayed read results after a newer refresh or deletion. Accepted deletes
 block duplicate mutations and refresh their final list. A confirmation captures the displayed
 record's revision; concurrent replacement causes compare-delete to reject and the newer copy
@@ -674,9 +674,37 @@ released on unmount. No polling or main-document overwrite is introduced.
 
 Native UI tests use the production provider and components to inspect a copy, compare the
 actual downloaded bytes, interleave a newer write during deletion confirmation, preserve the
-canonical document, discover a live conflict and report failed recovery writes. Five controller
-tests cover stale reads, mutation races, failures and duplicate admission. The entry is mounted
+canonical document, discover a live conflict and report failed recovery writes. Controller tests cover stale reads, mutation races, failures, duplicate admission and
+retention of committed restoration links. The entry is mounted
 in App rather than in the persistence provider, keeping infrastructure independent of UI.
+
+## Restore a recovery copy as a new notebook
+
+NotebookRecoveryRepository.restoreDraft compares the reviewed draft revision inside a
+readwrite transaction spanning recovery, notebook, file metadata/body and activity stores.
+A new UUID identifies the destination. RecoveredNotebookCopy validates source identity and
+basic document/cell shape, preserves cell contents, outputs, tasks and extra fields, and
+updates the notebook identity, recovered title and save timestamp. FileRecordSet prepares
+forced-local content and UTF-8 accounting; the new notebook is persistent.
+
+Destination records use add, and an identity already owning file metadata is rejected.
+The source recovery record is consumed only in the same successful transaction. A stale or
+missing source returns no copy; malformed source, key collision or commit failure leaves
+the draft intact. Two concurrent restores of one revision create one notebook. The original
+canonical notebook and its pending autosave queue are not modified or acknowledged.
+
+The recovery center offers Restore as new notebook, then an Open recovered notebook link
+in a separate tab using the configured browser/hash route. The controller shares mutation
+admission between delete/restore and preserves a committed copy link even when follow-up
+listing fails or an action is retried against a consumed record. Closing and reopening the
+center retains this link for the current application lifetime. A later application load can
+find the created notebook through normal persistent notebook records.
+
+Native tests verify stale revision rejection, transaction rollback, ID collision, concurrent
+restore, an intact original document, the link target and successful AutoSaveService loading
+of the new copy. Parser tests preserve arbitrary payload fields and reject malformed input.
+Restoration is an explicit copy operation; original pending edits can still produce further
+recovery records, and the original window remains protected by its unsaved-exit guard.
 
 ## Remaining lifecycle work
 

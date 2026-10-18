@@ -3036,3 +3036,176 @@ test('recovery write failure remains visible even when no recovery copy was save
     await window.storageHarness.AutoSaveService.resetInstance();
   });
 });
+
+test('restoration atomically consumes only the reviewed draft and preserves all data on failure', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRecoveryRepository, NotebookRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const second = new IndexedDBStorageProvider();
+    const repo = new NotebookRecoveryRepository(provider, () => 'copy');
+    const S = DB_CONFIG.STORES;
+    const content = JSON.stringify({
+      notebook_id: 'origin',
+      title: 'Local',
+      cells: [{ id: 'a', type: 'markdown', content: '保留' }],
+      tasks: [],
+    });
+    const record = await repo.saveDraft({
+      notebookId: 'origin',
+      writerId: 'writer',
+      revision: 2,
+      content,
+      expectedContent: null,
+      reason: 'content_changed',
+    });
+    const notebooks = new NotebookRepository(provider);
+    await notebooks.saveNotebook({
+      id: 'occupied',
+      name: 'Existing',
+      lastAccessedAt: 1,
+      accessCount: 1,
+      cacheEnabled: true,
+    });
+    const stale = await repo.restoreDraft(record.id, 1);
+    const failing = new NotebookRecoveryRepository(
+      {
+        transaction: (names, mode, schedule) =>
+          provider.transaction(names, mode, async (stores) => {
+            await schedule(stores);
+            throw new Error('restore aborted');
+          }),
+      },
+      () => 'copy'
+    );
+    let abort;
+    try {
+      await failing.restoreDraft(record.id, 2);
+    } catch (error) {
+      abort = error.message;
+    }
+    const afterAbort = {
+      draft: await repo.listDrafts(),
+      copy: await provider.get(S.NOTEBOOKS, 'copy'),
+      body: await provider.get(S.FILES_CONTENT, 'copy::notebook_copy.json'),
+    };
+    let collision;
+    try {
+      await new NotebookRecoveryRepository(provider, () => 'occupied').restoreDraft(record.id, 2);
+    } catch (error) {
+      collision = error.name;
+    }
+    const afterCollision = await repo.listDrafts();
+    const occupied = await provider.get(S.NOTEBOOKS, 'occupied');
+    const copies = await Promise.all([
+      repo.restoreDraft(record.id, 2),
+      new NotebookRecoveryRepository(second, () => 'copy').restoreDraft(record.id, 2),
+    ]);
+    const body = await provider.get(S.FILES_CONTENT, 'copy::notebook_copy.json');
+    const remaining = await repo.listDrafts();
+    await provider.close();
+    await second.close();
+    return {
+      stale,
+      abort,
+      afterAbort,
+      collision,
+      afterCollision,
+      occupied,
+      copies,
+      body,
+      remaining,
+    };
+  });
+  expect(result.stale).toBeNull();
+  expect(result.abort).toBe('restore aborted');
+  expect(result.afterAbort.draft).toHaveLength(1);
+  expect(result.afterAbort.copy).toBeUndefined();
+  expect(result.afterAbort.body).toBeUndefined();
+  expect(result.collision).toBe('ConstraintError');
+  expect(result.afterCollision).toHaveLength(1);
+  expect(result.occupied.name).toBe('Existing');
+  expect(result.copies.filter(Boolean)).toHaveLength(1);
+  expect(result.remaining).toEqual([]);
+  expect(JSON.parse(result.body.content)).toMatchObject({
+    notebook_id: 'copy',
+    title: 'Local (Recovered)',
+    cells: [{ content: '保留' }],
+  });
+});
+
+test('recovery UI restores a separate notebook and exposes its new-tab link', async ({ page }) => {
+  await page.evaluate(async () => {
+    const {
+      IndexedDBStorageProvider,
+      NotebookRecoveryRepository,
+      NotebookRepository,
+      mountRecoveryProbe,
+    } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const content = JSON.stringify({
+      notebook_id: 'source-ui',
+      title: 'Recovered work',
+      cells: [{ id: 'a', type: 'markdown', content: 'local contents' }],
+      tasks: [],
+    });
+    await new NotebookRecoveryRepository(provider).saveDraft({
+      notebookId: 'source-ui',
+      writerId: 'writer',
+      revision: 1,
+      content,
+      expectedContent: null,
+      reason: 'content_changed',
+    });
+    await new NotebookRepository(provider).saveNotebookSnapshot(
+      {
+        notebookId: 'source-ui',
+        filePath: 'notebook_source-ui.json',
+        fileName: 'saved',
+        content: 'original winner',
+        size: 15,
+        lastModified: 'now',
+      },
+      {
+        id: 'source-ui',
+        name: 'Saved winner',
+        lastAccessedAt: 1,
+        accessCount: 1,
+        cacheEnabled: true,
+      }
+    );
+    await provider.close();
+    window.unmountRecovery = mountRecoveryProbe();
+  });
+  await page.getByRole('button', { name: 'Recovery copies (1)', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Recovery copies', exact: true });
+  await dialog.getByRole('button', { name: 'Restore as new notebook', exact: true }).click();
+  const link = dialog.getByRole('link', { name: 'Open recovered notebook' });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute('target', '_blank');
+  const href = await link.getAttribute('href');
+  expect(href).toMatch(/^\/workspace\//);
+  const id = decodeURIComponent(href.slice('/workspace/'.length));
+  expect(id).not.toBe('source-ui');
+  await expect(dialog.getByText('No recovery copies.')).toBeVisible();
+  const result = await page.evaluate(async (id) => {
+    const { IndexedDBStorageProvider, AutoSaveService, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const original = await provider.get(
+      DB_CONFIG.STORES.FILES_CONTENT,
+      'source-ui::notebook_source-ui.json'
+    );
+    const loaded = await AutoSaveService.getInstance().load(id);
+    await provider.close();
+    window.unmountRecovery();
+    await AutoSaveService.resetInstance();
+    return { original, loaded };
+  }, id);
+  expect(result.original.content).toBe('original winner');
+  expect(result.loaded).toMatchObject({
+    notebookTitle: 'Recovered work (Recovered)',
+    cells: [{ content: 'local contents' }],
+  });
+});

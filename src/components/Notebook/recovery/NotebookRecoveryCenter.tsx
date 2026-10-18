@@ -1,5 +1,6 @@
 import { Alert, Button, Input, List, Modal, Space, Typography } from 'antd';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { isHashRoutingEnabled } from '../../../utils/routerMode';
 import { saveAs } from 'file-saver';
 import { usePersistence } from '../../../services/persistence/PersistenceContext';
 import type { NotebookRecoveryRecord } from '../../../services/persistence/interfaces';
@@ -34,7 +35,7 @@ export function NotebookRecoveryCenter() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [saveFailures, setSaveFailures] = useState<Record<string, string>>({});
   const preview = state.drafts.find((draft) => draft.id === previewId);
-  const busy = state.phase === 'deleting';
+  const busy = state.phase === 'deleting' || state.phase === 'restoring';
 
   useEffect(() => {
     const refresh = () => {
@@ -80,7 +81,10 @@ export function NotebookRecoveryCenter() {
 
   return (
     <>
-      {(state.drafts.length > 0 || state.error || Object.keys(saveFailures).length > 0) && (
+      {(state.drafts.length > 0 ||
+        state.error ||
+        state.restored ||
+        Object.keys(saveFailures).length > 0) && (
         <Button
           style={{ position: 'fixed', right: 24, bottom: 24, zIndex: 900 }}
           onClick={() => {
@@ -90,7 +94,9 @@ export function NotebookRecoveryCenter() {
         >
           {state.drafts.length > 0 || state.error
             ? `Recovery copies (${state.drafts.length})`
-            : 'Unsaved edits'}
+            : Object.keys(saveFailures).length > 0
+              ? 'Unsaved edits'
+              : 'Recovered notebook'}
         </Button>
       )}
       <Modal
@@ -113,7 +119,8 @@ export function NotebookRecoveryCenter() {
       >
         <Typography.Paragraph>
           These local copies contain edits that could not replace the saved notebook. Download a
-          copy to keep its contents. Your current notebook stays unchanged.
+          copy, or restore it as a separate notebook. Restoring removes the recovery copy only after
+          the new notebook is saved.
         </Typography.Paragraph>
         {(state.error || downloadError) && (
           <Alert type="error" showIcon message={state.error ?? downloadError} />
@@ -128,6 +135,16 @@ export function NotebookRecoveryCenter() {
           />
         ))}
         {state.notice && <Alert type="info" showIcon message={state.notice} />}
+        {state.restored && (
+          <Button
+            href={`${isHashRoutingEnabled ? '#' : ''}/workspace/${encodeURIComponent(state.restored.id)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open recovered notebook
+          </Button>
+        )}
+
         <List
           loading={state.phase === 'loading'}
           dataSource={[...state.drafts]}
@@ -146,6 +163,9 @@ export function NotebookRecoveryCenter() {
                     View contents
                   </Button>
                   <Button onClick={() => download(draft)}>Download JSON</Button>
+                  <Button disabled={busy} onClick={() => void controller.restore(draft)}>
+                    Restore as new notebook
+                  </Button>
                   <Button danger disabled={busy} onClick={() => setPendingDeletion(draft)}>
                     Delete recovery copy
                   </Button>

@@ -76,6 +76,9 @@ Coverage:
 - Production recovery UI previews and downloads exact stored JSON, requires explicit deletion
   confirmation, rejects stale confirmations, responds to live conflicts and exposes recovery
   storage failures when no copy exists. Canonical notebook content stays intact.
+- Restore-as-new atomically creates a persistent notebook and consumes the reviewed draft;
+  stale revisions, collisions and aborted commits retain recovery data. Concurrent restores
+  create one copy. The UI provides a new-tab link and the copy loads through normal autosave.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

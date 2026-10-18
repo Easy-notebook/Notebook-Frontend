@@ -3,12 +3,45 @@ import type {
   IStorageProvider,
   NotebookRecoveryData,
   NotebookRecoveryRecord,
+  NotebookEntity,
 } from '../interfaces';
 import { DB_STORES } from '../../../storage/schema';
+import { v4 as uuid } from 'uuid';
+import { RecoveredNotebookCopy } from './RecoveredNotebookCopy';
+import { NotebookActivityRecord } from './NotebookActivityRecord';
 
 /** Recovery drafts are independent of canonical documents and never subject to cache eviction. */
 export class NotebookRecoveryRepository implements INotebookRecoveryRepository {
-  constructor(private readonly storage: IStorageProvider) {}
+  constructor(
+    private readonly storage: IStorageProvider,
+    private readonly createId: () => string = uuid
+  ) {}
+
+  async restoreDraft(id: string, revision: number): Promise<NotebookEntity | null> {
+    let restored: NotebookEntity | null = null;
+    const S = DB_STORES;
+    await this.storage.transaction(
+      [S.NOTEBOOK_RECOVERY, S.NOTEBOOKS, S.FILES_METADATA, S.FILES_CONTENT, S.ACTIVITIES],
+      'readwrite',
+      async (stores) => {
+        const recovery = stores[S.NOTEBOOK_RECOVERY];
+        const draft = await this.read<NotebookRecoveryRecord | undefined>(recovery.get(id));
+        if (!draft || draft.revision !== revision) return;
+        const copy = new RecoveredNotebookCopy(draft, this.createId());
+        const ownedFiles = await this.read(
+          stores[S.FILES_METADATA].index('notebookId').count(copy.notebook.id)
+        );
+        if (ownedFiles > 0) throw new Error('Recovery notebook identity already owns files');
+        stores[S.NOTEBOOKS].add(copy.notebook);
+        stores[S.FILES_METADATA].add(copy.file.metadata);
+        stores[S.FILES_CONTENT].add(copy.file.content!);
+        stores[S.ACTIVITIES].add(new NotebookActivityRecord(copy.notebook.id, 'open', Date.now()));
+        recovery.delete(id);
+        restored = copy.notebook;
+      }
+    );
+    return restored;
+  }
 
   async saveDraft(data: NotebookRecoveryData): Promise<NotebookRecoveryRecord> {
     const captured = { ...data };

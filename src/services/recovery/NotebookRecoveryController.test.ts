@@ -5,6 +5,7 @@ import type { NotebookRecoveryRecord } from '../persistence/interfaces';
 function setup() {
   const repository = {
     saveDraft: vi.fn(),
+    restoreDraft: vi.fn().mockResolvedValue(null),
     listDrafts: vi.fn().mockResolvedValue([]),
     discardDraft: vi.fn().mockResolvedValue(true),
   };
@@ -95,4 +96,62 @@ it('does not admit duplicate deletes or refreshes during an accepted deletion', 
   finish(true);
   await deleting;
   expect(controller.getSnapshot().phase).toBe('ready');
+});
+
+it('restores the reviewed revision and preserves the open link if list refresh fails', async () => {
+  const { repository, controller } = setup();
+  repository.restoreDraft.mockResolvedValue({ id: 'copy', name: 'Recovered' });
+  repository.listDrafts.mockRejectedValue(new Error('list unavailable'));
+  await controller.restore(draft(4));
+  expect(repository.restoreDraft).toHaveBeenCalledExactlyOnceWith('draft', 4);
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'failed',
+    restored: { id: 'copy', name: 'Recovered' },
+    error: 'list unavailable',
+  });
+});
+
+it('refreshes stale restoration without presenting a nonexistent new notebook', async () => {
+  const { repository, controller } = setup();
+  repository.listDrafts.mockResolvedValue([draft(5)]);
+  await controller.restore(draft(4));
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    restored: null,
+    drafts: [draft(5)],
+    notice: expect.stringContaining('changed'),
+  });
+});
+
+it('serializes restore against deletion and duplicate restore actions', async () => {
+  const { repository, controller } = setup();
+  let finish!: (value: { id: string; name: string }) => void;
+  repository.restoreDraft.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+  );
+  const restoring = controller.restore(draft(1));
+  await controller.discard(draft(1));
+  await controller.restore(draft(1));
+  await controller.refresh();
+  expect(repository.restoreDraft).toHaveBeenCalledTimes(1);
+  expect(repository.discardDraft).not.toHaveBeenCalled();
+  finish({ id: 'copy', name: 'Copy' });
+  await restoring;
+  expect(controller.getSnapshot().phase).toBe('ready');
+});
+
+it('keeps the last created notebook accessible after a stale restore retry', async () => {
+  const { repository, controller } = setup();
+  repository.restoreDraft.mockResolvedValueOnce({ id: 'copy', name: 'Recovered' });
+  repository.listDrafts.mockRejectedValueOnce(new Error('refresh unavailable'));
+  await controller.restore(draft(1));
+  await controller.restore(draft(1));
+  expect(controller.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    restored: { id: 'copy', name: 'Recovered' },
+    notice: expect.stringContaining('changed'),
+  });
 });

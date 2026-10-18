@@ -1,18 +1,26 @@
 import type {
   INotebookRecoveryRepository,
   NotebookRecoveryRecord,
+  NotebookEntity,
 } from '../persistence/interfaces';
 
 interface RecoveryState {
-  phase: 'idle' | 'loading' | 'ready' | 'deleting' | 'failed';
+  phase: 'idle' | 'loading' | 'ready' | 'deleting' | 'restoring' | 'failed';
   drafts: readonly NotebookRecoveryRecord[];
   error: string | null;
   notice: string | null;
+  restored: Pick<NotebookEntity, 'id' | 'name'> | null;
 }
 
-/** Coordinates recovery reads and revision-checked deletion for any view. */
+/** Coordinates recovery reads and revision-checked restore/delete actions for any view. */
 export class NotebookRecoveryController {
-  private state: RecoveryState = { phase: 'idle', drafts: [], error: null, notice: null };
+  private state: RecoveryState = {
+    phase: 'idle',
+    drafts: [],
+    error: null,
+    notice: null,
+    restored: null,
+  };
   private readonly listeners = new Set<() => void>();
   private generation = 0;
 
@@ -27,7 +35,7 @@ export class NotebookRecoveryController {
   };
 
   async refresh(): Promise<void> {
-    if (this.state.phase === 'deleting') return;
+    if (this.busy) return;
     const generation = ++this.generation;
     this.publish({ ...this.state, phase: 'loading', error: null });
     try {
@@ -40,22 +48,49 @@ export class NotebookRecoveryController {
   }
 
   async discard(draft: Pick<NotebookRecoveryRecord, 'id' | 'revision'>): Promise<void> {
-    if (this.state.phase === 'deleting') return;
     const { id, revision } = draft;
-    const generation = ++this.generation;
-    this.publish({ ...this.state, phase: 'deleting', error: null, notice: null });
-    try {
+    return this.mutate('deleting', async () => {
       const deleted = await this.repository.discardDraft(id, revision);
-      const drafts = await this.repository.listDrafts();
-      if (generation !== this.generation) return;
-      this.publish({
-        phase: 'ready',
-        drafts,
-        error: null,
+      return {
+        restored: null,
         notice: deleted
           ? 'Recovery copy deleted. Your current notebook was not changed.'
           : 'This recovery copy changed or was already removed. Review the refreshed list.',
-      });
+      };
+    });
+  }
+
+  async restore(draft: Pick<NotebookRecoveryRecord, 'id' | 'revision'>): Promise<void> {
+    const { id, revision } = draft;
+    return this.mutate('restoring', async () => {
+      const restored = await this.repository.restoreDraft(id, revision);
+      return {
+        restored,
+        notice: restored
+          ? 'A new notebook was created. Open it in a new tab to continue editing.'
+          : 'This recovery copy changed or was already removed. Review the refreshed list.',
+      };
+    });
+  }
+
+  private get busy(): boolean {
+    return this.state.phase === 'deleting' || this.state.phase === 'restoring';
+  }
+
+  private async mutate(
+    phase: 'deleting' | 'restoring',
+    operation: () => Promise<Pick<RecoveryState, 'notice' | 'restored'>>
+  ): Promise<void> {
+    if (this.busy) return;
+    const generation = ++this.generation;
+    this.publish({ ...this.state, phase, error: null, notice: null });
+    try {
+      const result = await operation();
+      if (generation !== this.generation) return;
+      // A committed copy must remain accessible even if refreshing the list fails.
+      this.publish({ ...this.state, ...result, restored: result.restored ?? this.state.restored });
+      const drafts = await this.repository.listDrafts();
+      if (generation === this.generation) this.publish({ ...this.state, phase: 'ready', drafts });
     } catch (error) {
       if (generation === this.generation)
         this.publish({ ...this.state, phase: 'failed', error: this.message(error) });
@@ -65,6 +100,7 @@ export class NotebookRecoveryController {
   private publish(state: RecoveryState): void {
     this.state = Object.freeze({
       ...state,
+      restored: state.restored ? Object.freeze({ ...state.restored }) : null,
       drafts: Object.freeze(state.drafts.map((draft) => Object.freeze({ ...draft }))),
     });
     for (const listener of this.listeners) listener();
