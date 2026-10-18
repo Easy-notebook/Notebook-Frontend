@@ -1,3 +1,4 @@
+import { StorageUsage, type StorageStats } from '../../../storage/StorageUsage';
 import { NotebookDeletion } from './NotebookDeletion';
 import {
   NotebookRetentionPolicy,
@@ -12,11 +13,62 @@ import {
   type StorageConfigEntity,
   type NotebookEntity,
   type FileMetadataEntity,
+  type FileContentEntity,
+  type SplitFileEntity,
 } from '../../../storage/schema';
 
 /** Configuration and retention maintenance use the same transaction owner as content. */
 export class StorageMaintenanceRepository implements IStorageMaintenanceRepository {
   constructor(private readonly storage: IStorageProvider) {}
+
+  async getStorageStats(): Promise<StorageStats> {
+    let usage!: StorageUsage;
+    await this.storage.transaction(
+      [
+        DB_STORES.NOTEBOOKS,
+        DB_STORES.FILES_METADATA,
+        DB_STORES.FILES_CONTENT,
+        DB_STORES.SPLIT_FILES,
+      ],
+      'readonly',
+      async (stores) => {
+        const [notebooks, files] = await Promise.all([
+          this.read<NotebookEntity[]>(stores[DB_STORES.NOTEBOOKS].getAll()),
+          this.read<FileMetadataEntity[]>(stores[DB_STORES.FILES_METADATA].getAll()),
+        ]);
+        usage = new StorageUsage(notebooks, files);
+        await Promise.all([
+          this.visit<FileContentEntity>(stores[DB_STORES.FILES_CONTENT], (content) =>
+            usage.addFileContent(content)
+          ),
+          this.visit<SplitFileEntity>(stores[DB_STORES.SPLIT_FILES], (content) =>
+            usage.addSplitContent(content)
+          ),
+        ]);
+      }
+    );
+    return usage.toStats();
+  }
+
+  private visit<T>(store: IDBObjectStore, consume: (record: T) => void): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = store.openCursor();
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        try {
+          const cursor = request.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          consume(cursor.value as T);
+          cursor.continue();
+        } catch (error) {
+          reject(error);
+        }
+      };
+    });
+  }
 
   async getConfig(): Promise<StorageConfigEntity> {
     return (

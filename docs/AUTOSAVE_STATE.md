@@ -175,7 +175,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs thirty-one isolated Playwright cases against production modules:
+`npm run test:browser` runs thirty-five isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -312,9 +312,27 @@ Native coverage saves a document over an evictable record, runs both cleanup mod
 zero capacity/retention, reloads the page and reads the only local content successfully.
 Unclassified historical records survive the same cleanup; an explicit cache is removed.
 
+## Storage usage snapshot
+
+StorageManager delegates usage statistics to one readonly transaction over notebooks,
+file metadata, file content and split content. Logical totals retain the existing meaning:
+file metadata sizes for existing notebooks, including remote references. Denormalized
+notebook counters and unrelated activity logs are not used to calculate these totals.
+
+Additional localContentBytes and splitContentBytes count UTF-8 bytes of stored strings.
+Content is consumed through cursors rather than materializing both content stores in
+memory. orphanContentBytes is a subset of those totals: file payloads without metadata
+or an existing notebook, plus split payloads without an existing notebook. Reporting
+orphans never deletes them. None of these fields includes IndexedDB record/index overhead
+or claims to measure physical disk usage. Empty stores report zero timestamps and totals.
+
+Native cases verify multibyte text, remote logical sizes, orphan/split accounting,
+unchanged access metadata, consistent snapshots during concurrent writes, empty stores
+and rejection instead of partial results when the transaction fails.
+
 ## Remaining lifecycle work
 
-Retention currently enforces cache count and inactivity. Byte quota accounting and the
+Retention currently enforces cache count and inactivity. Byte quota enforcement and the
 creation/active-use contract for explicitly evictable caches require a separate audit.
 Persistent documents are protected regardless of age or count; this does not expand
 browser storage quota or claim remote synchronization.

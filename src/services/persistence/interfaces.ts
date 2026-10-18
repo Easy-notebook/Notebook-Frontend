@@ -1,3 +1,4 @@
+import type { StorageStats } from '../../storage/StorageUsage';
 import type {
   CleanupMode,
   CleanupStats,
@@ -116,6 +117,7 @@ export interface ISplitFileRepository {
 }
 
 export interface IStorageMaintenanceRepository {
+  getStorageStats(): Promise<StorageStats>;
   cleanup(mode?: CleanupMode): Promise<CleanupStats>;
   getCleanupCandidates(): Promise<CleanupCandidates>;
   getConfig(): Promise<StorageConfigEntity>;

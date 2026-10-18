@@ -10,18 +10,8 @@ import { storageLog } from '@Utils/logger';
 export type { CleanupStats } from './NotebookRetentionPolicy';
 import type { CleanupStats, CleanupMode } from './NotebookRetentionPolicy';
 
-/**
- * Storage usage statistics
- */
-export interface StorageStats {
-  totalNotebooks: number;
-  totalFiles: number;
-  totalSize: number;
-  largeFilesCount: number;
-  oldestNotebook: number;
-  newestNotebook: number;
-  mostAccessedNotebook: string;
-}
+export type { StorageStats } from './StorageUsage';
+import type { StorageStats } from './StorageUsage';
 
 /**
  * Main storage manager with intelligent cleanup and maintenance
@@ -117,45 +107,7 @@ export class StorageManager {
    * Get comprehensive storage statistics
    */
   private static async doGetStorageStats(): Promise<StorageStats> {
-    const notebooks = await persistenceService.notebooks.getAllNotebooks();
-
-    let totalFiles = 0;
-    let totalSize = 0;
-    let largeFilesCount = 0;
-    let oldestNotebook = Date.now();
-    let newestNotebook = 0;
-    let mostAccessedNotebook = '';
-    let maxAccess = 0;
-
-    for (const notebook of notebooks) {
-      const stats = await persistenceService.notebooks.getNotebookStats(notebook.id);
-      totalFiles += stats.fileCount;
-      totalSize += stats.totalSize;
-
-      // Get large files count for this notebook
-      const largeFiles = await persistenceService.files.getLargeFiles(notebook.id);
-      largeFilesCount += largeFiles.length;
-
-      // Track oldest/newest
-      oldestNotebook = Math.min(oldestNotebook, notebook.createdAt);
-      newestNotebook = Math.max(newestNotebook, notebook.createdAt);
-
-      // Track most accessed
-      if (notebook.accessCount > maxAccess) {
-        maxAccess = notebook.accessCount;
-        mostAccessedNotebook = notebook.id;
-      }
-    }
-
-    return {
-      totalNotebooks: notebooks.length,
-      totalFiles,
-      totalSize,
-      largeFilesCount,
-      oldestNotebook,
-      newestNotebook,
-      mostAccessedNotebook,
-    };
+    return persistenceService.maintenance.getStorageStats();
   }
 
   /**

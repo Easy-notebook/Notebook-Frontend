@@ -35,6 +35,8 @@ Coverage:
 - Notebook deletion cascades through tab/split caches; retention failure rolls back owned records and configuration.
 - Autosaved local-only and unclassified historical documents survive both cleanup modes and page reload.
 - Explicit document deletion remains available despite automatic retention protection.
+- Usage snapshots distinguish logical file sizes from UTF-8 local/split payloads, identify orphan bytes,
+  stay consistent during concurrent writes, and reject failed read transactions.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

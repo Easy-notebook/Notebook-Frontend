@@ -982,3 +982,144 @@ test('explicit user deletion can remove a persistent document', async ({ page })
   });
   expect(remaining).toEqual([]);
 });
+
+test('usage distinguishes logical remote sizes from stored local, split and orphan payloads', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    await provider.put(S.NOTEBOOKS, {
+      id: 'book',
+      createdAt: 17,
+      lastAccessedAt: 23,
+      accessCount: 2,
+      totalSize: 999999,
+      fileCount: 999,
+    });
+    await provider.put(S.FILES_METADATA, {
+      id: 'book::local',
+      notebookId: 'book',
+      size: 7,
+      isLargeFile: false,
+    });
+    await provider.put(S.FILES_METADATA, {
+      id: 'book::remote',
+      notebookId: 'book',
+      size: 100000000,
+      isLargeFile: true,
+      hasLocalContent: false,
+    });
+    await provider.put(S.FILES_METADATA, { id: 'gone::orphan', notebookId: 'gone', size: 8 });
+    await provider.put(S.FILES_CONTENT, { fileId: 'book::local', content: '你🙂' });
+    await provider.put(S.FILES_CONTENT, { fileId: 'gone::orphan', content: 'orphan' });
+    await provider.put(S.FILES_CONTENT, { fileId: 'missing-metadata', content: 'x' });
+    await provider.put(S.SPLIT_FILES, {
+      id: 'book::split',
+      notebookId: 'book',
+      content: '预览',
+      size: 999,
+    });
+    await provider.put(S.SPLIT_FILES, { id: 'gone::split', notebookId: 'gone', content: 'z' });
+    const repository = new StorageMaintenanceRepository(provider);
+    const stats = await repository.getStorageStats();
+    const notebook = await provider.get(S.NOTEBOOKS, 'book');
+    await provider.close();
+    return { stats, notebook };
+  });
+  expect(result.stats).toEqual({
+    totalNotebooks: 1,
+    totalFiles: 2,
+    totalSize: 100000007,
+    largeFilesCount: 1,
+    oldestNotebook: 17,
+    newestNotebook: 17,
+    mostAccessedNotebook: 'book',
+    localContentBytes: 14,
+    splitContentBytes: 7,
+    orphanContentBytes: 8,
+  });
+  expect(result.notebook.accessCount).toBe(2);
+  expect(result.notebook.lastAccessedAt).toBe(23);
+});
+
+test('usage reads one committed revision during a concurrent content update', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    await provider.put(S.NOTEBOOKS, {
+      id: 'book',
+      createdAt: 1,
+      lastAccessedAt: 1,
+      accessCount: 1,
+    });
+    await provider.put(S.FILES_METADATA, { id: 'file', notebookId: 'book', size: 1 });
+    await provider.put(S.FILES_CONTENT, { fileId: 'file', content: 'a' });
+    const repository = new StorageMaintenanceRepository(provider);
+    const reading = repository.getStorageStats();
+    const writing = provider.transaction(
+      [S.FILES_METADATA, S.FILES_CONTENT],
+      'readwrite',
+      (stores) => {
+        stores[S.FILES_METADATA].put({ id: 'file', notebookId: 'book', size: 5 });
+        stores[S.FILES_CONTENT].put({ fileId: 'file', content: 'later' });
+      }
+    );
+    const [before] = await Promise.all([reading, writing]);
+    const after = await repository.getStorageStats();
+    await provider.close();
+    return { before, after };
+  });
+  expect([result.before.totalSize, result.before.localContentBytes]).toEqual([1, 1]);
+  expect([result.after.totalSize, result.after.localContentBytes]).toEqual([5, 5]);
+});
+
+test('empty storage usage has explicit zero totals and timestamps', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const stats = await new StorageMaintenanceRepository(provider).getStorageStats();
+    await provider.close();
+    return stats;
+  });
+  expect(result).toEqual({
+    totalNotebooks: 0,
+    totalFiles: 0,
+    totalSize: 0,
+    largeFilesCount: 0,
+    oldestNotebook: 0,
+    newestNotebook: 0,
+    mostAccessedNotebook: '',
+    localContentBytes: 0,
+    splitContentBytes: 0,
+    orphanContentBytes: 0,
+  });
+});
+
+test('usage does not publish a partial snapshot when the read transaction fails', async ({
+  page,
+}) => {
+  const error = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('usage read aborted');
+        }),
+    });
+    try {
+      await repository.getStorageStats();
+    } catch (failure) {
+      return failure.message;
+    } finally {
+      await provider.close();
+    }
+  });
+  expect(error).toBe('usage read aborted');
+});
