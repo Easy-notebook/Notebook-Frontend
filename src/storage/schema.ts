@@ -109,7 +109,7 @@ export interface SplitFileEntity {
 export interface StorageConfigEntity {
   id: 'config'; // Single config record
   maxNotebooks: number; // Maximum number of notebooks to cache
-  maxTotalSize: number; // Maximum total cache size in bytes
+  maxTotalSize: number; // UTF-8 content budget; protected documents may exceed it
   maxFileSize: number; // Files larger than this are soft-referenced
   cleanupInterval: number; // Cleanup interval in ms
   retentionPeriod: number; // How long to keep inactive notebooks (ms)

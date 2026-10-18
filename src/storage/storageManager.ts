@@ -3,12 +3,12 @@
 
 import { StorageMaintenanceLifecycle } from './StorageMaintenanceLifecycle';
 import { persistenceService } from '../services/persistence/instance';
-import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG, NotebookEntity } from './schema';
+import { StorageConfigEntity, DEFAULT_STORAGE_CONFIG } from './schema';
 import { DataMigration } from './migration';
 import { storageLog } from '@Utils/logger';
 
 export type { CleanupStats } from './NotebookRetentionPolicy';
-import type { CleanupStats, CleanupMode } from './NotebookRetentionPolicy';
+import type { CleanupStats, CleanupMode, CleanupCandidates } from './NotebookRetentionPolicy';
 
 export type { StorageStats } from './StorageUsage';
 import type { StorageStats } from './StorageUsage';
@@ -49,11 +49,7 @@ export class StorageManager {
     return this.lifecycle.run(() => this.doCleanupNotebook(notebookId));
   }
 
-  static getCleanupCandidates(): Promise<{
-    inactive: NotebookEntity[];
-    excess: NotebookEntity[];
-    totalBytesToFree: number;
-  }> {
+  static getCleanupCandidates(): Promise<CleanupCandidates> {
     return this.lifecycle.run(() => this.doGetCleanupCandidates());
   }
 
@@ -146,11 +142,7 @@ export class StorageManager {
   /**
    * Get notebooks ready for cleanup (inactive or exceeding limits)
    */
-  private static async doGetCleanupCandidates(): Promise<{
-    inactive: NotebookEntity[];
-    excess: NotebookEntity[];
-    totalBytesToFree: number;
-  }> {
+  private static async doGetCleanupCandidates(): Promise<CleanupCandidates> {
     return persistenceService.maintenance.getCleanupCandidates();
   }
 

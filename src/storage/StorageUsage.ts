@@ -5,6 +5,11 @@ import type {
   SplitFileEntity,
 } from './schema';
 
+export interface ContentUsage {
+  totalBytes: number;
+  bytesByNotebook: ReadonlyMap<string, number>;
+}
+
 export interface StorageStats {
   totalNotebooks: number;
   totalFiles: number;
@@ -25,6 +30,7 @@ export interface StorageStats {
 export class StorageUsage {
   private readonly notebookIds: Set<string>;
   private readonly fileOwners: Map<string, string>;
+  private readonly contentBytesByNotebook = new Map<string, number>();
   private readonly encoder = new TextEncoder();
   private readonly stats: StorageStats;
 
@@ -67,12 +73,28 @@ export class StorageUsage {
     this.stats.localContentBytes += bytes;
     const owner = this.fileOwners.get(content.fileId);
     if (owner === undefined || !this.notebookIds.has(owner)) this.stats.orphanContentBytes += bytes;
+    else this.recordOwnedBytes(owner, bytes);
   }
 
   addSplitContent(content: SplitFileEntity): void {
     const bytes = this.encoder.encode(content.content).byteLength;
     this.stats.splitContentBytes += bytes;
     if (!this.notebookIds.has(content.notebookId)) this.stats.orphanContentBytes += bytes;
+    else this.recordOwnedBytes(content.notebookId, bytes);
+  }
+
+  private recordOwnedBytes(notebookId: string, bytes: number): void {
+    this.contentBytesByNotebook.set(
+      notebookId,
+      (this.contentBytesByNotebook.get(notebookId) ?? 0) + bytes
+    );
+  }
+
+  toContentUsage(): ContentUsage {
+    return {
+      totalBytes: this.stats.localContentBytes + this.stats.splitContentBytes,
+      bytesByNotebook: new Map(this.contentBytesByNotebook),
+    };
   }
 
   toStats(): StorageStats {

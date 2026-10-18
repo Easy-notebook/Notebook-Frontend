@@ -32,22 +32,27 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
       ],
       'readonly',
       async (stores) => {
-        const [notebooks, files] = await Promise.all([
-          this.read<NotebookEntity[]>(stores[DB_STORES.NOTEBOOKS].getAll()),
-          this.read<FileMetadataEntity[]>(stores[DB_STORES.FILES_METADATA].getAll()),
-        ]);
-        usage = new StorageUsage(notebooks, files);
-        await Promise.all([
-          this.visit<FileContentEntity>(stores[DB_STORES.FILES_CONTENT], (content) =>
-            usage.addFileContent(content)
-          ),
-          this.visit<SplitFileEntity>(stores[DB_STORES.SPLIT_FILES], (content) =>
-            usage.addSplitContent(content)
-          ),
-        ]);
+        usage = (await this.readUsage(stores)).usage;
       }
     );
     return usage.toStats();
+  }
+
+  private async readUsage(stores: Record<string, IDBObjectStore>) {
+    const [notebooks, files] = await Promise.all([
+      this.read<NotebookEntity[]>(stores[DB_STORES.NOTEBOOKS].getAll()),
+      this.read<FileMetadataEntity[]>(stores[DB_STORES.FILES_METADATA].getAll()),
+    ]);
+    const usage = new StorageUsage(notebooks, files);
+    await Promise.all([
+      this.visit<FileContentEntity>(stores[DB_STORES.FILES_CONTENT], (content) =>
+        usage.addFileContent(content)
+      ),
+      this.visit<SplitFileEntity>(stores[DB_STORES.SPLIT_FILES], (content) =>
+        usage.addSplitContent(content)
+      ),
+    ]);
+    return { notebooks, files, usage };
   }
 
   private visit<T>(store: IDBObjectStore, consume: (record: T) => void): Promise<void> {
@@ -97,17 +102,23 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
   async getCleanupCandidates(): Promise<CleanupCandidates> {
     let result!: CleanupCandidates;
     await this.storage.transaction(
-      [DB_STORES.CONFIG, DB_STORES.NOTEBOOKS, DB_STORES.FILES_METADATA],
+      [
+        DB_STORES.CONFIG,
+        DB_STORES.NOTEBOOKS,
+        DB_STORES.FILES_METADATA,
+        DB_STORES.FILES_CONTENT,
+        DB_STORES.SPLIT_FILES,
+      ],
       'readonly',
       async (stores) => {
-        const [config, notebooks, files] = await Promise.all([
+        const [config, { notebooks, files, usage }] = await Promise.all([
           this.read<StorageConfigEntity | undefined>(stores[DB_STORES.CONFIG].get('config')),
-          this.read<NotebookEntity[]>(stores[DB_STORES.NOTEBOOKS].getAll()),
-          this.read<FileMetadataEntity[]>(stores[DB_STORES.FILES_METADATA].getAll()),
+          this.readUsage(stores),
         ]);
         const selected = new NotebookRetentionPolicy(config ?? DEFAULT_STORAGE_CONFIG).select(
           notebooks,
-          Date.now()
+          Date.now(),
+          usage.toContentUsage()
         );
         const ids = new Set([...selected.inactive, ...selected.excess].map((book) => book.id));
         result = {
@@ -129,18 +140,29 @@ export class StorageMaintenanceRepository implements IStorageMaintenanceReposito
       filesDeleted: 0,
       bytesFreed: 0,
       duration: 0,
+      contentBytesFreed: 0,
+      remainingContentBytes: 0,
+      overBudgetBytes: 0,
     };
     await this.storage.transaction(
       [DB_STORES.CONFIG, ...NotebookDeletion.stores],
       'readwrite',
       async (stores) => {
-        const [stored, notebooks] = await Promise.all([
+        const [stored, { notebooks, usage }] = await Promise.all([
           this.read<StorageConfigEntity | undefined>(stores[DB_STORES.CONFIG].get('config')),
-          this.read<NotebookEntity[]>(stores[DB_STORES.NOTEBOOKS].getAll()),
+          this.readUsage(stores),
         ]);
         const config = stored ?? DEFAULT_STORAGE_CONFIG;
         const now = Date.now();
-        const selected = new NotebookRetentionPolicy(config).select(notebooks, now, mode);
+        const selected = new NotebookRetentionPolicy(config).select(
+          notebooks,
+          now,
+          usage.toContentUsage(),
+          mode
+        );
+        stats.contentBytesFreed = selected.contentBytesFreed;
+        stats.remainingContentBytes = selected.remainingContentBytes;
+        stats.overBudgetBytes = selected.overBudgetBytes;
         const deletion = new NotebookDeletion(stores);
         for (const notebook of [...selected.inactive, ...selected.excess]) {
           const deleted = await deletion.delete(notebook.id);

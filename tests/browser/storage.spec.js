@@ -1123,3 +1123,105 @@ test('usage does not publish a partial snapshot when the read transaction fails'
   });
   expect(error).toBe('usage read aborted');
 });
+
+test('content budget uses local and split payloads, preserves remote-only caches and reports protected pressure', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    const S = DB_CONFIG.STORES;
+    await repository.updateConfig({ maxNotebooks: 10, maxTotalSize: 12, retentionPeriod: 60_000 });
+    const now = Date.now();
+    for (const [id, age, retention] of [
+      ['old', 30, 'evictable'],
+      ['recent', 10, 'evictable'],
+      ['remote', 50, 'evictable'],
+      ['document', 100, 'persistent'],
+    ]) {
+      await provider.put(S.NOTEBOOKS, { id, lastAccessedAt: now - age, retention });
+      await provider.put(S.FILES_METADATA, {
+        id: `${id}::file`,
+        notebookId: id,
+        size: id === 'remote' ? 100000000 : 999,
+      });
+    }
+    await provider.put(S.FILES_CONTENT, { fileId: 'old::file', content: '你' });
+    await provider.put(S.SPLIT_FILES, { id: 'old::split', notebookId: 'old', content: '🙂' });
+    await provider.put(S.FILES_CONTENT, { fileId: 'recent::file', content: '12345' });
+    await provider.put(S.FILES_CONTENT, { fileId: 'document::file', content: '123456' });
+    await provider.put(S.FILES_CONTENT, { fileId: 'orphan', content: 'x' });
+    const preview = await repository.getCleanupCandidates();
+    const regular = await repository.cleanup();
+    const kept = (await provider.getAll(S.NOTEBOOKS)).map((book) => book.id);
+    await repository.updateConfig({ maxTotalSize: 0 });
+    const constrained = await repository.cleanup();
+    const remaining = (await provider.getAll(S.NOTEBOOKS)).map((book) => book.id);
+    const usage = await repository.getStorageStats();
+    await provider.close();
+    return { preview, regular, kept, constrained, remaining, usage };
+  });
+  expect(result.preview.excess.map((book) => book.id)).toEqual(['old']);
+  expect(result.preview).toMatchObject({
+    contentBytesFreed: 7,
+    remainingContentBytes: 12,
+    overBudgetBytes: 0,
+  });
+  expect(result.regular).toMatchObject({
+    notebooksDeleted: 1,
+    contentBytesFreed: 7,
+    remainingContentBytes: 12,
+    overBudgetBytes: 0,
+  });
+  expect(result.kept).toEqual(['document', 'recent', 'remote']);
+  expect(result.constrained).toMatchObject({
+    notebooksDeleted: 1,
+    contentBytesFreed: 5,
+    remainingContentBytes: 7,
+    overBudgetBytes: 7,
+  });
+  expect(result.remaining).toEqual(['document', 'remote']);
+  expect(result.usage.localContentBytes + result.usage.splitContentBytes).toBe(7);
+});
+
+test('content-budget cleanup abort preserves every measured payload', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, StorageMaintenanceRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new StorageMaintenanceRepository(provider);
+    const S = DB_CONFIG.STORES;
+    await repository.updateConfig({ maxNotebooks: 10, maxTotalSize: 0 });
+    await provider.put(S.NOTEBOOKS, {
+      id: 'cache',
+      retention: 'evictable',
+      lastAccessedAt: Date.now(),
+    });
+    await provider.put(S.FILES_METADATA, { id: 'cache::file', notebookId: 'cache', size: 4 });
+    await provider.put(S.FILES_CONTENT, { fileId: 'cache::file', content: 'keep' });
+    const before = await repository.getConfig();
+    const failing = new StorageMaintenanceRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('budget cleanup aborted');
+        }),
+    });
+    let error;
+    try {
+      await failing.cleanup();
+    } catch (failure) {
+      error = failure.message;
+    }
+    const usage = await repository.getStorageStats();
+    const after = await repository.getConfig();
+    await provider.close();
+    return { error, usage, before, after };
+  });
+  expect(result.error).toBe('budget cleanup aborted');
+  expect(result.usage.totalNotebooks).toBe(1);
+  expect(result.usage.localContentBytes).toBe(4);
+  expect(result.after).toEqual(result.before);
+});

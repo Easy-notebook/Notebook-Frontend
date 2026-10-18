@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 184 tests across fifteen files. Coverage includes
+The persistence/autosave/session gate passes 191 tests across fifteen files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -175,14 +175,14 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs thirty-five isolated Playwright cases against production modules:
+`npm run test:browser` runs thirty-seven isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 184 Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 191 Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -330,10 +330,33 @@ Native cases verify multibyte text, remote logical sizes, orphan/split accountin
 unchanged access metadata, consistent snapshots during concurrent writes, empty stores
 and rejection instead of partial results when the transaction fails.
 
+## Content budget enforcement
+
+Regular cleanup applies maxTotalSize to UTF-8 local-plus-split content bytes. Emergency
+cleanup targets 70% of that allowance, alongside its cache-count target. Age/count
+candidates are accounted first, then the oldest remaining payload-bearing evictable
+notebooks are selected until the target is met or no reclaimable content remains.
+Zero-byte/remote-only caches are not deleted merely because other content exceeds
+the byte budget. Persistent documents and orphan payloads are included in usage but
+are never selected for automatic deletion.
+
+Usage reading is shared by reporting, preview and cleanup. Cleanup measures/selects/deletes
+within the same readwrite transaction. Both preview and committed results expose
+contentBytesFreed, remainingContentBytes and overBudgetBytes; the existing bytesFreed
+and totalBytesToFree remain logical file-metadata totals. A nonzero overBudgetBytes
+explicitly means protected/unowned content prevents meeting the target. No write-admission
+cap or physical browser quota guarantee is claimed. Read or commit failures reject the
+operation without publishing committed totals. Content budget must be a nonnegative
+safe integer; invalid persisted budgets cannot trigger cleanup.
+
+Policy tests cover LRU, emergency targets, invalid budgets and un-reclaimable pressure.
+Native tests cover multibyte local/split payloads, preview/execute agreement, remote-only
+cache preservation, zero budgets with protected data, and transaction rollback.
+
 ## Remaining lifecycle work
 
-Retention currently enforces cache count and inactivity. Byte quota enforcement and the
-creation/active-use contract for explicitly evictable caches require a separate audit.
+Retention now enforces cache count, inactivity and an application content budget.
+The creation/active-use contract for explicitly evictable caches still requires an audit.
 Persistent documents are protected regardless of age or count; this does not expand
 browser storage quota or claim remote synchronization.
 A transaction accepted after deletion cannot retroactively protect the deleted notebook.
