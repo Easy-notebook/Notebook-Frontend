@@ -43,6 +43,61 @@ beforeEach(() => {
 afterEach(() => AutoSaveService.resetInstance());
 
 describe('single-writer autosave', () => {
+  it('acknowledges an immediate save without waiting for edits accepted during its write', async () => {
+    const old = deferred();
+    const next = deferred();
+    storage.notebooks.saveNotebookSnapshot
+      .mockImplementationOnce(async () => {
+        await old.promise;
+        return { id: 'old' };
+      })
+      .mockImplementationOnce(async () => {
+        await next.promise;
+        return { id: 'next' };
+      });
+    const saving = service.saveNow(snapshot('first'));
+    await vi.waitFor(() => expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1));
+    await service.queueSave(snapshot('second'));
+    const revision = service.getSaveProgress('notebook')!.currentRevision;
+    old.resolve();
+    await saving;
+    expect(service.getSaveProgress('notebook')).toMatchObject({
+      committedRevision: 1,
+      currentRevision: 2,
+    });
+    expect(service.hasPending('notebook')).toBe(true);
+    const complete = service.flushThrough('notebook', revision);
+    next.resolve();
+    await complete;
+    expect(service.getSaveProgress('notebook')).toMatchObject({
+      phase: 'clean',
+      committedRevision: revision,
+    });
+  });
+
+  it('keeps failed notebook progress after another notebook successfully commits', async () => {
+    storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
+      if (file.notebookId === 'bad') throw new Error('quota');
+      return { id: 'saved' };
+    });
+    await service.queueSave(snapshot('bad', 'bad'));
+    await service.queueSave(snapshot('good', 'good'));
+    await expect(service.flush()).rejects.toThrow('quota');
+    expect(service.getSaveProgress('bad')).toMatchObject({
+      phase: 'blocked',
+      committedRevision: 0,
+      error: 'quota',
+    });
+    expect(service.getSaveProgress('good')).toMatchObject({ phase: 'clean', error: null });
+  });
+
+  it('rejects impossible revision barriers without starting a write', async () => {
+    await service.queueSave(snapshot('pending'));
+    await expect(service.flushThrough('notebook', 100)).rejects.toThrow('Unknown');
+    await expect(service.flushThrough('missing', 1)).rejects.toThrow('Unknown');
+    expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
+  });
+
   it('reuses unchanged text byte counts but invalidates in-place content edits', async () => {
     const NativeBlob = globalThis.Blob;
     const measured: unknown[] = [];

@@ -90,6 +90,7 @@ describe('authoritative autosave projection', () => {
     expect(firstCommit.revision).toBe(1);
     second.resolve();
     await saving;
+    await service.flushThrough('a', 2);
     expect(binding.store.getState().isDirty).toBe(false);
     expect(binding.store.getState().pendingCount).toBe(0);
     expect(

@@ -4,6 +4,7 @@
  */
 
 import { debounce } from 'lodash-es';
+import { NotebookSaveQueue } from './NotebookSaveQueue';
 import { PersistenceService } from '../persistence/PersistenceService';
 import type { IPersistenceService } from '../persistence/interfaces';
 import type { Cell } from '@Store/models';
@@ -19,6 +20,7 @@ import {
   type IAutoSaveService,
   type LoadedNotebook,
   type NotebookSnapshot,
+  type NotebookSaveProgress,
   DEFAULT_AUTOSAVE_CONFIG,
   INITIAL_AUTOSAVE_STATE,
 } from './types';
@@ -48,10 +50,9 @@ export class AutoSaveService implements IAutoSaveService {
   private readonly isDevelopment: boolean = import.meta.env.DEV === true;
 
   // Save queue management
-  private readonly saveQueue = new Map<string, NotebookSnapshot & { revision: number }>();
+  private readonly saveQueue = new NotebookSaveQueue();
   private readonly debouncedSave: ReturnType<typeof debounce>;
   private processing: Promise<void> | null = null;
-  private nextRevision = 0;
   private readonly contentSizes = new WeakMap<Cell, { content: string; bytes: number }>();
 
   // Event listeners
@@ -195,8 +196,23 @@ export class AutoSaveService implements IAutoSaveService {
    */
   public async saveNow(snapshot: NotebookSnapshot): Promise<void> {
     if (!this.validateSnapshot(snapshot)) throw new Error('Invalid notebook snapshot');
-    this.enqueueSnapshot(snapshot);
-    await this.processSaveQueue(snapshot.notebookId);
+    const revision = this.enqueueSnapshot(snapshot);
+    await this.flushThrough(snapshot.notebookId, revision);
+  }
+
+  public getSaveProgress(notebookId: string): NotebookSaveProgress | null {
+    return this.saveQueue.progress(notebookId);
+  }
+
+  /** Wait for this accepted revision (or a newer coalesced snapshot) to commit. */
+  public flushThrough(notebookId: string, revision: number): Promise<void> {
+    const barrier = this.saveQueue.createBarrier(notebookId, revision);
+    if (!barrier.pending) return barrier.completion;
+    this.debouncedSave.cancel();
+    void this.processSaveQueue(notebookId).catch((error: unknown) => {
+      notebookLog.error('Revision save failed; pending snapshot retained', { notebookId, error });
+    });
+    return barrier.completion;
   }
 
   /**
@@ -250,7 +266,7 @@ export class AutoSaveService implements IAutoSaveService {
    * Clear pending save for a specific notebook
    */
   public clearPending(notebookId: string): void {
-    this.saveQueue.delete(notebookId);
+    this.saveQueue.discard(notebookId);
     this.publish({}, 'dirty_changed', notebookId);
 
     if (this.isDevelopment) {
@@ -357,13 +373,10 @@ export class AutoSaveService implements IAutoSaveService {
   /**
    * Process the save queue
    */
-  private enqueueSnapshot(snapshot: NotebookSnapshot): void {
-    this.saveQueue.set(snapshot.notebookId, {
-      ...snapshot,
-      timestamp: Date.now(),
-      revision: ++this.nextRevision,
-    });
+  private enqueueSnapshot(snapshot: NotebookSnapshot): number {
+    const queued = this.saveQueue.enqueue(snapshot);
     this.publish({ activeNotebookId: snapshot.notebookId }, 'dirty_changed', snapshot.notebookId);
+    return queued.revision;
   }
 
   private async processSaveQueue(notebookId?: string): Promise<void> {
@@ -391,10 +404,10 @@ export class AutoSaveService implements IAutoSaveService {
       let retries = 0;
       while (this.saveQueue.has(id)) {
         const snapshot = this.saveQueue.get(id)!;
+        this.saveQueue.begin(snapshot);
         try {
           await this.performSave(snapshot);
-          // A new edit may have arrived while this revision was being written.
-          if (this.saveQueue.get(id)?.revision === snapshot.revision) this.saveQueue.delete(id);
+          this.saveQueue.acknowledge(snapshot);
           retries = 0;
           this.publish(
             { status: AutoSaveStatus.IDLE, lastSavedAt: Date.now(), error: null },
@@ -403,6 +416,16 @@ export class AutoSaveService implements IAutoSaveService {
             snapshot.revision
           );
         } catch (error) {
+          this.saveQueue.fail(snapshot, error, retries >= this.config.maxRetries);
+          this.publish(
+            {
+              status: AutoSaveStatus.IDLE,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            'save_failed',
+            id,
+            snapshot.revision
+          );
           if (this.saveQueue.get(id)?.revision !== snapshot.revision) {
             retries = 0;
             continue;
@@ -497,9 +520,6 @@ export class AutoSaveService implements IAutoSaveService {
         cellsCount: cells.length,
       });
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.publish({ status: AutoSaveStatus.IDLE, error: errorMsg }, 'save_failed', notebookId);
-
       notebookLog.error('AutoSaveService: Save failed', { notebookId, error });
       throw error;
     }
@@ -645,6 +665,7 @@ export class AutoSaveService implements IAutoSaveService {
       notebookId,
       revision,
       state,
+      progress: notebookId ? this.saveQueue.progress(notebookId) : null,
       status: state.status,
       error: state.error ?? undefined,
       timestamp: Date.now(),

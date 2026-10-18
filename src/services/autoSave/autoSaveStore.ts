@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { AutoSaveService } from './AutoSaveService';
+import type { NotebookSaveProgress } from './types';
 import {
   AutoSaveStatus,
   type AutoSaveState,
@@ -17,6 +18,8 @@ import {
  * AutoSave store actions interface
  */
 export interface AutoSaveStoreActions {
+  getSaveProgress: (notebookId: string) => NotebookSaveProgress | null;
+  flushThrough: (notebookId: string, revision: number) => Promise<void>;
   /** Initialize the auto-save service */
   initialize: () => Promise<void>;
 
@@ -74,6 +77,9 @@ export function createAutoSaveStore(service: AutoSaveService) {
   const store = create<AutoSaveStore>()(
     subscribeWithSelector(() => ({
       ...service.getState(),
+      getSaveProgress: (notebookId: string) => service.getSaveProgress(notebookId),
+      flushThrough: (notebookId: string, revision: number) =>
+        service.flushThrough(notebookId, revision),
       initialize: () => service.initialize(),
       queueSave: (snapshot: NotebookSnapshot) => service.queueSave(snapshot),
       saveNow: (snapshot: NotebookSnapshot) => service.saveNow(snapshot),

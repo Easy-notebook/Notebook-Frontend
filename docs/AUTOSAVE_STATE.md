@@ -37,10 +37,36 @@ Targeted lint completes with zero errors and existing any-type warnings in stora
 interfaces/repositories. Full-project type checking is tracked separately; it is
 not asserted to pass.
 
+## Per-notebook save state and revision barriers
+
+NotebookSaveQueue now owns each notebook's scheduled/writing/retry_wait/blocked/clean
+transitions, latest snapshot, in-flight revision and committed revision. Progress
+snapshots are immutable and available through getSaveProgress and notification
+progress. A successful save of another notebook does not clear this notebook's
+blocked progress or error. The existing global status/error remain a last-operation
+projection; consumers needing notebook-specific truth must use its progress.
+
+saveNow captures its accepted revision and waits through flushThrough. This barrier
+resolves when that revision, or a newer coalesced snapshot, commits; edits accepted
+afterward do not extend it. A failed stale snapshot can be replaced by a newer one
+without rejecting the barrier prematurely. Retry exhaustion rejects pending barriers
+and retains the snapshot for a later explicit retry. Invalid/future revisions reject
+without scheduling I/O. An already committed barrier does not trigger another save.
+
+Explicit discard rejects affected barriers and cannot discard an in-flight write.
+Queue teardown rejects remaining barriers. The queue retains one progress entry per
+encountered notebook until discard/clear, plus only pending/latest snapshots and
+live barrier waiters; it does not keep an edit history. Revision numbers are local to
+the service instance and are not persisted or a cross-window concurrency protocol.
+
+The persistence/autosave gate passes 94 tests across eight files, including six
+queue transition tests and new service-level deferred-write barriers and independent
+failure-state checks. Existing pause and multi-notebook writer tests also pass.
+
 ## Remaining lifecycle work
 
-The service still exposes a global operation status. Separate per-notebook save
-states, committed revision storage, revision-bound flush barriers, pause admission,
-disposal while I/O is active, cross-window conflicts and native recovery verification
-remain. clearPending is an explicit discard operation, not a save acknowledgement.
-This phase does not claim a complete storage/session state-machine redesign.
+Graceful disposal while I/O is active, pause admission fencing, fairness of the global
+writer under continuous edits, cross-window conflicts and native recovery verification
+remain. flush still drains pending work, while flushThrough provides a fixed revision
+boundary; pause currently uses the former and requires a separate admission protocol.
+No crash-durability or cross-session committed-version guarantee is claimed.

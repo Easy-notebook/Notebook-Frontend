@@ -19,6 +19,16 @@ export enum AutoSaveStatus {
   DISCONNECTED = 'disconnected',
 }
 
+export type SavePhase = 'clean' | 'scheduled' | 'writing' | 'retry_wait' | 'blocked';
+export interface NotebookSaveProgress {
+  readonly notebookId: string;
+  readonly phase: SavePhase;
+  readonly currentRevision: number;
+  readonly committedRevision: number;
+  readonly inFlightRevision: number | null;
+  readonly error: string | null;
+}
+
 /**
  * Notebook snapshot for saving
  */
@@ -92,6 +102,7 @@ export type AutoSaveEventType =
 export interface AutoSaveEvent {
   /** Complete authoritative state at this transition. */
   state: Readonly<AutoSaveState>;
+  progress: NotebookSaveProgress | null;
   /** Revision acknowledged by save_completed, scoped to this service instance. */
   revision?: number;
   type: AutoSaveEventType;
@@ -128,6 +139,9 @@ export interface IAutoSaveService {
 
   /** Save immediately without debouncing */
   saveNow(snapshot: NotebookSnapshot): Promise<void>;
+
+  getSaveProgress(notebookId: string): NotebookSaveProgress | null;
+  flushThrough(notebookId: string, revision: number): Promise<void>;
 
   /** Load a notebook from storage */
   load(notebookId: string): Promise<LoadedNotebook | null>;
