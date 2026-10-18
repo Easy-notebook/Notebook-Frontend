@@ -56,6 +56,8 @@ export class AutoSaveService implements IAutoSaveService {
 
   // Event listeners
   private readonly listeners: Set<AutoSaveEventListener> = new Set();
+  private readonly notifications: AutoSaveEvent[] = [];
+  private notifying = false;
 
   /**
    * Private constructor for singleton pattern
@@ -116,6 +118,13 @@ export class AutoSaveService implements IAutoSaveService {
         .initialize()
         .then(() => {
           this.initialized = true;
+        })
+        .catch((error: unknown) => {
+          this.publish(
+            { error: error instanceof Error ? error.message : String(error) },
+            'initialization_failed'
+          );
+          throw error;
         })
         .finally(() => {
           this.initialization = null;
@@ -205,27 +214,22 @@ export class AutoSaveService implements IAutoSaveService {
     await this.flush(notebookId);
 
     try {
-      this.setStatus(AutoSaveStatus.LOADING);
-      this.updateState({ activeNotebookId: notebookId });
-      this.emitEvent('load_started', notebookId);
+      this.publish(
+        { status: AutoSaveStatus.LOADING, activeNotebookId: notebookId },
+        'load_started',
+        notebookId
+      );
 
       notebookLog.debug('AutoSaveService: Loading notebook', { notebookId });
 
       const result = await this.loadFromPersistence(notebookId);
 
-      this.setStatus(AutoSaveStatus.IDLE);
-      this.updateState({
-        isDirty: this.saveQueue.size > 0,
-        error: null,
-      });
-      this.emitEvent('load_completed', notebookId);
+      this.publish({ status: AutoSaveStatus.IDLE, error: null }, 'load_completed', notebookId);
 
       return result;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.setStatus(AutoSaveStatus.IDLE);
-      this.updateState({ error: errorMsg });
-      this.emitEvent('load_failed', notebookId, errorMsg);
+      this.publish({ status: AutoSaveStatus.IDLE, error: errorMsg }, 'load_failed', notebookId);
 
       notebookLog.error('AutoSaveService: Load failed', { notebookId, error });
       throw error;
@@ -247,7 +251,7 @@ export class AutoSaveService implements IAutoSaveService {
    */
   public clearPending(notebookId: string): void {
     this.saveQueue.delete(notebookId);
-    this.updateState({ pendingCount: this.saveQueue.size, isDirty: this.saveQueue.size > 0 });
+    this.publish({}, 'dirty_changed', notebookId);
 
     if (this.isDevelopment) {
       notebookLog.debug('AutoSaveService: Pending save cleared', { notebookId });
@@ -295,12 +299,7 @@ export class AutoSaveService implements IAutoSaveService {
 
     // Step 5: Clear queue and enter DISCONNECTED state
     this.saveQueue.clear();
-    this.setStatus(AutoSaveStatus.DISCONNECTED);
-    this.updateState({
-      isDirty: false,
-      pendingCount: 0,
-      activeNotebookId: null,
-    });
+    this.publish({ status: AutoSaveStatus.DISCONNECTED, activeNotebookId: null }, 'status_changed');
 
     notebookLog.info('AutoSaveService: Paused (DISCONNECTED)');
   }
@@ -315,7 +314,7 @@ export class AutoSaveService implements IAutoSaveService {
       return;
     }
 
-    this.setStatus(AutoSaveStatus.IDLE);
+    this.publish({ status: AutoSaveStatus.IDLE }, 'status_changed');
     notebookLog.info('AutoSaveService: Resumed (IDLE)');
   }
 
@@ -349,6 +348,10 @@ export class AutoSaveService implements IAutoSaveService {
     notebookLog.info('AutoSaveService: Disposed');
   }
 
+  public clearError(): void {
+    this.publish({ error: null }, 'error_cleared');
+  }
+
   // ==================== Private Methods ====================
 
   /**
@@ -360,12 +363,7 @@ export class AutoSaveService implements IAutoSaveService {
       timestamp: Date.now(),
       revision: ++this.nextRevision,
     });
-    this.updateState({
-      isDirty: true,
-      pendingCount: this.saveQueue.size,
-      activeNotebookId: snapshot.notebookId,
-    });
-    this.emitEvent('dirty_changed', snapshot.notebookId);
+    this.publish({ activeNotebookId: snapshot.notebookId }, 'dirty_changed', snapshot.notebookId);
   }
 
   private async processSaveQueue(notebookId?: string): Promise<void> {
@@ -398,8 +396,12 @@ export class AutoSaveService implements IAutoSaveService {
           // A new edit may have arrived while this revision was being written.
           if (this.saveQueue.get(id)?.revision === snapshot.revision) this.saveQueue.delete(id);
           retries = 0;
-          this.updateState({ isDirty: this.saveQueue.size > 0, pendingCount: this.saveQueue.size });
-          this.emitEvent('dirty_changed', id);
+          this.publish(
+            { status: AutoSaveStatus.IDLE, lastSavedAt: Date.now(), error: null },
+            'save_completed',
+            id,
+            snapshot.revision
+          );
         } catch (error) {
           if (this.saveQueue.get(id)?.revision !== snapshot.revision) {
             retries = 0;
@@ -427,8 +429,7 @@ export class AutoSaveService implements IAutoSaveService {
       if (await this.shouldPreventDataLoss(snapshot)) {
         throw new Error('Refusing to overwrite an existing notebook with an empty snapshot');
       }
-      this.setStatus(AutoSaveStatus.SYNCING);
-      this.emitEvent('save_started', notebookId);
+      this.publish({ status: AutoSaveStatus.SYNCING }, 'save_started', notebookId);
 
       // Prepare both records before any write: serialization failures must not
       // leave updated metadata pointing at the previous content revision.
@@ -460,8 +461,6 @@ export class AutoSaveService implements IAutoSaveService {
       });
       const contentSize = new Blob([notebookContent]).size;
 
-      await this.persistence.notebooks.saveNotebook(notebookMetadata);
-
       if (this.isDevelopment) {
         notebookLog.lifecycleEvent('save', notebookId, {
           title: notebookTitle,
@@ -471,7 +470,7 @@ export class AutoSaveService implements IAutoSaveService {
         });
       }
 
-      const saveResult = await this.persistence.files.saveFile(
+      const saveResult = await this.persistence.notebooks.saveNotebookSnapshot(
         {
           notebookId,
           filePath: `notebook_${notebookId}.json`,
@@ -481,7 +480,7 @@ export class AutoSaveService implements IAutoSaveService {
           size: contentSize,
           remoteUrl: undefined,
         },
-        { forceLocal: true }
+        notebookMetadata
       );
 
       if (this.isDevelopment) {
@@ -493,25 +492,13 @@ export class AutoSaveService implements IAutoSaveService {
         });
       }
 
-      // Update state on success
-      this.setStatus(AutoSaveStatus.IDLE);
-      this.updateState({
-        lastSavedAt: timestamp,
-        isDirty: this.saveQueue.size > 0,
-        pendingCount: this.saveQueue.size,
-        error: null,
-      });
-      this.emitEvent('save_completed', notebookId);
-
       notebookLog.info('AutoSaveService: Notebook saved', {
         notebookId,
         cellsCount: cells.length,
       });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.setStatus(AutoSaveStatus.IDLE);
-      this.updateState({ error: errorMsg });
-      this.emitEvent('save_failed', notebookId, errorMsg);
+      this.publish({ status: AutoSaveStatus.IDLE, error: errorMsg }, 'save_failed', notebookId);
 
       notebookLog.error('AutoSaveService: Save failed', { notebookId, error });
       throw error;
@@ -638,43 +625,54 @@ export class AutoSaveService implements IAutoSaveService {
     return totalSize;
   }
 
-  /**
-   * Update internal state
-   */
-  private updateState(updates: Partial<AutoSaveState>): void {
-    this.state = { ...this.state, ...updates };
-  }
-
-  /**
-   * Set status with event emission
-   */
-  private setStatus(status: AutoSaveStatus): void {
-    if (this.state.status !== status) {
-      this.state.status = status;
-      this.emitEvent('status_changed');
-    }
-  }
-
-  /**
-   * Emit event to all listeners
-   */
-  private emitEvent(type: AutoSaveEventType, notebookId?: string, error?: string): void {
-    const event: AutoSaveEvent = {
+  /** Publish one complete transition; observers never reconstruct storage truth. */
+  private publish(
+    updates: Partial<Omit<AutoSaveState, 'isDirty' | 'pendingCount'>>,
+    type: AutoSaveEventType,
+    notebookId?: string,
+    revision?: number
+  ): void {
+    const previousStatus = this.state.status;
+    this.state = {
+      ...this.state,
+      ...updates,
+      isDirty: this.saveQueue.size > 0,
+      pendingCount: this.saveQueue.size,
+    };
+    const state = Object.freeze({ ...this.state });
+    const event: AutoSaveEvent = Object.freeze({
       type,
       notebookId,
-      status: this.state.status,
-      error,
+      revision,
+      state,
+      status: state.status,
+      error: state.error ?? undefined,
       timestamp: Date.now(),
-      isDirty: this.state.isDirty,
-    };
-
-    this.listeners.forEach((listener) => {
-      try {
-        listener(event);
-      } catch (e) {
-        notebookLog.error('AutoSaveService: Event listener error', { error: e });
-      }
+      isDirty: state.isDirty,
     });
+    if (previousStatus !== state.status && type !== 'status_changed') {
+      this.notifications.push(Object.freeze({ ...event, type: 'status_changed' }));
+    }
+    this.notifications.push(event);
+    if (this.notifying) return;
+    this.notifying = true;
+    try {
+      // A listener may submit another edit. Deliver that transition only after all
+      // observers have received the current one, preserving publication order.
+      for (let index = 0; index < this.notifications.length; index++) {
+        const notification = this.notifications[index];
+        for (const listener of [...this.listeners]) {
+          try {
+            listener(notification);
+          } catch (error) {
+            notebookLog.error('AutoSaveService: Event listener error', { error });
+          }
+        }
+      }
+    } finally {
+      this.notifications.length = 0;
+      this.notifying = false;
+    }
   }
 }
 

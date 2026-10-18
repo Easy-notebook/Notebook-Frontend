@@ -9,10 +9,8 @@ import { AutoSaveService } from './AutoSaveService';
 import {
   AutoSaveStatus,
   type AutoSaveState,
-  type AutoSaveEvent,
   type NotebookSnapshot,
   type LoadedNotebook,
-  INITIAL_AUTOSAVE_STATE,
 } from './types';
 
 /**
@@ -46,9 +44,6 @@ export interface AutoSaveStoreActions {
   /** Clear error state */
   clearError: () => void;
 
-  /** Set dirty state manually */
-  setDirty: (isDirty: boolean) => void;
-
   /**
    * Pause auto-save (enter DISCONNECTED state)
    * Used when navigating to / route
@@ -75,189 +70,32 @@ export type AutoSaveStore = AutoSaveState & AutoSaveStoreActions;
 /**
  * Create the AutoSave store with service integration
  */
-const useAutoSaveStore = create<AutoSaveStore>()(
-  subscribeWithSelector((set) => {
-    // Get service instance
-    const service = AutoSaveService.getInstance();
-
-    // Subscribe to service events and sync state
-    service.subscribe((event: AutoSaveEvent) => {
-      handleServiceEvent(set, event);
-    });
-
-    return {
-      // Initial state
-      ...INITIAL_AUTOSAVE_STATE,
-
-      // Actions
-      initialize: async () => {
-        try {
-          await service.initialize();
-          const state = service.getState();
-          set({
-            status: state.status,
-            error: null,
-          });
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Initialization failed',
-          });
-          throw error;
-        }
-      },
-
-      queueSave: async (snapshot: NotebookSnapshot) => {
-        try {
-          await service.queueSave(snapshot);
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Save failed',
-          });
-          throw error;
-        }
-      },
-
-      saveNow: async (snapshot: NotebookSnapshot) => {
-        try {
-          await service.saveNow(snapshot);
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Save failed',
-          });
-          throw error;
-        }
-      },
-
-      load: async (notebookId: string) => {
-        try {
-          set({ activeNotebookId: notebookId });
-          return await service.load(notebookId);
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Load failed',
-          });
-          throw error;
-        }
-      },
-
-      hasPending: (notebookId?: string) => {
-        return service.hasPending(notebookId);
-      },
-
-      clearPending: (notebookId: string) => {
-        service.clearPending(notebookId);
-        set({ pendingCount: 0 });
-      },
-
-      flush: async (notebookId?: string) => {
-        try {
-          await service.flush(notebookId);
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Flush failed',
-          });
-          throw error;
-        }
-      },
-
-      waitForComplete: async () => {
-        await service.waitForComplete();
-      },
-
-      clearError: () => {
-        set({ error: null });
-      },
-
-      setDirty: (isDirty: boolean) => {
-        set({ isDirty });
-      },
-
-      pause: async (currentSnapshot?: NotebookSnapshot) => {
-        try {
-          await service.pause(currentSnapshot);
-          // State will be updated via event subscription
-        } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Pause failed',
-          });
-          throw error;
-        }
-      },
-
-      resume: () => {
-        service.resume();
-        // State will be updated via event subscription
-      },
-
-      isPaused: () => {
-        return service.isPaused();
-      },
-    };
-  })
-);
-
-/**
- * Handle service events and update store state
- */
-function handleServiceEvent(
-  set: (state: Partial<AutoSaveState>) => void,
-  event: AutoSaveEvent
-): void {
-  switch (event.type) {
-    case 'status_changed':
-      set({ status: event.status });
-      break;
-
-    case 'save_started':
-      set({
-        status: AutoSaveStatus.SYNCING,
-        activeNotebookId: event.notebookId || null,
-      });
-      break;
-
-    case 'save_completed':
-      set({
-        status: AutoSaveStatus.IDLE,
-        lastSavedAt: event.timestamp,
-        isDirty: false,
-        error: null,
-      });
-      break;
-
-    case 'save_failed':
-      set({
-        status: AutoSaveStatus.IDLE,
-        error: event.error || 'Save failed',
-      });
-      break;
-
-    case 'load_started':
-      set({
-        status: AutoSaveStatus.LOADING,
-        activeNotebookId: event.notebookId || null,
-      });
-      break;
-
-    case 'load_completed':
-      set({
-        status: AutoSaveStatus.IDLE,
-        isDirty: false,
-        error: null,
-      });
-      break;
-
-    case 'load_failed':
-      set({
-        status: AutoSaveStatus.IDLE,
-        error: event.error || 'Load failed',
-      });
-      break;
-
-    case 'dirty_changed':
-      set({ isDirty: event.isDirty ?? false });
-      break;
-  }
+export function createAutoSaveStore(service: AutoSaveService) {
+  const store = create<AutoSaveStore>()(
+    subscribeWithSelector(() => ({
+      ...service.getState(),
+      initialize: () => service.initialize(),
+      queueSave: (snapshot: NotebookSnapshot) => service.queueSave(snapshot),
+      saveNow: (snapshot: NotebookSnapshot) => service.saveNow(snapshot),
+      load: (notebookId: string) => service.load(notebookId),
+      hasPending: (notebookId?: string) => service.hasPending(notebookId),
+      clearPending: (notebookId: string) => service.clearPending(notebookId),
+      flush: (notebookId?: string) => service.flush(notebookId),
+      waitForComplete: () => service.waitForComplete(),
+      clearError: () => service.clearError(),
+      pause: (snapshot?: NotebookSnapshot) => service.pause(snapshot),
+      resume: () => service.resume(),
+      isPaused: () => service.isPaused(),
+    }))
+  );
+  const unsubscribe = service.subscribe((event) => store.setState(event.state));
+  return { store, unsubscribe };
 }
+
+const binding = createAutoSaveStore(AutoSaveService.getInstance());
+const useAutoSaveStore = binding.store;
+const hot = (import.meta as ImportMeta & { hot?: { dispose(callback: () => void): void } }).hot;
+hot?.dispose(binding.unsubscribe);
 
 // ==================== Selectors ====================
 

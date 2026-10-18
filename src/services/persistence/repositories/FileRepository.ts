@@ -1,63 +1,26 @@
 import { IFileRepository, IStorageProvider } from '../interfaces';
-import {
-  FileMetadataEntity,
-  FileContentEntity,
-  DEFAULT_STORAGE_CONFIG,
-} from '../../../storage/schema';
+import { FileMetadataEntity, FileContentEntity } from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
-import { getFileType } from '../../../storage/fileTypes';
+import { FileRecordSet } from './FileRecordSet';
 
 export class FileRepository implements IFileRepository {
   constructor(private storage: IStorageProvider) {}
 
   async saveFile(fileData: any, options: any = {}): Promise<FileMetadataEntity> {
-    const config = {
-      maxFileSize: options.maxFileSize ?? DEFAULT_STORAGE_CONFIG.maxFileSize,
-      compressionEnabled: options.compressionEnabled ?? DEFAULT_STORAGE_CONFIG.compressionEnabled,
-      forceLocal: options.forceLocal ?? false,
-    };
-
-    const fileId = `${fileData.notebookId}::${fileData.filePath}`;
-    const isLargeFile = fileData.size > config.maxFileSize && !config.forceLocal;
-    const now = Date.now();
-
-    const metadata: FileMetadataEntity = {
-      id: fileId,
-      notebookId: fileData.notebookId,
-      filePath: fileData.filePath,
-      fileName: fileData.fileName,
-      fileType: getFileType(fileData.filePath),
-      size: fileData.size,
-      lastModified: fileData.lastModified,
-      cachedAt: now,
-      lastAccessedAt: now,
-      accessCount: 1,
-      storageType: isLargeFile ? 'remote' : 'local',
-      hasLocalContent: !isLargeFile,
-      remoteUrl: fileData.remoteUrl,
-      isLargeFile,
-      contentPreview: isLargeFile ? this.generateContentPreview(fileData.content) : undefined,
-    };
+    const records = new FileRecordSet(fileData, options);
 
     await this.storage.transaction(
       [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
       'readwrite',
       async (stores) => {
-        stores[DB_CONFIG.STORES.FILES_METADATA].put(metadata);
-
-        if (!isLargeFile) {
-          const content: FileContentEntity = {
-            fileId,
-            content: fileData.content, // Compression logic omitted for brevity
-            compressed: false,
-            encoding: 'utf8', // Simplified
-          };
-          stores[DB_CONFIG.STORES.FILES_CONTENT].put(content);
-        }
+        records.writeTo(
+          stores[DB_CONFIG.STORES.FILES_METADATA],
+          stores[DB_CONFIG.STORES.FILES_CONTENT]
+        );
       }
     );
 
-    return metadata;
+    return records.metadata;
   }
 
   async getFile(
@@ -69,68 +32,95 @@ export class FileRepository implements IFileRepository {
     needsRemoteFetch?: boolean;
   } | null> {
     const fileId = `${notebookId}::${filePath}`;
-    const metadata = await this.storage.get<FileMetadataEntity>(
-      DB_CONFIG.STORES.FILES_METADATA,
-      fileId
+    let result: Awaited<ReturnType<IFileRepository['getFile']>> = null;
+    // Read the revision, update its access counters and read its content under one lock.
+    // Separate transactions can overwrite a concurrent save with stale metadata.
+    await this.storage.transaction(
+      [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
+      'readwrite',
+      (stores) =>
+        new Promise<void>((resolve, reject) => {
+          const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
+          const request = metadataStore.get(fileId);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            try {
+              const metadata = request.result as FileMetadataEntity | undefined;
+              if (!metadata) {
+                resolve();
+                return;
+              }
+              metadata.lastAccessedAt = Date.now();
+              metadata.accessCount += 1;
+              metadataStore.put(metadata);
+              result = { metadata, needsRemoteFetch: true };
+              if (!metadata.hasLocalContent) {
+                resolve();
+                return;
+              }
+              const content = stores[DB_CONFIG.STORES.FILES_CONTENT].get(fileId);
+              content.onerror = () => reject(content.error);
+              content.onsuccess = () => {
+                const entity = content.result as FileContentEntity | undefined;
+                if (entity) result = { metadata, content: entity.content, needsRemoteFetch: false };
+                resolve();
+              };
+            } catch (error) {
+              reject(error);
+            }
+          };
+        })
     );
-
-    if (!metadata) return null;
-
-    // Update access stats
-    metadata.lastAccessedAt = Date.now();
-    metadata.accessCount += 1;
-    await this.storage.put(DB_CONFIG.STORES.FILES_METADATA, metadata);
-
-    if (metadata.hasLocalContent) {
-      const contentEntity = await this.storage.get<FileContentEntity>(
-        DB_CONFIG.STORES.FILES_CONTENT,
-        fileId
-      );
-      if (contentEntity) {
-        return {
-          metadata,
-          content: contentEntity.content,
-          needsRemoteFetch: false,
-        };
-      }
-    }
-
-    return {
-      metadata,
-      needsRemoteFetch: true,
-    };
+    return result;
   }
 
   async getFilesForNotebook(notebookId: string, includeContent = false): Promise<any[]> {
-    // Inefficient but functional for refactor: get all and filter
-    const allFiles = await this.storage.getAll<FileMetadataEntity>(DB_CONFIG.STORES.FILES_METADATA);
-    const notebookFiles = allFiles.filter((f) => f.notebookId === notebookId);
-
-    const results = [];
-    for (const metadata of notebookFiles) {
-      let content: string | undefined;
-      let needsRemoteFetch = !metadata.hasLocalContent;
-
-      if (includeContent && metadata.hasLocalContent) {
-        const contentEntity = await this.storage.get<FileContentEntity>(
-          DB_CONFIG.STORES.FILES_CONTENT,
-          metadata.id
-        );
-        if (contentEntity) {
-          content = contentEntity.content;
-          needsRemoteFetch = false;
-        } else {
-          needsRemoteFetch = true;
-        }
-      }
-
-      results.push({
-        metadata,
-        content,
-        needsRemoteFetch,
-      });
-    }
-
+    let results: Array<{
+      metadata: FileMetadataEntity;
+      content?: string;
+      needsRemoteFetch: boolean;
+    }> = [];
+    const storeNames: string[] = [DB_CONFIG.STORES.FILES_METADATA];
+    if (includeContent) storeNames.push(DB_CONFIG.STORES.FILES_CONTENT);
+    await this.storage.transaction(
+      storeNames,
+      'readonly',
+      (stores) =>
+        new Promise<void>((resolve, reject) => {
+          const request = stores[DB_CONFIG.STORES.FILES_METADATA]
+            .index('notebookId')
+            .getAll(notebookId);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            try {
+              const metadata = request.result as FileMetadataEntity[];
+              results = metadata.map((metadata) => ({
+                metadata,
+                content: undefined,
+                needsRemoteFetch: !metadata.hasLocalContent,
+              }));
+              let pending = 0;
+              if (includeContent) {
+                for (const file of results) {
+                  if (!file.metadata.hasLocalContent) continue;
+                  const content = stores[DB_CONFIG.STORES.FILES_CONTENT].get(file.metadata.id);
+                  pending++;
+                  content.onerror = () => reject(content.error);
+                  content.onsuccess = () => {
+                    const entity = content.result as FileContentEntity | undefined;
+                    file.content = entity?.content;
+                    file.needsRemoteFetch = !entity;
+                    if (--pending === 0) resolve();
+                  };
+                }
+              }
+              if (pending === 0) resolve();
+            } catch (error) {
+              reject(error);
+            }
+          };
+        })
+    );
     return results;
   }
 
@@ -151,42 +141,48 @@ export class FileRepository implements IFileRepository {
 
   async updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean> {
     const fileId = `${notebookId}::${filePath}`;
-    const metadata = await this.storage.get<FileMetadataEntity>(
-      DB_CONFIG.STORES.FILES_METADATA,
-      fileId
-    );
-
-    if (!metadata) return false;
-
-    const updatedMetadata: FileMetadataEntity = {
-      ...metadata,
-      hasLocalContent: true,
-      storageType: 'local',
-      size: new Blob([content]).size,
-      lastModified: new Date().toISOString(),
-      lastAccessedAt: Date.now(),
-    };
-
+    // Prepare payload work before taking the write lock.
+    const size = new Blob([content]).size;
+    let updated = false;
     await this.storage.transaction(
       [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT],
       'readwrite',
-      async (stores) => {
-        stores[DB_CONFIG.STORES.FILES_METADATA].put(updatedMetadata);
-
-        const contentEntity: FileContentEntity = {
-          fileId,
-          content,
-          compressed: false,
-          encoding: 'utf8',
-        };
-        stores[DB_CONFIG.STORES.FILES_CONTENT].put(contentEntity);
-      }
+      (stores) =>
+        new Promise<void>((resolve, reject) => {
+          const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
+          const request = metadataStore.get(fileId);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            try {
+              const metadata = request.result as FileMetadataEntity | undefined;
+              if (!metadata) {
+                resolve();
+                return;
+              }
+              const now = Date.now();
+              metadataStore.put({
+                ...metadata,
+                hasLocalContent: true,
+                storageType: 'local',
+                size,
+                lastModified: new Date(now).toISOString(),
+                lastAccessedAt: now,
+              } satisfies FileMetadataEntity);
+              const contentEntity: FileContentEntity = {
+                fileId,
+                content,
+                compressed: false,
+                encoding: 'utf8',
+              };
+              stores[DB_CONFIG.STORES.FILES_CONTENT].put(contentEntity);
+              updated = true;
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          };
+        })
     );
-
-    return true;
-  }
-
-  private generateContentPreview(content: string): string {
-    return content.substring(0, 500);
+    return updated;
   }
 }

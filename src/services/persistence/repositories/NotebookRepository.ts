@@ -1,6 +1,7 @@
-import { INotebookRepository, IStorageProvider } from '../interfaces';
+import { INotebookRepository, IStorageProvider, type FileSaveData } from '../interfaces';
 import { NotebookEntity, NotebookActivityEntity } from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
+import { FileRecordSet } from './FileRecordSet';
 
 export class NotebookRepository implements INotebookRepository {
   constructor(private storage: IStorageProvider) {}
@@ -8,30 +9,63 @@ export class NotebookRepository implements INotebookRepository {
   async saveNotebook(
     notebookData: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
   ): Promise<NotebookEntity> {
-    const now = Date.now();
-    const existing = await this.storage.get<NotebookEntity>(
-      DB_CONFIG.STORES.NOTEBOOKS,
-      notebookData.id
+    return this.persistNotebook(notebookData);
+  }
+
+  async saveNotebookSnapshot(
+    file: FileSaveData,
+    notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
+  ) {
+    if (file.notebookId !== notebook.id) throw new Error('Snapshot notebook identity mismatch');
+    const records = new FileRecordSet(file, { forceLocal: true });
+    await this.persistNotebook(notebook, records);
+    return records.metadata;
+  }
+
+  private async persistNotebook(
+    data: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>,
+    file?: FileRecordSet
+  ): Promise<NotebookEntity> {
+    const names: string[] = [DB_CONFIG.STORES.NOTEBOOKS, DB_CONFIG.STORES.ACTIVITIES];
+    if (file) names.push(DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.FILES_CONTENT);
+    let notebook!: NotebookEntity;
+    await this.storage.transaction(
+      names,
+      'readwrite',
+      (stores) =>
+        new Promise<void>((resolve, reject) => {
+          const notebooks = stores[DB_CONFIG.STORES.NOTEBOOKS];
+          const request = notebooks.get(data.id);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            try {
+              const now = Date.now();
+              const existing = request.result as NotebookEntity | undefined;
+              notebook = { ...data, createdAt: existing?.createdAt ?? now, updatedAt: now };
+              notebooks.put(notebook);
+              const activity: NotebookActivityEntity = {
+                id: `${data.id}::${now}`,
+                notebookId: data.id,
+                activityType: 'open',
+                timestamp: now,
+              };
+              stores[DB_CONFIG.STORES.ACTIVITIES].put(activity);
+              file?.writeTo(
+                stores[DB_CONFIG.STORES.FILES_METADATA],
+                stores[DB_CONFIG.STORES.FILES_CONTENT]
+              );
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          };
+        })
     );
-
-    const notebook: NotebookEntity = {
-      ...notebookData,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-
-    await this.storage.put(DB_CONFIG.STORES.NOTEBOOKS, notebook);
-    await this.logActivity(notebook.id, 'open');
-
     return notebook;
   }
 
   async getNotebook(id: string): Promise<NotebookEntity | null> {
-    const notebook = await this.storage.get<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS, id);
-    if (notebook) {
-      await this.updateAccessTime(id);
-    }
-    return notebook || null;
+    return (await this.accessNotebook(id)) ?? null;
   }
 
   async getAllNotebooks(
@@ -130,12 +164,35 @@ export class NotebookRepository implements INotebookRepository {
   }
 
   async updateAccessTime(id: string): Promise<void> {
-    const notebook = await this.storage.get<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS, id);
-    if (notebook) {
-      notebook.lastAccessedAt = Date.now();
-      notebook.accessCount += 1;
-      await this.storage.put(DB_CONFIG.STORES.NOTEBOOKS, notebook);
-    }
+    await this.accessNotebook(id);
+  }
+
+  private async accessNotebook(id: string): Promise<NotebookEntity | undefined> {
+    let notebook: NotebookEntity | undefined;
+    await this.storage.transaction(
+      [DB_CONFIG.STORES.NOTEBOOKS],
+      'readwrite',
+      (stores) =>
+        new Promise<void>((resolve, reject) => {
+          const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+          const request = store.get(id);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            try {
+              notebook = request.result as NotebookEntity | undefined;
+              if (notebook) {
+                notebook.lastAccessedAt = Date.now();
+                notebook.accessCount += 1;
+                store.put(notebook);
+              }
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          };
+        })
+    );
+    return notebook;
   }
 
   async getNotebookStats(id: string): Promise<{
@@ -173,16 +230,5 @@ export class NotebookRepository implements INotebookRepository {
       lastActivity,
       activities: notebookActivities.slice(0, 50),
     };
-  }
-
-  private async logActivity(notebookId: string, activityType: string): Promise<void> {
-    const timestamp = Date.now();
-    const activity: NotebookActivityEntity = {
-      id: `${notebookId}::${timestamp}`,
-      notebookId,
-      activityType: activityType as any,
-      timestamp,
-    };
-    await this.storage.put(DB_CONFIG.STORES.ACTIVITIES, activity);
   }
 }

@@ -13,6 +13,21 @@ export type {
   SplitFileEntity,
 };
 
+export interface FileSaveData {
+  notebookId: string;
+  filePath: string;
+  fileName: string;
+  content: string;
+  size: number;
+  lastModified: string;
+  remoteUrl?: string;
+}
+
+export interface FileSaveOptions {
+  maxFileSize?: number;
+  forceLocal?: boolean;
+}
+
 export interface IStorageProvider {
   initialize(): Promise<void>;
   close(): Promise<void>;
@@ -28,6 +43,10 @@ export interface IStorageProvider {
 }
 
 export interface INotebookRepository {
+  saveNotebookSnapshot(
+    file: FileSaveData,
+    notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
+  ): Promise<FileMetadataEntity>;
   saveNotebook(notebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>): Promise<NotebookEntity>;
   getNotebook(id: string): Promise<NotebookEntity | null>;
   getAllNotebooks(options?: {

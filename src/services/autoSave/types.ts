@@ -82,12 +82,18 @@ export type AutoSaveEventType =
   | 'load_started'
   | 'load_completed'
   | 'load_failed'
-  | 'dirty_changed';
+  | 'dirty_changed'
+  | 'error_cleared'
+  | 'initialization_failed';
 
 /**
  * AutoSave event payload
  */
 export interface AutoSaveEvent {
+  /** Complete authoritative state at this transition. */
+  state: Readonly<AutoSaveState>;
+  /** Revision acknowledged by save_completed, scoped to this service instance. */
+  revision?: number;
   type: AutoSaveEventType;
   notebookId?: string;
   status: AutoSaveStatus;
@@ -158,6 +164,9 @@ export interface IAutoSaveService {
 
   /** Subscribe to state change events */
   subscribe(listener: AutoSaveEventListener): () => void;
+
+  /** Clear the displayed service error. */
+  clearError(): void;
 
   /** Dispose and cleanup resources */
   dispose(): void;

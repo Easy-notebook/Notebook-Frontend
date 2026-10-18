@@ -4,7 +4,7 @@ import { AutoSaveStatus, type NotebookSnapshot } from './types';
 
 const storage = vi.hoisted(() => ({
   initialize: vi.fn(),
-  notebooks: { saveNotebook: vi.fn(), getNotebook: vi.fn() },
+  notebooks: { saveNotebook: vi.fn(), saveNotebookSnapshot: vi.fn(), getNotebook: vi.fn() },
   files: { saveFile: vi.fn(), getFile: vi.fn(), getFilesForNotebook: vi.fn() },
 }));
 vi.mock('../persistence/PersistenceService', () => ({
@@ -36,7 +36,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   storage.initialize.mockResolvedValue(undefined);
   storage.notebooks.saveNotebook.mockResolvedValue({});
-  storage.files.saveFile.mockResolvedValue({ id: 'file', hasLocalContent: true });
+  storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'file', hasLocalContent: true });
   storage.files.getFilesForNotebook.mockResolvedValue([]);
   service = AutoSaveService.getInstance({ debounceMs: 60000, maxRetries: 1, retryDelayMs: 0 });
 });
@@ -61,13 +61,13 @@ describe('single-writer autosave', () => {
       await service.saveNow(data);
       await service.saveNow({ ...data, notebookTitle: 'renamed' });
       expect(measured.filter((value) => value === '中文 🐍')).toHaveLength(1);
-      expect(storage.notebooks.saveNotebook.mock.calls[1][0].totalSize).toBe(
+      expect(storage.notebooks.saveNotebookSnapshot.mock.calls[1][1].totalSize).toBe(
         new NativeBlob(['中文 🐍']).size
       );
       data.cells[0].content = 'changed';
       await service.saveNow(data);
       expect(measured.filter((value) => value === 'changed')).toHaveLength(1);
-      expect(storage.notebooks.saveNotebook.mock.calls[2][0].totalSize).toBe(7);
+      expect(storage.notebooks.saveNotebookSnapshot.mock.calls[2][1].totalSize).toBe(7);
     } finally {
       vi.unstubAllGlobals();
     }
@@ -81,7 +81,7 @@ describe('single-writer autosave', () => {
       await expect(service.saveNow({ ...snapshot('empty'), cells: [] })).rejects.toThrow();
       expect(storage.notebooks.getNotebook).not.toHaveBeenCalled();
       expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
-      expect(storage.files.saveFile).not.toHaveBeenCalled();
+      expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
       expect(service.hasPending('notebook')).toBe(true);
     }
   );
@@ -101,7 +101,7 @@ describe('single-writer autosave', () => {
     invalid.cells[0].metadata = circular;
     await expect(service.saveNow(invalid)).rejects.toThrow();
     expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
-    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
     expect(service.hasPending('notebook')).toBe(true);
   });
   it.each([{}, [], { cells: null }, { cells: {} }, { cells: [], tasks: {} }])(
@@ -113,7 +113,7 @@ describe('single-writer autosave', () => {
         'Invalid notebook data structure'
       );
       expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
-      expect(storage.files.saveFile).not.toHaveBeenCalled();
+      expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
       expect(service.hasPending('notebook')).toBe(true);
     }
   );
@@ -133,12 +133,12 @@ describe('single-writer autosave', () => {
       'read unavailable'
     );
     expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
-    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
     expect(service.hasPending('notebook')).toBe(true);
     expect(service.getState().isDirty).toBe(true);
     storage.files.getFile.mockResolvedValue({ content: JSON.stringify({ cells: [], tasks: [] }) });
     await service.flush();
-    expect(storage.files.saveFile).toHaveBeenCalledTimes(1);
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
     expect(service.hasPending('notebook')).toBe(false);
   });
 
@@ -146,7 +146,7 @@ describe('single-writer autosave', () => {
     storage.files.getFile.mockResolvedValue({ content: '{broken json' });
     await expect(service.saveNow({ ...snapshot('empty'), cells: [] })).rejects.toThrow();
     expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
-    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
     expect(service.hasPending('notebook')).toBe(true);
   });
 
@@ -157,57 +157,68 @@ describe('single-writer autosave', () => {
     await expect(service.load('notebook')).rejects.toThrow();
     expect(events).toContain('load_failed');
     expect(events).not.toContain('load_completed');
-    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
   });
   it('coalesces queued edits and forces local persistence', async () => {
     await service.queueSave(snapshot('old'));
     await service.queueSave(snapshot('new'));
     await service.flush();
-    expect(storage.files.saveFile).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(storage.files.saveFile.mock.calls[0][0].content).title).toBe('new');
-    expect(storage.files.saveFile.mock.calls[0][1]).toEqual({ forceLocal: true });
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(storage.notebooks.saveNotebookSnapshot.mock.calls[0][0].content).title).toBe(
+      'new'
+    );
+    expect(storage.notebooks.saveNotebookSnapshot.mock.calls[0][1]).toMatchObject({
+      id: 'notebook',
+      name: 'new',
+    });
+    expect(storage.files.saveFile).not.toHaveBeenCalled();
+    expect(storage.notebooks.saveNotebook).not.toHaveBeenCalled();
     expect(service.getState().isDirty).toBe(false);
   });
 
   it('serializes immediate saves behind an in-flight revision', async () => {
     const gate = deferred();
-    storage.files.saveFile.mockImplementationOnce(async () => {
+    storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
       await gate.promise;
       return { id: 'old' };
     });
     const first = service.saveNow(snapshot('old'));
-    await vi.waitFor(() => expect(storage.files.saveFile).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1));
     const second = service.saveNow(snapshot('new'));
     expect(service.getState().isDirty).toBe(true);
-    expect(storage.files.saveFile).toHaveBeenCalledTimes(1);
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
     gate.resolve();
     await Promise.all([first, second]);
     expect(
-      storage.files.saveFile.mock.calls.map(([file]) => JSON.parse(file.content).title)
+      storage.notebooks.saveNotebookSnapshot.mock.calls.map(
+        ([file]) => JSON.parse(file.content).title
+      )
     ).toEqual(['old', 'new']);
     expect(service.hasPending()).toBe(false);
   });
 
   it('retries transient errors without losing the snapshot', async () => {
-    storage.files.saveFile.mockRejectedValueOnce(new Error('temporary'));
+    storage.notebooks.saveNotebookSnapshot.mockRejectedValueOnce(new Error('temporary'));
     await service.saveNow(snapshot('keep'));
-    expect(storage.files.saveFile).toHaveBeenCalledTimes(2);
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(2);
     expect(service.getState().isDirty).toBe(false);
   });
 
   it('replaces a failed in-flight revision with the latest edit without retrying stale content', async () => {
     const gate = deferred();
-    storage.files.saveFile.mockImplementationOnce(async () => {
+    storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
       await gate.promise;
       throw new Error('old revision failed');
     });
     const saving = service.saveNow(snapshot('old'));
-    await vi.waitFor(() => expect(storage.files.saveFile).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1));
     await service.queueSave(snapshot('new'));
     gate.resolve();
     await saving;
     expect(
-      storage.files.saveFile.mock.calls.map(([file]) => JSON.parse(file.content).title)
+      storage.notebooks.saveNotebookSnapshot.mock.calls.map(
+        ([file]) => JSON.parse(file.content).title
+      )
     ).toEqual(['old', 'new']);
     expect(service.hasPending()).toBe(false);
     expect(service.getState()).toMatchObject({ isDirty: false, error: null });
@@ -220,24 +231,26 @@ describe('single-writer autosave', () => {
     invalid.cells[0].metadata = circular;
     await expect(service.saveNow(invalid)).rejects.toThrow();
     await service.saveNow(snapshot('corrected'));
-    expect(storage.files.saveFile).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(storage.files.saveFile.mock.calls[0][0].content).title).toBe('corrected');
+    expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(storage.notebooks.saveNotebookSnapshot.mock.calls[0][0].content).title).toBe(
+      'corrected'
+    );
     expect(service.getState()).toMatchObject({ isDirty: false, pendingCount: 0, error: null });
   });
 
   it('retains failed writes and refuses to report a successful pause', async () => {
-    storage.files.saveFile.mockRejectedValue(new Error('disk full'));
+    storage.notebooks.saveNotebookSnapshot.mockRejectedValue(new Error('disk full'));
     await expect(service.pause(snapshot('unsaved'))).rejects.toThrow('disk full');
     expect(service.hasPending('notebook')).toBe(true);
     expect(service.getState().isDirty).toBe(true);
     expect(service.getStatus()).not.toBe(AutoSaveStatus.DISCONNECTED);
-    storage.files.saveFile.mockResolvedValue({ id: 'recovered' });
+    storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'recovered' });
     await service.flush();
     expect(service.getState().isDirty).toBe(false);
   });
 
   it('continues saving other notebooks when one exhausts retries', async () => {
-    storage.files.saveFile.mockImplementation(async (file) => {
+    storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
       if (file.notebookId === 'failed') throw new Error('failed notebook');
       return { id: 'saved' };
     });
@@ -250,7 +263,7 @@ describe('single-writer autosave', () => {
 
   it('does not propagate a different notebook writer failure to a waiting immediate save', async () => {
     const gate = deferred();
-    storage.files.saveFile.mockImplementation(async (file) => {
+    storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
       if (file.notebookId === 'failed') {
         await gate.promise;
         throw new Error('unavailable');
@@ -259,7 +272,7 @@ describe('single-writer autosave', () => {
     });
     const first = service.saveNow(snapshot('bad', 'failed'));
     const failed = expect(first).rejects.toThrow('unavailable');
-    await vi.waitFor(() => expect(storage.files.saveFile).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1));
     const second = service.saveNow(snapshot('good', 'healthy'));
     gate.resolve();
     await failed;
@@ -275,7 +288,7 @@ describe('single-writer autosave', () => {
     await service.queueSave(snapshot('later edit'));
     gate.resolve();
     await paused;
-    const calls = storage.files.saveFile.mock.calls;
+    const calls = storage.notebooks.saveNotebookSnapshot.mock.calls;
     expect(JSON.parse(calls[calls.length - 1][0].content).title).toBe('later edit');
     expect(service.isPaused()).toBe(true);
   });
