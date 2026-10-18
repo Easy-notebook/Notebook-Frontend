@@ -55,6 +55,8 @@ Coverage:
   maintenance lifecycle, and can mount again using real IndexedDB.
 - Missing historical database probes do not create databases; migration reads all matching
   source stores and preserves original source records.
+- Notebook imports commit atomically, concurrent equal imports become no-ops, conflicts roll
+  back the batch, and forced migration preserves edited and unrelated destination documents.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

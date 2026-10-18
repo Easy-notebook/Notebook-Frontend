@@ -2001,3 +2001,163 @@ test('historical reads and migration include every matching source store', async
   expect(result.files.map((file) => file.content).sort()).toEqual(['one', 'two']);
   expect(result.original.files).toEqual(result.read.files);
 });
+
+test('notebook imports are atomic, conflict-safe and idempotent across connections', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const second = new IndexedDBStorageProvider();
+    const repository = new NotebookRepository(provider);
+    const notebook = {
+      id: 'import',
+      name: 'Historical',
+      lastAccessedAt: 1,
+      accessCount: 1,
+      cacheEnabled: true,
+    };
+    const file = (path, content) => ({
+      notebookId: 'import',
+      filePath: path,
+      fileName: path,
+      content,
+      size: content.length,
+      lastModified: 'old',
+    });
+    const S = DB_CONFIG.STORES;
+    const failed = new NotebookRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('import aborted');
+        }),
+    });
+    let aborted;
+    try {
+      await failed.importNotebook(notebook, [file('a', 'one'), file('b', 'two')]);
+    } catch (error) {
+      aborted = error.message;
+    }
+    const afterAbort = await Promise.all([
+      provider.getAll(S.NOTEBOOKS),
+      provider.getAll(S.FILES_METADATA),
+      provider.getAll(S.FILES_CONTENT),
+      provider.getAll(S.ACTIVITIES),
+    ]);
+    const concurrent = await Promise.all([
+      repository.importNotebook(notebook, [file('a', 'one'), file('b', 'two')]),
+      new NotebookRepository(second).importNotebook(notebook, [file('a', 'one'), file('b', 'two')]),
+    ]);
+    const original = await provider.get(S.NOTEBOOKS, 'import');
+    await provider.put(S.NOTEBOOKS, { ...original, name: 'Edited name' });
+    let conflict;
+    try {
+      await repository.importNotebook(notebook, [file('c', 'new'), file('a', 'different')]);
+    } catch (error) {
+      conflict = error.message;
+    }
+    const repeat = await repository.importNotebook(notebook, [file('a', 'one'), file('b', 'two')]);
+    const after = await provider.get(S.NOTEBOOKS, 'import');
+    const bodies = await provider.getAll(S.FILES_CONTENT);
+    const activities = await provider.getAll(S.ACTIVITIES);
+    const merged = await repository.importNotebook(notebook, [
+      file('a', 'one'),
+      file('c', 'three'),
+    ]);
+    const afterMerge = await provider.get(S.NOTEBOOKS, 'import');
+    let sourceConflict;
+    try {
+      await repository.importNotebook(notebook, [file('d', 'one'), file('d', 'two')]);
+    } catch (error) {
+      sourceConflict = error.message;
+    }
+    const invalidBody = await provider.get(S.FILES_CONTENT, 'import::d');
+    await provider.close();
+    await second.close();
+    return {
+      aborted,
+      afterAbort,
+      concurrent,
+      conflict,
+      repeat,
+      after,
+      bodies,
+      activities,
+      merged,
+      afterMerge,
+      sourceConflict,
+      invalidBody,
+    };
+  });
+  expect(result.aborted).toBe('import aborted');
+  expect(result.afterAbort).toEqual([[], [], [], []]);
+  expect(result.concurrent.sort()).toEqual([0, 2]);
+  expect(result.conflict).toContain('Destination file conflict');
+  expect(result.repeat).toBe(0);
+  expect(result.after).toMatchObject({
+    name: 'Edited name',
+    fileCount: 2,
+    totalSize: 6,
+    retention: 'persistent',
+  });
+  expect(result.bodies.map((file) => file.content).sort()).toEqual(['one', 'two']);
+  expect(result.activities).toHaveLength(1);
+  expect(result.merged).toBe(1);
+  expect(result.afterMerge).toMatchObject({ name: 'Edited name', fileCount: 3, totalSize: 11 });
+  expect(result.sourceConflict).toContain('Conflicting source file');
+  expect(result.invalidBody).toBeUndefined();
+});
+
+test('forced historical migration preserves destination edits and unrelated notebooks', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DataMigration, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const notebooks = new NotebookRepository(provider);
+    const metadata = (id) => ({
+      id,
+      name: id,
+      lastAccessedAt: 1,
+      accessCount: 1,
+      cacheEnabled: true,
+    });
+    await notebooks.importNotebook(metadata('history'), [
+      {
+        notebookId: 'history',
+        filePath: 'a',
+        fileName: 'a',
+        content: 'edited',
+        size: 6,
+        lastModified: 'now',
+      },
+    ]);
+    await notebooks.saveNotebook(metadata('unrelated'));
+    await new Promise((resolve, reject) => {
+      const open = indexedDB.open('easyremote-file-cache', 1);
+      open.onupgradeneeded = () =>
+        open.result
+          .createObjectStore('files', { keyPath: 'id' })
+          .put({ id: 'a', notebookId: 'history', path: 'a', name: 'a', content: 'old', size: 3 });
+      open.onsuccess = () => {
+        open.result.close();
+        resolve();
+      };
+      open.onerror = () => reject(open.error);
+    });
+    const needed = await DataMigration.isMigrationNeeded();
+    const stats = await DataMigration.forceMigration();
+    const after = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    const body = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'history::a');
+    await provider.close();
+    return { needed, stats, after, body };
+  });
+  expect(result.needed).toBe(true);
+  expect(result.stats).toMatchObject({ notebooksMigrated: 0, filesMigrated: 0 });
+  expect(result.stats.errors).toHaveLength(1);
+  expect(result.stats.errors[0]).toContain('Destination file conflict');
+  expect(result.after.map((book) => book.id).sort()).toEqual(['history', 'unrelated']);
+  expect(result.body.content).toBe('edited');
+});

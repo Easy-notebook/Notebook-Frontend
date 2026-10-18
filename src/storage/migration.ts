@@ -35,12 +35,6 @@ export class DataMigration {
    */
   static async isMigrationNeeded(): Promise<boolean> {
     try {
-      // Check if we have any notebooks in the new system
-      const notebooks = await persistenceService.notebooks.getAllNotebooks({ limit: 1 });
-      if (notebooks.length > 0) {
-        return false; // Already have data in new system
-      }
-
       // Check if legacy databases exist with data
       for (const dbName of LEGACY_DB_NAMES) {
         const hasLegacyData = await this.checkLegacyDatabase(dbName);
@@ -162,23 +156,19 @@ export class DataMigration {
           totalSize: 0,
           cacheEnabled: true,
         };
-        await persistenceService.notebooks.saveNotebook(notebook);
-        stats.notebooksMigrated++;
-        for (const file of files) {
-          try {
-            await persistenceService.files.saveFile({
-              notebookId: file.notebookId,
-              filePath: file.path,
-              fileName: file.name,
-              content: file.content || '',
-              lastModified: file.lastModified || new Date().toISOString(),
-              size: file.size || 0,
-            });
-            stats.filesMigrated++;
-          } catch (error) {
-            stats.errors.push(`Failed to migrate file ${file.path}: ${error}`);
-          }
-        }
+        const imported = await persistenceService.notebooks.importNotebook(
+          notebook,
+          files.map((file) => ({
+            notebookId: file.notebookId,
+            filePath: file.path,
+            fileName: file.name,
+            content: file.content || '',
+            lastModified: file.lastModified || new Date().toISOString(),
+            size: file.size || 0,
+          }))
+        );
+        if (imported > 0) stats.notebooksMigrated++;
+        stats.filesMigrated += imported;
       } catch (error) {
         stats.errors.push(`Failed to migrate notebook ${notebookId}: ${error}`);
       }
@@ -187,24 +177,8 @@ export class DataMigration {
     return stats;
   }
 
-  /**
-   * Force migration by clearing new database first
-   */
-  static async forceMigration(): Promise<MigrationStats> {
-    console.log('Performing force migration - clearing new database first');
-
-    try {
-      // Clear all data in new database
-      const notebooks = await persistenceService.notebooks.getAllNotebooks();
-      for (const notebook of notebooks) {
-        await persistenceService.notebooks.deleteNotebook(notebook.id);
-      }
-
-      // Now perform migration
-      return await this.migrate();
-    } catch (error) {
-      console.error('Force migration failed:', error);
-      throw error;
-    }
+  /** Retry historical imports without deleting or overwriting destination documents. */
+  static forceMigration(): Promise<MigrationStats> {
+    return this.migrate();
   }
 }

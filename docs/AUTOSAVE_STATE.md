@@ -212,7 +212,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs fifty-eight isolated Playwright cases against production modules:
+`npm run test:browser` runs sixty isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -497,12 +497,27 @@ source read and are awaited without an independent source timeout.
 Eight deterministic reader tests cover completion, timeout, late callbacks, blocked
 opens, abort and version change. Native tests verify absent probes leave no database,
 multiple source stores are imported, and historical source records remain unchanged.
-This checkpoint does not establish atomic or conflict-safe destination imports.
+NotebookImport captures a notebook batch before asynchronous admission. One readwrite
+transaction compares destination metadata/body records, adds missing files, recomputes
+counters and appends activity. Equal local bodies are skipped without changing destination
+metadata. Conflicting source duplicates or destination records reject the entire notebook.
+Concurrent imports serialize on the same store scope; a retry creates no extra activity.
+New records use add, so an unexpected key collision aborts instead of overwriting.
+
+Migration now calls this operation instead of separate notebook/file saves. forceMigration
+retries the same non-destructive path and never clears destination documents. Startup
+probes source databases even when the destination already has other notebooks. Counts
+include only newly committed files and notebooks with committed additions. Atomicity is
+per notebook, not across every historical database; errors remain visible in MigrationStats.
+Native tests cover rollback, two concurrent connections, repeat no-op, missing-file merge,
+source/destination conflicts, preserved names and forced migration preservation.
 
 ## Remaining lifecycle work
 
-Historical destination migration still needs atomicity, idempotence and conflict handling.
-forceMigration still deletes destination notebooks before importing and requires redesign.
+Historical migration conflicts are reported and preserve both sources; there is no conflict
+resolution UI or automatic choice of a winning historical revision. Startup probing is
+repeatable but has no persistent completion journal. Historical input validation and
+orphan-record repair require further review.
 
 Retention now enforces cache count, inactivity and an application content budget.
 The production caller audit found no explicit evictable notebook creation. Current editing

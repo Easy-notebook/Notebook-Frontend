@@ -13,9 +13,14 @@ import {
 import { DB_CONFIG } from '../../../storage/database';
 import { NotebookDeletion } from './NotebookDeletion';
 import { FileRecordSet } from './FileRecordSet';
+import { NotebookImport } from './NotebookImport';
 
 export class NotebookRepository implements INotebookRepository {
   constructor(private storage: IStorageProvider) {}
+
+  async importNotebook(notebook: NotebookSaveData, files: FileSaveData[]): Promise<number> {
+    return new NotebookImport(notebook, files).commit(this.storage);
+  }
 
   async saveNotebook(notebookData: NotebookSaveData): Promise<NotebookEntity> {
     return this.persistNotebook({ ...notebookData });
