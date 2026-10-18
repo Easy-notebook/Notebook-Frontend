@@ -8,6 +8,7 @@ import { NotebookSaveQueue } from './NotebookSaveQueue';
 import { NotebookSaveScheduler } from './NotebookSaveScheduler';
 import { NotebookWriteBaseline } from './NotebookWriteBaseline';
 import { PersistenceService } from '../persistence/PersistenceService';
+import { NotebookConflictError } from '../persistence/NotebookConflictError';
 import type { IPersistenceService, NotebookSnapshotCondition } from '../persistence/interfaces';
 import type { Cell } from '@Store/models';
 import { notebookLog, storageLog } from '@Utils/logger';
@@ -81,6 +82,7 @@ export class AutoSaveService implements IAutoSaveService {
     this.scheduler = new NotebookSaveScheduler(this.saveQueue, {
       maxRetries: this.config.maxRetries,
       retryDelayMs: this.config.retryDelayMs,
+      retryable: (error) => !(error instanceof NotebookConflictError),
       canRun: () => this.canProcessSaves(),
       write: (snapshot) => this.performSave(snapshot),
       committed: (snapshot) =>
@@ -699,7 +701,11 @@ export class AutoSaveService implements IAutoSaveService {
     if (snapshot.cells?.length) return this.writeBaseline.condition(snapshot.notebookId);
     const observed = await this.readStoredNotebook(snapshot.notebookId);
     if (observed.notebook?.cells.length) {
-      throw new Error('Refusing to overwrite an existing notebook with an empty snapshot');
+      throw new NotebookConflictError(
+        snapshot.notebookId,
+        `notebook_${snapshot.notebookId}.json`,
+        'empty_overwrite'
+      );
     }
     return this.writeBaseline.condition(snapshot.notebookId, observed.content);
   }

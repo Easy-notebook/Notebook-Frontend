@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { NotebookConflictError } from '../persistence/NotebookConflictError';
 import { AutoSaveService } from './AutoSaveService';
 import { AutoSaveStatus, type NotebookSnapshot } from './types';
 
@@ -760,3 +761,19 @@ it.each([false, true])(
     });
   }
 );
+
+it('publishes one blocked failure for a typed storage conflict without automatic retries', async () => {
+  const conflict = new NotebookConflictError('notebook', 'notebook_notebook.json');
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(conflict);
+  const failures: string[] = [];
+  service.subscribe((event) => {
+    if (event.type === 'save_failed') failures.push(event.error!);
+  });
+  await expect(service.saveNow(snapshot('conflict'))).rejects.toBe(conflict);
+  expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(1);
+  expect(failures).toEqual([conflict.message]);
+  expect(service.getSaveProgress('notebook')).toMatchObject({
+    phase: 'blocked',
+    committedRevision: 0,
+  });
+});

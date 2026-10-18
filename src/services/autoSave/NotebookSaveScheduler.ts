@@ -16,6 +16,7 @@ interface Retry {
 interface SchedulerOptions {
   maxRetries: number;
   retryDelayMs: number;
+  retryable?: (error: unknown) => boolean;
   canRun: () => boolean;
   write: (snapshot: QueuedSnapshot) => Promise<void>;
   committed: (snapshot: QueuedSnapshot) => void;
@@ -141,9 +142,10 @@ export class NotebookSaveScheduler {
     try {
       await this.options.write(snapshot);
     } catch (error) {
-      const exhausted = failures >= this.options.maxRetries;
-      this.queue.fail(snapshot, error, exhausted);
-      if (this.queue.get(id)?.revision !== snapshot.revision) {
+      const terminal = this.options.retryable?.(error) === false;
+      const exhausted = terminal || failures >= this.options.maxRetries;
+      this.queue.fail(snapshot, error, exhausted, terminal);
+      if (!terminal && this.queue.get(id)?.revision !== snapshot.revision) {
         this.retries.delete(id);
       } else if (exhausted) {
         this.retries.delete(id);

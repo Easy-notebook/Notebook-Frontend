@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session gate passes 260 tests across twenty-two files. Coverage includes
+The storage/persistence/autosave/session gate passes 263 tests across twenty-two files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -220,7 +220,7 @@ profile, and the native unsaved-exit dialog followed by successful save/reload a
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 260 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 263 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -583,7 +583,7 @@ The condition is captured at invocation; existing callers may omit it.
 
 Native tests interleave another connection's nonempty commit between the autosave check
 and write, with both missing and initially empty content. The conditional commit rejects,
-the queue retains its revision, and retry rejects the now-nonempty document. Additional
+the queue retains its revision and blocks immediately without an automatic retry. Additional
 coverage verifies matching revisions succeed and orphan-body conflicts preserve all stores.
 Empty-save validation now shares the fixed edit baseline described below. Byte equality
 is not a durable revision token and does not detect identical-content ABA changes.
@@ -609,6 +609,22 @@ Unit tests cover pending/committed edits overtaking loads and baseline ownership
 This provides optimistic content conflict detection for AutoSaveService clients, not merging,
 a revision history, cross-device coordination or protection from unconditional repository
 callers. Conflict resolution UI and durable recovery of the losing local edit remain work.
+
+## Terminal save conflicts
+
+NotebookConflictError identifies content-version mismatch and empty-overwrite refusal
+without classifying errors by message text. Autosave supplies the retry policy to its
+storage-independent scheduler: these semantic conflicts block immediately, while ordinary
+write failures retain the bounded retry behavior. The queue remains dirty and does not
+acknowledge the rejected revision.
+
+A terminal conflict also blocks a newer local snapshot admitted during the failing write.
+The newest snapshot remains queued and affected barriers reject; it is not automatically
+written against the same incompatible baseline. The active drain continues other notebooks.
+An explicit later flush can attempt the retained revision, still under the original condition.
+Deterministic tests verify no retry timer, one write attempt, independent notebook progress,
+barrier rejection and latest-snapshot preservation. Native cross-window tests verify the
+original version conflict is now returned immediately rather than masked by a retry.
 
 ## Remaining lifecycle work
 

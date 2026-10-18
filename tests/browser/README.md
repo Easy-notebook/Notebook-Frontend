@@ -65,7 +65,7 @@ Coverage:
   leave neither partial receipts nor deletion markers. Deleted imports stay deleted across
   reload and forced retry, including attempts from previously unseen historical sources.
 - Empty autosave conditions reject a competing connection's intervening nonempty commit;
-  retries remain pending, matching revisions succeed, and orphan bodies are never overwritten
+  typed conflicts block immediately while edits remain pending, matching revisions succeed, and orphan bodies are never overwritten
   through an absent-content condition.
 - Two actual pages keep independent edit baselines: own sequential saves succeed, unloaded
   overwrites and stale nonempty edits reject, retry/load cannot silently rebase pending edits,

@@ -81,15 +81,15 @@ export class NotebookSaveQueue {
     }
   }
 
-  fail(snapshot: QueuedSnapshot, error: unknown, exhausted: boolean): void {
+  fail(snapshot: QueuedSnapshot, error: unknown, exhausted: boolean, terminal = false): void {
     const entry = this.writing(snapshot);
     const superseded = entry.snapshot?.revision !== snapshot.revision;
     this.update(entry, {
       inFlightRevision: null,
-      phase: superseded ? 'scheduled' : exhausted ? 'blocked' : 'retry_wait',
+      phase: terminal ? 'blocked' : superseded ? 'scheduled' : exhausted ? 'blocked' : 'retry_wait',
       error: error instanceof Error ? error.message : String(error),
     });
-    if (!superseded && exhausted) {
+    if (terminal || (!superseded && exhausted)) {
       for (const barrier of entry.barriers) barrier.reject(error);
       entry.barriers.clear();
     }

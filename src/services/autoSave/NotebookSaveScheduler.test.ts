@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NotebookSaveQueue } from './NotebookSaveQueue';
 import { NotebookSaveScheduler } from './NotebookSaveScheduler';
 
-function setup(retryDelayMs = 1000) {
+function setup(retryDelayMs = 1000, retryable?: (error: unknown) => boolean) {
   const queue = new NotebookSaveQueue();
   const write = vi.fn().mockResolvedValue(undefined);
   const committed = vi.fn();
@@ -11,6 +11,7 @@ function setup(retryDelayMs = 1000) {
   const scheduler = new NotebookSaveScheduler(queue, {
     maxRetries: 1,
     retryDelayMs,
+    retryable,
     write,
     committed,
     failed,
@@ -200,4 +201,49 @@ describe('scoped single-writer scheduler', () => {
     expect(write).toHaveBeenCalledTimes(3);
     expect(queue.progress('a')?.phase).toBe('clean');
   });
+});
+
+it('blocks nonretryable failures immediately while saving independent notebooks', async () => {
+  vi.useFakeTimers();
+  const { scheduler, enqueue, write, queue } = setup(60000, () => false);
+  write.mockImplementation(async (snapshot) => {
+    if (snapshot.notebookId === 'conflict') throw new Error('conflict');
+  });
+  enqueue('conflict');
+  enqueue('safe');
+  await expect(scheduler.drain()).rejects.toThrow('conflict');
+  expect(write.mock.calls.map(([snapshot]) => snapshot.notebookId)).toEqual(['conflict', 'safe']);
+  expect(queue.progress('conflict')).toMatchObject({ phase: 'blocked', committedRevision: 0 });
+  expect(queue.has('safe')).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('retains superseding edits but rejects their barriers when the active write hits a terminal conflict', async () => {
+  const { scheduler, enqueue, write, queue } = setup(60000, () => false);
+  const gate = deferred();
+  const started = deferred();
+  write.mockImplementationOnce(async () => {
+    started.resolve();
+    await gate.promise;
+    throw new Error('conflict');
+  });
+  enqueue('book');
+  const drain = expect(scheduler.drain('book')).rejects.toThrow('conflict');
+  await started.promise;
+  const latest = enqueue('book');
+  const barrier = expect(queue.createBarrier('book', latest.revision).completion).rejects.toThrow(
+    'conflict'
+  );
+  gate.resolve();
+  await Promise.all([drain, barrier]);
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(queue.get('book')).toBe(latest);
+  expect(queue.progress('book')).toMatchObject({
+    phase: 'blocked',
+    currentRevision: latest.revision,
+    committedRevision: 0,
+  });
+  await scheduler.drain('book');
+  expect(write).toHaveBeenCalledTimes(2);
+  expect(queue.has('book')).toBe(false);
 });

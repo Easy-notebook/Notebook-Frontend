@@ -16,6 +16,7 @@ import { DB_CONFIG } from '../../../storage/database';
 import { NotebookDeletion } from './NotebookDeletion';
 import { FileRecordSet } from './FileRecordSet';
 import { NotebookImport } from './NotebookImport';
+import { NotebookConflictError } from '../NotebookConflictError';
 
 export class NotebookRepository implements INotebookRepository {
   constructor(private storage: IStorageProvider) {}
@@ -72,7 +73,7 @@ export class NotebookRepository implements INotebookRepository {
           condition.expectedContent === null
             ? !metadata && !current
             : metadata?.hasLocalContent && current?.content === condition.expectedContent;
-        if (!matches) throw new Error('Notebook content changed before snapshot commit');
+        if (!matches) throw new NotebookConflictError(data.id, file.metadata.filePath);
       }
       const retained = file ? files.filter((record) => record.id !== file.metadata.id) : files;
       const now = Date.now();

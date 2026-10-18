@@ -2559,7 +2559,7 @@ for (const initiallyPresent of [false, true]) {
     }, initiallyPresent);
     expect(result.injected).toBe(true);
     expect(result.commitErrors).toEqual(['Notebook content changed before snapshot commit']);
-    expect(result.error).toContain('Refusing to overwrite');
+    expect(result.error).toContain('content changed');
     expect(result.pending).toBe(true);
     expect(result.progress.committedRevision).toBe(0);
     expect(JSON.parse(result.saved.content).cells[0].content).toBe('other window');
