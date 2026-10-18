@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave gate passes 122 tests across nine files. Coverage includes
+The persistence/autosave/session gate passes 132 tests across eleven files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -111,6 +111,18 @@ admitting unrelated pending work. Internal teardown waits for the worker itself,
 retry timers and stops further attempts after the current write finishes. Discard and
 normal idle completion release retry timers. The scheduler performs no persistence
 serialization or UI publication; those responsibilities remain in AutoSaveService.
+
+## Session boundary
+
+Switching notebooks flushes the departing notebook by queue identity, without waiting
+for unrelated saves or requiring the editor to still show that notebook. Disconnect
+submits a final editor snapshot only when its ID matches the active session; otherwise
+it drains already accepted snapshots without relabeling another notebook's content.
+
+A failed pause keeps the session identity and reports a session error, allowing a
+subsequent disconnect to retry persistence. A failed departure flush restores the
+previous session phase before loading begins. Successful connection clears stale
+operation errors. Six session regressions cover these ownership and retry boundaries.
 
 ## Remaining lifecycle work
 

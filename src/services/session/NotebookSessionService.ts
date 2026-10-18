@@ -115,6 +115,7 @@ export class NotebookSessionService implements ISessionService {
         }
         // Update session state without reloading
         this.state.currentNotebookId = notebookId;
+        this.state.error = null;
         this.setStatus(SessionStatus.CONNECTED);
         this.emit({
           type: 'session_loaded',
@@ -142,6 +143,7 @@ export class NotebookSessionService implements ISessionService {
 
       // Update state
       this.state.currentNotebookId = notebookId;
+      this.state.error = null;
       this.setStatus(SessionStatus.CONNECTED);
 
       this.emit({
@@ -209,14 +211,18 @@ export class NotebookSessionService implements ISessionService {
       if (currentNotebookId) {
         // Get current notebook state from notebookStore for final save
         const notebookStore = await this.getNotebookStore();
-        const snapshot = {
-          notebookId: currentNotebookId,
-          notebookTitle: notebookStore.notebookTitle || '',
-          cells: notebookStore.cells || [],
-          tasks: notebookStore.tasks || [],
-          timestamp: Date.now(),
-        };
+        const snapshot =
+          notebookStore.notebookId === currentNotebookId
+            ? {
+                notebookId: currentNotebookId,
+                notebookTitle: notebookStore.notebookTitle || '',
+                cells: notebookStore.cells || [],
+                tasks: notebookStore.tasks || [],
+                timestamp: Date.now(),
+              }
+            : undefined;
 
+        // Queued snapshots retain their own identity when the editor has moved on.
         await this.autoSave.pause(snapshot);
       } else {
         await this.autoSave.pause();
@@ -240,9 +246,14 @@ export class NotebookSessionService implements ISessionService {
       }
     } catch (error) {
       notebookLog.error('Failed to disconnect', { error });
-      // Still transition to disconnected state
-      this.state.currentNotebookId = null;
-      this.setStatus(SessionStatus.DISCONNECTED);
+      // A failed pause leaves the accepted edits and active session available for retry.
+      this.state.error = error instanceof Error ? error.message : 'Disconnect failed';
+      this.emit({
+        type: 'session_error',
+        notebookId: currentNotebookId || undefined,
+        error: this.state.error,
+        timestamp: Date.now(),
+      });
       throw error;
     }
   }
@@ -257,6 +268,7 @@ export class NotebookSessionService implements ISessionService {
     }
 
     const previousNotebookId = this.state.currentNotebookId;
+    const previousStatus = this.state.status;
 
     // Same notebook, no switch needed
     if (previousNotebookId === notebookId) {
@@ -276,15 +288,10 @@ export class NotebookSessionService implements ISessionService {
         });
       }
 
-      // Wait for any pending auto-save operations
-      await this.autoSave.waitForComplete();
-
-      // Save current notebook state if connected
+      // The queue owns notebook identity. A different editor snapshot does not
+      // invalidate already accepted edits, and unrelated saves cannot gate navigation.
       if (previousNotebookId && !this.autoSave.isPaused()) {
-        const notebookStore = await this.getNotebookStore();
-        if (notebookStore.notebookId === previousNotebookId) {
-          await this.autoSave.flush(previousNotebookId);
-        }
+        await this.autoSave.flush(previousNotebookId);
       }
 
       // Load new notebook
@@ -308,6 +315,7 @@ export class NotebookSessionService implements ISessionService {
     } catch (error) {
       notebookLog.error('Failed to switch notebooks', { notebookId, error });
       this.state.error = error instanceof Error ? error.message : 'Switch failed';
+      if (this.state.status === SessionStatus.SWITCHING) this.setStatus(previousStatus);
 
       this.emit({
         type: 'session_error',
