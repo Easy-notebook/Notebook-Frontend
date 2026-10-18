@@ -46,3 +46,19 @@ revision-bound flush barriers, cross-window write conflicts, or unify the separa
 legacy IndexedDBManager. Those responsibilities require further implementation and
 integration verification. Existing uncommitted editor/repository work is outside
 this commit.
+
+## React initialization ownership
+
+PersistenceProvider now waits for its preceding cleanup promise before initialization.
+This matters during React StrictMode effect replay: the connection intentionally
+rejects operations during closing. Cancelled effects cannot start a deferred opening
+or publish late initialization results. Opening/ready/failed UI states expose a retry
+path rather than leaving failed initialization as a permanent blank screen. Cleanup
+rejections are observed even after unmount, and retries again wait for cleanup.
+
+The combined storage/autosave gate passes 85 tests, including six provider lifecycle
+component regressions (StrictMode, pending cleanup, late completion/rejection, failure
+retry and cleanup failure). These tests use a mock service and jsdom, not a native
+browser startup audit. Full-project typecheck remains at 305 diagnostics with none in
+PersistenceContext; targeted lint has zero errors and the pre-existing mixed-export
+Fast Refresh warning. Autosave shutdown and per-notebook state machines remain open.
