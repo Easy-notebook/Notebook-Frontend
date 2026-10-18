@@ -33,6 +33,7 @@ export class NotebookSessionService implements ISessionService {
   private notifying = false;
   private autoSave: AutoSaveService;
   private isInitialized = false;
+  private transitionTail: Promise<void> = Promise.resolve();
   private readonly isDevelopment = import.meta.env.DEV === true;
 
   private constructor() {
@@ -52,7 +53,11 @@ export class NotebookSessionService implements ISessionService {
   /**
    * Initialize the session service
    */
-  public async initialize(): Promise<void> {
+  public initialize(): Promise<void> {
+    return this.enqueueTransition(() => this.initializeSession());
+  }
+
+  private async initializeSession(): Promise<void> {
     if (this.isInitialized) return;
 
     try {
@@ -76,7 +81,11 @@ export class NotebookSessionService implements ISessionService {
    * Connect to a notebook session (load and activate)
    * Used when navigating to /workspace/:id
    */
-  public async connect(notebookId: string): Promise<NotebookSession | null> {
+  public connect(notebookId: string): Promise<NotebookSession | null> {
+    return this.enqueueTransition(() => this.connectNotebook(notebookId));
+  }
+
+  private async connectNotebook(notebookId: string): Promise<NotebookSession | null> {
     this.validateNotebookId(notebookId);
 
     // If already connected to this notebook, skip
@@ -163,7 +172,11 @@ export class NotebookSessionService implements ISessionService {
    * Disconnect from current session (clear and pause)
    * Used when navigating to "/" route
    */
-  public async disconnect(): Promise<void> {
+  public disconnect(): Promise<void> {
+    return this.enqueueTransition(() => this.disconnectNotebook());
+  }
+
+  private async disconnectNotebook(): Promise<void> {
     const currentNotebookId = this.state.currentNotebookId;
 
     // Already disconnected
@@ -234,7 +247,11 @@ export class NotebookSessionService implements ISessionService {
    * Switch to a different notebook session
    * Handles saving current state and loading new notebook
    */
-  public async switchSession(notebookId: string): Promise<NotebookSession | null> {
+  public switchSession(notebookId: string): Promise<NotebookSession | null> {
+    return this.enqueueTransition(() => this.switchNotebook(notebookId));
+  }
+
+  private async switchNotebook(notebookId: string): Promise<NotebookSession | null> {
     this.validateNotebookId(notebookId);
 
     const previousNotebookId = this.state.currentNotebookId;
@@ -265,7 +282,7 @@ export class NotebookSessionService implements ISessionService {
       }
 
       // Load new notebook
-      const session = await this.connect(notebookId);
+      const session = await this.connectNotebook(notebookId);
 
       this.emit({
         type: 'session_switched',
@@ -385,6 +402,17 @@ export class NotebookSessionService implements ISessionService {
       this.notifications.length = 0;
       this.notifying = false;
     }
+  }
+
+  /** Serialize complete transitions, including their persistence and publication. */
+  private enqueueTransition<T>(operation: () => Promise<T>): Promise<T> {
+    const completion = this.transitionTail.then(operation);
+    // Failure belongs to the caller; the next accepted command still gets a turn.
+    this.transitionTail = completion.then(
+      () => undefined,
+      () => undefined
+    );
+    return completion;
   }
 
   private validateNotebookId(notebookId: string): void {

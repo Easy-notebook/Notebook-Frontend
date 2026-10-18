@@ -27,7 +27,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The persistence/autosave/session gate passes 141 tests across eleven files. Coverage includes
+The persistence/autosave/session gate passes 148 tests across eleven files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -122,7 +122,7 @@ it drains already accepted snapshots without relabeling another notebook's conte
 A failed pause keeps the session identity and reports a session error, allowing a
 subsequent disconnect to retry persistence. A failed departure flush restores the
 previous session phase before loading begins. Successful connection clears stale
-operation errors. Fifteen session regressions cover ownership, retries and load publication. Connection
+operation errors. Twenty-two session regressions cover ownership, retries and load publication. Connection
 success uses a fresh post-load store snapshot and verifies its notebook identity.
 A false loader result rejects before publishing connected/loaded; a partially updated
 store carrying an error is not reused as a successful cached load. Cached and loaded
@@ -138,6 +138,21 @@ subscription on hot disposal. Commands delegate directly to the service, includi
 error dismissal; their rejected promises do not overwrite a newer published state.
 Initialization failure and invalid IDs also publish service-owned errors. A successful
 initialization retry clears the error, and successful connection records its timestamp.
+
+## Session transition ownership
+
+The session service serializes initialize/connect/disconnect/switch commands in
+admission order. Each command includes its storage work and state publication;
+internal switch-to-connect composition does not reacquire the queue. The departing
+identity and same-notebook checks run when the command gets its turn, not when an
+earlier transition may still be pending. A rejected command releases ownership while
+preserving the caller's rejection. Commands submitted by event observers join the queue.
+
+This service boundary protects direct callers as well as route navigation. The route
+coordinator still coalesces pending destinations before dispatch; the service does not
+drop commands already accepted through its public API. Seven deferred/concurrent
+regressions cover switch order, pause-before-resume, duplicates, failure recovery,
+return navigation, observer submissions and initialization deduplication.
 
 ## Remaining lifecycle work
 

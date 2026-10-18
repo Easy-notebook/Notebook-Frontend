@@ -51,6 +51,108 @@ beforeEach(async () => {
 });
 
 describe('session storage ownership', () => {
+  it('serializes concurrent switches and flushes the notebook actually being departed', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const order: string[] = [];
+    mocks.autoSave.flush.mockImplementation(async (id) => {
+      order.push(`flush:${id}`);
+    });
+    mocks.store.loadFromDatabase.mockImplementation(async (id) => {
+      order.push(`load:${id}`);
+      if (id === 'b') await gate;
+      mocks.store.notebookId = id;
+      return true;
+    });
+    const b = service.switchSession('b');
+    const c = service.switchSession('c');
+    await vi.waitFor(() => expect(order).toContain('load:b'));
+    release();
+    await Promise.all([b, c]);
+    expect(order).toEqual(['flush:a', 'load:b', 'flush:b', 'load:c']);
+    expect(service.getCurrentNotebookId()).toBe('c');
+  });
+
+  it('finishes disconnect pause before reconnect can resume and load', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const order: string[] = [];
+    let paused = false;
+    mocks.autoSave.isPaused.mockImplementation(() => paused);
+    mocks.autoSave.pause.mockImplementation(async () => {
+      order.push('pause:start');
+      await gate;
+      paused = true;
+      order.push('pause:end');
+    });
+    mocks.autoSave.resume.mockImplementation(() => {
+      paused = false;
+      order.push('resume');
+    });
+    mocks.store.loadFromDatabase.mockImplementation(async (id) => {
+      order.push(`load:${id}`);
+      mocks.store.notebookId = id;
+      return true;
+    });
+    const disconnecting = service.disconnect();
+    const connecting = service.connect('b');
+    await vi.waitFor(() => expect(order).toContain('pause:start'));
+    release();
+    await Promise.all([disconnecting, connecting]);
+    expect(order).toEqual(['pause:start', 'pause:end', 'resume', 'load:b']);
+    expect(paused).toBe(false);
+    expect(service.isConnected()).toBe(true);
+  });
+
+  it('rechecks duplicate connect requests after the first load completes', async () => {
+    const results = await Promise.all([service.connect('b'), service.connect('b')]);
+    expect(mocks.store.loadFromDatabase).toHaveBeenCalledExactlyOnceWith('b');
+    expect(results[0]?.notebookId).toBe('b');
+    expect(results[1]).toBeNull();
+  });
+
+  it('releases transition ownership after failure so an accepted later command can proceed', async () => {
+    mocks.autoSave.flush.mockRejectedValueOnce(new Error('quota'));
+    const failed = expect(service.switchSession('b')).rejects.toThrow('quota');
+    const later = service.switchSession('c');
+    await Promise.all([failed, later]);
+    expect(mocks.store.loadFromDatabase).toHaveBeenCalledExactlyOnceWith('c');
+    expect(service.getState()).toMatchObject({
+      currentNotebookId: 'c',
+      status: SessionStatus.CONNECTED,
+      error: null,
+    });
+  });
+
+  it('does not skip a return to the current notebook while another connect is pending', async () => {
+    await Promise.all([service.connect('b'), service.connect('a')]);
+    expect(mocks.store.loadFromDatabase.mock.calls.map(([id]) => id)).toEqual(['b', 'a']);
+    expect(service.getCurrentNotebookId()).toBe('a');
+  });
+
+  it('queues commands submitted by connection observers after the active transition', async () => {
+    let leaving: Promise<void> | undefined;
+    service.subscribe((event) => {
+      if (event.type === 'session_loaded' && event.notebookId === 'b')
+        leaving = service.disconnect();
+    });
+    const connected = await service.connect('b');
+    expect(connected?.notebookId).toBe('b');
+    expect(leaving).toBeDefined();
+    await leaving;
+    expect(service.isDisconnected()).toBe(true);
+    expect(mocks.autoSave.pause).toHaveBeenCalledWith(expect.objectContaining({ notebookId: 'b' }));
+  });
+
+  it('shares initialization through the transition owner', async () => {
+    await Promise.all([service.initialize(), service.initialize()]);
+    expect(mocks.autoSave.initialize).toHaveBeenCalledTimes(1);
+  });
+
   it('projects cached connections and initial state from the service', async () => {
     const binding = createSessionStore(service);
     expect(binding.store.getState()).toMatchObject(service.getState());
