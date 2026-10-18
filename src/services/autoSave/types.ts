@@ -135,6 +135,9 @@ export interface IAutoSaveService {
   /** Get full current state */
   getState(): AutoSaveState;
 
+  /** Last save failure for each still-pending notebook; stable immutable snapshot. */
+  getSaveFailures(): Readonly<Record<string, string>>;
+
   /** Check if service is initialized */
   isInitialized(): boolean;
 

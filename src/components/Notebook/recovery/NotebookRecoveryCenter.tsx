@@ -33,7 +33,12 @@ export function NotebookRecoveryCenter() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<NotebookRecoveryRecord | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [saveFailures, setSaveFailures] = useState<Record<string, string>>({});
+  const autoSave = AutoSaveService.getInstance();
+  const subscribeToSaves = useMemo(
+    () => (listener: () => void) => autoSave.subscribe(() => listener()),
+    [autoSave]
+  );
+  const saveFailures = useSyncExternalStore(subscribeToSaves, autoSave.getSaveFailures);
   const preview = state.drafts.find((draft) => draft.id === previewId);
   const busy = state.phase === 'deleting' || state.phase === 'restoring';
 
@@ -42,29 +47,15 @@ export function NotebookRecoveryCenter() {
       void controller.refresh();
     };
     refresh();
-    const unsubscribe = AutoSaveService.getInstance().subscribe((event) => {
-      const id = event.notebookId;
-      if (event.type === 'save_failed') {
-        if (id)
-          setSaveFailures((previous) => ({
-            ...previous,
-            [id]: event.error ?? 'Your latest edits could not be saved.',
-          }));
-        refresh();
-      } else if (id && event.type === 'save_completed') {
-        setSaveFailures((previous) => {
-          const remaining = { ...previous };
-          delete remaining[id];
-          return remaining;
-        });
-      }
+    const unsubscribe = autoSave.subscribe((event) => {
+      if (event.type === 'save_failed') refresh();
     });
     window.addEventListener('focus', refresh);
     return () => {
       unsubscribe();
       window.removeEventListener('focus', refresh);
     };
-  }, [controller]);
+  }, [controller, autoSave]);
 
   const download = (draft: NotebookRecoveryRecord) => {
     setDownloadError(null);

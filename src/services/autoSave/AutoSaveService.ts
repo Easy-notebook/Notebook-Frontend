@@ -55,6 +55,7 @@ export class AutoSaveService implements IAutoSaveService {
 
   // Internal state
   private state: AutoSaveState;
+  private saveFailures: Readonly<Record<string, string>> = Object.freeze({});
   private lifecycle: ServiceLifecycle = { phase: 'active' };
   private readonly reads = new Set<Promise<unknown>>();
   private readonly writeBaseline = new NotebookWriteBaseline();
@@ -180,9 +181,10 @@ export class AutoSaveService implements IAutoSaveService {
     await this.initialization;
   }
 
-  /**
-   * Check if service is initialized
-   */
+  /** Stable immutable projection for views mounted after a save failure. */
+  public getSaveFailures = (): Readonly<Record<string, string>> => this.saveFailures;
+
+  /** Check if service is initialized. */
   public isInitialized(): boolean {
     return this.initialized;
   }
@@ -713,6 +715,16 @@ export class AutoSaveService implements IAutoSaveService {
       isDirty: this.saveQueue.size > 0,
       pendingCount: this.saveQueue.size,
     };
+    if (type === 'save_failed' && notebookId) {
+      this.saveFailures = Object.freeze({
+        ...this.saveFailures,
+        [notebookId]: this.state.error ?? 'Your latest edits could not be saved.',
+      });
+    } else {
+      const remaining = Object.entries(this.saveFailures).filter(([id]) => this.saveQueue.has(id));
+      if (remaining.length !== Object.keys(this.saveFailures).length)
+        this.saveFailures = Object.freeze(Object.fromEntries(remaining));
+    }
     const state = Object.freeze({ ...this.state });
     const event: AutoSaveEvent = Object.freeze({
       type,

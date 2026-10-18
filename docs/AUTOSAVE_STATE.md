@@ -56,7 +56,7 @@ immutable; status-change notifications carry the same complete transition snapsh
 
 ## Verification (2026-10-19)
 
-The storage/persistence/autosave/session/recovery gate passes 299 tests across twenty-five files. Coverage includes
+The storage/persistence/autosave/session/recovery gate passes 302 tests across twenty-five files. Coverage includes
 atomic repository writes, connection ownership, revision barriers, scoped fair
 scheduling, retry deadlines, shutdown, pause and authoritative store publication.
 Scheduler tests use deferred writes and virtual time; repository/provider tests use
@@ -228,7 +228,7 @@ profile, and the native unsaved-exit dialog followed by successful save/reload a
 cancelling navigation. The runner starts its own Vite server and never uses a personal
 browser profile. Setup and exact limits are in [the browser test README](../tests/browser/README.md).
 
-These results add real IndexedDB/browser evidence to the 299 focused Vitest cases; they do
+These results add real IndexedDB/browser evidence to the 302 focused Vitest cases; they do
 not claim crash/power-loss durability, bfcache behavior or other browser engines.
 
 ## Non-destructive database upgrades
@@ -679,8 +679,12 @@ App mounts NotebookRecoveryCenter inside the existing persistence/theme provider
 shows recovery copies when records are available and exposes preview, raw JSON download,
 refresh and explicitly confirmed deletion. Download does not delete a recovery record or
 acknowledge a pending save. Recovery storage failures still expose an Unsaved edits entry
-with the actual failure, even when no downloadable record exists. Per-notebook save failure
-messages clear only after that notebook successfully commits.
+with the actual failure, even when no downloadable record exists. AutoSaveService owns a stable,
+immutable getSaveFailures snapshot, observed through useSyncExternalStore rather than reconstructed
+from events by each view. Mounting after a failure or remounting the recovery center retains the
+warning. A notebook's failure clears only after all its pending edits commit or are explicitly
+discarded; another notebook's success, a superseded revision's commit, a new edit, or clearing the
+global status error cannot erase it. Disposal releases all pending failure warnings.
 
 NotebookRecoveryController owns idle/loading/ready/deleting/restoring/failed UI data transitions.
 Generations suppress delayed read results after a newer refresh or deletion. Accepted deletes

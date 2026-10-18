@@ -836,3 +836,62 @@ it('captures the newest queued revision when the active write discovers a confli
   expect(JSON.parse(draft.content).cells[0].content).toBe('# newest');
   expect(service.hasPending('notebook')).toBe(true);
 });
+
+it('retains immutable per-notebook failures for late subscribers until pending work is committed', async () => {
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValueOnce(
+    new NotebookConflictError('a', 'notebook_a.json')
+  );
+  await expect(service.saveNow(snapshot('local', 'a'))).rejects.toThrow('content changed');
+  const failed = service.getSaveFailures();
+  expect(failed.a).toContain('content changed');
+  expect(Object.isFrozen(failed)).toBe(true);
+  expect(service.getSaveFailures()).toBe(failed);
+  service.clearError();
+  await service.queueSave(snapshot('newer', 'a'));
+  await service.saveNow(snapshot('unrelated', 'b'));
+  expect(service.getSaveFailures()).toBe(failed);
+  let observed: Readonly<Record<string, string>> | undefined;
+  const unsubscribe = service.subscribe((event) => {
+    if (event.type === 'save_completed' && event.notebookId === 'a')
+      observed = service.getSaveFailures();
+  });
+  await service.flush('a');
+  unsubscribe();
+  expect(observed).toEqual({});
+  expect(service.getSaveFailures()).toEqual({});
+  expect(failed.a).toContain('content changed');
+});
+
+it('clears only explicitly discarded failures and releases all warnings on disposal', async () => {
+  storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
+    throw new NotebookConflictError(file.notebookId, file.filePath);
+  });
+  await expect(service.saveNow(snapshot('a', 'a'))).rejects.toThrow();
+  await expect(service.saveNow(snapshot('b', 'b'))).rejects.toThrow();
+  service.clearPending('a');
+  expect(Object.keys(service.getSaveFailures())).toEqual(['b']);
+  await AutoSaveService.resetInstance();
+  expect(service.getSaveFailures()).toEqual({});
+});
+
+it('keeps a failure visible when an older revision commits while newer edits remain pending', async () => {
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValueOnce(
+    new NotebookConflictError('notebook', 'notebook_notebook.json')
+  );
+  await expect(service.saveNow(snapshot('first'))).rejects.toThrow();
+  const gate = deferred();
+  storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+    await gate.promise;
+    return { id: 'saved' };
+  });
+  const draining = service.flush();
+  await vi.waitFor(() => expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledTimes(2));
+  await service.queueSave(snapshot('newer'));
+  const warnings: boolean[] = [];
+  service.subscribe((event) => {
+    if (event.type === 'save_completed') warnings.push(Boolean(service.getSaveFailures().notebook));
+  });
+  gate.resolve();
+  await draining;
+  expect(warnings).toEqual([true, false]);
+});

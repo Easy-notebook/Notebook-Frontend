@@ -3032,6 +3032,13 @@ test('recovery write failure remains visible even when no recovery copy was save
       NotebookRecoveryRepository.prototype.saveDraft = original;
     }
   });
+  // Remount after the failure: no failure event will be replayed to the new view.
+  await page.evaluate(() => window.unmountRecovery());
+  await expect(page.getByText('Recovery probe ready')).toHaveCount(0);
+  await page.evaluate(() => {
+    window.unmountRecovery = window.storageHarness.mountRecoveryProbe();
+  });
+  await expect(page.getByText('Recovery probe ready')).toBeVisible();
   await page.getByRole('button', { name: 'Unsaved edits', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Recovery copies', exact: true });
   await expect(dialog.getByText('Some edits are still unsaved')).toBeVisible();
@@ -3039,6 +3046,11 @@ test('recovery write failure remains visible even when no recovery copy was save
     dialog.getByText(/conflict recovery could not be saved: Recovery storage unavailable/)
   ).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Download JSON' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Close', exact: true }).last().click();
+  await page.evaluate(() =>
+    window.storageHarness.AutoSaveService.getInstance().clearPending('failed-recovery')
+  );
+  await expect(page.getByRole('button', { name: 'Unsaved edits', exact: true })).toHaveCount(0);
   await page.evaluate(async () => {
     window.unmountRecovery();
     await window.storageHarness.AutoSaveService.resetInstance();
