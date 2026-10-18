@@ -43,30 +43,6 @@ export const FileCache = {
       remoteUrl: fileData.remoteUrl,
     };
 
-    // Ensure notebook exists before saving file
-    try {
-      const existingNotebook = await persistenceService.notebooks.getNotebook(
-        transformedData.notebookId
-      );
-
-      if (!existingNotebook) {
-        // Create new notebook if it doesn't exist
-        await persistenceService.notebooks.saveNotebook({
-          id: transformedData.notebookId,
-          name: `Notebook ${transformedData.notebookId.slice(0, 8)}`, // Use first 8 chars as default name
-          description: 'Auto-created notebook',
-          lastAccessedAt: Date.now(),
-          accessCount: 1,
-          fileCount: 0,
-          totalSize: 0,
-          cacheEnabled: true,
-        });
-      }
-    } catch (error) {
-      console.warn('Failed to ensure notebook exists:', error);
-      // Continue with file save even if notebook creation fails
-    }
-
     return persistenceService.files.saveFile(transformedData);
   },
 

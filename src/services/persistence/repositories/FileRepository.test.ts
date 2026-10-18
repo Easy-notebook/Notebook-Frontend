@@ -12,7 +12,20 @@ function setup(
     queueMicrotask(() => value.onsuccess?.());
     return value;
   };
-  const metadataStore = { get: vi.fn(() => request(metadata)), put: vi.fn(), delete: vi.fn() };
+  const metadataStore = {
+    get: vi.fn(() => request(metadata)),
+    put: vi.fn(),
+    delete: vi.fn(),
+    index: vi.fn(() => ({
+      getAll: vi.fn(() =>
+        request(
+          [
+            metadataStore.put.mock.calls[metadataStore.put.mock.calls.length - 1]?.[0] ?? metadata,
+          ].filter(Boolean)
+        )
+      ),
+    })),
+  };
   const contentStore = { get: vi.fn(() => request(content)), put: vi.fn(), delete: vi.fn() };
   const stores = {
     [DB_CONFIG.STORES.NOTEBOOKS]: { get: vi.fn(() => request(null)), put: vi.fn() },

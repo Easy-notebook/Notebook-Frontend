@@ -1350,3 +1350,107 @@ test('failed snapshot commit rolls back content, notebook counters and retention
   expect(result.content.content).toBe('old');
   expect(result.activity).toEqual([]);
 });
+
+test('concurrent first file writes create one persistent parent with exact totals', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository(provider);
+    await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        files.saveFile({
+          notebookId: 'new-book',
+          filePath: `file${i}`,
+          fileName: `file${i}`,
+          content: 'ab',
+          size: 2,
+          lastModified: 'today',
+        })
+      )
+    );
+    const notebooks = await provider.getAll(DB_CONFIG.STORES.NOTEBOOKS);
+    const metadata = await provider.getAll(DB_CONFIG.STORES.FILES_METADATA);
+    await provider.close();
+    return { notebooks, metadata };
+  });
+  expect(result.notebooks).toHaveLength(1);
+  expect(result.notebooks[0]).toMatchObject({
+    id: 'new-book',
+    fileCount: 5,
+    totalSize: 10,
+    retention: 'persistent',
+  });
+  expect(result.metadata).toHaveLength(5);
+});
+
+test('updating orphan content establishes parent ownership and counts every associated file', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    await provider.put(S.FILES_METADATA, { id: 'book::a', notebookId: 'book', size: 3 });
+    await provider.put(S.FILES_METADATA, { id: 'book::b', notebookId: 'book', size: 7 });
+    await new FileRepository(provider).updateFileContent('book', 'a', '你好');
+    const notebook = await provider.get(S.NOTEBOOKS, 'book');
+    await provider.close();
+    return notebook;
+  });
+  expect(result).toMatchObject({ fileCount: 2, totalSize: 13, retention: 'persistent' });
+});
+
+test('an aborted first file save leaves neither a parent nor child records', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, async (stores) => {
+          await schedule(stores);
+          throw new Error('parent creation aborted');
+        }),
+    });
+    let error;
+    try {
+      await files.saveFile({
+        notebookId: 'new',
+        filePath: 'a',
+        fileName: 'a',
+        content: 'data',
+        size: 4,
+        lastModified: 'today',
+      });
+    } catch (failure) {
+      error = failure.message;
+    }
+    const S = DB_CONFIG.STORES;
+    const counts = await Promise.all(
+      [S.NOTEBOOKS, S.FILES_METADATA, S.FILES_CONTENT, S.ACTIVITIES].map(
+        async (name) => (await provider.getAll(name)).length
+      )
+    );
+    await provider.close();
+    return { error, counts };
+  });
+  expect(result.error).toBe('parent creation aborted');
+  expect(result.counts).toEqual([0, 0, 0, 0]);
+});
+
+test('deleting an orphan file does not recreate a deleted notebook', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    await provider.put(S.FILES_METADATA, { id: 'gone::file', notebookId: 'gone', size: 3 });
+    await provider.put(S.FILES_CONTENT, { fileId: 'gone::file', content: 'old' });
+    await new FileRepository(provider).deleteFile('gone', 'file');
+    const notebooks = await provider.getAll(S.NOTEBOOKS);
+    const files = await provider.getAll(S.FILES_METADATA);
+    await provider.close();
+    return { notebooks, files };
+  });
+  expect(result).toEqual({ notebooks: [], files: [] });
+});

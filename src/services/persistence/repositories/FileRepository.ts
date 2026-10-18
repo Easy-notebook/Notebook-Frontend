@@ -261,7 +261,7 @@ export class FileRepository implements IFileRepository {
     } satisfies NotebookActivityEntity);
     const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
     const notebook = await this.read<NotebookEntity | undefined>(store.get(notebookId));
-    if (notebook)
+    if (notebook) {
       store.put({
         ...notebook,
         fileCount: Math.max(0, (notebook.fileCount || 0) + deltaCount),
@@ -269,6 +269,26 @@ export class FileRepository implements IFileRepository {
         updatedAt: now,
         lastAccessedAt: now,
       });
+    } else if (activityType === 'file_create') {
+      // The pending metadata write is visible in this transaction. Include any older
+      // orphan files when establishing ownership; never infer counters from one delta.
+      const files = await this.read<FileMetadataEntity[]>(
+        stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(notebookId)
+      );
+      store.put({
+        id: notebookId,
+        name: `Notebook ${notebookId.slice(0, 8)}`,
+        description: 'Auto-created notebook',
+        createdAt: now,
+        updatedAt: now,
+        lastAccessedAt: now,
+        accessCount: 1,
+        fileCount: files.length,
+        totalSize: files.reduce((sum, file) => sum + file.size, 0),
+        cacheEnabled: true,
+        retention: 'persistent',
+      } satisfies NotebookEntity);
+    }
   }
 
   private read<T>(request: IDBRequest<T>): Promise<T> {

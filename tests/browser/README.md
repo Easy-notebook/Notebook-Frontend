@@ -41,6 +41,8 @@ Coverage:
   report protected over-budget content, and roll back failed quota cleanup.
 - Snapshot/metadata saves derive file totals transactionally, preserve other files and access history,
   and roll back content/counters/retention promotion together on failure.
+- File writes atomically establish missing notebook ownership and correct totals; failed saves
+  leave no parent/child records, and orphan deletion does not resurrect notebooks.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

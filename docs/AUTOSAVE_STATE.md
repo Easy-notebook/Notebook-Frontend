@@ -175,7 +175,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs thirty-nine isolated Playwright cases against production modules:
+`npm run test:browser` runs forty-three isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -367,6 +367,20 @@ WeakMap size cache is removed. FileCache creation starts with no pre-counted fil
 existing-notebook read no longer triggers an additional metadata write/access increment.
 Native cases cover create/replace, additional files, concurrent stale refresh and rollback
 of content, counters and retention promotion on failed commit.
+
+## Atomic file parent ownership
+
+File creation and content updates establish a missing notebook parent within their existing
+multi-store write transaction. The new parent is persistent, and its counters include all
+notebook-indexed metadata already present in that transaction, including historical orphan
+files. Concurrent first writes serialize and produce one parent with accumulated totals.
+Existing parent identity is retained. Deleting an orphan file never creates a parent.
+
+FileCache delegates directly to FileRepository after input conversion; its separate parent
+creation and swallowed-failure path are removed. No parent or child write survives an
+aborted initial save. Native tests cover concurrent first writes, orphan content updates,
+complete rollback and non-resurrection during deletion. Existing orphan content is not
+swept automatically; ownership is established only through an explicitly requested write.
 
 ## Remaining lifecycle work
 
