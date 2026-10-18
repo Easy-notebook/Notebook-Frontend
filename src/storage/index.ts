@@ -4,7 +4,6 @@
 export * from './database';
 export * from './schema';
 export * from './fileTypes';
-export * from './notebookOrm';
 export * from './fileOrm';
 export * from './storageManager';
 export * from './migration';
@@ -13,7 +12,6 @@ export * from './tabCache';
 
 // Re-export main classes and functions for easy access
 export { IndexedDBManager } from './database';
-export { NotebookORM } from './notebookOrm';
 export { FileORM, type FileData, type FileResult } from './fileOrm';
 export { StorageManager, type CleanupStats, type StorageStats } from './storageManager';
 export { DataMigration, type MigrationStats } from './migration';
@@ -40,8 +38,8 @@ export interface FileObject {
 export const FileCache = {
   saveFile: async (fileData: any) => {
     const { FileORM } = await import('./fileOrm');
-    const { NotebookORM } = await import('./notebookOrm');
-    
+    const { storagePersistence } = await import('./persistence');
+
     // Transform legacy format to new format
     const transformedData = {
       notebookId: fileData.notebookId,
@@ -50,16 +48,18 @@ export const FileCache = {
       content: fileData.content || '',
       lastModified: fileData.lastModified || new Date().toISOString(),
       size: fileData.size || 0,
-      remoteUrl: fileData.remoteUrl
+      remoteUrl: fileData.remoteUrl,
     };
-    
+
     // Ensure notebook exists before saving file
     try {
-      const existingNotebook = await NotebookORM.getNotebook(transformedData.notebookId);
-      
+      const existingNotebook = await storagePersistence.notebooks.getNotebook(
+        transformedData.notebookId
+      );
+
       if (!existingNotebook) {
         // Create new notebook if it doesn't exist
-        await NotebookORM.saveNotebook({
+        await storagePersistence.notebooks.saveNotebook({
           id: transformedData.notebookId,
           name: `Notebook ${transformedData.notebookId.slice(0, 8)}`, // Use first 8 chars as default name
           description: 'Auto-created notebook',
@@ -67,29 +67,29 @@ export const FileCache = {
           accessCount: 1,
           fileCount: 1,
           totalSize: transformedData.size,
-          cacheEnabled: true
+          cacheEnabled: true,
         });
       } else {
         // Update existing notebook access time
-        await NotebookORM.saveNotebook({
+        await storagePersistence.notebooks.saveNotebook({
           ...existingNotebook,
           lastAccessedAt: Date.now(),
-          accessCount: existingNotebook.accessCount + 1
+          accessCount: existingNotebook.accessCount + 1,
         });
       }
     } catch (error) {
       console.warn('Failed to ensure notebook exists:', error);
       // Continue with file save even if notebook creation fails
     }
-    
+
     return FileORM.saveFile(transformedData);
   },
-  
+
   getFile: async (notebookId: string, filePath: string) => {
     const { FileORM } = await import('./fileOrm');
     const result = await FileORM.getFile(notebookId, filePath);
     if (!result) return null;
-    
+
     // Return legacy format
     return {
       id: result.metadata.id,
@@ -102,21 +102,21 @@ export const FileCache = {
       size: result.metadata.size,
       cachedAt: result.metadata.cachedAt,
       accessCount: result.metadata.accessCount,
-      lastAccessed: result.metadata.lastAccessedAt
+      lastAccessed: result.metadata.lastAccessedAt,
     };
   },
-  
+
   deleteFile: async (notebookId: string, filePath: string) => {
     const { FileORM } = await import('./fileOrm');
     return FileORM.deleteFile(notebookId, filePath);
   },
-  
+
   getFilesForNotebook: async (notebookId: string) => {
     const { FileORM } = await import('./fileOrm');
     const results = await FileORM.getFilesForNotebook(notebookId, true);
-    
+
     // Return legacy format
-    return results.map(result => ({
+    return results.map((result) => ({
       id: result.metadata.id,
       notebookId: result.metadata.notebookId,
       path: result.metadata.filePath,
@@ -127,10 +127,10 @@ export const FileCache = {
       size: result.metadata.size,
       cachedAt: result.metadata.cachedAt,
       accessCount: result.metadata.accessCount,
-      lastAccessed: result.metadata.lastAccessedAt
+      lastAccessed: result.metadata.lastAccessedAt,
     }));
   },
-  
+
   clearNotebookCache: async (notebookId: string) => {
     const { StorageManager } = await import('./storageManager');
     return StorageManager.cleanupNotebook(notebookId);
@@ -138,15 +138,15 @@ export const FileCache = {
 
   // Get all cached notebooks
   getAllNotebooks: async () => {
-    const { NotebookORM } = await import('./notebookOrm');
-    return NotebookORM.getNotebooks();
+    const { storagePersistence } = await import('./persistence');
+    return storagePersistence.notebooks.getAllNotebooks();
   },
 
   // Get specific notebook
   getNotebook: async (notebookId: string) => {
-    const { NotebookORM } = await import('./notebookOrm');
-    return NotebookORM.getNotebook(notebookId);
-  }
+    const { storagePersistence } = await import('./persistence');
+    return storagePersistence.notebooks.getNotebook(notebookId);
+  },
 };
 
 // Initialize storage system

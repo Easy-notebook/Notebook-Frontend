@@ -1,5 +1,9 @@
 import { INotebookRepository, IStorageProvider, type FileSaveData } from '../interfaces';
-import { NotebookEntity, NotebookActivityEntity } from '../../../storage/schema';
+import {
+  NotebookEntity,
+  NotebookActivityEntity,
+  FileMetadataEntity,
+} from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
 import { FileRecordSet } from './FileRecordSet';
 
@@ -201,34 +205,105 @@ export class NotebookRepository implements INotebookRepository {
     lastActivity: number;
     activities: NotebookActivityEntity[];
   }> {
-    // This also requires querying by index.
-    // I'll implement a simplified version or extend IStorageProvider if needed.
-    // For now, I'll assume I can access the DB directly if I really need to,
-    // or just use getAll and filter (inefficient but works for now).
-
-    // Let's use getAll and filter for simplicity in this refactor step,
-    // optimizing later if performance is an issue.
-
-    const allFiles = await this.storage.getAll<any>(DB_CONFIG.STORES.FILES_METADATA);
-    const notebookFiles = allFiles.filter((f) => f.notebookId === id);
-
-    const fileCount = notebookFiles.length;
-    const totalSize = notebookFiles.reduce((sum, f) => sum + f.size, 0);
-
-    const allActivities = await this.storage.getAll<NotebookActivityEntity>(
-      DB_CONFIG.STORES.ACTIVITIES
+    let files: FileMetadataEntity[] = [];
+    let activities: NotebookActivityEntity[] = [];
+    await this.storage.transaction(
+      [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.ACTIVITIES],
+      'readonly',
+      async (stores) => {
+        [files, activities] = await Promise.all([
+          this.read<FileMetadataEntity[]>(
+            stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(id)
+          ),
+          this.read<NotebookActivityEntity[]>(
+            stores[DB_CONFIG.STORES.ACTIVITIES].index('notebookId').getAll(id)
+          ),
+        ]);
+      }
     );
-    const notebookActivities = allActivities
-      .filter((a) => a.notebookId === id)
-      .sort((a, b) => b.timestamp - a.timestamp);
-
-    const lastActivity = notebookActivities.length > 0 ? notebookActivities[0].timestamp : 0;
-
+    activities.sort((a, b) => b.timestamp - a.timestamp);
     return {
-      fileCount,
-      totalSize,
-      lastActivity,
-      activities: notebookActivities.slice(0, 50),
+      fileCount: files.length,
+      totalSize: files.reduce((sum, file) => sum + file.size, 0),
+      lastActivity: activities[0]?.timestamp ?? 0,
+      activities: activities.slice(0, 50),
     };
+  }
+
+  async logActivity(
+    notebookId: string,
+    activityType: NotebookActivityEntity['activityType'],
+    filePath?: string,
+    metadata?: NotebookActivityEntity['metadata']
+  ): Promise<void> {
+    const timestamp = Date.now();
+    await this.storage.put(DB_CONFIG.STORES.ACTIVITIES, {
+      id: `${notebookId}::${timestamp}`,
+      notebookId,
+      activityType,
+      filePath,
+      timestamp,
+      metadata,
+    });
+  }
+
+  async getInactiveNotebooks(retentionPeriod: number): Promise<NotebookEntity[]> {
+    let notebooks: NotebookEntity[] = [];
+    await this.storage.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly', async (stores) => {
+      notebooks = await this.read<NotebookEntity[]>(
+        stores[DB_CONFIG.STORES.NOTEBOOKS]
+          .index('lastAccessedAt')
+          .getAll(IDBKeyRange.upperBound(Date.now() - retentionPeriod))
+      );
+    });
+    return notebooks;
+  }
+
+  async adjustNotebookStats(
+    notebookId: string,
+    deltaFileCount: number,
+    deltaBytes: number
+  ): Promise<void> {
+    await this.storage.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite', async (stores) => {
+      const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+      const notebook = await this.read<NotebookEntity | undefined>(store.get(notebookId));
+      if (!notebook) return;
+      store.put({
+        ...notebook,
+        fileCount: Math.max(0, (notebook.fileCount || 0) + (deltaFileCount || 0)),
+        totalSize: Math.max(0, (notebook.totalSize || 0) + (deltaBytes || 0)),
+        updatedAt: Date.now(),
+      });
+    });
+  }
+
+  async recalcNotebookStats(notebookId: string): Promise<void> {
+    await this.storage.transaction(
+      [DB_CONFIG.STORES.NOTEBOOKS, DB_CONFIG.STORES.FILES_METADATA],
+      'readwrite',
+      async (stores) => {
+        const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+        const [notebook, files] = await Promise.all([
+          this.read<NotebookEntity | undefined>(store.get(notebookId)),
+          this.read<FileMetadataEntity[]>(
+            stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(notebookId)
+          ),
+        ]);
+        if (!notebook) return;
+        store.put({
+          ...notebook,
+          fileCount: files.length,
+          totalSize: files.reduce((sum, file) => sum + (file.size || 0), 0),
+          updatedAt: Date.now(),
+        });
+      }
+    );
+  }
+
+  private read<T>(request: IDBRequest<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
   }
 }

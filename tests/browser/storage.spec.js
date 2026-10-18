@@ -373,3 +373,84 @@ for (const operation of ['clearNotebook', 'clearAll']) {
     expect(result.records.map((record) => record.id)).toEqual(['a::one', 'a::two']);
   });
 }
+
+test('notebook maintenance shares atomic repositories without lost counter updates', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new NotebookRepository(provider);
+    const notebook = {
+      id: 'a',
+      name: 'A',
+      lastAccessedAt: 0,
+      accessCount: 1,
+      fileCount: 0,
+      totalSize: 0,
+      cacheEnabled: true,
+    };
+    await repository.saveNotebook(notebook);
+    await repository.saveNotebook({ ...notebook, id: 'b', lastAccessedAt: Date.now() });
+    await Promise.all(Array.from({ length: 20 }, () => repository.adjustNotebookStats('a', 1, 10)));
+    const adjusted = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a');
+    await provider.put(DB_CONFIG.STORES.FILES_METADATA, {
+      id: 'a::one',
+      notebookId: 'a',
+      filePath: 'one',
+      size: 5,
+    });
+    await provider.put(DB_CONFIG.STORES.FILES_METADATA, {
+      id: 'a::two',
+      notebookId: 'a',
+      filePath: 'two',
+      size: 7,
+    });
+    await provider.put(DB_CONFIG.STORES.FILES_METADATA, {
+      id: 'b::one',
+      notebookId: 'b',
+      filePath: 'one',
+      size: 100,
+    });
+    await repository.recalcNotebookStats('a');
+    const recalculated = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a');
+    await repository.logActivity('a', 'close');
+    const stats = await repository.getNotebookStats('a');
+    const inactive = await repository.getInactiveNotebooks(1000);
+    await provider.close();
+    return { adjusted, recalculated, stats, inactive };
+  });
+  expect(result.adjusted).toMatchObject({ fileCount: 20, totalSize: 200 });
+  expect(result.recalculated).toMatchObject({ fileCount: 2, totalSize: 12 });
+  expect(result.stats).toMatchObject({ fileCount: 2, totalSize: 12 });
+  expect(result.stats.activities.some((activity) => activity.activityType === 'close')).toBe(true);
+  expect(result.inactive.map((notebook) => notebook.id)).toEqual(['a']);
+});
+
+for (const operation of ['adjustNotebookStats', 'recalcNotebookStats']) {
+  test(`${operation} does not acknowledge an aborted statistics update`, async ({ page }) => {
+    const result = await page.evaluate(async (operation) => {
+      const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      await provider.put(DB_CONFIG.STORES.NOTEBOOKS, { id: 'a', fileCount: 3, totalSize: 30 });
+      const repository = new NotebookRepository({
+        transaction: (names, mode, schedule) =>
+          provider.transaction(names, mode, async (stores) => {
+            await schedule(stores);
+            throw new Error('statistics commit aborted');
+          }),
+      });
+      let error;
+      try {
+        await repository[operation]('a', 1, 10);
+      } catch (failure) {
+        error = failure.message;
+      }
+      const notebook = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a');
+      await provider.close();
+      return { error, notebook };
+    }, operation);
+    expect(result.error).toBe('statistics commit aborted');
+    expect(result.notebook).toEqual({ id: 'a', fileCount: 3, totalSize: 30 });
+  });
+}

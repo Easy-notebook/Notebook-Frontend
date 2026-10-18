@@ -56,6 +56,19 @@ export interface INotebookRepository {
   }): Promise<NotebookEntity[]>;
   deleteNotebook(id: string): Promise<boolean>;
   updateAccessTime(id: string): Promise<void>;
+  logActivity(
+    notebookId: string,
+    activityType: NotebookActivityEntity['activityType'],
+    filePath?: string,
+    metadata?: NotebookActivityEntity['metadata']
+  ): Promise<void>;
+  getInactiveNotebooks(retentionPeriod: number): Promise<NotebookEntity[]>;
+  adjustNotebookStats(
+    notebookId: string,
+    deltaFileCount: number,
+    deltaBytes: number
+  ): Promise<void>;
+  recalcNotebookStats(notebookId: string): Promise<void>;
   getNotebookStats(id: string): Promise<{
     fileCount: number;
     totalSize: number;

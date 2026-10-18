@@ -3,7 +3,7 @@
 
 import { IndexedDBManager, DB_CONFIG } from './database';
 import { FileMetadataEntity, FileContentEntity, DEFAULT_STORAGE_CONFIG } from './schema';
-import { NotebookORM } from './notebookOrm';
+import { storagePersistence } from './persistence';
 import { getFileType } from './fileTypes';
 import { fileLog, storageLog } from '@Utils/logger';
 
@@ -132,32 +132,35 @@ export class FileORM {
               });
 
               // Log activity and resolve
-              NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath).catch(
-                (error) => storageLog.error('Failed to log file create activity', { error })
-              );
+              storagePersistence.notebooks
+                .logActivity(fileData.notebookId, 'file_create', fileData.filePath)
+                .catch((error) =>
+                  storageLog.error('Failed to log file create activity', { error })
+                );
               // Adjust notebook stats
-              NotebookORM.adjustNotebookStats(
-                fileData.notebookId,
-                deltaFileCount,
-                deltaBytes
-              ).catch((error) => storageLog.error('Failed to adjust notebook stats', { error }));
+              storagePersistence.notebooks
+                .adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes)
+                .catch((error) => storageLog.error('Failed to adjust notebook stats', { error }));
               resolve(metadata);
             };
 
             contentRequest.onerror = () => reject(contentRequest.error);
           } else {
             // Large file - only metadata is saved
-            NotebookORM.logActivity(fileData.notebookId, 'file_create', fileData.filePath, {
-              isLargeFile: true,
-              remoteUrl: fileData.remoteUrl,
-            }).catch((error) =>
-              storageLog.error('Failed to log large file create activity', { error })
-            );
+            storagePersistence.notebooks
+              .logActivity(fileData.notebookId, 'file_create', fileData.filePath, {
+                isLargeFile: true,
+                remoteUrl: fileData.remoteUrl,
+              })
+              .catch((error) =>
+                storageLog.error('Failed to log large file create activity', { error })
+              );
             // Adjust notebook stats
-            NotebookORM.adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes).catch(
-              (error) =>
+            storagePersistence.notebooks
+              .adjustNotebookStats(fileData.notebookId, deltaFileCount, deltaBytes)
+              .catch((error) =>
                 storageLog.error('Failed to adjust notebook stats for large file', { error })
-            );
+              );
             resolve(metadata);
           }
         };
@@ -233,12 +236,12 @@ export class FileORM {
         const updateRequest = metaStore.put(updatedMetadata);
         updateRequest.onsuccess = () => {
           // Log activity and update notebook access
-          NotebookORM.logActivity(notebookId, 'file_access', filePath).catch((error) =>
-            storageLog.error('Failed to log file access activity', { error })
-          );
-          NotebookORM.updateNotebookAccess(notebookId).catch((error) =>
-            storageLog.error('Failed to update notebook access', { error })
-          );
+          storagePersistence.notebooks
+            .logActivity(notebookId, 'file_access', filePath)
+            .catch((error) => storageLog.error('Failed to log file access activity', { error }));
+          storagePersistence.notebooks
+            .updateAccessTime(notebookId)
+            .catch((error) => storageLog.error('Failed to update notebook access', { error }));
         };
         updateRequest.onerror = () =>
           fileLog.error('Failed to update file access stats', { notebookId, filePath });
@@ -318,9 +321,11 @@ export class FileORM {
   ): Promise<FileResult[]> {
     const db = await IndexedDBManager.getDB();
     // Update notebook access on listing files
-    NotebookORM.updateNotebookAccess(notebookId).catch((error) =>
-      storageLog.error('Failed to update notebook access during file listing', { error })
-    );
+    storagePersistence.notebooks
+      .updateAccessTime(notebookId)
+      .catch((error) =>
+        storageLog.error('Failed to update notebook access during file listing', { error })
+      );
 
     return new Promise((resolve, reject) => {
       const storeNames = includeContent
@@ -443,13 +448,15 @@ export class FileORM {
           const contentRequest = contentStore.delete(fileId);
 
           const finalize = () => {
-            NotebookORM.logActivity(notebookId, 'file_delete', filePath).catch((error) =>
-              storageLog.error('Failed to log file delete activity', { error })
-            );
+            storagePersistence.notebooks
+              .logActivity(notebookId, 'file_delete', filePath)
+              .catch((error) => storageLog.error('Failed to log file delete activity', { error }));
             // Adjust notebook stats
-            NotebookORM.adjustNotebookStats(notebookId, -1, -size).catch((error) =>
-              storageLog.error('Failed to adjust notebook stats after delete', { error })
-            );
+            storagePersistence.notebooks
+              .adjustNotebookStats(notebookId, -1, -size)
+              .catch((error) =>
+                storageLog.error('Failed to adjust notebook stats after delete', { error })
+              );
             resolve(true);
           };
 
@@ -545,9 +552,11 @@ export class FileORM {
           contentRequest.onsuccess = () => {
             // Adjust notebook stats for size change only
             const deltaBytes = (updatedMetadata.size || 0) - (metadata.size || 0);
-            NotebookORM.adjustNotebookStats(notebookId, 0, deltaBytes).catch((error) =>
-              storageLog.error('Failed to adjust notebook stats after file update', { error })
-            );
+            storagePersistence.notebooks
+              .adjustNotebookStats(notebookId, 0, deltaBytes)
+              .catch((error) =>
+                storageLog.error('Failed to adjust notebook stats after file update', { error })
+              );
             resolve(true);
           };
           contentRequest.onerror = () => reject(contentRequest.error);
