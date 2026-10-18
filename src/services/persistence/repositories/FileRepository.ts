@@ -1,3 +1,4 @@
+import { NotebookActivityRecord } from './NotebookActivityRecord';
 import { StorageConfiguration } from '../../../storage/StorageConfiguration';
 import {
   IFileRepository,
@@ -248,13 +249,9 @@ export class FileRepository implements IFileRepository {
     const notebook = await this.read<NotebookEntity | undefined>(store.get(notebookId));
     if (notebook)
       store.put({ ...notebook, lastAccessedAt: now, accessCount: notebook.accessCount + 1 });
-    stores[DB_CONFIG.STORES.ACTIVITIES].put({
-      id: `${notebookId}::${now}::${filePath}`,
-      notebookId,
-      filePath,
-      activityType: 'file_access',
-      timestamp: now,
-    } satisfies NotebookActivityEntity);
+    stores[DB_CONFIG.STORES.ACTIVITIES].add(
+      new NotebookActivityRecord(notebookId, 'file_access', now, filePath)
+    );
   }
 
   private async recordMutation(
@@ -266,13 +263,9 @@ export class FileRepository implements IFileRepository {
     activityType: NotebookActivityEntity['activityType']
   ): Promise<void> {
     const now = Date.now();
-    stores[DB_CONFIG.STORES.ACTIVITIES].put({
-      id: `${notebookId}::${now}::${filePath}`,
-      notebookId,
-      filePath,
-      activityType,
-      timestamp: now,
-    } satisfies NotebookActivityEntity);
+    stores[DB_CONFIG.STORES.ACTIVITIES].add(
+      new NotebookActivityRecord(notebookId, activityType, now, filePath)
+    );
     const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
     const notebook = await this.read<NotebookEntity | undefined>(store.get(notebookId));
     if (notebook) {

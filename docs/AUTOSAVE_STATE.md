@@ -175,7 +175,7 @@ browser/process termination remain unproven.
 
 ## Native Chromium verification
 
-`npm run test:browser` runs forty-six isolated Playwright cases against production modules:
+`npm run test:browser` runs forty-eight isolated Playwright cases against production modules:
 page reload persistence, native multi-store rollback, accepted-transaction draining
 on close, retry after a blocked upgrade, normal browser-process restart with a temporary
 profile, and the native unsaved-exit dialog followed by successful save/reload after
@@ -401,6 +401,20 @@ Native tests cover threshold changes, local-content removal on a remote transiti
 overrides, forced-local snapshots, invalid patch rollback and repairing malformed settings
 before cache writes resume. Configuration unit tests cover every numeric field and detached
 default values.
+
+## Append-only activity records
+
+Notebook and file repositories construct activity records through NotebookActivityRecord,
+using the existing uuid dependency for event identity. Millisecond timestamp and file path
+no longer determine the primary key, so repeated operations in one clock tick remain
+separate events. Existing timestamp/notebook indexes continue to serve temporal queries;
+historical IDs remain readable without a schema upgrade.
+
+Activity writes use add rather than put. A key collision rejects the transaction instead
+of overwriting prior history; file data, notebook counters and activity remain atomic.
+Explicit logActivity now uses the same transactional append contract. A frozen-clock native
+test verifies all fourteen notebook/file events survive, and an injected duplicate key test
+verifies existing history remains intact while the associated file write rolls back.
 
 ## Remaining lifecycle work
 

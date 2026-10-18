@@ -1581,3 +1581,107 @@ test('malformed stored config rejects initialization, cleanup and cache writes u
   expect(result.pending).toEqual([]);
   expect(result.saved.hasLocalContent).toBe(true);
 });
+
+test('same-millisecond notebook and file events remain individually recorded', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, FileRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const notebooks = new NotebookRepository(provider);
+    const files = new FileRepository(provider);
+    const originalNow = Date.now;
+    Date.now = () => 123456;
+    try {
+      const notebook = {
+        id: 'book',
+        name: 'Book',
+        lastAccessedAt: Date.now(),
+        accessCount: 1,
+        cacheEnabled: true,
+      };
+      await notebooks.saveNotebook(notebook);
+      await Promise.all(Array.from({ length: 3 }, () => notebooks.saveNotebook(notebook)));
+      await Promise.all(
+        Array.from({ length: 3 }, () =>
+          files.saveFile({
+            notebookId: 'book',
+            filePath: 'file',
+            fileName: 'file',
+            content: 'same',
+            size: 4,
+            lastModified: 'today',
+          })
+        )
+      );
+      await Promise.all(Array.from({ length: 3 }, () => files.getFile('book', 'file')));
+      await Promise.all(Array.from({ length: 3 }, () => notebooks.logActivity('book', 'close')));
+      await files.deleteFile('book', 'file');
+      const activities = await provider.getAll(DB_CONFIG.STORES.ACTIVITIES);
+      const stats = await notebooks.getNotebookStats('book');
+      await provider.close();
+      return { activities, stats };
+    } finally {
+      Date.now = originalNow;
+    }
+  });
+  expect(result.activities).toHaveLength(14);
+  expect(new Set(result.activities.map((event) => event.id)).size).toBe(14);
+  expect(result.activities.every((event) => event.timestamp === 123456)).toBe(true);
+  const count = (type) => result.activities.filter((event) => event.activityType === type).length;
+  expect([
+    count('open'),
+    count('file_create'),
+    count('file_access'),
+    count('close'),
+    count('file_delete'),
+  ]).toEqual([4, 3, 3, 3, 1]);
+  expect(result.stats.activities).toHaveLength(14);
+  expect(result.stats.lastActivity).toBe(123456);
+});
+
+test('an activity key collision aborts the file transaction instead of overwriting history', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const S = DB_CONFIG.STORES;
+    const original = { id: 'existing', notebookId: 'book', activityType: 'close', timestamp: 1 };
+    await provider.put(S.ACTIVITIES, original);
+    const repository = new FileRepository({
+      transaction: (names, mode, schedule) =>
+        provider.transaction(names, mode, (stores) =>
+          schedule({
+            ...stores,
+            [S.ACTIVITIES]: {
+              add: (record) => stores[S.ACTIVITIES].add({ ...record, id: 'existing' }),
+            },
+          })
+        ),
+    });
+    let error;
+    try {
+      await repository.saveFile({
+        notebookId: 'book',
+        filePath: 'file',
+        fileName: 'file',
+        content: 'new',
+        size: 3,
+        lastModified: 'today',
+      });
+    } catch (failure) {
+      error = failure.name;
+    }
+    const activity = await provider.getAll(S.ACTIVITIES);
+    const counts = await Promise.all(
+      [S.NOTEBOOKS, S.FILES_METADATA, S.FILES_CONTENT].map(
+        async (name) => (await provider.getAll(name)).length
+      )
+    );
+    await provider.close();
+    return { error, activity, original, counts };
+  });
+  expect(result.error).toBeDefined();
+  expect(result.activity).toEqual([result.original]);
+  expect(result.counts).toEqual([0, 0, 0]);
+});

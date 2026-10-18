@@ -44,7 +44,7 @@ function setup(
         return request;
       }),
     },
-    activities: { put: vi.fn() },
+    activities: { add: vi.fn() },
     files_metadata: { put: vi.fn(), index: vi.fn(() => ({ getAll: readFiles })) },
     files_content: { put: vi.fn(), delete: vi.fn() },
   };
@@ -82,7 +82,7 @@ it('commits notebook metadata, activity and a forced-local snapshot through one 
       lastAccessedAt: expect.any(Number),
     })
   );
-  expect(stores.activities.put).toHaveBeenCalledWith(
+  expect(stores.activities.add).toHaveBeenCalledWith(
     expect.objectContaining({ notebookId: 'book', activityType: 'open' })
   );
   expect(metadata).toMatchObject({ hasLocalContent: true, storageType: 'local' });

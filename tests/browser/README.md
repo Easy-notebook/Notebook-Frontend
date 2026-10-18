@@ -45,6 +45,8 @@ Coverage:
   leave no parent/child records, and orphan deletion does not resurrect notebooks.
 - File saves observe committed configured thresholds; explicit overrides and local snapshots remain supported.
 - Invalid configuration updates roll back, and malformed saved settings reject maintenance/cache writes until repaired.
+- Same-millisecond notebook/file activities retain distinct identities; an injected activity-key
+  collision aborts the file transaction without overwriting history.
 - Acknowledged data survives a normal browser process restart.
 - A real user gesture plus unsaved edits triggers the native beforeunload dialog;
   cancelling navigation allows saving, after which reload reads the saved notebook.

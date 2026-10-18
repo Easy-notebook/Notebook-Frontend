@@ -1,3 +1,4 @@
+import { NotebookActivityRecord } from './NotebookActivityRecord';
 import {
   INotebookRepository,
   IStorageProvider,
@@ -68,13 +69,7 @@ export class NotebookRepository implements INotebookRepository {
         updatedAt: now,
       };
       notebooks.put(notebook);
-      const activity: NotebookActivityEntity = {
-        id: `${data.id}::${now}`,
-        notebookId: data.id,
-        activityType: 'open',
-        timestamp: now,
-      };
-      stores[DB_CONFIG.STORES.ACTIVITIES].put(activity);
+      stores[DB_CONFIG.STORES.ACTIVITIES].add(new NotebookActivityRecord(data.id, 'open', now));
       file?.writeTo(
         stores[DB_CONFIG.STORES.FILES_METADATA],
         stores[DB_CONFIG.STORES.FILES_CONTENT]
@@ -196,14 +191,15 @@ export class NotebookRepository implements INotebookRepository {
     filePath?: string,
     metadata?: NotebookActivityEntity['metadata']
   ): Promise<void> {
-    const timestamp = Date.now();
-    await this.storage.put(DB_CONFIG.STORES.ACTIVITIES, {
-      id: `${notebookId}::${timestamp}`,
+    const activity = new NotebookActivityRecord(
       notebookId,
       activityType,
+      Date.now(),
       filePath,
-      timestamp,
-      metadata,
+      metadata
+    );
+    await this.storage.transaction([DB_CONFIG.STORES.ACTIVITIES], 'readwrite', async (stores) => {
+      stores[DB_CONFIG.STORES.ACTIVITIES].add(activity);
     });
   }
 

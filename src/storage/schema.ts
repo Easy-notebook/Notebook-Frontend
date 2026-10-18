@@ -64,7 +64,7 @@ export interface FileContentEntity {
  * Notebook activity log - tracks notebook usage for cleanup
  */
 export interface NotebookActivityEntity {
-  id: string; // `${notebookId}::${timestamp}`
+  id: string; // Opaque event identity; timestamp is indexed separately
   notebookId: string;
   activityType: 'open' | 'close' | 'file_access' | 'file_create' | 'file_delete';
   filePath?: string; // Optional file path for file-related activities
