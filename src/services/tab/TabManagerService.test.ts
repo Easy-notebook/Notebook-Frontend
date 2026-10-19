@@ -194,3 +194,23 @@ it('retains source-specific failures when neither source is usable', async () =>
     ],
   });
 });
+
+it.each([
+  ['cache', 'assets/photo.png', 'image'],
+  ['backend', 'assets/photo.png', 'image'],
+  ['cache', 'diagram.SVG', 'image'],
+  ['backend', 'diagram.SVG', 'image'],
+  ['cache', 'photo-notes.md', 'markdown'],
+  ['backend', 'photo-notes.md', 'markdown'],
+  ['cache', 'Image-analysis.txt', 'text'],
+  ['backend', 'Image-analysis.txt', 'text'],
+  ['cache', 'Screenshot-log.txt', 'text'],
+  ['backend', 'Screenshot-log.txt', 'text'],
+])('retains %s metadata for %s without requiring its file body', async (source, path, type) => {
+  if (source === 'cache') io.files.mockResolvedValueOnce([cached(path)]);
+  else io.remote.mockResolvedValueOnce({ status: 'ok', files: [{ name: path, path }] });
+  expect(await tabManagerService.loadDefaultTabs('book')).toEqual([
+    { id: `book::${path}`, path, name: path, type },
+  ]);
+  expect(io.files).toHaveBeenCalledExactlyOnceWith('book', false);
+});

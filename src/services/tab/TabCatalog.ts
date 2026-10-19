@@ -2,7 +2,7 @@ import type { PreviewFile } from '@Store/models';
 import type { FileReadRecord } from '@Services/persistence/interfaces';
 import { makeFileId } from '@Storage/fileIdentity';
 import { getFileType } from '@Storage/fileTypes';
-import { validateFileForTab } from '@Utils/fileValidation';
+import { validateTabMetadata } from '@Utils/fileValidation';
 
 /** One source's validated, notebook-scoped catalog; partial parsing never escapes. */
 export class TabCatalog {
@@ -69,7 +69,7 @@ export class TabCatalog {
   private add(path: string, name: string): void {
     if ((path.startsWith('notebook_') && path.endsWith('.json')) || name.endsWith('.easynb'))
       return;
-    if (!validateFileForTab(path, name, '').isValid) return;
+    if (!validateTabMetadata(path, name).isValid) return;
     if (!this.byPath.has(path)) {
       this.byPath.set(path, {
         id: makeFileId(this.notebookId, path),

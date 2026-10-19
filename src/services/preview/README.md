@@ -178,3 +178,13 @@ that source's failure is logged. An empty result is returned only when both sour
 succeed. Failures with no usable entries reject with `TabDiscoveryError`, retaining
 source-specific causes, so the store can preserve current tabs and show the error.
 `FileReadRecord` now types both single-file and notebook-list repository results.
+
+## Metadata validation versus file availability
+
+Tab discovery uses `validateTabMetadata` and does not require file bodies.
+Existing path, system-file, temporary-file and notebook exclusions still apply.
+Images and ordinary text names containing photo/Image/Screenshot are not evidence
+of missing content and remain eligible for tabs. The former filename-based
+missing-image heuristic and content-dependent discovery validator are removed.
+Actual availability is resolved only when the file is opened, through the complete
+cache-hit and exact remote-read contracts above.
