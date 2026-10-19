@@ -78,3 +78,50 @@ it('does not alter a completed answer when interruption is repeated', async () =
   expect(state().qaList).toBe(completed);
   expect(completed[0]).toMatchObject({ content: 'done', resolved: true, onProcess: false });
 });
+
+it('stops a replaced answer while allowing the new answer to stream', async () => {
+  await start();
+  state().addContentToAnswer('qa', 'partial');
+  state().addQA({ id: 'next', type: 'user', content: 'next question', resolved: false });
+  await new InitStreamingAnswerAction().execute({ payload: { QId: 'next' }, showToast: vi.fn() });
+  expect(state().qaList.find((qa) => qa.id === 'qa')).toMatchObject({
+    content: 'partial',
+    onProcess: false,
+    resolved: false,
+  });
+  expect(state().qaList.find((qa) => qa.id === 'next')).toMatchObject({
+    type: 'assistant',
+    onProcess: true,
+  });
+});
+
+it('does not initialize an answer superseded synchronously during old-answer settlement', async () => {
+  await start();
+  state().addQA({ id: 'next', type: 'user', content: 'next question', resolved: false });
+  state().addQA({ id: 'newest', type: 'user', content: 'newest question', resolved: false });
+  let newest: Promise<void> | undefined;
+  const unsubscribe = useAIAgentStore.subscribe((value) => {
+    if (!newest && value.qaList.find((qa) => qa.id === 'qa')?.onProcess === false) {
+      unsubscribe();
+      newest = new InitStreamingAnswerAction().execute({
+        payload: { QId: 'newest' },
+        showToast: vi.fn(),
+      });
+    }
+  });
+  try {
+    await new InitStreamingAnswerAction().execute({ payload: { QId: 'next' }, showToast: vi.fn() });
+    await newest;
+    expect(qaStreamManager.getStreamingQaId()).toBe('newest');
+    expect(state().qaList.find((qa) => qa.id === 'next')).toMatchObject({
+      type: 'user',
+      content: 'next question',
+    });
+    expect(state().qaList.find((qa) => qa.id === 'newest')).toMatchObject({
+      type: 'assistant',
+      onProcess: true,
+    });
+  } finally {
+    unsubscribe();
+  }
+});

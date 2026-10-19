@@ -416,6 +416,7 @@ it.each(['completed', 'replacement'] as const)(
     await vi.waitFor(() => expect(io.handle).toHaveBeenCalledOnce());
     if (kind === 'completed') qaStreamManager.clearStreamingQaId(qaStreamManager.capture());
     else qaStreamManager.setStreamingQaId('qa', new AbortController().signal, interrupt);
+    interrupt.mockClear();
     const remaining = qaStreamManager.capture();
     transport.controller.close();
     await receipt.completion;

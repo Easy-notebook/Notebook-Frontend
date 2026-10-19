@@ -24,10 +24,11 @@ export class InitStreamingAnswerAction extends StreamAction {
     if (qid !== undefined && qid !== null) {
       const qidStr = Array.isArray(qid) ? qid[0] : qid.toString();
       // Own cancellation before the answer update can notify synchronous subscribers.
-      qaStreamManager.setStreamingQaId(qidStr, context.signal, () =>
+      const session = qaStreamManager.setStreamingQaId(qidStr, context.signal, () =>
         useAIAgentStore.getState().cancelStreamingAnswer(qidStr)
       );
-      const session = qaStreamManager.capture();
+      context.signal?.throwIfAborted();
+      if (qaStreamManager.capture() !== session) return;
       try {
         await globalUpdateInterface.initStreamingAnswer(qidStr);
         context.signal?.throwIfAborted();

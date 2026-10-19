@@ -1,94 +1,85 @@
-/**
- * QA Stream Manager - Manages QA streaming state
- *
- * Replaces global lastStreamingQaId with a proper class
- */
-
 import { agentLog } from '@Utils/logger';
 
 export interface QAStreamSession {
   readonly qaId: string;
 }
 
+interface ActiveQAStream {
+  readonly session: QAStreamSession;
+  readonly signal?: AbortSignal;
+  readonly onCancel?: () => void;
+  readonly detach: () => void;
+}
+
+/** Owns one active answer occurrence and all resources belonging to it. */
 export class QAStreamManager {
   private static instance: QAStreamManager;
-  private session: QAStreamSession | null = null;
-  private transportSignal: AbortSignal | undefined;
-  private onCancel: (() => void) | undefined;
-  private detachCancellation: (() => void) | undefined;
+  private active: ActiveQAStream | null = null;
 
   private constructor() {}
 
   static getInstance(): QAStreamManager {
-    if (!QAStreamManager.instance) {
-      QAStreamManager.instance = new QAStreamManager();
-    }
+    if (!QAStreamManager.instance) QAStreamManager.instance = new QAStreamManager();
     return QAStreamManager.instance;
   }
 
-  /**
-   * Set the currently streaming QA ID
-   */
-  setStreamingQaId(qaId: string, signal?: AbortSignal, onCancel?: () => void): void {
+  setStreamingQaId(qaId: string, signal?: AbortSignal, onCancel?: () => void): QAStreamSession {
     signal?.throwIfAborted();
-    this.detachCancellation?.();
-    this.detachCancellation = undefined;
+    const previous = this.active;
     const session = Object.freeze({ qaId });
-    this.session = session;
-    this.transportSignal = signal;
-    this.onCancel = onCancel;
-    if (signal) {
-      const cancel = () => this.cancelStreamingQa(session);
-      signal.addEventListener('abort', cancel, { once: true });
-      this.detachCancellation = () => signal.removeEventListener('abort', cancel);
+    const cancel = () => this.cancelStreamingQa(session);
+    this.active = {
+      session,
+      signal,
+      onCancel,
+      detach: () => signal?.removeEventListener('abort', cancel),
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
+    previous?.detach();
+    try {
+      // Publish replacement ownership first: old-answer subscribers may start another answer.
+      previous?.onCancel?.();
+    } catch (error) {
+      this.clearStreamingQaId(session);
+      throw error;
     }
     agentLog.debug('QA streaming started', { qaId });
+    return session;
   }
 
-  /**
-   * Get the currently streaming QA ID
-   */
   getStreamingQaId(): string | null {
-    return this.session?.qaId ?? null;
+    return this.active?.session.qaId ?? null;
   }
 
   /** Capture this occurrence, including restarts of the same QA ID. */
   capture(): QAStreamSession | null {
-    return this.session;
+    return this.active?.session ?? null;
   }
 
   /** Clear only the captured occurrence when an owner is provided. */
   clearStreamingQaId(expected?: QAStreamSession | null): void {
-    if (expected !== undefined && this.session !== expected) return;
-    this.detachCancellation?.();
-    this.detachCancellation = undefined;
-    this.onCancel = undefined;
-    this.transportSignal = undefined;
-    const previousQaId = this.session?.qaId;
-    this.session = null;
-    if (previousQaId) {
-      agentLog.debug('QA streaming cleared', { previousQaId });
-    }
+    if (expected !== undefined && this.capture() !== expected) return;
+    const previous = this.active;
+    this.active = null;
+    previous?.detach();
+    if (previous) agentLog.debug('QA streaming cleared', { previousQaId: previous.session.qaId });
   }
 
   /** Interrupt this occurrence, clearing ownership before notifying its answer. */
   cancelStreamingQa(expected: QAStreamSession | null): void {
-    if (this.session !== expected) return;
-    const onCancel = this.onCancel;
+    if (this.capture() !== expected) return;
+    const previous = this.active;
     this.clearStreamingQaId(expected);
-    onCancel?.();
+    previous?.onCancel?.();
   }
 
   /** EOF/failure without a finish event interrupts only this transport's answer. */
   endTransport(signal: AbortSignal): void {
-    if (this.transportSignal === signal) this.cancelStreamingQa(this.session);
+    if (this.active?.signal === signal) this.cancelStreamingQa(this.capture());
   }
 
-  /**
-   * Check if a QA is currently streaming
-   */
   isStreaming(): boolean {
-    return this.session !== null;
+    return this.active !== null;
   }
 }
 
