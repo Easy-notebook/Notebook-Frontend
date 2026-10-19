@@ -1,0 +1,123 @@
+import type { PersistStorage, StorageValue } from 'zustand/middleware';
+import type { PersistedState, SettingsWithTimestamp } from '@Store/models/settings';
+import { encrypt, decrypt } from '@Utils/encryption';
+
+const object = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** Validates the persistence envelope and credential boundary; migrations own settings defaults. */
+export function readSettingsState(value: unknown): PersistedState {
+  if (!object(value) || !object(value.settings) || typeof value.settings.apiKey !== 'string')
+    throw new Error('Invalid persisted settings payload');
+  return value as unknown as PersistedState;
+}
+
+interface SettingsStorageDependencies {
+  storage: () => Storage;
+  readBackup: () => Promise<PersistedState | null>;
+  writeBackup: (settings: SettingsWithTimestamp) => Promise<void>;
+  pruneBackups: () => Promise<void>;
+  version: number;
+  encrypt?: (value: string) => Promise<string>;
+  decrypt?: (value: string) => Promise<string>;
+}
+
+/** Serialized settings I/O. Runtime state stays plaintext; persisted credentials are encrypted. */
+export class SettingsPersistenceStorage implements PersistStorage<PersistedState, Promise<void>> {
+  private tail: Promise<void> = Promise.resolve();
+
+  constructor(private readonly dependencies: SettingsStorageDependencies) {}
+
+  private enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const operation = this.tail.then(work);
+    this.tail = operation.then(
+      () => undefined,
+      () => undefined
+    );
+    return operation;
+  }
+
+  private async transform(
+    state: PersistedState,
+    direction: 'encrypt' | 'decrypt'
+  ): Promise<PersistedState> {
+    const captured = structuredClone(readSettingsState(state));
+    const settings = captured.settings!;
+    const transform =
+      direction === 'encrypt'
+        ? (this.dependencies.encrypt ?? encrypt)
+        : (this.dependencies.decrypt ?? decrypt);
+    if (settings.apiKey) settings.apiKey = await transform(settings.apiKey);
+    return captured;
+  }
+
+  private async backup(): Promise<StorageValue<PersistedState> | null> {
+    const state = await this.dependencies.readBackup();
+    return state === null
+      ? null
+      : {
+          state: await this.transform(state, 'decrypt'),
+          version: this.dependencies.version,
+        };
+  }
+
+  getItem(name: string): Promise<StorageValue<PersistedState> | null> {
+    return this.enqueue(async () => {
+      try {
+        const raw = this.dependencies.storage().getItem(name);
+        if (raw === null) return this.backup();
+        const value: unknown = JSON.parse(raw);
+        if (
+          !object(value) ||
+          (value.version !== undefined &&
+            (typeof value.version !== 'number' ||
+              !Number.isSafeInteger(value.version) ||
+              value.version < 0))
+        )
+          throw new Error('Invalid settings storage envelope');
+        return {
+          state: await this.transform(readSettingsState(value.state), 'decrypt'),
+          version: value.version as number | undefined,
+        };
+      } catch (error) {
+        const recovered = await this.backup();
+        if (recovered) return recovered;
+        throw error;
+      }
+    });
+  }
+
+  setItem(name: string, value: StorageValue<PersistedState>): Promise<void> {
+    const captured = structuredClone(value);
+    return this.enqueue(async () => {
+      const state = await this.transform(captured.state, 'encrypt');
+      const encoded = JSON.stringify({ ...captured, state });
+      await this.dependencies.writeBackup(state.settings!);
+      try {
+        this.dependencies.storage().setItem(name, encoded);
+      } catch (error) {
+        if (!(error instanceof DOMException) || error.name !== 'QuotaExceededError') throw error;
+        await this.dependencies.pruneBackups();
+        this.dependencies.storage().setItem(name, encoded);
+      }
+    });
+  }
+
+  removeItem(name: string): Promise<void> {
+    return this.enqueue(async () => {
+      this.dependencies.storage().removeItem(name);
+    });
+  }
+
+  createBackup(settings: SettingsWithTimestamp): Promise<void> {
+    const captured = structuredClone(settings);
+    return this.enqueue(async () => {
+      const encoded = await this.transform({ settings: captured }, 'encrypt');
+      await this.dependencies.writeBackup(encoded.settings!);
+    });
+  }
+
+  restoreBackup(): Promise<PersistedState | null> {
+    return this.enqueue(async () => (await this.backup())?.state ?? null);
+  }
+}

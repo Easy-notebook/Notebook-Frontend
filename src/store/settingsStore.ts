@@ -1,11 +1,13 @@
 // store/settingsStore.ts
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { encrypt, decrypt } from '@Utils/encryption';
+import { persist, type PersistOptions } from 'zustand/middleware';
+import {
+  SettingsPersistenceStorage,
+  readSettingsState,
+} from '@Services/settings/SettingsPersistenceStorage';
 import { useMemo } from 'react';
 import { storeLog } from '@Utils/logger';
 import type {
-  ThemeType,
   PlatformType,
   MarkdownPreferences,
   EditorSettings,
@@ -14,7 +16,6 @@ import type {
   SettingsWithTimestamp,
   StorageItem,
   StorageEstimate,
-  PlatformKeyMapping,
   PlatformKeyMappingConfig,
   PersistedState,
 } from '@Store/models';
@@ -30,7 +31,6 @@ const TEST_STORAGE_KEY = '!!testQuota';
 const MIN_STORAGE_SPACE = 1024 * 50; // 50KB minimum storage requirement
 const MAX_SHORTCUT_KEYS = 3; // Maximum number of keys in a shortcut combination
 const CLEANUP_THRESHOLD = 1024 * 1024; // 1MB
-const MAX_RETRY_ATTEMPTS = 3;
 const DEFAULT_API_URL = 'https://api.example.com';
 
 /**
@@ -277,24 +277,15 @@ const storageManager = {
   async restoreFromBackup(): Promise<PersistedState | null> {
     const keys = Object.keys(localStorage);
     const backupPattern = new RegExp(`${STORAGE_KEYS.BACKUP}-(\\d+)$`);
-    const latestBackup = keys
+    const backups = keys
       .filter((key) => backupPattern.test(key))
-      .sort((a, b) => {
-        const timeA = parseInt(a.split('-').pop() || '0') || 0;
-        const timeB = parseInt(b.split('-').pop() || '0') || 0;
-        return timeB - timeA;
-      })[0];
-
-    if (latestBackup) {
+      .sort((a, b) => Number(b.split('-').pop()) - Number(a.split('-').pop()));
+    for (const key of backups) {
       try {
-        const compressed = localStorage.getItem(latestBackup);
-        if (compressed) {
-          const data = JSON.parse(compressed);
-          return data;
-        }
+        const raw = localStorage.getItem(key);
+        if (raw !== null) return readSettingsState({ settings: JSON.parse(raw) });
       } catch (error) {
-        storeLog.error('Backup restoration failed', { error });
-        return null;
+        storeLog.error('Backup restoration failed', { key, error });
       }
     }
     return null;
@@ -403,33 +394,6 @@ const getPlatformInfo = (): PlatformType => {
   return 'default';
 };
 
-const withRetry = async <T>(
-  operation: () => Promise<T>,
-  maxAttempts = MAX_RETRY_ATTEMPTS
-): Promise<T> => {
-  let lastError: Error;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await operation();
-    } catch (error: any) {
-      lastError = error;
-      if (attempt === maxAttempts) break;
-
-      // Exponential backoff
-      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-
-      // Try cleanup if storage is full
-      if (error.name === 'QuotaExceededError') {
-        await storageManager.cleanupStorage();
-      }
-    }
-  }
-
-  throw lastError!;
-};
-
 // Create Settings Store
 const createSettingsStore = (set: any, get: any): SettingsStore => ({
   settings: initialSettings,
@@ -459,12 +423,12 @@ const createSettingsStore = (set: any, get: any): SettingsStore => ({
         throw new Error('Invalid base URL format');
       }
 
-      const encryptedKey = apiKey ? await encrypt(apiKey) : get().settings.apiKey;
+      const nextApiKey = apiKey ?? get().settings.apiKey;
 
-      set((state: SettingsStoreState) => ({
+      await set((state: SettingsStoreState) => ({
         settings: {
           ...state.settings,
-          apiKey: encryptedKey,
+          apiKey: nextApiKey,
           baseUrl: baseUrl || state.settings.baseUrl,
           apiTimeout: apiTimeout || state.settings.apiTimeout,
         },
@@ -597,120 +561,57 @@ const createSettingsStore = (set: any, get: any): SettingsStore => ({
   },
 });
 
-// Storage Configuration
-const storageConfig = {
+const settingsPersistence = new SettingsPersistenceStorage({
+  storage: () => localStorage,
+  readBackup: () => storageManager.restoreFromBackup(),
+  writeBackup: (settings) => storageManager.createBackup(settings),
+  pruneBackups: () => storageManager.clearOldBackups(),
+  version: STORE_VERSION,
+});
+
+const storageConfig: PersistOptions<SettingsStore, PersistedState, Promise<void>> = {
   name: STORE_NAME,
   version: STORE_VERSION,
+  partialize: (state): PersistedState => ({ settings: state.settings, timestamp: Date.now() }),
+  storage: settingsPersistence,
 
-  partialize: (state: SettingsStoreState): PersistedState => ({
-    settings: {
-      ...state.settings,
-      timestamp: Date.now(),
-    },
-  }),
-
-  storage: {
-    getItem: async (name: string): Promise<PersistedState | null> => {
-      try {
-        const value = localStorage.getItem(name);
-        if (!value) {
-          // Try to restore from backup if main storage is empty
-          return await storageManager.restoreFromBackup();
-        }
-
-        const decompressed = value;
-        const parsed = JSON.parse(decompressed);
-
-        if (parsed.settings?.apiKey) {
-          parsed.settings.apiKey = await decrypt(parsed.settings.apiKey);
-        }
-
-        return parsed;
-      } catch (error) {
-        storeLog.error('Error reading settings', { error });
-        // Attempt to restore from backup on error
-        return await storageManager.restoreFromBackup();
-      }
-    },
-
-    setItem: async (name: string, value: PersistedState): Promise<void> => {
-      return await withRetry(async () => {
-        try {
-          // Create backup before attempting to save
-          await storageManager.createBackup(value.settings as SettingsWithTimestamp);
-
-          // Check storage space and cleanup if necessary
-          if (!(await storageManager.checkStorageSpace())) {
-            await storageManager.cleanupStorage();
-          }
-
-          // Compress with UTF16 for better compression ratio
-          const compressed = JSON.stringify(value);
-          localStorage.setItem(name, compressed);
-        } catch (error: any) {
-          // If setting fails, try clearing some space and retry
-          if (error.name === 'QuotaExceededError') {
-            await storageManager.clearOldBackups();
-            // Compress and retry
-            const compressed = JSON.stringify(value);
-            localStorage.setItem(name, compressed);
-          } else {
-            throw error;
-          }
-        }
-      });
-    },
-
-    removeItem: async (name: string): Promise<void> => {
-      try {
-        localStorage.removeItem(name);
-      } catch (error) {
-        storeLog.error('Error removing settings', { error });
-      }
-    },
-  },
-
-  migrate: (persistedState: PersistedState, version: number): PersistedState => {
-    let migratedState = { ...persistedState };
+  migrate: (persistedState: unknown, version: number): PersistedState => {
+    let migratedState = { ...readSettingsState(persistedState) };
 
     try {
-      switch (version) {
-        case 0:
-          // Migration from initial version
-          migratedState = {
-            ...migratedState,
-            settings: {
-              ...initialSettings,
-              ...migratedState.settings,
+      if (version === 0) {
+        // Migration from initial version
+        migratedState = {
+          ...migratedState,
+          settings: {
+            ...initialSettings,
+            ...migratedState.settings,
+          },
+        };
+      }
+      if (version === 0 || version === 1) {
+        // Add new v2 fields with defaults
+        if (migratedState.settings) {
+          migratedState.settings = {
+            ...migratedState.settings,
+            apiTimeout: initialSettings.apiTimeout,
+            theme: initialSettings.theme,
+            markdownPreferences: {
+              ...initialSettings.markdownPreferences,
+              ...migratedState.settings.markdownPreferences,
+            },
+            editorSettings: {
+              ...initialSettings.editorSettings,
+              ...migratedState.settings.editorSettings,
             },
           };
-        /* falls through */
-        case 1:
-          // Add new v2 fields with defaults
-          if (migratedState.settings) {
-            migratedState.settings = {
-              ...migratedState.settings,
-              apiTimeout: initialSettings.apiTimeout,
-              theme: initialSettings.theme,
-              markdownPreferences: {
-                ...initialSettings.markdownPreferences,
-                ...migratedState.settings.markdownPreferences,
-              },
-              editorSettings: {
-                ...initialSettings.editorSettings,
-                ...migratedState.settings.editorSettings,
-              },
-            };
-          }
-          break;
-        default:
-          if (version > STORE_VERSION) {
-            storeLog.warn('Future version detected, resetting to initial state', {
-              currentVersion: STORE_VERSION,
-              storedVersion: version,
-            });
-            return { settings: initialSettings };
-          }
+        }
+      } else if (version > STORE_VERSION) {
+        storeLog.warn('Future version detected, resetting to initial state', {
+          currentVersion: STORE_VERSION,
+          storedVersion: version,
+        });
+        return { settings: initialSettings };
       }
 
       return migratedState;
@@ -720,12 +621,8 @@ const storageConfig = {
     }
   },
 
-  // Add onRehydrateStorage handler
-  onRehydrateStorage: () => (state: SettingsStoreState | null) => {
-    if (!state) {
-      console.warn('Storage rehydration failed, attempting backup restore');
-      return storageManager.restoreFromBackup();
-    }
+  onRehydrateStorage: () => (_state, error) => {
+    if (error) storeLog.error('Settings rehydration failed', { error });
   },
 };
 
@@ -741,8 +638,8 @@ export const useSettingsError = () => useSettingsStore((state) => state.error);
 export const useStorageManager = () => ({
   checkStorage: storageManager.checkStorageSpace,
   cleanup: storageManager.cleanupStorage,
-  createBackup: storageManager.createBackup,
-  restoreBackup: storageManager.restoreFromBackup,
+  createBackup: (settings: SettingsWithTimestamp) => settingsPersistence.createBackup(settings),
+  restoreBackup: () => settingsPersistence.restoreBackup(),
   getStorageEstimate: storageManager.getStorageEstimate,
 });
 
