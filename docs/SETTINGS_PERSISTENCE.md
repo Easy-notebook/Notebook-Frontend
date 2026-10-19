@@ -99,3 +99,17 @@ action reports its error with exactly one primary write attempt.
 Schema tests cover malformed nested fields, enum values, non-finite numbers, historical
 partial records and malformed primary recovery. Chromium verifies invalid current data
 cannot hydrate and malformed runtime updates leave state and storage unchanged.
+
+## Shortcut update policy
+
+`ShortcutBinding` owns editable binding parsing and semantic conflict comparison.
+Modifier order and letter case do not distinguish otherwise equal bindings. Repeated
+modifiers are invalid. The existing Ctrl+C/V/X/A/Z reservation policy now compares
+canonical identities consistently. The editable grammar accepts one or two modifiers
+and an alphanumeric key or Enter; Enter matches built-in new-cell/run-cell defaults.
+Stored display strings remain unchanged. This policy applies to the dedicated shortcut
+update action; bulk import/update currently performs structural validation only.
+
+Tests cover reserved combinations, modifier-order conflicts, malformed bindings, and
+all built-in bindings. Chromium verifies rejected updates do not mutate state/storage
+and the default Enter binding can be saved through the public action.

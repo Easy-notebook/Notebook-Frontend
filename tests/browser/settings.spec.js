@@ -206,3 +206,35 @@ test('malformed current settings cannot hydrate or be introduced through runtime
   expect(result.runtime.editorSettings.editorType).toBe('tiptap');
   expect(result.preserved).toBe(true);
 });
+
+test('shortcut validation protects reserved bindings and permits existing Enter defaults', async ({
+  page,
+}) => {
+  await page.goto('/tests/browser/storage.html');
+  const result = await page.evaluate(async () => {
+    const { default: store } = await import('/src/store/settingsStore.ts');
+    await store.persist.rehydrate();
+    let rejected;
+    try {
+      store.getState().updateShortcut('saveFile', 'Ctrl+C');
+    } catch (error) {
+      rejected = error.message;
+    }
+    const afterRejection = {
+      binding: store.getState().settings.shortcuts.saveFile,
+      primary: localStorage.getItem('easy-notebook-settings'),
+    };
+    store.getState().updateShortcut('newCell', 'Ctrl+Enter');
+    await store.persist.rehydrate();
+    return {
+      rejected,
+      afterRejection,
+      binding: store.getState().settings.shortcuts.newCell,
+      error: store.getState().error,
+    };
+  });
+  expect(result.rejected).toContain('reserved by the system');
+  expect(result.afterRejection).toEqual({ binding: 'Ctrl+S', primary: null });
+  expect(result.binding).toBe('Ctrl+Enter');
+  expect(result.error).toBeNull();
+});

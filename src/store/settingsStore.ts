@@ -1,3 +1,4 @@
+import { ShortcutBinding } from '@Services/settings/ShortcutBinding';
 import { readSettingsState } from '@Services/settings/SettingsRecord';
 import { initialSettings } from '@Services/settings/SettingsDefaults';
 import { SettingsBackupRepository } from '@Services/settings/SettingsBackupRepository';
@@ -32,7 +33,6 @@ const STORAGE_KEYS = {
 } as const;
 const TEST_STORAGE_KEY = '!!testQuota';
 const MIN_STORAGE_SPACE = 1024 * 50; // 50KB minimum storage requirement
-const MAX_SHORTCUT_KEYS = 3; // Maximum number of keys in a shortcut combination
 const CLEANUP_THRESHOLD = 1024 * 1024; // 1MB
 
 export interface SettingsStoreState {
@@ -122,9 +122,6 @@ const PLATFORM_KEY_MAPPING: PlatformKeyMappingConfig = {
   },
 };
 
-// System reserved shortcuts to avoid conflicts
-const RESERVED_SHORTCUTS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z']);
-
 // Initial settings with default values
 
 // Storage management utilities
@@ -213,42 +210,6 @@ const isValidUrl = (url: string): boolean => {
   }
 };
 
-const validateShortcut = (shortcut: string, existingShortcuts: Record<string, string>): boolean => {
-  const keyPattern = /^(Ctrl|Alt|Shift|Meta)$/;
-  const finalKeyPattern = /^[A-Za-z0-9]$/;
-  const parts = shortcut.split('+').map((p) => p.trim());
-
-  if (parts.length > MAX_SHORTCUT_KEYS || parts.length < 2) {
-    throw new Error(`Shortcut must have 2-${MAX_SHORTCUT_KEYS} keys`);
-  }
-
-  const modifiers = parts.slice(0, -1);
-  const finalKey = parts[parts.length - 1];
-
-  if (!modifiers.every((mod) => keyPattern.test(mod))) {
-    throw new Error('Invalid modifier key(s)');
-  }
-
-  if (!finalKeyPattern.test(finalKey)) {
-    throw new Error('Invalid final key');
-  }
-
-  const normalizedShortcut = shortcut.toLowerCase().replace(/\s+/g, '');
-  if (RESERVED_SHORTCUTS.has(normalizedShortcut)) {
-    throw new Error('This shortcut is reserved by the system');
-  }
-
-  const conflicts = Object.entries(existingShortcuts).filter(
-    ([_, value]) => value.toLowerCase().replace(/\s+/g, '') === normalizedShortcut
-  );
-
-  if (conflicts.length > 0) {
-    throw new Error(`Shortcut conflicts with: ${conflicts.map(([key]) => key).join(', ')}`);
-  }
-
-  return true;
-};
-
 const getPlatformInfo = (): PlatformType => {
   const platform = navigator.platform.toLowerCase();
   if (platform.includes('mac')) return 'macos';
@@ -303,7 +264,7 @@ const createSettingsStore = (
       void updates.update((settings) => {
         const currentShortcuts: Record<string, string> = { ...settings.shortcuts };
         delete currentShortcuts[key];
-        validateShortcut(value, currentShortcuts);
+        ShortcutBinding.validateUpdate(value, currentShortcuts);
         return { ...settings, shortcuts: { ...settings.shortcuts, [key]: value } };
       });
     },
