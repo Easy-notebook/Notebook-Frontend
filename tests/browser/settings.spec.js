@@ -319,3 +319,34 @@ test('competing tabs serialize settings writes and reject stale snapshots until 
     })
   ).toBe('rebased-key');
 });
+
+test('settings UI shows a write conflict and explicitly reloads the winning preferences', async ({
+  page,
+}) => {
+  await page.goto('/tests/browser/storage.html');
+  await page.evaluate(async () => {
+    const { mountSettings } = await import('/tests/browser/SettingsProbe.jsx');
+    await mountSettings();
+    const { default: store } = await import('/src/store/settingsStore.ts');
+    await store.getState().updateApiSettings({ apiTimeout: 30000 });
+    const saved = JSON.parse(localStorage.getItem('easy-notebook-settings'));
+    saved.state.settings.apiTimeout = 20000;
+    localStorage.setItem('easy-notebook-settings', JSON.stringify(saved));
+  });
+  const timeout = page.locator('input[name="apiTimeout"]');
+  await timeout.fill('45000');
+  await expect(page.getByRole('alert')).toContainText('Settings changed in another context');
+  await page
+    .getByRole('button', { name: 'Reload saved settings (replace current changes)' })
+    .click();
+  await expect(timeout).toHaveValue('20000');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await timeout.fill('25000');
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        () => JSON.parse(localStorage.getItem('easy-notebook-settings')).state.settings.apiTimeout
+      )
+    )
+    .toBe(25000);
+});

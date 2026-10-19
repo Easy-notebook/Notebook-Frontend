@@ -47,6 +47,8 @@
     "file": "文件"
   },
   "settings": {
+    "reloadFailed": "无法读取已保存的设置。",
+    "reloadSaved": "重新读取已保存设置（替换当前修改）",
     "title": "设置",
     "tabs": {
       "general": "通用",

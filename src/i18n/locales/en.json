@@ -47,6 +47,8 @@
     "file": "file"
   },
   "settings": {
+    "reloadFailed": "Could not read saved settings.",
+    "reloadSaved": "Reload saved settings (replace current changes)",
     "title": "Settings",
     "tabs": {
       "general": "General",

@@ -156,3 +156,18 @@ cleanup ordering/isolation. Chromium exercises destructured methods from the pub
 Cross-tab tests pause one writer during encryption, observe another waiting for settings
 ownership, then verify stale-write rejection, winner preservation, rehydration and retry.
 Unit tests also verify external deletion cannot be silently resurrected.
+
+## Settings UI integration
+
+The settings page sends timeout input as a number and uses typed preference handlers.
+Persisted failures are rendered in an alert with an explicitly labeled reload action
+that replaces current edits with saved settings. Reload clears the error only when
+hydration succeeds. The label and failure message are translated in English/Chinese.
+Shortcut recording is a module-level component so parent updates do not remount and
+lose the captured keys. The obsolete numeric markdown-preference branch is removed;
+all declared markdown preferences are boolean switches.
+
+Component tests verify numeric submission, reload success/failure handling and shortcut
+recording across parent renders. A real Chromium UI test exercises conflict display,
+explicit reload of the winning value and a subsequent successful save. This supplies
+manual conflict recovery rather than automatic merging of unsaved preference changes.
