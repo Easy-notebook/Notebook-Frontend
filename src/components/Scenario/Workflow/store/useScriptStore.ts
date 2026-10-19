@@ -21,6 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 // External dependencies
 import useNotebookStore from '@Store/notebookStore';
 import { ScriptCodeExecution, scriptCodeResultValue } from './ScriptCodeExecution';
+import { NotebookActionScope } from './NotebookActionScope';
 
 // ==============================================
 // Types
@@ -182,73 +183,81 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     const actionType = request.action;
     console.log(`[ScriptStore] Executing action: ${actionType}`);
 
-    // Record action execution to AIAgentStore
-    let actionId: string | null = null;
+    const scope = new NotebookActionScope(signal);
+    signal = scope.signal;
     try {
-      const { useAIAgentStore } = await import('@Store/AIAgentStore');
-      signal?.throwIfAborted();
-      const viewMode = useNotebookStore.getState().viewMode;
-      const currentCellId = useNotebookStore.getState().getCurrentCellId();
-
-      // Format action content with parameters
-      const actionContent = formatActionContent(actionType, request);
-
-      // Add action to right sidebar
-      actionId = useAIAgentStore.getState().addAction({
-        type: 'system_event' as any,
-        content: actionContent,
-        result: '',
-        relatedQAIds: [],
-        cellId: currentCellId,
-        viewMode: viewMode,
-        onProcess: true,
-      });
-    } catch (error) {
-      console.error('[ScriptStore] Failed to record action to sidebar:', error);
-    }
-
-    try {
-      // Import action registry dynamically to avoid circular dependencies
-      const { getActionClass } = await import('../actions');
-
-      signal?.throwIfAborted();
-
-      // Get action class from registry
-      const ActionClass = getActionClass(actionType);
-
-      if (!ActionClass) throw new Error(`Unknown action type: ${actionType}`);
-
-      // Create action instance with scriptStore reference
-      const action = new ActionClass(get());
-
-      // Execute action
-      const result = await action.execute(request, signal);
-      signal?.throwIfAborted();
-
-      // Update action with result
-      if (actionId) {
+      const notebook = useNotebookStore.getState();
+      const viewMode = notebook.viewMode;
+      const currentCellId = notebook.getCurrentCellId();
+      // Record action execution to AIAgentStore
+      let actionId: string | null = null;
+      try {
         const { useAIAgentStore } = await import('@Store/AIAgentStore');
         signal?.throwIfAborted();
-        useAIAgentStore.getState().updateAction(actionId, {
-          onProcess: false,
-          result: formatActionResult(result),
+
+        // Format action content with parameters
+        const actionContent = formatActionContent(actionType, request);
+
+        // Add action to right sidebar
+        actionId = useAIAgentStore.getState().addAction({
+          type: 'system_event' as any,
+          content: actionContent,
+          result: '',
+          relatedQAIds: [],
+          cellId: currentCellId,
+          viewMode: viewMode,
+          onProcess: true,
         });
+      } catch (error) {
+        console.error('[ScriptStore] Failed to record action to sidebar:', error);
       }
 
-      return result;
-    } catch (error) {
-      console.error(`[ScriptStore] Error executing action ${actionType}:`, error);
+      try {
+        // Import action registry dynamically to avoid circular dependencies
+        const { getActionClass } = await import('../actions');
 
-      // Mark action as failed
-      if (actionId) {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        useAIAgentStore.getState().updateAction(actionId, {
-          onProcess: false,
-          result: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        });
+        signal?.throwIfAborted();
+
+        // Get action class from registry
+        const ActionClass = getActionClass(actionType);
+
+        if (!ActionClass) throw new Error(`Unknown action type: ${actionType}`);
+
+        // Create action instance with scriptStore reference
+        scope.begin();
+        const action = new ActionClass(get());
+
+        // Execute action
+        const result = await action.execute(request, signal);
+        signal?.throwIfAborted();
+
+        // Update action with result
+        if (actionId) {
+          const { useAIAgentStore } = await import('@Store/AIAgentStore');
+          signal?.throwIfAborted();
+          useAIAgentStore.getState().updateAction(actionId, {
+            onProcess: false,
+            result: formatActionResult(result),
+          });
+        }
+
+        return result;
+      } catch (error) {
+        console.error(`[ScriptStore] Error executing action ${actionType}:`, error);
+
+        // Mark action as failed
+        if (actionId) {
+          const { useAIAgentStore } = await import('@Store/AIAgentStore');
+          useAIAgentStore.getState().updateAction(actionId, {
+            onProcess: false,
+            result: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
+
+        throw error;
       }
-
-      throw error;
+    } finally {
+      scope.dispose();
     }
   },
 

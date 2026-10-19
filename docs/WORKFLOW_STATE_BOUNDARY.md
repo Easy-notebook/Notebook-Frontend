@@ -129,3 +129,13 @@ abort or unsubscribe callback issues another command synchronously, that later c
 the interrupted start resolves without installing a second owner. Old unsubscribe cleanup cannot
 clear a replacement run's busy flag. A subscription that immediately invalidates its run is
 released as soon as registration returns, before any initial snapshot or preparation is published.
+
+`NotebookActionScope` owns ScriptStore action admission and execution. It captures notebook
+identity before lazy module imports and combines notebook invalidation with the optional caller
+signal. Switching away and back cannot revive an admitted request. Sidebar cell/view context is
+captured before awaiting. A sidebar subscriber that navigates before dispatch prevents execution
+and settles that invocation's record as failed. During execution only, the first ID assignment
+to an unsaved notebook is accepted to support kernel initialization. Cancellation releases the
+notebook subscription immediately; ordinary completion releases it in finally without aborting
+already-completed work. Action implementations must still check the supplied signal around their
+own asynchronous side effects; this scope does not make non-cooperative code interruptible.
