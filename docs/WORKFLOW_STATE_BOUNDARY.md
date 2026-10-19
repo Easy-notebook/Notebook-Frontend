@@ -58,3 +58,9 @@ Cancellation still takes precedence and stale failures cannot fail a newer run. 
 applied action effects remain applied; this is stop-on-error behavior, not transaction rollback.
 Action methods that return application-specific failure values instead of throwing retain
 their existing return contracts and require separate interpretation by their callers.
+
+Transition-owned notebook actions use the same failure rule. BaseTransitionHandler propagates
+an execution exception instead of returning success after logging it. A failed step-heading
+insertion therefore prevents STEP_RUNNING publication; initialization stops before subsequent
+description/section actions if title update throws. Successful actions still execute once.
+The optional absence of a scriptStore retains headless transition behavior.

@@ -173,6 +173,7 @@ export abstract class BaseTransitionHandler {
       console.log(`[Action] Executed ${actionType}: ${content.slice(0, 50)}`);
     } catch (error) {
       console.error(`[Action] Failed to execute ${actionType}:`, error);
+      throw error;
     }
   }
 
