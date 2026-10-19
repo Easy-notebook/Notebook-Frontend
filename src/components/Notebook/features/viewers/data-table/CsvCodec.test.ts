@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import { expect, it } from 'vitest';
-import { serializeTableCsv } from './serializeTableCsv';
+import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 
 it('round-trips delimiters, quotes, newlines, whitespace and Unicode without synthetic headers', () => {
   const cells = [
@@ -26,9 +26,31 @@ it('uses column keys and their displayed order, preserving zero, false and missi
     [{ A: 0, B: false, C: null, D: undefined, hidden: 'not exported' }],
     [{ key: 'B' }, { key: 'A' }, { key: 'C' }, { key: 'D' }]
   );
-  expect(encoded).toBe('false,0,,');
+  expect(encoded).toBe('false,0,"",""');
 });
 
 it('does not fabricate data for an empty table', () => {
   expect(serializeTableCsv([], [{ key: 'A' }])).toBe('');
+});
+
+it.each([
+  ['', []],
+  [' ', [[' ']]],
+  ['a\n', [['a']]],
+  ['a\n\n', [['a'], ['']]],
+  ['\n', [['']]],
+  ['\r\n\r\n', [[''], ['']]],
+  ['a\n\nb', [['a'], [''], ['b']]],
+  ['"line\nbreak"\n""', [['line\nbreak'], ['']]],
+] as const)('preserves CSV records for %j', (content, expected) => {
+  expect(parseTableCsv(content)).toEqual(expected);
+  const encoded = serializeTableCsv(
+    expected.map((row) => ({ A: row[0] })),
+    [{ key: 'A' }]
+  );
+  expect(parseTableCsv(encoded)).toEqual(expected);
+});
+
+it('reports malformed quoted cells instead of silently saving partial data', () => {
+  expect(() => parseTableCsv('"unterminated')).toThrow('Invalid CSV');
 });

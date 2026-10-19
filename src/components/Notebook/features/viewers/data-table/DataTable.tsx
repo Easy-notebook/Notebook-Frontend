@@ -1,8 +1,7 @@
 // moved to features/viewers/data-table
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx-js-style';
-import Papa from 'papaparse';
-import { serializeTableCsv } from './serializeTableCsv';
+import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
 import {
   useReactTable,
@@ -192,9 +191,11 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   >([]);
   const [styleMap, setStyleMap] = useState<Record<string, React.CSSProperties>>({});
 
-  const workbookRef = useRef<{ fileId: string; source: string; document: XlsxDocument } | null>(
-    null
-  );
+  const sourceRef = useRef<{
+    fileId: string;
+    source: string;
+    workbook: XlsxDocument | null;
+  } | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -230,9 +231,13 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   useEffect(() => {
     const fileType = typeOverride || currentFile?.type;
     const content = currentFile?.content ?? '';
-    workbookRef.current = null;
+    sourceRef.current = null;
 
-    if (!content || (fileType !== 'csv' && fileType !== 'xlsx')) {
+    if (
+      !currentFile ||
+      (fileType !== 'csv' && fileType !== 'xlsx') ||
+      (fileType === 'xlsx' && !content)
+    ) {
       setData([]);
       setColumns([]);
       setSheetMerges([]);
@@ -243,12 +248,13 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     setIsLoading(true);
 
     try {
+      let workbook: XlsxDocument | null = null;
       let parsedData: CSVRow[] = [];
       let headers: string[] = [];
 
       if (fileType === 'xlsx') {
         const document = XlsxDocument.fromBase64(content);
-        workbookRef.current = { fileId: currentFile!.id, source: content, document };
+        workbook = document;
         const ws = document.worksheet;
         const ref = (ws as any)['!ref'] || 'A1';
         const range = XLSX.utils.decode_range(ref);
@@ -476,64 +482,28 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         setData(parsedData);
         setIsLoading(false);
       } else {
-        // CSV - Use PapaParse for better performance and robustness
-        if (!content || content.trim().length === 0) {
-          setData([]);
-          setColumns([]);
-          setIsLoading(false);
-          return;
-        }
-
-        Papa.parse(content, {
-          header: false, // We'll handle headers manually to ensure consistency
-          skipEmptyLines: true,
-          worker: false, // Disable worker to avoid potential environment issues
-          complete: (results) => {
-            const rows = results.data as any[][];
-            if (rows.length > 0) {
-              const maxCols = Math.max(0, ...rows.map((r) => r.length));
-              headers = Array.from({ length: maxCols }, (_, i) => getExcelColumnName(i));
-              parsedData = rows.map((values) => {
-                const obj: CSVRow = {};
-                headers.forEach((h, i) => {
-                  obj[h] = values[i] ?? '';
-                });
-                return obj;
-              });
-            }
-            // CSV has no merges/styles
-            setSheetMerges([]);
-            setStyleMap({});
-
-            // Update state inside the callback
-            const columnInfos: ColumnInfo[] = headers.map((h) => {
-              const values = parsedData.map((row) => row[h]);
-              const type = detectColumnType(values);
-              return {
-                key: h,
-                displayName: h,
-                width: columnWidths[h] || Math.max(100, Math.min(220, h.length * 10)),
-                type: type as any,
-              };
-            });
-
-            setColumns(columnInfos);
-            setData(parsedData);
-            setIsLoading(false);
-          },
-          error: (error: any) => {
-            console.error('PapaParse error:', error);
-            setData([]);
-            setColumns([]);
-            setIsLoading(false);
-          },
-        });
-
-        // Return early since PapaParse is async/callback-based
-        return;
+        const rows = parseTableCsv(content);
+        const maxCols = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
+        headers = Array.from({ length: maxCols }, (_, i) => getExcelColumnName(i));
+        parsedData = rows.map((values) =>
+          Object.fromEntries(headers.map((key, i) => [key, values[i] ?? '']))
+        );
+        setSheetMerges([]);
+        setStyleMap({});
+        setColumns(
+          headers.map((key) => ({
+            key,
+            displayName: key,
+            width: columnWidths[key] || Math.max(100, Math.min(220, key.length * 10)),
+            type: detectColumnType(parsedData.map((row) => row[key])) as ColumnInfo['type'],
+          }))
+        );
+        setData(parsedData);
+        setIsLoading(false);
       }
+      sourceRef.current = { fileId: currentFile.id, source: content, workbook };
     } catch (err) {
-      workbookRef.current = null;
+      sourceRef.current = null;
       console.error('Failed to parse file:', err);
       setData([]);
       setColumns([]);
@@ -1132,15 +1102,17 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     if (!currentFile) return;
     try {
       const isWorkbook = (typeOverride || currentFile.type) === 'xlsx';
-      const workbook = workbookRef.current;
+      const source = sourceRef.current;
       if (
-        isWorkbook &&
-        (!workbook || workbook.fileId !== currentFile.id || workbook.source !== currentFile.content)
+        !source ||
+        source.fileId !== currentFile.id ||
+        source.source !== currentFile.content ||
+        (isWorkbook && !source.workbook)
       ) {
-        throw new Error('Workbook is not ready for saving');
+        throw new Error('Spreadsheet is not ready for saving');
       }
       const content = isWorkbook
-        ? workbook!.document.serialize(data, columns)
+        ? source.workbook!.serialize(data, columns)
         : serializeTableCsv(data, columns);
       const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
         surface: isInSplitView ? 'split' : 'normal',

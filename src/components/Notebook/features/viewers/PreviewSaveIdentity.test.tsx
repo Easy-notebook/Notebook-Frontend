@@ -255,3 +255,42 @@ it('refuses to save a workbook whose current source could not be read', async ()
     log.mockRestore();
   }
 });
+
+it('preserves empty rows when the CSV grid is saved', async () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::rows.csv',
+    name: 'rows.csv',
+    path: 'rows.csv',
+    type: 'csv',
+    content: 'first\n\nlast\n\n',
+  };
+  render(<DataTable />);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith('first\n""\nlast\n""', {
+    surface: 'normal',
+    fileId: 'book::rows.csv',
+  });
+});
+
+it('cannot overwrite malformed CSV with an empty grid after parsing fails', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    model.state.activeFile = {
+      ...model.state.activeFile,
+      id: 'book::bad.csv',
+      name: 'bad.csv',
+      path: 'bad.csv',
+      type: 'csv',
+      content: '"unterminated',
+    };
+    render(<DataTable />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+    expect(model.state.updatePreviewFileContent).not.toHaveBeenCalled();
+    expect(model.state.setTabDirty).not.toHaveBeenCalled();
+  } finally {
+    log.mockRestore();
+  }
+});

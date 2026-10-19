@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx-js-style';
-import type { TableCellValue } from './serializeTableCsv';
+import type { TableCellValue } from './CsvCodec';
 
 /** Owns the original workbook so grid edits do not discard undisplayed worksheets. */
 export class XlsxDocument {

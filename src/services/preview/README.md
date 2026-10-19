@@ -240,7 +240,7 @@ rollback. Store and UI tests cover target routing and late completion ownership.
 
 The spreadsheet stores every source row in its data model, including any original
 header row. A/B/C column labels are view coordinates, not file contents.
-`serializeTableCsv` projects cells in column order and uses Papa Parse to encode
+`CsvCodec` owns CSV parsing and serialization. `serializeTableCsv` projects cells in column order and uses Papa Parse to encode
 CSV for both save and export. It preserves embedded commas, quotes, CR/LF and
 Unicode, and normalizes null/undefined cells to empty strings while retaining
 zero and false. Repeated CSV save/read cycles do not insert coordinate rows.
@@ -258,3 +258,9 @@ This is not a full Excel editing engine: structural edits do not translate formu
 references, UI-only formatting changes are not yet projected into workbook styles,
 and features unsupported by the installed workbook codec are not guaranteed to
 round-trip. Those remain explicit follow-ups.
+
+CSV parsing retains blank records and whitespace-only cells. It removes only the
+synthetic final record produced by the parser for a trailing line terminator.
+The encoder quotes empty cells explicitly so an empty final row is unambiguous.
+Malformed quoted input fails admission to saving; both formats require a loaded
+source matching the current file ID and content before a write is allowed.
