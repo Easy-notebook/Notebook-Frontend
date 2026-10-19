@@ -1185,3 +1185,56 @@ it('keeps imported font presentation attached to its source cell after insertion
   fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
   expect(style().fontSize).toBe('18pt');
 });
+
+it('updates search matches immediately after each replacement and restores them after undo', async () => {
+  model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'Ada\nAda' };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.keyDown(screen.getAllByText('Ada', { exact: true })[0], { key: 'f', ctrlKey: true });
+  fireEvent.change(screen.getByPlaceholderText('Search text...'), { target: { value: 'Ada' } });
+  fireEvent.change(screen.getByPlaceholderText('Replace text...'), { target: { value: '$&' } });
+  expect(screen.getByText('1 of 2 matches')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+  expect(screen.getByText('1 of 1 matches')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+  expect(screen.getByText('No matches found')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Close find and replace' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith(
+    '$&\n$&',
+    expect.anything()
+  );
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+  });
+  await act(async () => {
+    fireEvent.keyDown(screen.getByText('Ada', { exact: true }), { key: 'f', ctrlKey: true });
+  });
+  expect(screen.getByText('1 of 1 matches')).toBeDefined();
+});
+
+it('recomputes replacement coordinates after inserting a row between search sessions', async () => {
+  model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'Ada\nGrace' };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.keyDown(screen.getByText('Ada', { exact: true }), { key: 'f', ctrlKey: true });
+  fireEvent.change(screen.getByPlaceholderText('Search text...'), { target: { value: 'Ada' } });
+  fireEvent.change(screen.getByPlaceholderText('Replace text...'), {
+    target: { value: 'Changed' },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Whole cell' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Find' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close find and replace' }));
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  fireEvent.keyDown(screen.getByText('Ada', { exact: true }), { key: 'f', ctrlKey: true });
+  fireEvent.click(screen.getByRole('button', { name: 'Replace' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close find and replace' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith(
+    '""\nChanged\nGrace',
+    expect.anything()
+  );
+});

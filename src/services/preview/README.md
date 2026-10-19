@@ -453,3 +453,16 @@ resolves them through the snapshot's current source mapping, so row/column chang
 and undo preserve font presentation without leaking it into inserted cells or other
 surviving cells. This does not add full border, row-height or advanced Excel layout
 support.
+
+## Snapshot-bound spreadsheet search
+
+`SpreadsheetSearch` derives immutable match coordinates from one draft snapshot and
+captured query. The editor no longer stores a second mutable match array or schedules
+a delayed find callback after replacement. Draft edits, structure changes, undo and
+query changes produce a new search result; the navigation cursor belongs to that
+specific result. A replacement command checks its source snapshot before committing.
+
+One and all replacements share the same pure operation and commit one full snapshot.
+Search and replacement text are literal (including regex punctuation and `$&`), and
+case/whole-cell matching use the same pattern as replacement. Empty queries, invalid
+selection and identical replacements produce no history frame or dirty transition.

@@ -1,3 +1,4 @@
+import { SpreadsheetSearch } from './SpreadsheetSearch';
 import {
   importedCellPresentation,
   spreadsheetCellPresentation,
@@ -92,8 +93,6 @@ interface FindReplaceState {
   replaceText: string;
   matchCase: boolean;
   matchWholeCell: boolean;
-  currentMatchIndex: number;
-  matches: Array<{ row: number; col: number }>;
 }
 
 // =====================================================
@@ -173,10 +172,11 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       )
   );
   const {
-    value: { data, columns, cellFormats, workbook: workbookState },
+    value: draftSnapshot,
     canUndo,
     canRedo,
   } = useSyncExternalStore(draftHistory.subscribe, draftHistory.getSnapshot);
+  const { data, columns, cellFormats, workbook: workbookState } = draftSnapshot;
   const commitDraft = useCallback(
     (patch: Partial<SpreadsheetSnapshot>) => {
       draftHistory.commit({ ...draftHistory.getSnapshot().value, ...patch });
@@ -219,8 +219,6 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     replaceText: '',
     matchCase: false,
     matchWholeCell: false,
-    currentMatchIndex: -1,
-    matches: [],
   });
 
   // ============== Color Picker ==============
@@ -568,120 +566,55 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     setFrozenColumns((prev) => (prev === activeCell.col + 1 ? 0 : activeCell.col + 1));
   }, [activeCell]);
 
-  // ============== Find & Replace Functions ==============
-  const performFind = useCallback(() => {
-    if (!findReplace.findText) {
-      setFindReplace((prev) => ({ ...prev, matches: [], currentMatchIndex: -1 }));
-      return;
-    }
-    const matches: Array<{ row: number; col: number }> = [];
-    const searchText = findReplace.matchCase
-      ? findReplace.findText
-      : findReplace.findText.toLowerCase();
-    data.forEach((row, rowIndex) => {
-      columns.forEach((col, colIndex) => {
-        let cellValue = String(row[col.key] ?? '');
-        if (!findReplace.matchCase) cellValue = cellValue.toLowerCase();
-        const isMatch = findReplace.matchWholeCell
-          ? cellValue === searchText
-          : cellValue.includes(searchText);
-        if (isMatch) {
-          matches.push({ row: rowIndex, col: colIndex });
-        }
-      });
-    });
-    setFindReplace((prev) => ({
-      ...prev,
-      matches,
-      currentMatchIndex: matches.length > 0 ? 0 : -1,
-    }));
-    if (matches.length > 0) {
-      setActiveCell(matches[0]);
-    }
-  }, [findReplace.findText, findReplace.matchCase, findReplace.matchWholeCell, data, columns]);
-
-  const findNext = useCallback(() => {
-    if (findReplace.matches.length === 0) return;
-    const nextIndex = (findReplace.currentMatchIndex + 1) % findReplace.matches.length;
-    setFindReplace((prev) => ({ ...prev, currentMatchIndex: nextIndex }));
-    setActiveCell(findReplace.matches[nextIndex]);
-  }, [findReplace.matches, findReplace.currentMatchIndex]);
-
-  const findPrevious = useCallback(() => {
-    if (findReplace.matches.length === 0) return;
-    const prevIndex =
-      (findReplace.currentMatchIndex - 1 + findReplace.matches.length) % findReplace.matches.length;
-    setFindReplace((prev) => ({ ...prev, currentMatchIndex: prevIndex }));
-    setActiveCell(findReplace.matches[prevIndex]);
-  }, [findReplace.matches, findReplace.currentMatchIndex]);
-
-  const replaceOne = useCallback(() => {
-    if (findReplace.currentMatchIndex < 0 || findReplace.matches.length === 0) return;
-    const match = findReplace.matches[findReplace.currentMatchIndex];
-    const newData = data.map((row) => ({ ...row }));
-    const colKey = columns[match.col].key;
-    let cellValue = String(newData[match.row][colKey] ?? '');
-    if (findReplace.matchWholeCell) {
-      cellValue = findReplace.replaceText;
-    } else {
-      const regex = new RegExp(
-        findReplace.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-        findReplace.matchCase ? 'g' : 'gi'
-      );
-      cellValue = cellValue.replace(regex, findReplace.replaceText);
-    }
-    newData[match.row][colKey] = cellValue;
-    commitDraft({ data: newData });
-    if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-    // Re-run find
-    setTimeout(performFind, 0);
-  }, [
-    findReplace.currentMatchIndex,
-    findReplace.matches,
-    findReplace.matchWholeCell,
-    findReplace.replaceText,
-    findReplace.findText,
-    findReplace.matchCase,
-    data,
-    columns,
-    commitDraft,
-    setTabDirty,
-    currentFile,
-    performFind,
-  ]);
-
-  const replaceAll = useCallback(() => {
-    if (findReplace.matches.length === 0) return;
-    const newData = data.map((row) => ({ ...row }));
-    const regex = new RegExp(
-      findReplace.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
-      findReplace.matchCase ? 'g' : 'gi'
-    );
-    findReplace.matches.forEach((match) => {
-      const colKey = columns[match.col].key;
-      let cellValue = String(newData[match.row][colKey] ?? '');
-      if (findReplace.matchWholeCell) {
-        cellValue = findReplace.replaceText;
-      } else {
-        cellValue = cellValue.replace(regex, findReplace.replaceText);
-      }
-      newData[match.row][colKey] = cellValue;
-    });
-    commitDraft({ data: newData });
-    if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-    setFindReplace((prev) => ({ ...prev, matches: [], currentMatchIndex: -1 }));
-  }, [
-    findReplace.matches,
-    findReplace.findText,
-    findReplace.matchCase,
-    findReplace.matchWholeCell,
-    findReplace.replaceText,
-    data,
-    commitDraft,
-    setTabDirty,
-    currentFile,
-    columns,
-  ]);
+  // Search coordinates are derived from this draft, never retained across revisions.
+  const search = useMemo(
+    () =>
+      new SpreadsheetSearch(draftSnapshot, {
+        text: findReplace.isOpen ? findReplace.findText : '',
+        matchCase: findReplace.matchCase,
+        wholeCell: findReplace.matchWholeCell,
+      }),
+    [
+      draftSnapshot,
+      findReplace.isOpen,
+      findReplace.findText,
+      findReplace.matchCase,
+      findReplace.matchWholeCell,
+    ]
+  );
+  const [findCursor, setFindCursor] = useState<{ search: SpreadsheetSearch; index: number } | null>(
+    null
+  );
+  const currentMatchIndex =
+    findCursor?.search === search ? findCursor.index : search.matches.length ? 0 : -1;
+  const selectMatch = useCallback(
+    (index: number) => {
+      const match = search.matches[index];
+      if (!match) return;
+      setFindCursor({ search, index });
+      setActiveCell(match);
+    },
+    [search]
+  );
+  const performFind = useCallback(() => selectMatch(0), [selectMatch]);
+  const findNext = useCallback(
+    () => selectMatch((currentMatchIndex + 1) % search.matches.length),
+    [selectMatch, currentMatchIndex, search]
+  );
+  const findPrevious = useCallback(
+    () => selectMatch((currentMatchIndex - 1 + search.matches.length) % search.matches.length),
+    [selectMatch, currentMatchIndex, search]
+  );
+  const replaceMatches = useCallback(
+    (all: boolean) => {
+      if (draftHistory.getSnapshot().value !== search.source) return;
+      const next = search.replace(findReplace.replaceText, all ? undefined : currentMatchIndex);
+      if (!next) return;
+      draftHistory.commit(next);
+      if (currentFile) setTabDirty(currentFile.id, true);
+    },
+    [draftHistory, search, findReplace.replaceText, currentMatchIndex, currentFile, setTabDirty]
+  );
 
   // ============== 合并单元格映射（关键新增） ==============
   // 使用数据区坐标（rowIndex/colIndex）
@@ -1665,6 +1598,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                 Find & Replace
               </h3>
               <button
+                aria-label="Close find and replace"
                 onClick={() => setFindReplace((prev) => ({ ...prev, isOpen: false }))}
                 className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
@@ -1716,15 +1650,15 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                     className="flex-1 px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-500/30 focus:border-theme-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   />
                   <button
-                    onClick={replaceOne}
-                    disabled={findReplace.matches.length === 0}
+                    onClick={() => replaceMatches(false)}
+                    disabled={search.matches.length === 0}
                     className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-40"
                   >
                     Replace
                   </button>
                   <button
-                    onClick={replaceAll}
-                    disabled={findReplace.matches.length === 0}
+                    onClick={() => replaceMatches(true)}
+                    disabled={search.matches.length === 0}
                     className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-40"
                   >
                     All
@@ -1759,10 +1693,10 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
               </div>
 
               {/* Results */}
-              {findReplace.matches.length > 0 && (
+              {search.matches.length > 0 && (
                 <div className="flex items-center justify-between pt-2 text-sm">
                   <span className="text-gray-600 dark:text-gray-400">
-                    {findReplace.currentMatchIndex + 1} of {findReplace.matches.length} matches
+                    {currentMatchIndex + 1} of {search.matches.length} matches
                   </span>
                   <div className="flex items-center gap-1">
                     <button
@@ -1782,7 +1716,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                   </div>
                 </div>
               )}
-              {findReplace.findText && findReplace.matches.length === 0 && (
+              {findReplace.findText && search.matches.length === 0 && (
                 <div className="text-sm text-gray-500 dark:text-gray-400 pt-2">
                   No matches found
                 </div>
