@@ -6,12 +6,12 @@ import { Command, Paperclip, X, FileText } from 'lucide-react';
 import { CommandHintComponent } from './CommandHint';
 import { aiTerminalService } from '@Services/ai-terminal/AITerminalService';
 import { useAttachmentDraft } from '@Hooks/useAttachmentDraft';
+import { useCommandDraft } from '@Hooks/useCommandDraft';
 
 const CommandInput: React.FC = () => {
   const {
     showCommandInput,
 
-    setIsLoading,
     setActiveView,
     actions,
     qaList,
@@ -29,7 +29,7 @@ const CommandInput: React.FC = () => {
     isRightSidebarCollapsed,
   } = useStore();
 
-  const [input, setInput] = useState('');
+  const { commandDraft, input, setInput } = useCommandDraft(notebookId);
   const modalRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -198,8 +198,6 @@ const CommandInput: React.FC = () => {
     async (command: string) => {
       const submission = draft.beginSubmission();
       try {
-        setIsLoading(true);
-
         // Only open sidebar if it is currently closed and not a command
         if (!command.startsWith('/') && isRightSidebarCollapsed) {
           setIsRightSidebarCollapsed(false);
@@ -227,11 +225,9 @@ const CommandInput: React.FC = () => {
         );
 
         submission.finish(accepted);
-      } catch (error) {
-        console.error('Error in handleSubmit:', error);
+        return accepted;
       } finally {
         submission.finish(false);
-        setTimeout(() => setIsLoading(false), 500);
       }
     },
     [
@@ -240,7 +236,6 @@ const CommandInput: React.FC = () => {
       currentPhaseId,
       currentStepIndex,
       currentCellId,
-      setIsLoading,
       setActiveView,
       actionsToShow,
       qasToShow,
@@ -253,15 +248,14 @@ const CommandInput: React.FC = () => {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         if (input.trim()) {
-          handleSubmit(input.trim());
-          setInput('');
+          void commandDraft.submit(handleSubmit, (error) => console.error('Submit error:', error));
         }
       }
     },
-    [input, handleSubmit, setInput]
+    [input, handleSubmit, commandDraft]
   );
 
   // Auto focus input when modal opens

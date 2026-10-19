@@ -58,8 +58,8 @@ that draft valid. Removing a newly published record synchronously also cannot le
 the submission settles. Tests exercise both directions of shared draft/record ownership.
 
 Remote URLs are never revoked. Record reconciliation only retains blob URLs already admitted
-by a draft. Text-input submission and the global terminal loading indicator retain their
-existing lifecycle.
+by a draft. Text-input revision ownership and shared loading leases are described in
+`COMMAND_SUBMISSION_LIFECYCLE.md`.
 
 ## Empty-state notebook admission
 

@@ -25,6 +25,7 @@ import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/
 import type { AICommandInputProps, VDSQuestion } from './types';
 import { FilePreviewList } from './FilePreviewList';
 import { useEmptyStatePreparationSession } from './useEmptyStatePreparationSession';
+import { useCommandDraft } from '@Hooks/useCommandDraft';
 
 const ACCEPT = '.csv,.xlsx,.xls,.pdf,.txt,.md,.jpg,.png,.jpeg,.doc,.docx,.ppt,.pptx';
 
@@ -36,7 +37,8 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [input, setInput] = useState<string>('');
+  const notebookId = useStore((state) => state.notebookId);
+  const { commandDraft, input, setInput } = useCommandDraft(notebookId);
   const [isFocused, setIsFocused] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isMultiline, setIsMultiline] = useState<boolean>(false);
@@ -70,7 +72,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const { setPreStage } = usePipelineStore();
   const sendOperation = useOperatorStore((s) => s.sendOperation);
 
-  const { addAction, setIsLoading, setActiveView, actions, qaList, addQA } = useAIAgentStore();
+  const { addAction, setActiveView, actions, qaList, addQA } = useAIAgentStore();
 
   const {
     viewMode,
@@ -175,7 +177,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           if (stage === 'upload') alert(t('emptyState.uploadError') || String(error));
         },
       }),
-    [preparation, i18n.language, t, setFiles, setPreStage]
+    [preparation, i18n.language, t, setFiles, setPreStage, setInput]
   );
 
   const handleFileChange = useCallback(
@@ -233,160 +235,131 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
   // ---------- 提交逻辑 ----------
   const handleSubmit = useCallback(
-    (command: string) => {
-      if (!command) return;
+    async (command: string): Promise<boolean> => {
+      if (!command) return false;
       preparation.cancel();
-      setIsLoading(true);
       const timestamp = new Date().toLocaleTimeString();
 
-      try {
-        // VDS：直接启动工作流
-        const csvFile = files.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
-        const hasFiles = files.length > 0;
+      // VDS：直接启动工作流
+      const csvFile = files.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
+      const hasFiles = files.length > 0;
 
-        if (hasFiles && isVDSMode && command.trim()) {
-          console.log('[AICommandInput] VDS mode - Starting workflow directly');
+      if (hasFiles && isVDSMode && command.trim()) {
+        console.log('[AICommandInput] VDS mode - Starting workflow directly');
 
-          usePreStageStore.getState().setSelectedProblem('vds', command.trim(), 'VDS Analysis');
+        usePreStageStore.getState().setSelectedProblem('vds', command.trim(), 'VDS Analysis');
 
-          // Use CSV file if available, otherwise use the first file
-          const currentFile = csvFile || files[0];
+        // Use CSV file if available, otherwise use the first file
+        const currentFile = csvFile || files[0];
 
-          const planningRequest = {
-            user_requirement: command.trim(),
-            file_path: currentFile?.name ? `assets/${currentFile.name}` : '',
-          };
+        const planningRequest = {
+          user_requirement: command.trim(),
+          file_path: currentFile?.name ? `assets/${currentFile.name}` : '',
+        };
 
-          // Add variables to AI planning context
-          const aiPlanningStore = useAIPlanningContextStore.getState();
-          Object.entries(planningRequest).forEach(([key, value]) => {
-            aiPlanningStore.addVariable(key, value as unknown as Record<string, unknown>);
-          });
+        // Add variables to AI planning context
+        const aiPlanningStore = useAIPlanningContextStore.getState();
+        Object.entries(planningRequest).forEach(([key, value]) => {
+          aiPlanningStore.addVariable(key, value as unknown as Record<string, unknown>);
+        });
 
-          // Start workflow immediately using new architecture
-          (async () => {
-            try {
-              console.log('[AICommandInput] Starting workflow with new architecture...');
-              const { useWorkflowStateMachine } = await import(
-                '@/components/Scenario/Workflow/store/workflowStateMachine'
-              );
-
-              // ✅ NEW ARCHITECTURE: Use useWorkflowStateMachine.startWorkflow()
-              // This replaces the deprecated initializeWorkflow() and startWorkflowExecution()
-              console.log('[AICommandInput] Planning request:', planningRequest);
-
-              await useWorkflowStateMachine.getState().startWorkflow(planningRequest);
-              console.log('[AICommandInput] Workflow started successfully via new architecture');
-
-              // Navigation will be handled automatically by useNotebookEffects
-              // after workflow execution completes and isExecuting becomes false
-              console.log(
-                '[AICommandInput] Workflow execution in progress, navigation will happen automatically'
-              );
-            } catch (error) {
-              console.error('[AICommandInput] Failed to start workflow:', error);
-            }
-          })();
-
-          return;
-        }
-
-        // Command 模式
-        if (command.startsWith('/')) {
-          setActiveView('script');
-          const commandId = `action-${Date.now()}`;
-          const actionData = {
-            id: commandId,
-            type: EVENT_TYPES.USER_NEW_INSTRUCTION,
-            timestamp,
-            content: command,
-            result: '',
-            relatedQAIds: [] as string[],
-            cellId: currentCellId,
-            viewMode,
-            onProcess: false,
-            attachedFiles: files,
-          };
-          addAction(actionData as any);
-
-          sendOperation(useStore.getState().notebookId, {
-            type: 'user_command',
-            payload: {
-              current_view_mode: viewMode,
-              current_phase_id: currentPhaseId,
-              current_step_index: currentStepIndex,
-              content: command,
-              commandId,
-              files,
-            },
-          });
-        } else {
-          // QA 模式
-          console.log('[DEBUG] AICommandInput - Entering QA mode for question:', command);
-          setIsRightSidebarCollapsed(false); // 打开右侧边栏以显示 QA
-          setActiveView('qa');
-          const qaId = `qa-${uuidv4()}`;
-          const qaData = {
-            id: qaId,
-            type: 'user',
-            timestamp,
-            content: command,
-            resolved: false,
-            relatedActionId: null,
-            cellId: currentCellId,
-            viewMode,
-            onProcess: true,
-            attachedFiles: files,
-          };
-          addQA(qaData as any);
-          const action = createUserAskQuestionAction(command, [qaId], currentCellId);
-          useAIAgentStore.getState().addAction(action);
-
-          const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-            useStore.getState().notebookId || '',
-            'general' as AgentType,
-            {
-              current_cell_id: currentCellId ?? '',
-              related_cells: getCurrentViewCells(),
-              related_qa_ids: qaList.map((qa) => qa.id),
-              current_qa_id: qaId,
-              question_content: command,
-            }
-          );
-
-          const finalPayload = {
-            type: 'user_question',
-            payload: {
-              content: command,
-              QId: [qaId],
-              current_view_mode: viewMode,
-              current_phase_id: currentPhaseId,
-              current_step_index: currentStepIndex,
-              related_qas: qaList,
-              related_actions: actions,
-              related_cells: getCurrentViewCells(),
-              files,
-              ...memoryContext,
-            },
-          };
-          console.log('[DEBUG] AICommandInput - Sending user_question operation:', finalPayload);
-          sendOperation(useStore.getState().notebookId, finalPayload);
-          console.log('[DEBUG] AICommandInput - user_question operation sent successfully');
-        }
-
-        setFiles([]);
-      } catch (err) {
-        console.error('Submit error:', err);
-      } finally {
-        // 与原行为一致：稍后关闭 loading
-        setTimeout(() => setIsLoading(false), 500);
+        const { useWorkflowStateMachine } = await import(
+          '@/components/Scenario/Workflow/store/workflowStateMachine'
+        );
+        await useWorkflowStateMachine.getState().startWorkflow(planningRequest);
+        return true;
       }
+
+      // Command 模式
+      if (command.startsWith('/')) {
+        setActiveView('script');
+        const commandId = `action-${Date.now()}`;
+        const actionData = {
+          id: commandId,
+          type: EVENT_TYPES.USER_NEW_INSTRUCTION,
+          timestamp,
+          content: command,
+          result: '',
+          relatedQAIds: [] as string[],
+          cellId: currentCellId,
+          viewMode,
+          onProcess: false,
+          attachedFiles: files,
+        };
+        addAction(actionData as any);
+
+        sendOperation(useStore.getState().notebookId, {
+          type: 'user_command',
+          payload: {
+            current_view_mode: viewMode,
+            current_phase_id: currentPhaseId,
+            current_step_index: currentStepIndex,
+            content: command,
+            commandId,
+            files,
+          },
+        });
+      } else {
+        // QA 模式
+        console.log('[DEBUG] AICommandInput - Entering QA mode for question:', command);
+        setIsRightSidebarCollapsed(false); // 打开右侧边栏以显示 QA
+        setActiveView('qa');
+        const qaId = `qa-${uuidv4()}`;
+        const qaData = {
+          id: qaId,
+          type: 'user',
+          timestamp,
+          content: command,
+          resolved: false,
+          relatedActionId: null,
+          cellId: currentCellId,
+          viewMode,
+          onProcess: true,
+          attachedFiles: files,
+        };
+        addQA(qaData as any);
+        const action = createUserAskQuestionAction(command, [qaId], currentCellId);
+        useAIAgentStore.getState().addAction(action);
+
+        const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
+          useStore.getState().notebookId || '',
+          'general' as AgentType,
+          {
+            current_cell_id: currentCellId ?? '',
+            related_cells: getCurrentViewCells(),
+            related_qa_ids: qaList.map((qa) => qa.id),
+            current_qa_id: qaId,
+            question_content: command,
+          }
+        );
+
+        const finalPayload = {
+          type: 'user_question',
+          payload: {
+            content: command,
+            QId: [qaId],
+            current_view_mode: viewMode,
+            current_phase_id: currentPhaseId,
+            current_step_index: currentStepIndex,
+            related_qas: qaList,
+            related_actions: actions,
+            related_cells: getCurrentViewCells(),
+            files,
+            ...memoryContext,
+          },
+        };
+        console.log('[DEBUG] AICommandInput - Sending user_question operation:', finalPayload);
+        sendOperation(useStore.getState().notebookId, finalPayload);
+        console.log('[DEBUG] AICommandInput - user_question operation sent successfully');
+      }
+
+      setFiles([]);
+      return true;
     },
     [
       preparation,
       files,
       isVDSMode,
-      setIsLoading,
       setActiveView,
       addAction,
       addQA,
@@ -402,6 +375,10 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       setFiles,
     ]
   );
+
+  const submitInput = useCallback(() => {
+    void commandDraft.submit(handleSubmit, (error) => console.error('Submit error:', error));
+  }, [commandDraft, handleSubmit]);
 
   // const hasContent = useMemo(() => input.trim().length > 0 || files.length > 0, [input, files.length]);
 
@@ -546,11 +523,10 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
                 if (input.trim()) {
-                  handleSubmit(input.trim());
-                  setInput('');
+                  submitInput();
                 }
               }
               // 延迟执行以获取最新 scrollHeight
@@ -598,8 +574,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
                 }`}
                 onClick={() => {
                   if (input.trim()) {
-                    handleSubmit(input.trim());
-                    setInput('');
+                    submitInput();
                   }
                 }}
               >
@@ -609,8 +584,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
                 type="button"
                 onClick={() => {
                   if (input.trim()) {
-                    handleSubmit(input.trim());
-                    setInput('');
+                    submitInput();
                   }
                 }}
                 disabled={!input.trim()}
@@ -670,8 +644,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
               type="button"
               onClick={() => {
                 if (input.trim()) {
-                  handleSubmit(input.trim());
-                  setInput('');
+                  submitInput();
                 }
               }}
               disabled={!input.trim()}
