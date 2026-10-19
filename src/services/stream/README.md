@@ -79,6 +79,18 @@ await manager.startPolling({ taskId, uniqueIdentifier, commandId, prompt });
 manager.stopPolling(taskId);
 ```
 
+Each task owns a `VideoPollingSession` with `waiting → requesting → waiting/stopped`
+transitions. Requests are serialized: the next delay starts after the current operation
+settles, so slow responses cannot overlap. The default is 60 attempts with a 10-second
+delay between attempts, plus request duration. The final response is processed before
+timeout is applied; a completed/failed status that stops polling wins over timeout.
+
+Sessions capture the starting notebook identity and recheck ownership before dispatch
+and after asynchronous boundaries. Stop/replacement invalidates pending continuations;
+old results cannot remove a replacement or update a different notebook's timeout state.
+Stopping does not abort an operation already dispatched through the operator store.
+Positive integer attempt limits and finite nonnegative delays are required.
+
 #### QAStreamManager
 ```typescript
 // Replaces global lastStreamingQaId

@@ -1,11 +1,12 @@
 /**
  * Video Polling Manager - Manages video generation status polling
  *
- * Replaces global activeVideoPolls Map with a proper class
+ * Owns per-task polling sessions bound to the notebook that started them.
  */
 
 import useStore from '@Store/notebookStore';
 import { networkLog, agentLog } from '@Utils/logger';
+import { VideoPollingSession } from './VideoPollingSession';
 
 export interface VideoPollingOptions {
   taskId: string;
@@ -18,8 +19,8 @@ export interface VideoPollingOptions {
 
 export class VideoPollingManager {
   private static instance: VideoPollingManager;
-  private activePolls: Map<string, number> = new Map(); // taskId -> intervalId
-  private readonly DEFAULT_MAX_ATTEMPTS = 60; // 60 * 10s = 10 minutes
+  private readonly activePolls = new Map<string, VideoPollingSession>();
+  private readonly DEFAULT_MAX_ATTEMPTS = 60; // Request durations are additional to polling delays.
   private readonly DEFAULT_POLL_INTERVAL = 10000; // 10 seconds
 
   private constructor() {}
@@ -43,63 +44,43 @@ export class VideoPollingManager {
       pollInterval = this.DEFAULT_POLL_INTERVAL,
     } = options;
 
-    // Clear existing poll for this task
-    this.stopPolling(taskId);
+    const notebookId = useStore.getState().notebookId;
+    if (!notebookId) {
+      this.stopPolling(taskId);
+      networkLog.error('Unable to get notebookId - stopping poll', { taskId });
+      return;
+    }
 
-    let attempts = 0;
-
-    const pollIntervalId = setInterval(async () => {
-      try {
-        attempts++;
-
-        // Get current notebook state
-        const notebookState = useStore.getState();
-        const notebookId = notebookState.notebookId;
-
-        if (!notebookId) {
-          networkLog.error('Unable to get notebookId - stopping poll', { taskId });
-          this.stopPolling(taskId);
-          return;
-        }
-
-        // Send status query to backend
+    const ownsNotebook = () =>
+      this.activePolls.get(taskId) === session && useStore.getState().notebookId === notebookId;
+    const session = new VideoPollingSession(maxAttempts, pollInterval, {
+      canPoll: ownsNotebook,
+      request: async () => {
         const { default: useOperatorStore } = await import('@Store/operatorStore');
-        const statusCommand = {
+        if (!ownsNotebook()) return;
+        await useOperatorStore.getState().sendOperation(notebookId, {
           type: 'check_video_generation_status',
-          payload: {
-            taskId,
-            uniqueIdentifier,
-            commandId,
+          payload: { taskId, uniqueIdentifier, commandId },
+        });
+      },
+      timeout: () => {
+        networkLog.warn('Video generation poll timeout', { taskId, attempts: maxAttempts });
+        const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
+          metadata: {
+            isGenerating: false,
+            generationError: 'Generation timeout',
+            generationStatus: 'timeout',
           },
-        };
-
-        useOperatorStore.getState().sendOperation(notebookId, statusCommand);
-
-        // Check timeout
-        if (attempts >= maxAttempts) {
-          networkLog.warn('Video generation poll timeout', { taskId, attempts });
-          this.stopPolling(taskId);
-
-          // Update cell status to timeout
-          const success = useStore.getState().updateCellByUniqueIdentifier(uniqueIdentifier, {
-            metadata: {
-              isGenerating: false,
-              generationError: 'Generation timeout',
-              generationStatus: 'timeout',
-            },
-          });
-
-          if (success) {
-            agentLog.info('Video generation timeout status updated', { taskId });
-          }
-        }
-      } catch (error) {
-        networkLog.error('Video generation status poll error', { taskId, error });
-        this.stopPolling(taskId);
-      }
-    }, pollInterval);
-
-    this.activePolls.set(taskId, pollIntervalId);
+        });
+        if (success) agentLog.info('Video generation timeout status updated', { taskId });
+      },
+      failed: (error) => networkLog.error('Video generation status poll error', { taskId, error }),
+      stopped: () => {
+        if (this.activePolls.get(taskId) === session) this.activePolls.delete(taskId);
+      },
+    });
+    this.stopPolling(taskId);
+    this.activePolls.set(taskId, session);
     networkLog.info('Video generation status polling started', {
       taskId,
       uniqueIdentifier,
@@ -111,10 +92,9 @@ export class VideoPollingManager {
    * Stop polling for a specific task
    */
   stopPolling(taskId: string): void {
-    const intervalId = this.activePolls.get(taskId);
-    if (intervalId !== undefined) {
-      clearInterval(intervalId);
-      this.activePolls.delete(taskId);
+    const session = this.activePolls.get(taskId);
+    if (session) {
+      session.stop();
       networkLog.debug('Video polling stopped', { taskId });
     }
   }
@@ -137,8 +117,7 @@ export class VideoPollingManager {
    * Stop all active polling
    */
   stopAllPolling(): void {
-    this.activePolls.forEach((intervalId) => clearInterval(intervalId));
-    this.activePolls.clear();
+    for (const session of [...this.activePolls.values()]) session.stop();
     networkLog.info('All video polling stopped');
   }
 }
