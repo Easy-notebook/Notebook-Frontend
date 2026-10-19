@@ -132,6 +132,8 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     try {
       const updatedStateJSON = await applySnapshotTransition(currentStateJSON, apiResponse || {});
 
+      if (get().stateJSON !== currentStateJSON) return;
+
       // Extract new FSM state
       const newFSMState = updatedStateJSON.state.FSM.state;
 
@@ -152,6 +154,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
       console.log(`[FSM] Transition complete: ${currentFSMState} → ${newFSMState}`);
     } catch (error) {
+      if (get().stateJSON !== currentStateJSON) return;
       console.error('[FSM] Transition failed:', error);
       get().fail(error as Error);
     }
@@ -183,7 +186,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     console.log(`[FSM] Starting workflow with stage: ${stageId}`, variables);
 
     // Update stateJSON with initial stage and variables
-    const stateJSON = get().stateJSON;
+    const stateJSON = structuredClone(get().stateJSON);
     stateJSON.observation.location.current.stage_id = stageId;
     stateJSON.observation.location.current.step_id = null;
     stateJSON.observation.location.current.behavior_id = null;
@@ -307,7 +310,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     const errorMessage = typeof error === 'string' ? error : error.message;
     console.error(`[FSM] Workflow failed: ${errorMessage}`);
 
-    const stateJSON = get().stateJSON;
+    const stateJSON = structuredClone(get().stateJSON);
     stateJSON.state.FSM.state = WorkflowState.FAILED;
     if (!stateJSON.metadata) stateJSON.metadata = {};
     stateJSON.metadata.error = errorMessage;
@@ -321,7 +324,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   cancel: () => {
     console.log('[FSM] Workflow canceled');
 
-    const stateJSON = get().stateJSON;
+    const stateJSON = structuredClone(get().stateJSON);
     stateJSON.state.FSM.state = WorkflowState.CANCELED;
 
     set({
@@ -342,9 +345,10 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
   pause: () => {
     const currentState = get().currentState;
+    if (currentState === WorkflowState.PAUSED) return;
     console.log('[FSM] Pausing workflow from state:', currentState);
 
-    const stateJSON = get().stateJSON;
+    const stateJSON = structuredClone(get().stateJSON);
     // Store the previous state so we can resume to it
     stateJSON.state.FSM.previous_state = currentState;
     stateJSON.state.FSM.state = WorkflowState.PAUSED;
@@ -356,7 +360,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   },
 
   resume: () => {
-    const stateJSON = get().stateJSON;
+    const stateJSON = structuredClone(get().stateJSON);
     const previousState = stateJSON.state.FSM.previous_state;
 
     console.log('[FSM] Resuming workflow to state:', previousState);
@@ -427,8 +431,14 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   handleAPIResponse: async (apiResponse: Record<string, unknown>, apiType?: string) => {
     console.log(`[FSM] Handling API response (type: ${apiType})`);
 
+    const currentStateJSON = get().stateJSON;
     try {
-      const updatedStateJSON = await applySnapshotTransition(get().stateJSON, apiResponse, apiType);
+      const updatedStateJSON = await applySnapshotTransition(
+        currentStateJSON,
+        apiResponse,
+        apiType
+      );
+      if (get().stateJSON !== currentStateJSON) return;
 
       const newFSMState = updatedStateJSON.state.FSM.state;
 
@@ -439,6 +449,7 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
       console.log(`[FSM] API response handled, new state: ${newFSMState}`);
     } catch (error) {
+      if (get().stateJSON !== currentStateJSON) return;
       console.error('[FSM] Failed to handle API response:', error);
       get().fail(error as Error);
     }
