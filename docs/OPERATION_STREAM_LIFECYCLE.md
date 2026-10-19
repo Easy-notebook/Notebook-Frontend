@@ -71,3 +71,9 @@ busy, failed and cancelled receipts report failure with the dispatcher message. 
 not wait for stream completion and does not assert successful analysis. The public void-returning
 adapter retains its signature. Missing output snapshots still trigger execution and report
 that nothing was submitted; an empty output array remains a valid silent execution snapshot.
+
+Phase selection delegates its phase/step transition to the notebook Store's atomic
+`setCurrentPhase` operation. The stream action does not reset the step again after an await:
+a delayed reset could otherwise overwrite navigation in a newly selected notebook. A supplied
+notebook identity must match before mutation, and synchronous subscriber changes suppress
+an obsolete success notification. Already-published selection is not rolled back.
