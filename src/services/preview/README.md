@@ -570,3 +570,12 @@ Imports validate incoming history and preserve an existing target's valid histor
 When rebuilding an absent parent they merge the supplied history with existing file
 histories. Invalid histories reject before notebook/body writes or completion receipts;
 no zero defaults or numeric coercion silently repair corrupt stored history.
+
+## Local-content flag admission
+
+`FileContentRecord.expectsLocalContent` requires an actual boolean before deciding
+whether a body is locally available. Single-file reads, metadata-only/content
+catalogs and conditional snapshot writes share this boundary. Truthy strings such
+as `"false"` cannot authorize a cache hit or satisfy snapshot compare-and-save.
+Invalid flags reject without coercion or repair; valid local/remote behavior and
+existing remote-to-local editing remain unchanged.

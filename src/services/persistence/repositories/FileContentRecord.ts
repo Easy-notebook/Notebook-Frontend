@@ -16,6 +16,12 @@ export class FileContentRecord {
     this.record = { fileId: data.fileId, content: data.content };
   }
 
+  static expectsLocalContent(metadata: { hasLocalContent: unknown }): boolean {
+    if (typeof metadata.hasLocalContent !== 'boolean')
+      throw new Error('Invalid file content availability');
+    return metadata.hasLocalContent;
+  }
+
   toRecord(): ContentPayload {
     return { ...this.record };
   }

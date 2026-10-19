@@ -448,3 +448,28 @@ it.each(['read', 'list', 'large', 'save', 'update', 'delete', 'clear'] as const)
     expect(contentStore.delete).not.toHaveBeenCalled();
   }
 );
+
+it.each(['false', 'true', 0, 1, null, undefined])(
+  'rejects ambiguous content availability %j on individual and catalog reads',
+  async (hasLocalContent) => {
+    const { repository, metadataStore, contentStore } = setup({
+      id: 'book::note.json',
+      notebookId: 'book',
+      filePath: 'note.json',
+      hasLocalContent,
+      accessCount: 1,
+      lastAccessedAt: 0,
+    });
+    await expect(repository.getFile('book', 'note.json')).rejects.toThrow(
+      'Invalid file content availability'
+    );
+    await expect(repository.getFilesForNotebook('book', false)).rejects.toThrow(
+      'Invalid file content availability'
+    );
+    await expect(repository.getFilesForNotebook('book', true)).rejects.toThrow(
+      'Invalid file content availability'
+    );
+    expect(contentStore.get).not.toHaveBeenCalled();
+    expect(metadataStore.put).not.toHaveBeenCalled();
+  }
+);

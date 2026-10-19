@@ -4276,3 +4276,57 @@ for (const source of ['input', 'stored']) {
     expect(result.after).toEqual(result.before);
   });
 }
+
+test('ambiguous local-content flags cannot admit reads or conditional snapshot writes', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, NotebookRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository(provider);
+    const notebooks = new NotebookRepository(provider);
+    const S = DB_CONFIG.STORES;
+    const data = {
+      notebookId: 'book',
+      filePath: 'file',
+      fileName: 'file',
+      content: 'old',
+      size: 3,
+      lastModified: 'old',
+    };
+    await files.saveFile(data);
+    const notebook = await provider.get(S.NOTEBOOKS, 'book');
+    const metadata = await provider.get(S.FILES_METADATA, 'book::file');
+    await provider.put(S.FILES_METADATA, { ...metadata, hasLocalContent: 'false' });
+    const snapshot = () =>
+      Promise.all(
+        [S.NOTEBOOKS, S.FILES_METADATA, S.FILES_CONTENT, S.ACTIVITIES].map((name) =>
+          provider.getAll(name)
+        )
+      );
+    const before = await snapshot();
+    const errors = [];
+    for (const action of [
+      () => files.getFile('book', 'file'),
+      () => files.getFilesForNotebook('book', false),
+      () => files.getFilesForNotebook('book', true),
+      () =>
+        notebooks.saveNotebookSnapshot({ ...data, content: 'replacement' }, notebook, {
+          expectedContent: 'old',
+        }),
+    ]) {
+      try {
+        await action();
+        errors.push(null);
+      } catch (error) {
+        errors.push(error.message);
+      }
+    }
+    const after = await snapshot();
+    await provider.close();
+    return { before, after, errors };
+  });
+  expect(result.errors).toEqual(Array(4).fill('Invalid file content availability'));
+  expect(result.after).toEqual(result.before);
+});

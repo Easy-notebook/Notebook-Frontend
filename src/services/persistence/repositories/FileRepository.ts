@@ -84,7 +84,7 @@ export class FileRepository implements IFileRepository {
       const metadata = await this.read<FileMetadataEntity | undefined>(metadataStore.get(fileId));
       if (metadata == null) return;
       new FileRecordOwnership(notebookId, filePath).verify(metadata);
-      const content = metadata.hasLocalContent
+      const content = FileContentRecord.expectsLocalContent(metadata)
         ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], fileId)
         : undefined;
       const accessed = {
@@ -113,14 +113,15 @@ export class FileRepository implements IFileRepository {
       results = await Promise.all(
         metadata.map(async (metadata) => {
           new FileRecordOwnership(notebookId).verify(metadata);
+          const expectsContent = FileContentRecord.expectsLocalContent(metadata);
           const content =
-            includeContent && metadata.hasLocalContent
+            includeContent && expectsContent
               ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], metadata.id)
               : undefined;
           return {
             metadata,
             content,
-            needsRemoteFetch: includeContent ? content === undefined : !metadata.hasLocalContent,
+            needsRemoteFetch: includeContent ? content === undefined : !expectsContent,
           };
         })
       );

@@ -1,3 +1,4 @@
+import { FileContentRecord } from './FileContentRecord';
 import { AccessHistory } from './AccessHistory';
 import { NotebookFileTotals } from './NotebookFileTotals';
 import { NotebookActivityRecord } from './NotebookActivityRecord';
@@ -75,7 +76,9 @@ export class NotebookRepository implements INotebookRepository {
         const matches =
           condition.expectedContent === null
             ? !metadata && !current
-            : metadata?.hasLocalContent && current?.content === condition.expectedContent;
+            : metadata != null &&
+              FileContentRecord.expectsLocalContent(metadata) &&
+              current?.content === condition.expectedContent;
         if (!matches) throw new NotebookConflictError(data.id, file.metadata.filePath);
       }
       const retained = file ? files.filter((record) => record.id !== file.metadata.id) : files;
