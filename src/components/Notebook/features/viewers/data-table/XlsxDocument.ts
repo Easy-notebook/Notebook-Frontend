@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx-js-style';
 import type { TableCellValue } from './CsvCodec';
 import type { CellFormat } from './SpreadsheetSnapshot';
 import { xlsxCellFormat } from './XlsxCellFormat';
+import { restoreWorkbookStyles } from './XlsxStyleReader';
 
 /** Owns the original workbook so grid edits do not discard undisplayed worksheets. */
 export class XlsxDocument {
@@ -11,11 +12,13 @@ export class XlsxDocument {
     const workbook = XLSX.read(content, {
       type: 'base64',
       cellStyles: true,
+      bookFiles: true,
       cellNF: true,
       cellDates: true,
       sheetStubs: true,
     });
     if (!workbook.SheetNames.length) throw new Error('Workbook has no worksheets');
+    restoreWorkbookStyles(workbook);
     return new XlsxDocument(workbook);
   }
 

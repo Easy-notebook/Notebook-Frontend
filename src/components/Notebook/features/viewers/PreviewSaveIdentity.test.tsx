@@ -809,3 +809,48 @@ it('renders imported XLSX fill at the displayed cell when the worksheet starts a
   const cell = screen.getByText('Offset cell', { exact: true }).closest('div')!.parentElement!;
   expect(cell.style.backgroundColor).toBe('rgb(18, 171, 52)');
 });
+
+it('restores saved formatting and lets the first toolbar click remove imported bold', async () => {
+  const XLSX = await import('xlsx-js-style');
+  const { XlsxDocument } = await import('./data-table/XlsxDocument');
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      A1: {
+        t: 's',
+        v: 'Styled',
+        s: {
+          font: { bold: true, italic: true, underline: true },
+          alignment: { horizontal: 'right' },
+        },
+      },
+      '!ref': 'A1',
+    },
+    'Main'
+  );
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::styled.xlsx',
+    name: 'styled.xlsx',
+    path: 'styled.xlsx',
+    type: 'xlsx',
+    content: XLSX.write(book, { type: 'base64', bookType: 'xlsx' }),
+  };
+  render(<DataTable showFormulaBar={false} />);
+  const text = screen.getByText('Styled', { exact: true });
+  expect(text.closest('div')?.style.fontWeight).toBe('700');
+  expect(text.closest('div')?.style.fontStyle).toBe('italic');
+  expect(text.closest('div')?.style.textDecoration).toBe('underline');
+  fireEvent.click(text);
+  fireEvent.click(screen.getByRole('button', { name: 'Bold (Ctrl+B)' }));
+  expect(screen.getByText('Styled', { exact: true }).closest('div')?.style.fontWeight).toBe('400');
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const calls = model.state.updatePreviewFileContent.mock.calls;
+  const content = calls[calls.length - 1][0] as string;
+  expect(XlsxDocument.fromBase64(content).worksheet.A1.s.font).toMatchObject({
+    bold: false,
+    italic: true,
+    underline: true,
+  });
+});

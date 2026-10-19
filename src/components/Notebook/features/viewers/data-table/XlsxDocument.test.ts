@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import { expect, it } from 'vitest';
 import { XlsxDocument } from './XlsxDocument';
+import { writtenCellStyle } from './testing/writtenCellStyle';
 
 function source() {
   const book = XLSX.utils.book_new();
@@ -70,7 +71,6 @@ it('retains the other sheet when the edited grid is emptied', () => {
 });
 
 it('writes user formatting into the actual cell style references, including unchanged formula cells', async () => {
-  const { writtenCellStyle } = await import('./testing/writtenCellStyle');
   const document = XlsxDocument.fromBase64(source());
   const saved = document.serialize(
     [
@@ -129,4 +129,43 @@ it('projects a worksheet without a used range as an empty grid', () => {
   XLSX.utils.book_append_sheet(book, {}, 'Empty');
   const document = XlsxDocument.fromBase64(XLSX.write(book, { type: 'base64', bookType: 'xlsx' }));
   expect(document.readGrid()).toEqual({ cells: [], merges: [] });
+});
+
+it('restores font and alignment styles across repeated save and reopen cycles on every worksheet', () => {
+  const book = XLSX.utils.book_new();
+  for (const name of ['Edited & Main', 'Retained']) {
+    XLSX.utils.book_append_sheet(
+      book,
+      {
+        C3: {
+          t: 'n',
+          v: 4,
+          f: '2+2',
+          s: {
+            font: { bold: true, italic: true, underline: true, color: { rgb: '123456' } },
+            fill: { patternType: 'solid', fgColor: { rgb: 'ABCDEF' } },
+            alignment: { horizontal: 'right', vertical: 'center', wrapText: true },
+          },
+        },
+        '!ref': 'C3',
+      },
+      name
+    );
+  }
+  let content = XLSX.write(book, { type: 'base64', bookType: 'xlsx' });
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const document = XlsxDocument.fromBase64(content);
+    expect(document.worksheet.C3.s).toMatchObject({
+      font: { bold: true, italic: true, underline: true, color: { rgb: '123456' } },
+      fill: { fgColor: { rgb: 'ABCDEF' } },
+      alignment: { horizontal: 'right', vertical: 'center', wrapText: true },
+    });
+    content = document.serialize([{ A: '4' }], [{ key: 'A' }]);
+    const workbook = XLSX.read(content, { type: 'base64' });
+    expect(workbook.Sheets['Edited & Main'].C3.f).toBe('2+2');
+    expect(workbook.Sheets.Retained.C3.f).toBe('2+2');
+    const retainedStyle = writtenCellStyle(content, 'C3', '/xl/worksheets/sheet2.xml');
+    expect(retainedStyle.font.getElementsByTagName('b')).toHaveLength(1);
+    expect(retainedStyle.alignment.getAttribute('horizontal')).toBe('right');
+  }
 });

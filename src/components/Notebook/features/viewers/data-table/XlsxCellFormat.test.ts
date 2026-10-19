@@ -23,9 +23,9 @@ it('overrides explicit false flags without discarding unrelated source style fie
   expect(original.font.bold).toBe(true);
 });
 
-it('normalizes the reader fill and preserves it when only font formatting changes', () => {
+it('preserves the document fill when only font formatting changes', () => {
   const style = xlsxCellFormat(
-    { patternType: 'solid', fgColor: { rgb: '123456' } },
+    { fill: { patternType: 'solid', fgColor: { rgb: '123456' } } },
     { bold: true }
   );
   expect(style.fill).toMatchObject({ patternType: 'solid', fgColor: { rgb: '123456' } });

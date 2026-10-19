@@ -269,11 +269,22 @@ available style fields and respects explicit false flags. Formatting unchanged
 formula cells retains their formula. Tests inspect emitted OOXML style references,
 including non-A1 source ranges, and exercise the toolbar-to-save integration.
 
+`restoreWorkbookStyles` reconnects the codec's parsed font/fill/alignment tables
+with cell style indices from worksheet XML. Package relationships resolve worksheet
+paths; sheet order is not used to guess filenames. Parsed numeric font flags become
+booleans, and each cell receives its own style object. Package file buffers are
+released after hydration. This adapter isolates the codec's undocumented parsed
+table shape; codec upgrades must run its package and round-trip contract tests.
+
+Imported toolbar formats initialize the draft baseline. The first click can remove
+imported bold, and explicit false overrides the source presentation. Tests cover
+three save/reopen cycles, retained worksheet styles, formulas, RGB fills, alignment,
+and toolbar removal followed by saving and reopening.
+
 This is not a full Excel editing engine: structural edits do not translate formula
-references. The installed reader exposes only part of the source style information,
-so complete style restoration on reopening and preservation across subsequent
-sessions remain incomplete. Features unsupported by the workbook codec are not
-guaranteed to round-trip. Those remain explicit follow-ups.
+references. Rich Excel features, custom theme rendering, borders and advanced style
+inheritance are not fully covered by this adapter or the installed codec. Complete
+Excel fidelity remains outside the verified behavior described above.
 
 CSV parsing retains blank records and whitespace-only cells. It removes only the
 synthetic final record produced by the parser for a trailing line terminator.

@@ -6,7 +6,11 @@ interface WorkbookArchive {
 }
 
 /** Inspect emitted OOXML rather than relying on the codec's partial style reader. */
-export function writtenCellStyle(content: string, address: string) {
+export function writtenCellStyle(
+  content: string,
+  address: string,
+  worksheetPath = '/xl/worksheets/sheet1.xml'
+) {
   const zip = XLSX.CFB as WorkbookArchive;
   const archive = zip.read(content, { type: 'base64' });
   const xml = (path: string) => {
@@ -17,7 +21,7 @@ export function writtenCellStyle(content: string, address: string) {
       'application/xml'
     );
   };
-  const sheet = xml('/xl/worksheets/sheet1.xml');
+  const sheet = xml(worksheetPath);
   const styles = xml('/xl/styles.xml');
   const cell = Array.from(sheet.getElementsByTagName('c')).find(
     (cell) => cell.getAttribute('r') === address

@@ -254,6 +254,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       let workbook: XlsxDocument | null = null;
       let parsedData: CSVRow[] = [];
       let parsedColumns: ColumnInfo[] = [];
+      const parsedFormats: Record<string, CellFormat> = {};
       let headers: string[] = [];
 
       if (fileType === 'xlsx') {
@@ -436,6 +437,16 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                   if (s.border.left) css.borderLeft = borderStyle;
                 }
 
+                parsedFormats[`${r}:${c}`] = {
+                  bold: Boolean(s.font?.bold),
+                  italic: Boolean(s.font?.italic),
+                  underline: Boolean(s.font?.underline),
+                  textAlign: s.alignment?.horizontal,
+                  color: typeof css.color === 'string' ? css.color : undefined,
+                  backgroundColor:
+                    typeof css.backgroundColor === 'string' ? css.backgroundColor : undefined,
+                };
+
                 // 只有当有实际样式时才添加到map
                 if (Object.keys(css).length > 0) {
                   nextStyleMap[`${r}:${c}`] = css;
@@ -493,7 +504,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         }));
         setIsLoading(false);
       }
-      draftHistory.reset({ data: parsedData, columns: parsedColumns, cellFormats: {} });
+      draftHistory.reset({ data: parsedData, columns: parsedColumns, cellFormats: parsedFormats });
       sourceRef.current = { fileId: currentFile.id, source: content, workbook };
     } catch (err) {
       sourceRef.current = null;
@@ -1495,17 +1506,21 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                             }
 
                             // 文本样式 -> 内层 <div>/<span> (merge xlsCss and custom format)
-                            if (customFormat?.bold || xlsCss.fontWeight) {
-                              textStyle.fontWeight = customFormat?.bold ? 700 : xlsCss.fontWeight;
-                            }
-                            if (customFormat?.italic || xlsCss.fontStyle) {
-                              textStyle.fontStyle = customFormat?.italic
-                                ? 'italic'
+                            textStyle.fontWeight =
+                              customFormat?.bold !== undefined
+                                ? customFormat.bold
+                                  ? 700
+                                  : 400
+                                : xlsCss.fontWeight;
+                            textStyle.fontStyle =
+                              customFormat?.italic !== undefined
+                                ? customFormat.italic
+                                  ? 'italic'
+                                  : 'normal'
                                 : xlsCss.fontStyle;
-                            }
-                            if (customFormat?.underline) {
-                              textStyle.textDecoration = 'underline';
-                            }
+                            textStyle.textDecoration = customFormat?.underline
+                              ? 'underline'
+                              : 'none';
                             if (customFormat?.color) {
                               textStyle.color = customFormat.color;
                             } else if (xlsCss.color) {
@@ -1518,7 +1533,9 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                             }
 
                             // 提取对齐信息用于 flex 布局
-                            const horiz = (xlsCss as any).__horiz as string | undefined;
+                            const horiz =
+                              customFormat?.textAlign ??
+                              ((xlsCss as any).__horiz as string | undefined);
                             const vert = (xlsCss as any).__vert as string | undefined;
 
                             const justifyContent =

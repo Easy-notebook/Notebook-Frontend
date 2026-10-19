@@ -1,22 +1,9 @@
-import type { CellStyle, CellStyleColor } from 'xlsx-js-style';
+import type { CellStyle } from 'xlsx-js-style';
 import type { CellFormat } from './SpreadsheetSnapshot';
 
-type ParsedStyle = CellStyle & {
-  patternType?: 'solid' | 'none';
-  fgColor?: CellStyleColor;
-  bgColor?: CellStyleColor;
-};
-
-/** Translate editor overrides and the reader's flattened fill into the writer's style shape. */
-export function xlsxCellFormat(original: ParsedStyle | undefined, format: CellFormat): CellStyle {
+/** Apply editor overrides to the document's normalized style without mutating it. */
+export function xlsxCellFormat(original: CellStyle | undefined, format: CellFormat): CellStyle {
   const style: CellStyle = { ...original };
-  if (!style.fill && original?.patternType) {
-    style.fill = {
-      patternType: original.patternType,
-      fgColor: original.fgColor,
-      bgColor: original.bgColor,
-    };
-  }
   if (
     format.bold !== undefined ||
     format.italic !== undefined ||
