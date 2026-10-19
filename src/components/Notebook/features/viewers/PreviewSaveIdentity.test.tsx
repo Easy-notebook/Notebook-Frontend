@@ -169,49 +169,56 @@ it('saving CSV preserves source cells and adds no spreadsheet column-label row',
   );
 });
 
-it('exports the same CSV bytes as the save action', async () => {
-  const content = '"name,label",notes\n"Ada, Lovelace","line one\nline ""two"""';
-  model.state.activeFile = {
-    ...model.state.activeFile,
-    id: 'book::table.csv',
-    name: 'table.csv',
-    path: 'table.csv',
-    type: 'csv',
-    content,
-  };
-  const createObjectURL = vi.fn<(blob: Blob) => string>(() => 'blob:export');
-  const revokeObjectURL = vi.fn();
-  const OriginalURL = URL;
-  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-  vi.stubGlobal(
-    'URL',
-    class extends OriginalURL {
-      static createObjectURL = createObjectURL;
-      static revokeObjectURL = revokeObjectURL;
+it.each([false, true])(
+  'exports the same CSV bytes as save with pending input %s',
+  async (pendingInput) => {
+    const content = '"name,label",notes\n"Ada, Lovelace","line one\nline ""two"""';
+    model.state.activeFile = {
+      ...model.state.activeFile,
+      id: 'book::table.csv',
+      name: 'table.csv',
+      path: 'table.csv',
+      type: 'csv',
+      content,
+    };
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => 'blob:export');
+    const revokeObjectURL = vi.fn();
+    const OriginalURL = URL;
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    vi.stubGlobal(
+      'URL',
+      class extends OriginalURL {
+        static createObjectURL = createObjectURL;
+        static revokeObjectURL = revokeObjectURL;
+      }
+    );
+    try {
+      render(<DataTable showFormulaBar={false} />);
+      if (pendingInput) {
+        fireEvent.doubleClick(screen.getByText('name,label', { exact: true }));
+        fireEvent.change(screen.getByRole('textbox'), { target: { value: 'edited,label' } });
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      });
+      expect(createObjectURL).toHaveBeenCalledOnce();
+      const blob = createObjectURL.mock.calls[0][0];
+      const exported = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+      });
+      expect(exported).toBe(pendingInput ? content.replace('name,label', 'edited,label') : content);
+      expect(exported).toBe(model.state.updatePreviewFileContent.mock.calls[0][0]);
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:export');
+    } finally {
+      click.mockRestore();
+      vi.unstubAllGlobals();
     }
-  );
-  try {
-    render(<DataTable />);
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
-    expect(createObjectURL).toHaveBeenCalledOnce();
-    const blob = createObjectURL.mock.calls[0][0];
-    const exported = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsText(blob);
-    });
-    expect(exported).toBe(content);
-    expect(exported).toBe(model.state.updatePreviewFileContent.mock.calls[0][0]);
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:export');
-  } finally {
-    click.mockRestore();
-    vi.unstubAllGlobals();
   }
-});
+);
 
 it('saves XLSX as a readable workbook and retains undisplayed sheets', async () => {
   const XLSX = await import('xlsx-js-style');

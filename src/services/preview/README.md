@@ -466,3 +466,8 @@ One and all replacements share the same pure operation and commit one full snaps
 Search and replacement text are literal (including regex punctuation and `$&`), and
 case/whole-cell matching use the same pattern as replacement. Empty queries, invalid
 selection and identical replacements produce no history frame or dirty transition.
+
+CSV export also calls `commitEditingCell` and serializes the returned current draft.
+It therefore includes text still in the active input, just like save, while remaining
+a download rather than a persistence acknowledgement. Temporary download URLs are
+released even if triggering the download throws.

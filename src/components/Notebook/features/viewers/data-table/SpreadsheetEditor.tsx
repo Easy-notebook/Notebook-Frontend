@@ -837,17 +837,6 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   }, [activeCell, data, commitDraft, setTabDirty, currentFile, rowOrder, columns, editSession]);
 
   // ============== Export / save ==============
-  const handleExport = useCallback(() => {
-    const csvContent = serializeTableCsv(data, columns);
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${currentFile?.name || 'export'}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [data, columns, currentFile]);
-
   const commitEditingCell = useCallback((): SpreadsheetSnapshot => {
     const snapshot = draftHistory.getSnapshot().value;
     if (!editingCell) return snapshot;
@@ -861,6 +850,21 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     if (currentFile) setTabDirty(currentFile.id, true);
     return draftHistory.getSnapshot().value;
   }, [draftHistory, editingCell, editValue, currentFile, setTabDirty]);
+
+  const handleExport = useCallback(() => {
+    const draft = commitEditingCell();
+    const csvContent = serializeTableCsv(draft.data, draft.columns);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentFile?.name || 'export'}.csv`;
+    try {
+      link.click();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }, [commitEditingCell, currentFile]);
 
   const handleSave = useCallback(async () => {
     if (!currentFile) return;
