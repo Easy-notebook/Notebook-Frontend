@@ -1,3 +1,4 @@
+import type { ExtensionFSM } from '../../core/ExtensionFSM';
 import React, { useEffect, useRef, useState } from 'react';
 import { NodeViewProps } from '@tiptap/react';
 import { BaseNodeView } from '../../core/BaseNodeView';
@@ -9,11 +10,7 @@ import { Image } from 'antd';
 import { generateCellId } from '../../../utils/cellConverters';
 
 interface ImageViewComponentProps extends NodeViewProps {
-  fsm: {
-    getCurrentState: () => string;
-    send: (event: string, payload?: Record<string, unknown>) => void;
-    transitionTo: (state: string) => void;
-  };
+  fsm: ExtensionFSM<ImageContext>;
 }
 
 const ImageViewComponent = (props: ImageViewComponentProps) => {
@@ -151,9 +148,6 @@ const ImageViewComponent = (props: ImageViewComponentProps) => {
   };
 
   const handleSave = () => {
-    if (cellId && updateCell) {
-      updateCell(cellId, tempMarkdown);
-    }
     // Delegate validation and attribute updates to FSM
     fsm.send('SAVE', { markdown: tempMarkdown });
     setImageError(false);
@@ -572,6 +566,7 @@ const ImageViewComponent = (props: ImageViewComponentProps) => {
 export const ImageView = (props: NodeViewProps) => {
   // We need to pass cell context to FSM creation
   const cell = useStore((state) => getCellById(state.cells, props.node.attrs.cellId));
+  const notebookId = useStore((state) => state.notebookId);
 
   return (
     <BaseNodeView<ImageContext>
@@ -584,6 +579,13 @@ export const ImageView = (props: NodeViewProps) => {
         cell: cell,
         editor: p.editor,
         getPos: p.getPos,
+        onSave: (markdown) => {
+          const state = useStore.getState();
+          const cellId = p.node.attrs.cellId;
+          if (state.notebookId === notebookId && cellId && getCellById(state.cells, cellId)) {
+            state.updateCell(cellId, markdown);
+          }
+        },
       })}
       renderState={(state, context, fsm) => <ImageViewComponent {...props} fsm={fsm} />}
       wrapperComponent={props.node.attrs.displayMode ? 'div' : 'span'}
