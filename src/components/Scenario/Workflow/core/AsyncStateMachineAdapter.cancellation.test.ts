@@ -37,3 +37,45 @@ it('rejects an already cancelled step before calling its API', async () => {
   ).rejects.toMatchObject({ name: 'AbortError' });
   expect(api).not.toHaveBeenCalled();
 });
+
+it('propagates API failure to the owning run instead of reporting no transition', async () => {
+  const failure = new Error('network unavailable');
+  vi.spyOn(StateFactory.getState('IDLE')!, 'callAPI').mockRejectedValue(failure);
+  await expect(new AsyncStateMachineAdapter().step(createInitialStateJSON())).rejects.toBe(failure);
+});
+
+it('stops the stream and does not apply a transition after an action throws', async () => {
+  const failure = new Error('cannot apply action');
+  const closed = vi.fn();
+  async function* actions() {
+    try {
+      yield { type: 'first' };
+      yield { type: 'must-not-run' };
+    } finally {
+      closed();
+    }
+  }
+  vi.spyOn(StateFactory.getState('IDLE')!, 'callAPI').mockResolvedValue(actions());
+  const execAction = vi.fn().mockRejectedValue(failure);
+  const adapter = new AsyncStateMachineAdapter(undefined, { execAction });
+  const transition = vi.spyOn(getTransitionCoordinator(), 'applyTransition');
+  await expect(adapter.step(createInitialStateJSON())).rejects.toBe(failure);
+  expect(execAction).toHaveBeenCalledOnce();
+  expect(closed).toHaveBeenCalledOnce();
+  expect(transition).not.toHaveBeenCalled();
+});
+
+it('propagates a stream failure after earlier actions without completing the transition', async () => {
+  const failure = new Error('connection interrupted');
+  async function* actions() {
+    yield { type: 'first' };
+    throw failure;
+  }
+  vi.spyOn(StateFactory.getState('IDLE')!, 'callAPI').mockResolvedValue(actions());
+  const execAction = vi.fn().mockResolvedValue(undefined);
+  const adapter = new AsyncStateMachineAdapter(undefined, { execAction });
+  const transition = vi.spyOn(getTransitionCoordinator(), 'applyTransition');
+  await expect(adapter.step(createInitialStateJSON())).rejects.toBe(failure);
+  expect(execAction).toHaveBeenCalledOnce();
+  expect(transition).not.toHaveBeenCalled();
+});

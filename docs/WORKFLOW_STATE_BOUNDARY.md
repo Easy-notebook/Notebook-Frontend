@@ -49,3 +49,12 @@ and skipping non-JSON lines as before. EOF flushes the decoder and processes a f
 without a newline. This is the existing line protocol, not a general multiline SSE parser.
 Browser fetch abort does not guarantee server-side rollback, and already-started action code
 still requires its own lifecycle/ownership checks.
+
+Exceptions from API calls, stream iteration, transition application and streamed action
+execution propagate through the adapter to the owning run. An owned failure publishes FAILED
+and error metadata and releases the busy flag. It is not converted to a successful no-transition
+step. An action exception closes iteration before later actions or the final transition run.
+Cancellation still takes precedence and stale failures cannot fail a newer run. Previously
+applied action effects remain applied; this is stop-on-error behavior, not transaction rollback.
+Action methods that return application-specific failure values instead of throwing retain
+their existing return contracts and require separate interpretation by their callers.

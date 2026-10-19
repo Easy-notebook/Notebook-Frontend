@@ -216,6 +216,7 @@ export class AsyncStateMachineAdapter {
               const errorMsg = error instanceof Error ? error.message : String(error);
               streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
               console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
+              throw error;
             }
           } else {
             console.warn('[AsyncFSM] No scriptStore available, action will be executed by handler');
@@ -265,8 +266,8 @@ export class AsyncStateMachineAdapter {
     } catch (error) {
       signal?.throwIfAborted();
       console.error(`[AsyncFSM] API call error for ${normalized}:`, error);
-      // TODO: Trigger FAIL event
-      return [stateJSON, null];
+      // The owning run session publishes FAILED; a transport failure is not a no-op step.
+      throw error;
     }
   }
 

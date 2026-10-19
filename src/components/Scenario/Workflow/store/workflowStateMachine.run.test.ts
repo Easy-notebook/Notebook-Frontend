@@ -73,3 +73,13 @@ it('starts a new planning run after a previous terminal state', async () => {
   expect(mocks.step.mock.calls[0][0].state.FSM.state).toBe(WorkflowState.IDLE);
   expect(mocks.step.mock.calls[0][0].state.variables.user_requirement).toBe('new request');
 });
+
+it('publishes FAILED and releases execution when an owned step rejects', async () => {
+  setup();
+  mocks.step.mockRejectedValue(new Error('planning failed'));
+  await useWorkflowStateMachine.getState().startWorkflow('planning');
+  expect(useWorkflowStateMachine.getState().currentState).toBe(WorkflowState.FAILED);
+  expect(useWorkflowStateMachine.getState().stateJSON.metadata?.error).toBe('planning failed');
+  expect(useNotebookStore.getState().isExecuting).toBe(false);
+  expect(mocks.step).toHaveBeenCalledOnce();
+});
