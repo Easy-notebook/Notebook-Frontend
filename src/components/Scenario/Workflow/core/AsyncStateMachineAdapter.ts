@@ -23,7 +23,7 @@ import { StateJSON, ExecutionStep } from '@Store/models';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
 import { WorkflowState } from '../observation/WorkflowState';
 
-import streamingLogger from '../__tests__/streaming-debug-logger';
+import { WorkflowStreamTrace, type StreamOutcome } from './WorkflowStreamTrace';
 import { StateFactory } from '../states/StateFactory';
 
 export interface APIType {
@@ -167,62 +167,66 @@ export class AsyncStateMachineAdapter {
         const actions = [];
         console.log(`[AsyncFSM] Starting streaming action execution...`);
 
-        // Start streaming debug session
-        streamingLogger.startSession(`${apiType}-${Date.now()}`);
-        streamingLogger.streamingStarted();
+        const streamingLogger = new WorkflowStreamTrace(apiType);
+        let streamOutcome: StreamOutcome = 'failed';
 
         // Get scriptStore from TransitionCoordinator context
         const scriptStore = coordinator.getContext().scriptStore;
 
-        for await (const rawAction of apiResponse) {
-          signal?.throwIfAborted();
-          const actionIndex = actions.length;
+        try {
+          for await (const rawAction of apiResponse) {
+            signal?.throwIfAborted();
+            const actionIndex = actions.length;
 
-          // IMPORTANT: Backend returns {"action": {...}} format, need to unwrap
-          const action = (rawAction as Record<string, unknown>).action || rawAction;
-          const actionType = (action as Record<string, unknown>).type || 'unknown';
+            // IMPORTANT: Backend returns {"action": {...}} format, need to unwrap
+            const action = (rawAction as Record<string, unknown>).action || rawAction;
+            const actionType = (action as Record<string, unknown>).type || 'unknown';
 
-          console.log(`[AsyncFSM] Raw action received:`, JSON.stringify(rawAction, null, 2));
-          console.log(`[AsyncFSM] Parsed action type: ${actionType}, executing immediately...`);
+            console.log(`[AsyncFSM] Raw action received:`, JSON.stringify(rawAction, null, 2));
+            console.log(`[AsyncFSM] Parsed action type: ${actionType}, executing immediately...`);
 
-          // Log action received
-          streamingLogger.actionReceived(actionIndex, actionType as string);
+            // Log action received
+            streamingLogger.actionReceived(actionIndex, actionType as string);
 
-          // Execute action immediately using scriptStore
-          if (scriptStore) {
-            try {
-              streamingLogger.actionExecutionStart(actionIndex);
+            // Execute action immediately using scriptStore
+            if (scriptStore) {
+              try {
+                streamingLogger.actionExecutionStart(actionIndex);
 
-              // Convert backend action format to frontend ExecutionStep format
-              const executionStep = this.convertActionToExecutionStep(
-                action as Record<string, unknown>
+                // Convert backend action format to frontend ExecutionStep format
+                const executionStep = this.convertActionToExecutionStep(
+                  action as Record<string, unknown>
+                );
+
+                console.log(`[AsyncFSM] Executing action step:`, executionStep);
+                await scriptStore.execAction(executionStep, signal);
+                signal?.throwIfAborted();
+
+                streamingLogger.actionExecutionEnd(actionIndex);
+                console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
+              } catch (error) {
+                signal?.throwIfAborted();
+                const errorMsg = error instanceof Error ? error.message : String(error);
+                streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
+                console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
+                throw error;
+              }
+            } else {
+              console.warn(
+                '[AsyncFSM] No scriptStore available, action will be executed by handler'
               );
-
-              console.log(`[AsyncFSM] Executing action step:`, executionStep);
-              await scriptStore.execAction(executionStep, signal);
-              signal?.throwIfAborted();
-
-              streamingLogger.actionExecutionEnd(actionIndex);
-              console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
-            } catch (error) {
-              signal?.throwIfAborted();
-              const errorMsg = error instanceof Error ? error.message : String(error);
-              streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
-              console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
-              throw error;
+              streamingLogger.actionDeferred(actionIndex);
             }
-          } else {
-            console.warn('[AsyncFSM] No scriptStore available, action will be executed by handler');
-            streamingLogger.actionExecutionEnd(actionIndex, 'No scriptStore available');
+
+            // Still collect actions for transition handler (store the unwrapped action)
+            actions.push(action as Record<string, unknown>);
           }
 
-          // Still collect actions for transition handler (store the unwrapped action)
-          actions.push(action as Record<string, unknown>);
+          streamOutcome = 'completed';
+        } finally {
+          streamingLogger.finish(signal?.aborted ? 'cancelled' : streamOutcome);
+          streamingLogger.printReport();
         }
-
-        streamingLogger.streamingEnded();
-        streamingLogger.endSession();
-        streamingLogger.printReport();
 
         console.log(`[AsyncFSM] Streaming execution complete: ${actions.length} actions`);
 

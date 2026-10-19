@@ -8,7 +8,7 @@
 - ✅ `AsyncStateMachineAdapter.ts` - 流式执行核心逻辑
 - ✅ `CompleteBehaviorHandler.ts` - 移除重复执行
 - ✅ `TransitionCoordinator.ts` - 添加 getContext() 方法
-- ✅ `streaming-debug-logger.ts` - 调试日志工具
+- ✅ `../core/WorkflowStreamTrace.ts` - 每次流式执行独立的日志会话
 
 ### 2. 检查依赖注入
 确保以下组件正确初始化：
@@ -288,8 +288,8 @@ console.log(performance.getEntriesByType('measure'));
 ### 技巧 3: 导出日志数据
 ```typescript
 // 在控制台
-import streamingLogger from '@/components/Scenario/Workflow/__tests__/streaming-debug-logger';
-console.log(streamingLogger.exportSessionData());
+// 每次流式执行结束（包括取消和失败）会输出独立的 [WorkflowStreamTrace] 报告。
+// 报告包含 phase、起止时间和每个动作的执行状态，不保留全局历史队列。
 // 复制 JSON 数据用于分析
 ```
 
