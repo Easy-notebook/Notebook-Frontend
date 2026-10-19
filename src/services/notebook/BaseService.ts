@@ -1,52 +1,49 @@
 import { Backend_BASE_URL } from '@Config/base_url';
 import { apiLog } from '@Utils/logger';
+import { HttpResponseError } from './HttpResponseError';
 
 export const API_BASE_URL = Backend_BASE_URL;
 
-// API response handling for non-stream responses
+/** Reads the response body once and keeps HTTP failures distinct from JSON failures. */
 export const handleResponse = async <T = any>(response: Response): Promise<T> => {
-  try {
-    // First check if the response is ok
-    if (!response.ok) {
-      // Try to get error details, but handle cases where response body is not JSON
-      let errorMessage = `HTTP error! status: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = (errorData as any).message || errorMessage;
-        apiLog.error('API error', { errorData });
-      } catch (jsonError) {
-        apiLog.error('Failed to parse error response as JSON', { jsonError });
-        // Use the response text as fallback
+  if (!response.ok) {
+    let message = `HTTP error! status: ${response.status}`;
+    let cause: unknown;
+    try {
+      const text = await response.text();
+      if (text.trim()) {
+        let data: unknown;
         try {
-          const errorText = await response.text();
-          if (errorText) {
-            errorMessage = errorText;
-          }
-        } catch (textError) {
-          apiLog.error('Failed to get response text', { textError });
+          data = JSON.parse(text);
+        } catch {
+          message = text;
         }
+        if (
+          data &&
+          typeof data === 'object' &&
+          'message' in data &&
+          typeof data.message === 'string' &&
+          data.message.trim()
+        )
+          message = data.message;
       }
-      throw new Error(errorMessage);
+    } catch (error) {
+      cause = error;
     }
+    const error = new HttpResponseError(response.status, response.statusText, message, cause);
+    apiLog.error('API error', { error });
+    throw error;
+  }
 
-    // Try to parse successful response
-    const data: T = await response.json();
-    return data;
+  try {
+    return await response.json();
   } catch (error) {
-    // If this was already an Error we threw above, re-throw it
-    if (error instanceof Error && error.message.includes('HTTP error!')) {
-      throw error;
-    }
-
     apiLog.error('Failed to parse API response', { error });
-
-    // Provide more specific error messages for common cases
     if (error instanceof TypeError && error.message.includes('Load failed')) {
       throw new Error(
         `Network error: Unable to connect to server at ${API_BASE_URL}. Please check if the backend server is running.`
       );
     }
-
     throw new Error(
       `Invalid response from server: ${error instanceof Error ? error.message : 'Unknown error'}`
     );

@@ -113,10 +113,10 @@ src/
 │   ├── codeStore.ts
 │   └── ...
 ├── services/           # API and business logic
-│   ├── notebookServices.ts
+│   ├── notebook/       # Notebook, file and execution API services
 │   ├── streamHandler.ts
 │   └── ...
-├── storage/            # IndexedDB ORM layer
+├── storage/            # Storage policy, schema and migration
 ├── utils/              # Utility functions
 │   ├── logger.ts      # Logging system
 │   ├── export/        # Export utilities
