@@ -36,7 +36,10 @@ export class NotebookSaveQueue {
 
   enqueue(snapshot: NotebookSnapshot): QueuedSnapshot {
     const previous = this.entries.get(snapshot.notebookId);
-    const queued = { ...snapshot, timestamp: Date.now(), revision: ++this.revision };
+    // A revision owns its accepted data across debounce, retries and conflict recovery.
+    // Clone before changing queue state so rejected input cannot replace an accepted edit.
+    const owned = structuredClone(snapshot);
+    const queued = { ...owned, timestamp: Date.now(), revision: ++this.revision };
     this.entries.set(snapshot.notebookId, {
       snapshot: queued,
       barriers: previous?.barriers ?? new Set(),

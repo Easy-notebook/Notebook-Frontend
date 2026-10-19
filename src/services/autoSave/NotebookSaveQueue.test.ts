@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { NotebookSnapshot } from './types';
 import { NotebookSaveQueue } from './NotebookSaveQueue';
 
 const snapshot = (notebookId = 'a') => ({
@@ -85,4 +86,51 @@ describe('notebook save transitions', () => {
     await discarded;
     expect(queue.size).toBe(0);
   });
+});
+
+it('detaches nested data when a revision is accepted', () => {
+  const queue = new NotebookSaveQueue();
+  const input: NotebookSnapshot = {
+    ...snapshot(),
+    cells: [
+      {
+        id: 'cell',
+        type: 'code',
+        content: 'before',
+        outputs: [{ type: 'text', content: 'original' }],
+        metadata: { label: 'accepted' },
+      },
+    ],
+  };
+  const accepted = queue.enqueue(input);
+  input.cells[0].content = 'after';
+  input.cells[0].outputs![0].content = 'changed';
+  input.cells[0].metadata!.label = 'changed';
+  input.cells.push({ id: 'late', type: 'markdown', content: 'late' });
+  expect(accepted.cells).toEqual([
+    {
+      id: 'cell',
+      type: 'code',
+      content: 'before',
+      outputs: [{ type: 'text', content: 'original' }],
+      metadata: { label: 'accepted' },
+    },
+  ]);
+});
+it('leaves the accepted revision and its barrier intact if cloning fails', async () => {
+  const queue = new NotebookSaveQueue();
+  const previous = queue.enqueue(snapshot());
+  const progress = queue.progress('a');
+  const barrier = queue.createBarrier('a', previous.revision).completion;
+  const invalid: NotebookSnapshot = {
+    ...snapshot(),
+    cells: [{ id: 'cell', type: 'code', content: '', metadata: { callback: () => {} } }],
+  };
+  expect(() => queue.enqueue(invalid)).toThrow();
+  expect(queue.get('a')).toBe(previous);
+  expect(queue.progress('a')).toBe(progress);
+  queue.begin(previous);
+  queue.acknowledge(previous);
+  await barrier;
+  expect(queue.enqueue(snapshot()).revision).toBe(previous.revision + 1);
 });

@@ -895,3 +895,35 @@ it('keeps a failure visible when an older revision commits while newer edits rem
   await draining;
   expect(warnings).toEqual([true, false]);
 });
+
+it('persists the accepted revision despite caller edits during debounce', async () => {
+  const input = snapshot('accepted');
+  input.cells[0].metadata = { label: 'original' };
+  await service.queueSave(input);
+  input.cells[0].content = 'not admitted';
+  input.cells[0].metadata.label = 'not admitted';
+  input.cells.push({ id: 'late', type: 'markdown', content: 'not admitted' });
+  await service.flush();
+  const saved = JSON.parse(storage.notebooks.saveNotebookSnapshot.mock.calls[0][0].content);
+  expect(saved.cells).toEqual([
+    {
+      id: 'title',
+      type: 'markdown',
+      content: '# accepted',
+      outputs: [],
+      metadata: { label: 'original' },
+    },
+  ]);
+});
+it('retries the same revision body after its caller mutates the input', async () => {
+  const input = snapshot('accepted');
+  storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+    input.cells[0].content = 'mutated after first attempt';
+    throw new Error('temporary storage error');
+  });
+  await service.saveNow(input);
+  const writes = storage.notebooks.saveNotebookSnapshot.mock.calls.map(([file]) => file.content);
+  expect(writes).toHaveLength(2);
+  expect(writes[1]).toBe(writes[0]);
+  expect(JSON.parse(writes[1]).cells[0].content).toBe('# accepted');
+});

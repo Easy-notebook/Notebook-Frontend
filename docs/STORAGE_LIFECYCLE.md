@@ -38,14 +38,30 @@ exercise injectable IndexedDB event doubles, not a native browser database.
 Targeted ESLint and diff whitespace checks passed. Whole-project type-check reported
 305 diagnostics, with none in the changed provider/connection/test files.
 
-## Remaining work
+## Save revision ownership
 
-This change is one phase of the storage redesign. It does not implement per-notebook
-save state machines, committed-revision tracking, atomic UI state publication,
-revision-bound flush barriers, cross-window write conflicts, or unify the separate
-legacy IndexedDBManager. Those responsibilities require further implementation and
-integration verification. Existing uncommitted editor/repository work is outside
-this commit.
+The later autosave implementation adds per-notebook lifecycle ownership in NotebookSaveQueue:
+clean, scheduled, writing, retry_wait and blocked. Each accepted snapshot receives a revision;
+acknowledging an older in-flight revision cannot erase a newer queued edit. Revision barriers
+resolve only when that revision or a newer coalesced snapshot commits. NotebookSaveScheduler
+owns the single writer, scoped drains, fairness and per-revision retry backoff. NotebookWriteBaseline
+retains the observed persisted body for conditional writes and does not silently rebase on retry.
+
+Admission takes an independent structured clone before advancing the revision or replacing queue
+state. Cells, nested outputs, metadata and tasks therefore cannot change when the caller reuses or
+mutates its input during debounce, retry or conflict recovery. Each retry serializes the same accepted
+data. Values unsupported by structuredClone are rejected at admission, leaving earlier pending
+work and barriers intact. Circular data can be cloned but still fails JSON serialization at the write
+boundary, retaining the pending revision for a later corrected edit.
+
+This adds an O(snapshot size) traversal and temporary allocation for each accepted edit. No latency
+or memory benchmark is claimed. There is still one latest pending snapshot per notebook, plus an
+older in-flight snapshot when needed. Public save method signatures remain unchanged.
+
+The admission-ownership gate passes 324 tests across 20 storage/autosave/session files, including
+four new regressions for caller mutation, retry-body stability and clone-failure atomicity. These
+are unit/integration tests with doubles and jsdom; they do not establish native browser durability
+or cross-window end-to-end behavior. Historical verification counts below describe earlier phases.
 
 ## React initialization ownership
 
@@ -61,4 +77,4 @@ component regressions (StrictMode, pending cleanup, late completion/rejection, f
 retry and cleanup failure). These tests use a mock service and jsdom, not a native
 browser startup audit. Full-project typecheck remains at 305 diagnostics with none in
 PersistenceContext; targeted lint has zero errors and the pre-existing mixed-export
-Fast Refresh warning. Autosave shutdown and per-notebook state machines remain open.
+Fast Refresh warning. Autosave shutdown and per-notebook state machines were implemented in later phases; see the save revision ownership section above.
