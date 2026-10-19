@@ -24,6 +24,7 @@ it('stops before consuming buffered successor actions after cancellation', async
   await expect(adapter.step(createInitialStateJSON(), abort.signal)).rejects.toMatchObject({
     name: 'AbortError',
   });
+  expect(execAction).toHaveBeenCalledWith(expect.any(Object), abort.signal);
   expect(execAction).toHaveBeenCalledOnce();
   expect(closed).toHaveBeenCalledOnce();
   expect(transition).not.toHaveBeenCalled();

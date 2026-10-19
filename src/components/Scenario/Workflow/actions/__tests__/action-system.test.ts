@@ -12,15 +12,42 @@ describe('Action System', () => {
   describe('Registration', () => {
     it('registers the complete action protocol, including aliases', () => {
       const actionTypes = getAllActionTypes();
-      expect([...actionTypes].sort()).toEqual([
-        'add', 'add-text', 'new_chapter', 'new_section', 'new_step', 'comment-result',
-        'exec', 'send_code_output', 'set_effect_as_thinking', 'is_thinking', 'finish_thinking',
-        'update_title', 'update_last_text', 'plan_stage', 'complete_workflow_planning',
-        'plan_step', 'update_stage_context', 'complete_stage_planning', 'delegate_task',
-        'complete_step_planning', 'complete_behavior', 'complete_behaviour', 'bug_analysis',
-        'update_code', 'exec_new_version', 'complete_reflection', 'clear_effect_current',
-        'clear_effect_history', 'update-step-focus', 'update_progress', 'update_agent', 'update_location',
-      ].sort());
+      expect([...actionTypes].sort()).toEqual(
+        [
+          'add',
+          'add-text',
+          'new_chapter',
+          'new_section',
+          'new_step',
+          'comment-result',
+          'exec',
+          'send_code_output',
+          'set_effect_as_thinking',
+          'is_thinking',
+          'finish_thinking',
+          'update_title',
+          'update_last_text',
+          'plan_stage',
+          'complete_workflow_planning',
+          'plan_step',
+          'update_stage_context',
+          'complete_stage_planning',
+          'delegate_task',
+          'complete_step_planning',
+          'complete_behavior',
+          'complete_behaviour',
+          'bug_analysis',
+          'update_code',
+          'exec_new_version',
+          'complete_reflection',
+          'clear_effect_current',
+          'clear_effect_history',
+          'update-step-focus',
+          'update_progress',
+          'update_agent',
+          'update_location',
+        ].sort()
+      );
     });
 
     it('should register all content actions', () => {
@@ -179,7 +206,12 @@ describe('Action Execution', () => {
         auto_debug: false,
       });
 
-      expect(mockScriptStore.execCodeCell).toHaveBeenCalledWith('test-cell', true, false);
+      expect(mockScriptStore.execCodeCell).toHaveBeenCalledWith(
+        'test-cell',
+        true,
+        false,
+        undefined
+      );
     });
 
     it('should use lastAddedCellId when codecell_id is lastAddedCellId', async () => {
@@ -191,7 +223,12 @@ describe('Action Execution', () => {
         codecell_id: 'lastAddedCellId',
       });
 
-      expect(mockScriptStore.execCodeCell).toHaveBeenCalledWith('last-cell-id', true, false);
+      expect(mockScriptStore.execCodeCell).toHaveBeenCalledWith(
+        'last-cell-id',
+        true,
+        false,
+        undefined
+      );
     });
   });
 

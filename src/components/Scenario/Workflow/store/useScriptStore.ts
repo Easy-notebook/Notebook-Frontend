@@ -34,7 +34,7 @@ interface ScriptStoreState {
 }
 
 interface ScriptStoreActions {
-  execAction: (step: ExecutionStep) => Promise<any>;
+  execAction: (step: ExecutionStep, signal?: AbortSignal) => Promise<any>;
 
   // Specialized operations (called by action handlers)
   addCell: (
@@ -46,7 +46,12 @@ interface ScriptStoreActions {
   updateLastText: (text: string) => void;
   finishThinking: () => void;
   setEffectAsThinking: (thinkingText?: string) => void;
-  execCodeCell: (codecellId: string, needOutput?: boolean, autoDebug?: boolean) => Promise<any>;
+  execCodeCell: (
+    codecellId: string,
+    needOutput?: boolean,
+    autoDebug?: boolean,
+    signal?: AbortSignal
+  ) => Promise<any>;
   updateTitle: (title: string) => void;
 }
 
@@ -168,7 +173,8 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   // ==============================================
   // Main Action Executor
   // ==============================================
-  execAction: async (step: ExecutionStep): Promise<any> => {
+  execAction: async (step: ExecutionStep, signal?: AbortSignal): Promise<any> => {
+    signal?.throwIfAborted();
     if (typeof step?.action !== 'string' || !step.action.trim()) {
       throw new Error('Action type must be a non-empty string');
     }
@@ -180,6 +186,7 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     let actionId: string | null = null;
     try {
       const { useAIAgentStore } = await import('@Store/AIAgentStore');
+      signal?.throwIfAborted();
       const viewMode = useNotebookStore.getState().viewMode;
       const currentCellId = useNotebookStore.getState().getCurrentCellId();
 
@@ -204,6 +211,8 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       // Import action registry dynamically to avoid circular dependencies
       const { getActionClass } = await import('../actions');
 
+      signal?.throwIfAborted();
+
       // Get action class from registry
       const ActionClass = getActionClass(actionType);
 
@@ -213,11 +222,13 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const action = new ActionClass(get());
 
       // Execute action
-      const result = await action.execute(request);
+      const result = await action.execute(request, signal);
+      signal?.throwIfAborted();
 
       // Update action with result
       if (actionId) {
         const { useAIAgentStore } = await import('@Store/AIAgentStore');
+        signal?.throwIfAborted();
         useAIAgentStore.getState().updateAction(actionId, {
           onProcess: false,
           result: formatActionResult(result),
@@ -313,8 +324,8 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     }
   },
 
-  execCodeCell: (codecellId, needOutput = true, autoDebug = false) =>
-    new ScriptCodeExecution(codecellId).run(needOutput, autoDebug),
+  execCodeCell: (codecellId, needOutput = true, autoDebug = false, signal) =>
+    new ScriptCodeExecution(codecellId, signal).run(needOutput, autoDebug),
 
   updateTitle: (title: string): void => {
     useNotebookStore.getState().updateTitle(title);

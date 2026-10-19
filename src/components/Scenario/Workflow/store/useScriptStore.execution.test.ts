@@ -47,7 +47,8 @@ it('dispatches the captured request even if the caller mutates its object during
   request.metadata!.marker = 'changed';
   await pending;
   expect(mocks.execute).toHaveBeenCalledExactlyOnceWith(
-    expect.objectContaining({ content: 'original', metadata: { marker: 'original' } })
+    expect.objectContaining({ content: 'original', metadata: { marker: 'original' } }),
+    undefined
   );
 });
 it('updates the created record rather than a newer record inserted by a subscriber', async () => {
@@ -74,4 +75,12 @@ it('updates the created record rather than a newer record inserted by a subscrib
   } finally {
     stop();
   }
+});
+
+it('rejects cancellation during admission before executing the action', async () => {
+  const abort = new AbortController();
+  const pending = useScriptStore.getState().execAction({ action: 'known' }, abort.signal);
+  abort.abort();
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  expect(mocks.execute).not.toHaveBeenCalled();
 });

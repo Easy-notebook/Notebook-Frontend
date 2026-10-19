@@ -32,7 +32,7 @@ export abstract class ActionBase {
    * @param step - The execution step containing action parameters
    * @returns Result of the action execution
    */
-  abstract execute(step: ExecutionStep): Promise<any> | any;
+  abstract execute(step: ExecutionStep, signal?: AbortSignal): Promise<any> | any;
 
   /**
    * Allow action to be called directly

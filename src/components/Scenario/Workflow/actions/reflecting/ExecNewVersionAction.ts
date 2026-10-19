@@ -21,11 +21,12 @@ import { WorkflowState } from '../../observation/WorkflowState';
 import { ClearEffectCurrentAction } from './ClearEffectCurrent';
 
 export class ExecNewVersionAction extends ActionBase {
-  async execute(step: ExecutionStep): Promise<any> {
+  async execute(step: ExecutionStep, signal?: AbortSignal): Promise<any> {
+    signal?.throwIfAborted();
     // Clear current effects before execution
     const stateMachine = useWorkflowStateMachine.getState();
     const stateJSON = stateMachine.stateJSON;
-    const workflowState = new WorkflowState(stateJSON);
+    const workflowState = new WorkflowState(structuredClone(stateJSON));
 
     ClearEffectCurrentAction.processState(workflowState);
 
@@ -58,7 +59,9 @@ export class ExecNewVersionAction extends ActionBase {
 
     try {
       // Execute the code cell using scriptStore
-      const result = await this.scriptStore.execCodeCell(targetCell.id, true, false);
+      const result = await this.scriptStore.execCodeCell(targetCell.id, true, false, signal);
+      signal?.throwIfAborted();
+      if (result === false) return result;
 
       // Get existing debug metadata
       const existingDebug = (targetCell.metadata?.debug || {}) as Partial<DebugMetadata>;
@@ -84,6 +87,7 @@ export class ExecNewVersionAction extends ActionBase {
 
       return result;
     } catch (error) {
+      signal?.throwIfAborted();
       console.error('[ExecNewVersionAction] Execution failed:', error);
 
       // Update metadata with failure

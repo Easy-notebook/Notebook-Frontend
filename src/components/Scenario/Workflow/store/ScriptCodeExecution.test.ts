@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import useNotebookStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
 import { useWorkflowStateMachine } from './workflowStateMachine';
 import { useAIPlanningContextStore } from './aiPlanningContext';
 import useScriptStore from './useScriptStore';
 import { createInitialStateJSON } from '@Store/models';
 import type { ExecutionResult } from '@Store/models/code';
 
+const agent = useAIAgentStore.getState();
 const notebook = useNotebookStore.getState();
 const code = useCodeStore.getState();
 const workflow = useWorkflowStateMachine.getState();
@@ -23,6 +25,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  useAIAgentStore.setState(agent, true);
   useNotebookStore.setState(notebook, true);
   useCodeStore.setState(code, true);
   useWorkflowStateMachine.setState(workflow, true);
@@ -168,4 +171,55 @@ it('releases the notebook subscription when execution rejects', async () => {
   useCodeStore.setState({ executeCell: vi.fn().mockRejectedValue(new Error('transport failed')) });
   expect(await useScriptStore.getState().execCodeCell('code')).toBe(false);
   expect(release).toHaveBeenCalledOnce();
+});
+
+it.each(['exec', 'exec_new_version'])(
+  'forwards cancellation through %s and suppresses late effects',
+  async (action) => {
+    const abort = new AbortController();
+    let finish!: (result: ExecutionResult) => void;
+    const execute = vi.fn(
+      () =>
+        new Promise<ExecutionResult>((resolve) => {
+          finish = resolve;
+        })
+    );
+    useCodeStore.setState({ executeCell: execute });
+    const pending = useScriptStore
+      .getState()
+      .execAction({ action, codecell_id: 'code' }, abort.signal);
+    const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    abort.abort();
+    const snapshot = useWorkflowStateMachine.getState().stateJSON;
+    const cells = useNotebookStore.getState().cells;
+    finish({ success: true, outputs: [{ type: 'text', content: 'cancelled result' }] });
+    await rejection;
+    expect(useWorkflowStateMachine.getState().stateJSON).toBe(snapshot);
+    expect(useNotebookStore.getState().cells).toBe(cells);
+    expect(useAIPlanningContextStore.getState().effect.current).toEqual([]);
+  }
+);
+it('cancels delayed debug focus when its workflow signal aborts', async () => {
+  vi.useFakeTimers();
+  const abort = new AbortController();
+  const focus = vi.fn();
+  useNotebookStore.setState({ setCurrentCell: focus });
+  useCodeStore.setState({
+    executeCell: vi.fn().mockResolvedValue({ success: false, error: 'failed' }),
+  });
+  await useScriptStore.getState().execCodeCell('code', true, true, abort.signal);
+  abort.abort();
+  expect(vi.getTimerCount()).toBe(0);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(focus).not.toHaveBeenCalled();
+});
+it('records outputs only once through the registered exec action', async () => {
+  const outputs = [{ type: 'text', content: 'single output' }];
+  useNotebookStore.setState({ cells: [{ id: 'code', type: 'code', content: '', outputs }] });
+  useCodeStore.setState({ executeCell: vi.fn().mockResolvedValue({ success: true, outputs }) });
+  await useScriptStore.getState().execAction({ action: 'exec', codecell_id: 'code' });
+  expect(useWorkflowStateMachine.getState().stateJSON.state.effects.current).toEqual([
+    { type: 'text', text: 'single output', cell_ref: 'code' },
+  ]);
 });

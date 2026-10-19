@@ -10,12 +10,18 @@ export class ScriptCodeExecution {
   private unsubscribe = () => {};
   private timer?: ReturnType<typeof setTimeout>;
 
-  constructor(private readonly cellId: string) {}
+  constructor(
+    private readonly cellId: string,
+    private readonly signal?: AbortSignal
+  ) {}
+
+  private readonly abort = () => this.settle();
 
   private owns(): boolean {
     const notebook = useNotebookStore.getState();
     return (
       this.phase !== 'settled' &&
+      !this.signal?.aborted &&
       notebook.notebookId === this.owner &&
       notebook.cells.some((cell) => cell.id === this.cellId)
     );
@@ -25,10 +31,12 @@ export class ScriptCodeExecution {
     if (this.phase === 'settled') return;
     this.phase = 'settled';
     this.unsubscribe();
+    this.signal?.removeEventListener('abort', this.abort);
     if (this.timer !== undefined) clearTimeout(this.timer);
   }
 
   async run(needOutput: boolean, autoDebug: boolean) {
+    this.signal?.throwIfAborted();
     if (!this.cellId || !this.owns()) return false;
     this.unsubscribe = useNotebookStore.subscribe((notebook) => {
       // Kernel initialization may assign an ID to a new, unsaved notebook.
@@ -36,14 +44,17 @@ export class ScriptCodeExecution {
         this.owner = notebook.notebookId;
       if (!this.owns()) this.settle();
     });
+    this.signal?.addEventListener('abort', this.abort, { once: true });
     try {
       const code = useCodeStore.getState();
       if (needOutput) code.setCellMode(this.cellId, 'output_only');
       if (!this.owns()) return false;
       const result = await code.executeCell(this.cellId);
+      this.signal?.throwIfAborted();
       if (!this.owns()) return false;
       this.phase = 'publishing';
       const { useWorkflowStateMachine } = await import('./workflowStateMachine');
+      this.signal?.throwIfAborted();
       if (!this.owns()) return false;
 
       const cell = useNotebookStore.getState().cells.find((item) => item.id === this.cellId);
@@ -90,6 +101,7 @@ export class ScriptCodeExecution {
       }
       return result.success ? result.outputs : result.error;
     } catch (error) {
+      this.signal?.throwIfAborted();
       if (this.owns()) console.error(`[ScriptStore] Error executing cell ${this.cellId}:`, error);
       return false;
     } finally {

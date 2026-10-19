@@ -90,5 +90,17 @@ fires or the context invalidates, then releases both resources.
 Execution outputs are appended to a detached workflow snapshot and published once per result.
 The prior snapshot remains unchanged. Planning-context effects are also appended in one batch,
 with ownership rechecked after synchronous workflow subscribers run. Notebook invalidation
-returns false through the existing code-execution failure contract. Workflow pause/cancel on the
-same notebook is not yet forwarded into this action lifecycle; backend work is not rolled back.
+returns false through the existing code-execution failure contract. An optional AbortSignal
+now flows from the automatic adapter through ScriptStore and registered code actions to this
+session. Pause/cancel/supersession invalidate result publication and pending debug focus, even
+on the same notebook. Cancellation throws its original reason after pending execution drains;
+backend work is not rolled back or forcibly interrupted.
+
+ExecCodeAction delegates output publication exclusively to ScriptCodeExecution; it no longer
+reads global notebook outputs and appends the same effects a second time. Both code actions
+check cancellation before post-execution indicators or debug metadata writes. Their initial
+clear-effects operation also starts from a detached snapshot. ScriptStore checks cancellation
+before action admission and before recording success, settling an existing action record through
+the error path. Other action implementations and transition-owned actions still require their
+own cancellation propagation. The legacy code-result return shape remains unchanged; interpreting
+that shape as a structured success object in debug metadata requires separate correction.

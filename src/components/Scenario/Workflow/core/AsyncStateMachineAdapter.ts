@@ -36,7 +36,7 @@ interface APIClient {
 }
 
 interface ScriptStore {
-  execAction: (step: ExecutionStep) => Promise<void>;
+  execAction: (step: ExecutionStep, signal?: AbortSignal) => Promise<void>;
 }
 
 /**
@@ -206,7 +206,7 @@ export class AsyncStateMachineAdapter {
               );
 
               console.log(`[AsyncFSM] Executing action step:`, executionStep);
-              await scriptStore.execAction(executionStep);
+              await scriptStore.execAction(executionStep, signal);
               signal?.throwIfAborted();
 
               streamingLogger.actionExecutionEnd(actionIndex);
