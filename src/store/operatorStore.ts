@@ -74,12 +74,16 @@ const useOperatorStore = create<OperatorStore>((set, get) => {
         },
       }));
       if (signal.aborted) return;
-      await handleStreamResponse(data as unknown as StreamData, async (toast) => {
-        showToast({
-          description: toast.message,
-          variant: toast.type === 'error' ? 'destructive' : 'default',
-        });
-      });
+      await handleStreamResponse(
+        data as unknown as StreamData,
+        async (toast) => {
+          showToast({
+            description: toast.message,
+            variant: toast.type === 'error' ? 'destructive' : 'default',
+          });
+        },
+        signal
+      );
     },
     busy: (value) =>
       set(value ? { isSendingOperation: true, error: null } : { isSendingOperation: false }),

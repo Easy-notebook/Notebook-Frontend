@@ -346,3 +346,30 @@ it('detaches submitter cancellation after acceptance while keeping the response 
   expect(io.handle).toHaveBeenCalledOnce();
   expect(useOperatorStore.getState().isSendingOperation).toBe(false);
 });
+
+it('passes notebook cancellation into an already executing response handler', async () => {
+  useNotebookStore.setState({ notebookId: 'first' });
+  const transport = controlledStream();
+  io.send.mockResolvedValue(transport.stream);
+  let release!: () => void;
+  io.handle.mockImplementation(async (_data, notify, signal: AbortSignal) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    signal.throwIfAborted();
+    await notify({ message: 'late', type: 'info' });
+  });
+  const receipt = await useOperatorStore.getState().submitOperation('first', operation);
+  if (!receipt.accepted) throw new Error('Expected accepted stream');
+  transport.controller.enqueue(encoder.encode('{"type":"test"}'));
+  await vi.waitFor(() => expect(io.handle).toHaveBeenCalledOnce());
+  const signal = io.handle.mock.calls[0][2] as AbortSignal;
+  useNotebookStore.setState({ notebookId: 'second' });
+  release();
+  await receipt.completion;
+  expect(signal).toBeInstanceOf(AbortSignal);
+  expect(signal.aborted).toBe(true);
+  expect(io.toast).not.toHaveBeenCalled();
+  expect(useOperatorStore.getState().error).toBeNull();
+  expect(useOperatorStore.getState().isSendingOperation).toBe(false);
+});

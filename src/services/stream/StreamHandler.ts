@@ -24,7 +24,17 @@ export class StreamHandler {
   /**
    * Handle a stream response by dispatching to the appropriate action
    */
-  async handleStream(data: StreamData, showToast: ShowToastFunction): Promise<void> {
+  async handleStream(
+    data: StreamData,
+    showToast: ShowToastFunction,
+    signal?: AbortSignal
+  ): Promise<void> {
+    signal?.throwIfAborted();
+    const notify: ShowToastFunction = async (toast) => {
+      signal?.throwIfAborted();
+      await showToast(toast);
+      signal?.throwIfAborted();
+    };
     // Normalize payload: handle both direct payload and data.payload formats
     const payload = data.payload || data.data?.payload || {};
     const dataPayload = data.data || { payload };
@@ -46,7 +56,8 @@ export class StreamHandler {
     const context: StreamActionContext = {
       data: normalizedData,
       payload: payload,
-      showToast,
+      showToast: notify,
+      signal,
     };
 
     // Try to find and execute registered action
@@ -56,12 +67,14 @@ export class StreamHandler {
       try {
         const action = new ActionClass();
         await action.execute(context);
+        signal?.throwIfAborted();
         agentLog.debug('Stream action executed successfully', { type: data.type });
 
         // Record significant stream actions to AI Agent Store
         // Filter out high-frequency events to avoid noise
         if (data.type !== 'addContentToAnswer') {
           const { useAIAgentStore } = await import('@Store/AIAgentStore');
+          signal?.throwIfAborted();
           useAIAgentStore.getState().addAction({
             type: 'system_event',
             content: `Stream Update: ${data.type}`,
@@ -73,8 +86,9 @@ export class StreamHandler {
           });
         }
       } catch (error) {
+        signal?.throwIfAborted();
         agentLog.error('Stream action execution failed', { type: data.type, error });
-        await showToast({
+        await notify({
           message: `处理流式响应失败: ${describeError(error)}`,
           type: 'error',
         });
@@ -93,10 +107,11 @@ export class StreamHandler {
  */
 export const handleStreamResponse = async (
   data: StreamData,
-  showToast: ShowToastFunction
+  showToast: ShowToastFunction,
+  signal?: AbortSignal
 ): Promise<void> => {
   const handler = StreamHandler.getInstance();
-  await handler.handleStream(data, showToast);
+  await handler.handleStream(data, showToast, signal);
 };
 
 // Re-export types for convenience
