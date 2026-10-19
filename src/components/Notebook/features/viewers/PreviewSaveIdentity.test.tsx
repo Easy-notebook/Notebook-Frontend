@@ -134,3 +134,65 @@ it('split editor callbacks carry split identity even while a normal file is sele
     fileId: 'book::split.js',
   });
 });
+
+it('saving CSV preserves source cells and adds no spreadsheet column-label row', async () => {
+  const content = '"name,label",notes\n"Ada, Lovelace","line one\nline ""two"""';
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.csv',
+    name: 'table.csv',
+    path: 'table.csv',
+    type: 'csv',
+    content,
+  };
+  render(<DataTable />);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith(content, {
+      surface: 'normal',
+      fileId: 'book::table.csv',
+    })
+  );
+});
+
+it('exports the same CSV bytes as the save action', async () => {
+  const content = '"name,label",notes\n"Ada, Lovelace","line one\nline ""two"""';
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.csv',
+    name: 'table.csv',
+    path: 'table.csv',
+    type: 'csv',
+    content,
+  };
+  const createObjectURL = vi.fn<(blob: Blob) => string>(() => 'blob:export');
+  const revokeObjectURL = vi.fn();
+  const OriginalURL = URL;
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  vi.stubGlobal(
+    'URL',
+    class extends OriginalURL {
+      static createObjectURL = createObjectURL;
+      static revokeObjectURL = revokeObjectURL;
+    }
+  );
+  try {
+    render(<DataTable />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    const blob = createObjectURL.mock.calls[0][0];
+    const exported = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(blob);
+    });
+    expect(exported).toBe(content);
+    expect(exported).toBe(model.state.updatePreviewFileContent.mock.calls[0][0]);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:export');
+  } finally {
+    click.mockRestore();
+    vi.unstubAllGlobals();
+  }
+});

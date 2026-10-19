@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx-js-style';
 import Papa from 'papaparse';
+import { serializeTableCsv } from './serializeTableCsv';
 import {
   useReactTable,
   getCoreRowModel,
@@ -1120,22 +1121,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     }
   }, [activeCell, data, columns, setTabDirty, currentFile]);
 
-  // ============== 导出/保存（原样保留） ==============
+  // ============== Export / save ==============
   const handleExport = useCallback(() => {
-    const headers = columns.map((col) => col.displayName);
-    const rows = data.map((row) => columns.map((col) => String(row[col.key] ?? '')));
-    const csvContent = [
-      headers.join(','),
-      ...rows.map((r) =>
-        r
-          .map((cell) =>
-            cell.includes(',') || cell.includes('"') || cell.includes('\n')
-              ? `"${cell.replace(/"/g, '""')}"`
-              : cell
-          )
-          .join(',')
-      ),
-    ].join('\n');
+    const csvContent = serializeTableCsv(data, columns);
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1148,10 +1136,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   const handleSave = useCallback(async () => {
     if (!currentFile) return;
     try {
-      const csvContent = [
-        columns.map((col) => col.displayName).join(','),
-        ...data.map((row) => columns.map((col) => String(row[col.key] ?? '')).join(',')),
-      ].join('\n');
+      const csvContent = serializeTableCsv(data, columns);
       const saved = await usePreviewStore.getState().updatePreviewFileContent(csvContent, {
         surface: isInSplitView ? 'split' : 'normal',
         fileId: currentFile.id,

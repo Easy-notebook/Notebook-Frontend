@@ -235,3 +235,14 @@ markers merely on Ctrl/Cmd+S. These edits commit to local preview storage; no
 backend file-upload operation is implied. Native browser tests cover split write
 ordering, UTF-8 sizes, metadata preservation, deletion ordering and transaction
 rollback. Store and UI tests cover target routing and late completion ownership.
+
+## CSV serialization
+
+The spreadsheet stores every source row in its data model, including any original
+header row. A/B/C column labels are view coordinates, not file contents.
+`serializeTableCsv` projects cells in column order and uses Papa Parse to encode
+CSV for both save and export. It preserves embedded commas, quotes, CR/LF and
+Unicode, and normalizes null/undefined cells to empty strings while retaining
+zero and false. Repeated CSV save/read cycles do not insert coordinate rows.
+This serializer does not implement XLSX workbook persistence or preserve workbook
+formatting; that write path still requires a format-aware model.
