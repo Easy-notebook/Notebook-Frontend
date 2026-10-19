@@ -6,6 +6,7 @@ const io = vi.hoisted(() => ({
   fetch: vi.fn(),
   fileRead: vi.fn(),
   fileSave: vi.fn(),
+  fileUpdate: vi.fn(),
   fileDelete: vi.fn(),
   fileClear: vi.fn(),
   loadTabs: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock('@Services/persistence/instance', () => ({
     files: {
       getFile: io.fileRead,
       saveFile: io.fileSave,
+      updateFileContent: io.fileUpdate,
       deleteFile: io.fileDelete,
       clearNotebook: io.fileClear,
     },
@@ -65,6 +67,7 @@ beforeEach(() => {
   io.loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
   io.fileRead.mockResolvedValue(undefined);
   io.fileSave.mockResolvedValue(undefined);
+  io.fileUpdate.mockResolvedValue(true);
   io.fileDelete.mockResolvedValue(true);
   io.fileClear.mockResolvedValue(undefined);
 });
@@ -548,5 +551,125 @@ describe('cache mutation publication', () => {
     expect(await state().deleteFileFromCache('book', 'file.txt')).toBe(false);
     expect(state().currentPreviewFiles).toEqual([tab('book')]);
     expect(state().error).toBe('Failed to delete file from cache');
+  });
+});
+
+describe('active file content commit ownership', () => {
+  async function openFile() {
+    io.fileRead.mockResolvedValueOnce(fileRecord('book'));
+    await state().loadFileById('book::file.txt');
+    io.fileRead.mockClear();
+  }
+  const committed = (content: string) => {
+    const record = fileRecord('book');
+    return {
+      content,
+      metadata: {
+        ...record.metadata,
+        size: new TextEncoder().encode(content).length,
+        lastModified: '2026-10-19T00:00:00.000Z',
+      },
+    };
+  };
+
+  it('publishes committed UTF-8 size and timestamps rather than old view metadata', async () => {
+    await openFile();
+    const saved = committed('中文');
+    io.fileRead.mockResolvedValueOnce(saved);
+    const result = await state().updateActiveFileContent('中文');
+    expect(io.fileUpdate).toHaveBeenCalledWith('book', 'file.txt', '中文');
+    expect(io.fileSave).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      content: '中文',
+      size: 6,
+      lastModified: saved.metadata.lastModified,
+    });
+    expect(state().activeFile).toBe(result);
+  });
+
+  it('does not resurrect a deleted file through an upsert', async () => {
+    await openFile();
+    const original = state().activeFile;
+    io.fileUpdate.mockResolvedValueOnce(false);
+    expect(await state().updateActiveFileContent('obsolete')).toBeNull();
+    expect(io.fileSave).not.toHaveBeenCalled();
+    expect(io.fileRead).not.toHaveBeenCalled();
+    expect(state().activeFile).toBe(original);
+  });
+
+  it('lets an admitted edit finish without reopening a closed file', async () => {
+    await openFile();
+    const write = deferred<boolean>();
+    io.fileUpdate.mockReturnValueOnce(write.promise);
+    const pending = state().updateActiveFileContent('edited');
+    state().clearNotebookState();
+    write.resolve(true);
+    expect(await pending).toBeNull();
+    expect(io.fileUpdate).toHaveBeenCalledOnce();
+    expect(io.fileRead).not.toHaveBeenCalled();
+    expect(state().activeFile).toBeNull();
+  });
+
+  it('ignores a late commit readback after a new file is selected', async () => {
+    await openFile();
+    const read = deferred<ReturnType<typeof committed>>();
+    io.fileRead.mockReturnValueOnce(read.promise);
+    const pending = state().updateActiveFileContent('edited');
+    await vi.waitFor(() => expect(io.fileRead).toHaveBeenCalledOnce());
+    io.fileRead.mockResolvedValueOnce(fileRecord('other'));
+    const selected = await state().loadFileById('other::file.txt');
+    read.resolve(committed('edited'));
+    expect(await pending).toBeNull();
+    expect(state().activeFile).toBe(selected);
+  });
+
+  it('publishes only the latest admitted edit when completions arrive out of order', async () => {
+    await openFile();
+    const first = deferred<boolean>();
+    const second = deferred<boolean>();
+    io.fileUpdate.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const old = state().updateActiveFileContent('first');
+    const latest = state().updateActiveFileContent('second');
+    io.fileRead.mockResolvedValueOnce(committed('second'));
+    second.resolve(true);
+    const result = await latest;
+    first.resolve(true);
+    expect(await old).toBeNull();
+    expect(state().activeFile).toBe(result);
+    expect(result?.content).toBe('second');
+    expect(io.fileRead).toHaveBeenCalledOnce();
+  });
+
+  it('rejects write failure without altering the active record', async () => {
+    await openFile();
+    const original = state().activeFile;
+    io.fileUpdate.mockRejectedValueOnce(new Error('write aborted'));
+    await expect(state().updateActiveFileContent('edited')).rejects.toThrow('write aborted');
+    expect(state().activeFile).toBe(original);
+    expect(io.fileRead).not.toHaveBeenCalled();
+  });
+
+  it('a stale write failure cannot cancel a newer edit', async () => {
+    await openFile();
+    const write = deferred<boolean>();
+    io.fileUpdate.mockReturnValueOnce(write.promise);
+    const old = state().updateActiveFileContent('first');
+    const rejected = expect(old).rejects.toThrow('old aborted');
+    const read = deferred<ReturnType<typeof committed>>();
+    io.fileRead.mockReturnValueOnce(read.promise);
+    const latest = state().updateActiveFileContent('second');
+    await vi.waitFor(() => expect(io.fileRead).toHaveBeenCalledOnce());
+    write.reject(new Error('old aborted'));
+    await rejected;
+    read.resolve(committed('second'));
+    expect((await latest)?.content).toBe('second');
+    expect(state().activeFile?.content).toBe('second');
+  });
+
+  it('does not fabricate a record if the file disappears between write and readback', async () => {
+    await openFile();
+    io.fileRead.mockResolvedValueOnce(null);
+    expect(await state().updateActiveFileContent('edited')).toBeNull();
+    expect(io.fileSave).not.toHaveBeenCalled();
   });
 });

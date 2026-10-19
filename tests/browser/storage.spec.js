@@ -3549,3 +3549,64 @@ for (const abort of [false, true]) {
     }
   });
 }
+
+test('overlapping file edits retain admission order and authoritative UTF-8 accounting', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository(provider);
+    const original = await files.saveFile({
+      notebookId: 'book',
+      filePath: 'edit.txt',
+      fileName: 'edit.txt',
+      content: 'old',
+      size: 3,
+      lastModified: 'old',
+    });
+    const first = files.updateFileContent('book', 'edit.txt', 'first');
+    const second = files.updateFileContent('book', 'edit.txt', '中文');
+    const saved = await Promise.all([first, second]);
+    const record = await files.getFile('book', 'edit.txt');
+    const notebook = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'book');
+    await provider.close();
+    return { saved, original, record, notebook };
+  });
+  expect(result.saved).toEqual([true, true]);
+  expect(result.record.content).toBe('中文');
+  expect(result.record.metadata.size).toBe(6);
+  expect(result.record.metadata.lastModified).not.toBe('old');
+  expect(result.record.metadata.cachedAt).toBe(result.original.cachedAt);
+  expect(result.notebook).toMatchObject({ fileCount: 1, totalSize: 6 });
+});
+
+test('an edit admitted after file deletion cannot recreate content or accounting', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository(provider);
+    await files.saveFile({
+      notebookId: 'book',
+      filePath: 'edit.txt',
+      fileName: 'edit.txt',
+      content: 'old',
+      size: 3,
+      lastModified: 'old',
+    });
+    const deleting = files.deleteFile('book', 'edit.txt');
+    const editing = files.updateFileContent('book', 'edit.txt', 'obsolete');
+    const outcomes = await Promise.all([deleting, editing]);
+    const record = await files.getFile('book', 'edit.txt');
+    const content = await provider.get(DB_CONFIG.STORES.FILES_CONTENT, 'book::edit.txt');
+    const notebook = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'book');
+    await provider.close();
+    return { outcomes, record, content, notebook };
+  });
+  expect(result.outcomes).toEqual([true, false]);
+  expect(result.record).toBeNull();
+  expect(result.content).toBeUndefined();
+  expect(result.notebook).toMatchObject({ fileCount: 0, totalSize: 0 });
+});

@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { PreviewRequestLifecycle } from '@Services/preview/PreviewRequestLifecycle';
 import { formatPreviewContent } from '@Services/preview/formatPreviewContent';
+import { fileFromCache } from '@Services/preview/fileFromCache';
 import type { FileContentResponse } from '@Services/types';
 import { FileService } from '@Services/notebook/FileService';
 import { fileLog, storeLog } from '@Utils/logger';
@@ -420,19 +421,7 @@ const usePreviewStore = create<PreviewStore>()(
           const cachedMetadata = cachedFile.metadata;
           const cachedMode = getActivePreviewMode(cachedMetadata.fileType as FileType);
 
-          const fileObject: FileObject = {
-            id: cachedMetadata.id,
-            notebookId: cachedMetadata.notebookId,
-            path: cachedMetadata.filePath,
-            name: cachedMetadata.fileName,
-            content: cachedFile.content || '',
-            type: cachedMetadata.fileType,
-            lastModified: cachedMetadata.lastModified,
-            size: cachedMetadata.size,
-            cachedAt: cachedMetadata.cachedAt,
-            accessCount: cachedMetadata.accessCount,
-            lastAccessed: cachedMetadata.lastAccessedAt,
-          };
+          const fileObject = fileFromCache(cachedFile);
 
           publish({
             activeFile: fileObject,
@@ -512,19 +501,7 @@ const usePreviewStore = create<PreviewStore>()(
             // Set active preview mode based on file type
             const previewMode = getActivePreviewMode(cachedMetadata.fileType as FileType);
 
-            const fileObject: FileObject = {
-              id: cachedMetadata.id,
-              notebookId: cachedMetadata.notebookId,
-              path: cachedMetadata.filePath,
-              name: cachedMetadata.fileName,
-              content: cachedFile.content || '',
-              type: cachedMetadata.fileType,
-              lastModified: cachedMetadata.lastModified,
-              size: cachedMetadata.size,
-              cachedAt: cachedMetadata.cachedAt,
-              accessCount: cachedMetadata.accessCount,
-              lastAccessed: cachedMetadata.lastAccessedAt,
-            };
+            const fileObject = fileFromCache(cachedFile);
 
             publish({
               activeFile: fileObject,
@@ -904,41 +881,39 @@ const usePreviewStore = create<PreviewStore>()(
           }
         },
 
-        // Update active file content and keep cache consistent
+        // Edits target the captured file; navigation only revokes UI publication.
         updateActiveFileContent: async (content: string): Promise<FileObject | null> => {
-          const state = get();
-          const file = state.activeFile;
-          if (!file) return null;
-
-          const updated: FileObject = { ...file, content };
-
-          // Transform to match persistenceService expected format
-          const cacheData = {
-            notebookId: updated.notebookId,
-            filePath: updated.path,
-            fileName: updated.name,
-            content: updated.content,
-            lastModified: updated.lastModified,
-            size: updated.size,
-          };
-
-          if (!hasNotebookId(updated.notebookId)) {
-            set({ isLoading: false });
-            return null;
+          const file = get().activeFile;
+          if (!file || !hasNotebookId(file.notebookId)) return null;
+          const request = normalRequests.begin();
+          set({ isLoading: false });
+          try {
+            // Updating an existing record preserves its metadata and cannot recreate a deleted file.
+            const saved = await persistenceService.files.updateFileContent(
+              file.notebookId,
+              file.path,
+              content
+            );
+            if (!normalRequests.isCurrent(request)) return null;
+            if (!saved) {
+              normalRequests.settle(request, 'failed');
+              return null;
+            }
+            // Read the committed record, including UTF-8 size and repository-assigned timestamps.
+            const record = await persistenceService.files.getFile(file.notebookId, file.path);
+            if (!normalRequests.isCurrent(request)) return null;
+            if (!record || record.needsRemoteFetch || record.content === undefined) {
+              normalRequests.settle(request, 'failed');
+              return null;
+            }
+            const updated = fileFromCache(record);
+            normalRequests.settle(request, 'ready');
+            set({ activeFile: updated });
+            return updated;
+          } catch (error) {
+            normalRequests.settle(request, 'failed');
+            throw error;
           }
-
-          await persistenceService.files.saveFile({
-            notebookId: cacheData.notebookId,
-            filePath: cacheData.filePath,
-            fileName: cacheData.fileName,
-            content: cacheData.content,
-            // We don't have fileType in cacheData, but we can derive it or pass it if available in updated
-            fileType: updated.type,
-            lastModified: cacheData.lastModified,
-            size: cacheData.size,
-          });
-          set({ activeFile: updated });
-          return updated;
         },
 
         setTabDirty: (fileId: string, value: boolean) => {

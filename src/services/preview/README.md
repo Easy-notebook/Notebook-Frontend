@@ -33,8 +33,7 @@ loads. Tab removal is immediate; neighbor selection belongs to the close request
 and cannot later republish an old tab list. Saved-tab misses can start default
 discovery only while their original request is current.
 
-Cache deletion and clear use the mutation completion rules below. Content editing
-still has a separate lifetime and awaits migration to guarded post-write updates.
+Cache deletion, clear, and content editing use the commit completion rules below.
 
 `src/store/previewStore.lifecycle.test.ts` exercises the real store with controlled
 cache/network promises, including replacement, failures, close/reset, notebook
@@ -65,4 +64,22 @@ flags and clears its active file; it never loads an unrelated remaining tab.
 notebook counters and activity records in one native readwrite transaction.
 Single-file deletion and bulk clear use the same record deletion implementation.
 Browser tests verify both successful isolation and complete abort rollback.
-Content-editing completion remains a separate follow-up.
+
+## Content edit completion
+
+An edit captures its notebook/path and admits a normal-preview request before
+writing. It uses the existing atomic `updateFileContent` contract: the repository
+updates UTF-8 byte accounting and timestamps while retaining record ownership;
+an already deleted file is not recreated. Navigation does not abort an admitted
+write, but supersedes its permission to read back or publish into the view.
+
+Only a current edit reads the committed cache record. `fileFromCache` projects
+that record, using the same mapping as ordinary cached previews. A subsequent
+navigation or edit prevents late readback from changing the active file. The
+readback may observe a newer committed revision; it does not synthesize metadata
+from the original UI snapshot. Missing/superseded results return `null`, and
+storage failures still reject the caller's promise.
+
+Native transaction admission already orders overlapping updates; browser tests
+cover consecutive edits and deletion admitted before an edit. No additional
+application write queue is used.
