@@ -72,7 +72,7 @@ The existing top-level and nested creation response shapes are accepted and vali
 
 Both admission services use `createAttachmentFiles` for unique IDs and complete rollback of
 partial browser URL allocation. The empty-state component still owns its controlled file list,
-VDS preparation timers, and workflow transition; draft leasing and cancellation of those UI
-continuations remain separate pending work. Notebook checks currently compare IDs, so an
+attachment draft; its preparation/suggestion/navigation sequence is now owned by
+`EmptyStatePreparationSession`. Draft leasing remains pending work. Notebook checks currently compare IDs, so an
 away-and-back switch to the same ID is not detected. Failed or superseded requests do not roll
 back server-side notebook/file creation.

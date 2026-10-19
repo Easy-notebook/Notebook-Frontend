@@ -22,6 +22,16 @@ Store integration tests cover both completion orders, clearing/resetting pending
 failure, current failure and retry, repeated File identity, synchronous reset, and external
 loading changes. Dataset description formatting is preserved for downstream API requests.
 
-This boundary does not yet own the command input's suggestion timers, backend question request,
-notebook changes, or workflow navigation. Those UI continuations require their own cancellation
-and result ownership. Server upload and browser preview URL lifecycles remain separate concerns.
+The command input's `EmptyStatePreparationSession` owns the surrounding upload, preparation,
+suggestion request and navigation sequence. Each new batch supersedes the previous sequence.
+The React hook cancels on unmount or a notebook change, including synchronous away-and-back
+switches; initial null-to-created notebook admission is preserved. File removal and submission
+also cancel preparation. Cancellation clears the 500 ms navigation timer and settles that wait.
+Suggestions start after dataset preparation completes, replacing the former arbitrary one-second
+wait. Responses are validated before publishing; obsolete completions and errors are ignored.
+
+Uploaded preview URLs returned after cancellation are released before acceptance. Accepted
+attachments still use the component's controlled file list; their draft/record lease integration
+is pending. Cancellation suppresses continuation effects, but does not abort backend network
+requests or the Store's already-started parser computation. Dataset analysis remains owned by
+Store selection/reset, independently of the mounted command input.
