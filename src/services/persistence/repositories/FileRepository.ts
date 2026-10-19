@@ -174,19 +174,42 @@ export class FileRepository implements IFileRepository {
     await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
       const metadata = stores[DB_CONFIG.STORES.FILES_METADATA];
       const previous = await this.read<FileMetadataEntity | undefined>(metadata.get(fileId));
-      metadata.delete(fileId);
-      stores[DB_CONFIG.STORES.FILES_CONTENT].delete(fileId);
-      if (previous)
-        await this.recordMutation(
-          stores,
-          notebookId,
-          filePath,
-          -1,
-          -(previous.size || 0),
-          'file_delete'
-        );
+      await this.deleteRecord(stores, notebookId, filePath, previous);
     });
     return true;
+  }
+
+  /** Delete the notebook's cached file records and accounting in one commit. */
+  async clearNotebook(notebookId: string): Promise<void> {
+    await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
+      const files = await this.read<FileMetadataEntity[]>(
+        stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(notebookId)
+      );
+      for (const file of files) {
+        await this.deleteRecord(stores, notebookId, file.filePath, file);
+      }
+    });
+  }
+
+  private async deleteRecord(
+    stores: Record<string, IDBObjectStore>,
+    notebookId: string,
+    filePath: string,
+    previous?: FileMetadataEntity
+  ): Promise<void> {
+    const fileId = `${notebookId}::${filePath}`;
+    stores[DB_CONFIG.STORES.FILES_METADATA].delete(fileId);
+    stores[DB_CONFIG.STORES.FILES_CONTENT].delete(fileId);
+    if (previous) {
+      await this.recordMutation(
+        stores,
+        notebookId,
+        filePath,
+        -1,
+        -(previous.size || 0),
+        'file_delete'
+      );
+    }
   }
 
   async updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean> {

@@ -170,6 +170,28 @@ const usePreviewStore = create<PreviewStore>()(
         },
       });
 
+      // Persistence success is independent of whether this view still owns the result.
+      const mutateCache = async (
+        operation: () => Promise<unknown>,
+        reconcile: () => void,
+        errorMessage: string
+      ): Promise<boolean> => {
+        const request = normalRequests.begin();
+        set({ isLoading: true, error: null });
+        try {
+          await operation();
+          if (normalRequests.isCurrent(request)) reconcile();
+          if (normalRequests.settle(request, 'ready')) set({ isLoading: false });
+          return true;
+        } catch (error) {
+          fileLog.error(errorMessage, { error });
+          if (normalRequests.settle(request, 'failed')) {
+            set({ isLoading: false, error: errorMessage });
+          }
+          return false;
+        }
+      };
+
       const previewFile = async (
         request: symbol,
         notebookId: string,
@@ -825,72 +847,46 @@ const usePreviewStore = create<PreviewStore>()(
         loadFileById: async (fileId) =>
           (await runPreviewRequest((request) => loadFileById(request, fileId))) ?? null,
 
-        // Delete a file from cache
-        deleteFileFromCache: async (notebookId: string, filePath: string): Promise<boolean> => {
-          try {
-            await persistenceService.files.deleteFile(notebookId, filePath);
+        // Delete a file from cache. A completed mutation must not steal a newer view.
+        deleteFileFromCache: (notebookId: string, filePath: string): Promise<boolean> =>
+          mutateCache(
+            async () => {
+              if (!(await persistenceService.files.deleteFile(notebookId, filePath))) {
+                throw new Error('File deletion was not committed');
+              }
+            },
+            () => {
+              const fileId = makeFileId(notebookId, filePath);
+              if (
+                get().currentPreviewFiles.some((file) => file.id === fileId) ||
+                get().activeFile?.id === fileId
+              ) {
+                get().closePreviewFile(fileId);
+              }
+            },
+            'Failed to delete file from cache'
+          ),
 
-            // Update state if needed
-            const fileId = makeFileId(notebookId, filePath);
-            const { currentPreviewFiles } = get();
-
-            // Remove from preview files list
-            if (currentPreviewFiles.some((f) => f.id === fileId)) {
-              get().closePreviewFile(fileId);
-            }
-
-            return true;
-          } catch (error) {
-            fileLog.error('Error deleting file from cache', { error });
-            set({ error: 'Failed to delete file from cache' });
-            return false;
-          }
-        },
-
-        // Clear all files for a notebook
-        clearCacheForNotebook: async (notebookId: string): Promise<boolean> => {
-          try {
-            // Note: persistenceService doesn't have clearNotebookCache exposed directly on files repo yet
-            // But we can iterate and delete or add a method.
-            // For now, let's assume we might need to add it or use getFilesForNotebook + delete
-            const files = await persistenceService.files.getFilesForNotebook(notebookId);
-            await Promise.all(
-              files.map((f) => persistenceService.files.deleteFile(notebookId, f.metadata.filePath))
-            );
-
-            // Update state
-            const { currentPreviewFiles } = get();
-            const updatedFiles = currentPreviewFiles.filter(
-              (f) => !f.id.startsWith(`${notebookId}::`)
-            );
-
-            // Handle active file and preview mode setting
-            if (updatedFiles.length > 0) {
-              const activeFile = await get().loadFileById(updatedFiles[0].id);
-              const activePreviewMode = activeFile
-                ? getActivePreviewMode(activeFile.type as FileType)
-                : 'default';
-
+        clearCacheForNotebook: (notebookId: string): Promise<boolean> =>
+          mutateCache(
+            () => persistenceService.files.clearNotebook(notebookId),
+            () => {
+              const current = get();
+              const belongsToNotebook = (fileId: string) => fileId.startsWith(`${notebookId}::`);
               set({
-                currentPreviewFiles: updatedFiles,
-                activeFile: activeFile,
-                activePreviewMode: activePreviewMode,
+                currentPreviewFiles: current.currentPreviewFiles.filter(
+                  (file) => !belongsToNotebook(file.id)
+                ),
+                dirtyMap: Object.fromEntries(
+                  Object.entries(current.dirtyMap).filter(([id]) => !belongsToNotebook(id))
+                ),
+                ...(current.activeFile && belongsToNotebook(current.activeFile.id)
+                  ? { activeFile: null, activePreviewMode: null, previewMode: 'notebook' as const }
+                  : {}),
               });
-            } else {
-              set({
-                currentPreviewFiles: updatedFiles,
-                activeFile: null,
-                activePreviewMode: null,
-              });
-            }
-
-            return true;
-          } catch (error) {
-            fileLog.error('Error clearing notebook cache', { error });
-            set({ error: 'Failed to clear notebook cache' });
-            return false;
-          }
-        },
+            },
+            'Failed to clear notebook cache'
+          ),
 
         // Get CSV data for CSVPreviewApp
         getCSVData: (): string | null => {

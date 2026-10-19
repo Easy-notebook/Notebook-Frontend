@@ -33,8 +33,8 @@ loads. Tab removal is immediate; neighbor selection belongs to the close request
 and cannot later republish an old tab list. Saved-tab misses can start default
 discovery only while their original request is current.
 
-Cache maintenance and content editing have separate lifetimes; this owner does
-not yet govern their post-write state updates.
+Cache deletion and clear use the mutation completion rules below. Content editing
+still has a separate lifetime and awaits migration to guarded post-write updates.
 
 `src/store/previewStore.lifecycle.test.ts` exercises the real store with controlled
 cache/network promises, including replacement, failures, close/reset, notebook
@@ -52,3 +52,17 @@ The formatter has no browser, persistence, or request-lifecycle dependency.
 
 Store integration tests assert both renderer output and cache payloads for PNG,
 JPEG, SVG, PDF, DOC/DOCX, existing data URLs, empty content, and text/Excel files.
+
+## Cache mutation completion
+
+Cache deletion/clear admits a normal-preview owner, cancelling older normal loads.
+The persistence operation continues even if navigation supersedes its view.
+Its boolean result reports persistence success; only the current owner reconciles
+tabs or publishes an error. Clearing a notebook removes only its tabs and dirty
+flags and clears its active file; it never loads an unrelated remaining tab.
+
+`FileRepository.clearNotebook` deletes target metadata/content and updates
+notebook counters and activity records in one native readwrite transaction.
+Single-file deletion and bulk clear use the same record deletion implementation.
+Browser tests verify both successful isolation and complete abort rollback.
+Content-editing completion remains a separate follow-up.

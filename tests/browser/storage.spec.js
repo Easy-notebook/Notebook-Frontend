@@ -3475,3 +3475,77 @@ test('hidden edits arriving during conflict recovery are persisted by a follow-u
     canonical: 'Winner',
   });
 });
+
+for (const abort of [false, true]) {
+  test(`notebook cache clear is one atomic transaction (abort=${abort})`, async ({ page }) => {
+    const result = await page.evaluate(async (abort) => {
+      const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const repository = new FileRepository(provider);
+      const S = DB_CONFIG.STORES;
+      for (const [book, path, size] of [
+        ['book', 'a.txt', 3],
+        ['book', 'b.txt', 4],
+        ['other', 'keep.txt', 5],
+      ]) {
+        await repository.saveFile({
+          notebookId: book,
+          filePath: path,
+          fileName: path,
+          content: 'saved',
+          size,
+          lastModified: 'old',
+        });
+      }
+      const beforeNotebook = await provider.get(S.NOTEBOOKS, 'book');
+      const beforeActivities = await provider.getAll(S.ACTIVITIES);
+      let transactions = 0;
+      const clearing = new FileRepository({
+        transaction: (names, mode, schedule) => {
+          transactions++;
+          return provider.transaction(names, mode, async (stores) => {
+            await schedule(stores);
+            if (abort) throw new Error('clear aborted');
+          });
+        },
+      });
+      let error;
+      try {
+        await clearing.clearNotebook('book');
+      } catch (failure) {
+        error = failure.message;
+      }
+      const metadata = await provider.getAll(S.FILES_METADATA);
+      const content = await provider.getAll(S.FILES_CONTENT);
+      const notebook = await provider.get(S.NOTEBOOKS, 'book');
+      const activities = await provider.getAll(S.ACTIVITIES);
+      await provider.close();
+      return {
+        transactions,
+        error,
+        metadata,
+        content,
+        notebook,
+        beforeNotebook,
+        beforeActivities,
+        activities,
+      };
+    }, abort);
+    expect(result.transactions).toBe(1);
+    if (abort) {
+      expect(result.error).toBe('clear aborted');
+      expect(result.metadata).toHaveLength(3);
+      expect(result.content).toHaveLength(3);
+      expect(result.notebook).toEqual(result.beforeNotebook);
+      expect(result.activities).toEqual(result.beforeActivities);
+    } else {
+      expect(result.error).toBeUndefined();
+      expect(result.metadata.map((file) => file.id)).toEqual(['other::keep.txt']);
+      expect(result.content.map((file) => file.fileId)).toEqual(['other::keep.txt']);
+      expect(result.notebook).toMatchObject({ fileCount: 0, totalSize: 0 });
+      expect(
+        result.activities.filter((activity) => activity.activityType === 'file_delete')
+      ).toHaveLength(2);
+    }
+  });
+}

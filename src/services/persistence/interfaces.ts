@@ -115,6 +115,7 @@ export interface IFileRepository {
   ): Promise<{ metadata: FileMetadataEntity; content?: string; needsRemoteFetch?: boolean } | null>;
   getFilesForNotebook(notebookId: string, includeContent?: boolean): Promise<any[]>;
   deleteFile(notebookId: string, filePath: string): Promise<boolean>;
+  clearNotebook(notebookId: string): Promise<void>;
   updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean>;
 }
 

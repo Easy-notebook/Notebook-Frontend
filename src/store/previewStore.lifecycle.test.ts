@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const io = vi.hoisted(() => ({
   read: vi.fn(),
@@ -6,13 +6,20 @@ const io = vi.hoisted(() => ({
   fetch: vi.fn(),
   fileRead: vi.fn(),
   fileSave: vi.fn(),
+  fileDelete: vi.fn(),
+  fileClear: vi.fn(),
   loadTabs: vi.fn(),
   defaults: vi.fn(),
 }));
 vi.mock('@Services/persistence/instance', () => ({
   persistenceService: {
     splitFiles: { getFile: io.read, saveFile: io.save },
-    files: { getFile: io.fileRead, saveFile: io.fileSave },
+    files: {
+      getFile: io.fileRead,
+      saveFile: io.fileSave,
+      deleteFile: io.fileDelete,
+      clearNotebook: io.fileClear,
+    },
   },
 }));
 vi.mock('@Services/notebook/FileService', () => ({ FileService: { getFile: io.fetch } }));
@@ -58,6 +65,14 @@ beforeEach(() => {
   io.loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
   io.fileRead.mockResolvedValue(undefined);
   io.fileSave.mockResolvedValue(undefined);
+  io.fileDelete.mockResolvedValue(true);
+  io.fileClear.mockResolvedValue(undefined);
+});
+
+// Store actions may schedule tab persistence through a dynamic import.
+// Drain that work while this test's repository mocks are still installed.
+afterEach(async () => {
+  await vi.dynamicImportSettled();
 });
 
 describe('split preview request ownership', () => {
@@ -463,4 +478,75 @@ describe('shared renderer content across normal and split preview', () => {
       }
     }
   );
+});
+
+describe('cache mutation publication', () => {
+  it('clears only target notebook tabs without choosing a different active file', async () => {
+    io.fileRead.mockResolvedValueOnce(fileRecord('other', 'chosen.txt'));
+    await state().loadFileById('other::chosen.txt');
+    const active = state().activeFile;
+    usePreviewStore.setState({
+      currentNotebookId: 'other',
+      currentPreviewFiles: [tab('book'), tab('other', 'first.txt'), tab('other', 'chosen.txt')],
+      dirtyMap: { 'book::file.txt': true, 'other::chosen.txt': true },
+    });
+    expect(await state().clearCacheForNotebook('book')).toBe(true);
+    expect(io.fileClear).toHaveBeenCalledWith('book');
+    expect(state().activeFile).toBe(active);
+    expect(state().currentPreviewFiles).toEqual([
+      tab('other', 'first.txt'),
+      tab('other', 'chosen.txt'),
+    ]);
+    expect(state().dirtyMap).toEqual({ 'other::chosen.txt': true });
+    expect(io.fileRead).toHaveBeenCalledOnce();
+  });
+
+  it('clears the target active file after a successful commit', async () => {
+    io.fileRead.mockResolvedValueOnce(fileRecord('book'));
+    await state().loadFileById('book::file.txt');
+    usePreviewStore.setState({ currentPreviewFiles: [tab('book')], previewMode: 'file' });
+    expect(await state().clearCacheForNotebook('book')).toBe(true);
+    expect(state().activeFile).toBeNull();
+    expect(state().activePreviewMode).toBeNull();
+    expect(state().previewMode).toBe('notebook');
+  });
+
+  it.each(['clear', 'delete'] as const)(
+    'a late %s completion reports persistence success without closing a reopened view',
+    async (action) => {
+      const commit = deferred<true>();
+      (action === 'clear' ? io.fileClear : io.fileDelete).mockReturnValueOnce(commit.promise);
+      const pending =
+        action === 'clear'
+          ? state().clearCacheForNotebook('book')
+          : state().deleteFileFromCache('book', 'file.txt');
+      io.fileRead.mockResolvedValueOnce(fileRecord('book'));
+      const reopened = await state().loadFileById('book::file.txt');
+      usePreviewStore.setState({ currentPreviewFiles: [tab('book')] });
+      commit.resolve(true);
+      expect(await pending).toBe(true);
+      expect(state().activeFile).toBe(reopened);
+      expect(state().currentPreviewFiles).toEqual([tab('book')]);
+    }
+  );
+
+  it('a late failure does not overwrite the newer request error or loading flag', async () => {
+    const commit = deferred<void>();
+    io.fileClear.mockReturnValueOnce(commit.promise);
+    const pending = state().clearCacheForNotebook('book');
+    state().clearNotebookState();
+    usePreviewStore.setState({ error: 'new view error' });
+    commit.reject(new Error('transaction aborted'));
+    expect(await pending).toBe(false);
+    expect(state().error).toBe('new view error');
+    expect(state().isLoading).toBe(false);
+  });
+
+  it('a rejected deletion keeps its tab and reports failure', async () => {
+    io.fileDelete.mockResolvedValueOnce(false);
+    usePreviewStore.setState({ currentPreviewFiles: [tab('book')] });
+    expect(await state().deleteFileFromCache('book', 'file.txt')).toBe(false);
+    expect(state().currentPreviewFiles).toEqual([tab('book')]);
+    expect(state().error).toBe('Failed to delete file from cache');
+  });
 });
