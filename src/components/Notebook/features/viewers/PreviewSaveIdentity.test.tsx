@@ -1245,3 +1245,42 @@ it('recomputes replacement coordinates after inserting a row between search sess
     expect.anything()
   );
 });
+
+it('copies and pastes an embedded newline as one spreadsheet cell', async () => {
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const readText = vi.fn();
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText, readText },
+  });
+  try {
+    model.state.activeFile = {
+      ...model.state.activeFile,
+      type: 'csv',
+      content: '"line one\nline two"\nuntouched',
+    };
+    render(<DataTable showFormulaBar={false} />);
+    fireEvent.contextMenu(screen.getByText('line one line two', { exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Copy/ }));
+    expect(writeText).toHaveBeenCalledWith('"line one\nline two"');
+    readText.mockResolvedValueOnce(writeText.mock.calls[0][0]);
+    fireEvent.doubleClick(screen.getByText('line one line two', { exact: true }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'placeholder' } });
+    fireEvent.blur(screen.getByRole('textbox'));
+    fireEvent.contextMenu(screen.getByText('placeholder', { exact: true }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Paste/ }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+    expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith(
+      '"line one\nline two"\nuntouched',
+      expect.anything()
+    );
+  } finally {
+    if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});

@@ -471,3 +471,17 @@ CSV export also calls `commitEditingCell` and serializes the returned current dr
 It therefore includes text still in the active input, just like save, while remaining
 a download rather than a persistence acknowledgement. Temporary download URLs are
 released even if triggering the download throws.
+
+## Delimited clipboard data
+
+`DelimitedTextCodec` owns quoted-cell encoding and record-boundary parsing for
+both CSV files and tab-delimited spreadsheet clipboard text. CSV's public helpers
+retain their existing signatures and delimiter detection. Clipboard copy encodes
+selected cells with TSV quoting, and paste decodes the same format; embedded tabs,
+quotes and newlines stay inside their cells. Real blank records are preserved,
+while a terminal line separator does not create an extra pasted row.
+
+An empty clipboard produces no edit. An explicitly copied blank cell is quoted
+and can still clear a target cell. Malformed quoted text fails before committing
+a draft. Existing revision-scoped paste admission and sorted-row projection remain
+in force.

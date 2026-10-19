@@ -1,3 +1,4 @@
+import { spreadsheetClipboardCodec } from './DelimitedTextCodec';
 import { SpreadsheetSearch } from './SpreadsheetSearch';
 import {
   importedCellPresentation,
@@ -793,21 +794,20 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   // ============== 复制/粘贴（原样保留） ==============
   const handleCopy = useCallback(() => {
     if (!activeCell) return;
-    let textToCopy = '';
+    let clipboardRows: string[][];
     if (selection) {
       const sc = Math.min(selection.startCol, selection.endCol);
       const ec = Math.max(selection.startCol, selection.endCol);
-      const rowsArr: string[] = [];
+      clipboardRows = [];
       for (const r of rowOrder.between(selection.startRow, selection.endRow)) {
         const colsArr: string[] = [];
         for (let c = sc; c <= ec; c++) colsArr.push(String(data[r][columns[c].key] ?? ''));
-        rowsArr.push(colsArr.join('\t'));
+        clipboardRows.push(colsArr);
       }
-      textToCopy = rowsArr.join('\n');
     } else {
-      textToCopy = String(data[activeCell.row][columns[activeCell.col].key] ?? '');
+      clipboardRows = [[String(data[activeCell.row][columns[activeCell.col].key] ?? '')]];
     }
-    navigator.clipboard.writeText(textToCopy);
+    navigator.clipboard.writeText(spreadsheetClipboardCodec.serialize(clipboardRows));
   }, [activeCell, selection, rowOrder, data, columns]);
 
   const handlePaste = useCallback(async () => {
@@ -817,7 +817,8 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     try {
       const text = await navigator.clipboard.readText();
       if (!editSession.completeDeferredEdit(ticket, true)) return;
-      const rows = text.split('\n').map((row) => row.split('\t'));
+      const rows = spreadsheetClipboardCodec.parse(text);
+      if (!rows.length) return;
       const newData = data.map((row) => ({ ...row }));
       const startRow = activeCell.row,
         startCol = activeCell.col;
