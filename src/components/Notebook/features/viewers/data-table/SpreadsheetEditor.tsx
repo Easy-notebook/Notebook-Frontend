@@ -1,11 +1,18 @@
 // moved to features/viewers/data-table
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import * as XLSX from 'xlsx-js-style';
 import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
 import { SpreadsheetRowOrder } from './SpreadsheetRowOrder';
 import { SpreadsheetEditSession } from './SpreadsheetEditSession';
-import { useSpreadsheetDraftState } from './useSpreadsheetDraftState';
+import { SpreadsheetHistory } from './SpreadsheetHistory';
 import { VirtualSpreadsheetRow, type SpreadsheetRowRenderer } from './VirtualSpreadsheetRow';
 import {
   useReactTable,
@@ -86,7 +93,7 @@ interface CellFormat {
 }
 
 // History state for undo/redo
-interface HistoryState {
+interface SpreadsheetSnapshot {
   data: CSVRow[];
   columns: ColumnInfo[];
   cellFormats: Record<string, CellFormat>;
@@ -180,8 +187,23 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   const setTabDirty = usePreviewStore((state) => state.setTabDirty);
 
   const [editSession] = useState(() => new SpreadsheetEditSession());
-  const [data, setData] = useSpreadsheetDraftState<CSVRow[]>([], editSession);
-  const [columns, setColumns] = useSpreadsheetDraftState<ColumnInfo[]>([], editSession);
+  const [draftHistory] = useState(
+    () =>
+      new SpreadsheetHistory<SpreadsheetSnapshot>({ data: [], columns: [], cellFormats: {} }, () =>
+        editSession.changed()
+      )
+  );
+  const {
+    value: { data, columns, cellFormats },
+    canUndo,
+    canRedo,
+  } = useSyncExternalStore(draftHistory.subscribe, draftHistory.getSnapshot);
+  const commitDraft = useCallback(
+    (patch: Partial<SpreadsheetSnapshot>) => {
+      draftHistory.commit({ ...draftHistory.getSnapshot().value, ...patch });
+    },
+    [draftHistory]
+  );
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [selection, setSelection] = useState<CellSelection | null>(null);
@@ -206,17 +228,6 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  // ============== Undo/Redo History ==============
-  const [history, setHistory] = useState<HistoryState[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const isUndoRedoAction = useRef(false);
-
-  // ============== Cell Formatting ==============
-  const [cellFormats, setCellFormats] = useSpreadsheetDraftState<Record<string, CellFormat>>(
-    {},
-    editSession
-  );
 
   // ============== Column Visibility & Freeze ==============
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
@@ -264,8 +275,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       (fileType !== 'csv' && fileType !== 'xlsx') ||
       (fileType === 'xlsx' && !content)
     ) {
-      setData([]);
-      setColumns([]);
+      draftHistory.reset({ data: [], columns: [], cellFormats: {} });
       setSheetMerges([]);
       setStyleMap({});
       return;
@@ -276,6 +286,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     try {
       let workbook: XlsxDocument | null = null;
       let parsedData: CSVRow[] = [];
+      let parsedColumns: ColumnInfo[] = [];
       let headers: string[] = [];
 
       if (fileType === 'xlsx') {
@@ -504,8 +515,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           };
         });
 
-        setColumns(columnInfos);
-        setData(parsedData);
+        parsedColumns = columnInfos;
         setIsLoading(false);
       } else {
         const rows = parseTableCsv(content);
@@ -516,28 +526,25 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         );
         setSheetMerges([]);
         setStyleMap({});
-        setColumns(
-          headers.map((key) => ({
-            key,
-            displayName: key,
-            width: columnWidths[key] || Math.max(100, Math.min(220, key.length * 10)),
-            type: detectColumnType(parsedData.map((row) => row[key])) as ColumnInfo['type'],
-          }))
-        );
-        setData(parsedData);
+        parsedColumns = headers.map((key) => ({
+          key,
+          displayName: key,
+          width: columnWidths[key] || Math.max(100, Math.min(220, key.length * 10)),
+          type: detectColumnType(parsedData.map((row) => row[key])) as ColumnInfo['type'],
+        }));
         setIsLoading(false);
       }
+      draftHistory.reset({ data: parsedData, columns: parsedColumns, cellFormats: {} });
       sourceRef.current = { fileId: currentFile.id, source: content, workbook };
     } catch (err) {
       sourceRef.current = null;
       console.error('Failed to parse file:', err);
-      setData([]);
-      setColumns([]);
+      draftHistory.reset({ data: [], columns: [], cellFormats: {} });
       setSheetMerges([]);
       setStyleMap({});
       setIsLoading(false);
     }
-  }, [currentFile, typeOverride, isInSplitView, editSession, setColumns, setData]);
+  }, [currentFile, typeOverride, isInSplitView, editSession, draftHistory]);
 
   useEffect(() => () => editSession.close(), [editSession]);
 
@@ -612,70 +619,19 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     [selection, rowOrder]
   );
 
-  // ============== Save to History (for Undo/Redo) ==============
-  const saveToHistory = useCallback(() => {
-    if (isUndoRedoAction.current) {
-      isUndoRedoAction.current = false;
-      return;
-    }
-    const newState: HistoryState = {
-      data: JSON.parse(JSON.stringify(data)),
-      columns: JSON.parse(JSON.stringify(columns)),
-      cellFormats: JSON.parse(JSON.stringify(cellFormats)),
-    };
-    setHistory((prev) => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push(newState);
-      // Keep only last 50 states
-      if (newHistory.length > 50) newHistory.shift();
-      return newHistory;
-    });
-    setHistoryIndex((prev) => Math.min(prev + 1, 49));
-  }, [data, columns, cellFormats, historyIndex]);
-
-  // Initialize history when data first loads
-  useEffect(() => {
-    if (data.length > 0 && history.length === 0) {
-      const initialState: HistoryState = {
-        data: JSON.parse(JSON.stringify(data)),
-        columns: JSON.parse(JSON.stringify(columns)),
-        cellFormats: {},
-      };
-      setHistory([initialState]);
-      setHistoryIndex(0);
-    }
-  }, [data, columns, history.length]);
-
   const handleUndo = useCallback(() => {
-    if (historyIndex > 0) {
-      isUndoRedoAction.current = true;
-      const prevState = history[historyIndex - 1];
-      setData(JSON.parse(JSON.stringify(prevState.data)));
-      setColumns(JSON.parse(JSON.stringify(prevState.columns)));
-      setCellFormats(JSON.parse(JSON.stringify(prevState.cellFormats)));
-      setHistoryIndex((prev) => prev - 1);
-      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-    }
-  }, [historyIndex, history, setData, setColumns, setCellFormats, setTabDirty, currentFile]);
+    if (draftHistory.undo() && currentFile) setTabDirty(currentFile.id, true);
+  }, [draftHistory, currentFile, setTabDirty]);
 
   const handleRedo = useCallback(() => {
-    if (historyIndex < history.length - 1) {
-      isUndoRedoAction.current = true;
-      const nextState = history[historyIndex + 1];
-      setData(JSON.parse(JSON.stringify(nextState.data)));
-      setColumns(JSON.parse(JSON.stringify(nextState.columns)));
-      setCellFormats(JSON.parse(JSON.stringify(nextState.cellFormats)));
-      setHistoryIndex((prev) => prev + 1);
-      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-    }
-  }, [historyIndex, history, setData, setColumns, setCellFormats, setTabDirty, currentFile]);
+    if (draftHistory.redo() && currentFile) setTabDirty(currentFile.id, true);
+  }, [draftHistory, currentFile, setTabDirty]);
 
   // ============== Cell Formatting Functions ==============
   const getCellFormatKey = (row: number, col: number) => `${row}:${col}`;
 
   const applyFormatToSelection = useCallback(
     (format: Partial<CellFormat>) => {
-      saveToHistory();
       const newFormats = { ...cellFormats };
       if (selection) {
         const sc = Math.min(selection.startCol, selection.endCol);
@@ -690,19 +646,10 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         const key = getCellFormatKey(activeCell.row, activeCell.col);
         newFormats[key] = { ...newFormats[key], ...format };
       }
-      setCellFormats(newFormats);
+      commitDraft({ cellFormats: newFormats });
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     },
-    [
-      saveToHistory,
-      cellFormats,
-      selection,
-      activeCell,
-      setCellFormats,
-      setTabDirty,
-      currentFile,
-      rowOrder,
-    ]
+    [cellFormats, selection, activeCell, commitDraft, setTabDirty, currentFile, rowOrder]
   );
 
   const toggleBold = useCallback(() => {
@@ -750,7 +697,6 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   const insertColumn = useCallback(
     (position: 'left' | 'right') => {
       if (!activeCell) return;
-      saveToHistory();
       const insertIndex = position === 'left' ? activeCell.col : activeCell.col + 1;
       const newColKey = getExcelColumnName(columns.length);
       const newColumn: ColumnInfo = {
@@ -781,16 +727,14 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         });
         return newRow;
       });
-      setColumns(renamedColumns);
-      setData(newData);
+      commitDraft({ columns: renamedColumns, data: newData });
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     },
-    [activeCell, saveToHistory, columns, data, setColumns, setData, setTabDirty, currentFile]
+    [activeCell, columns, data, commitDraft, setTabDirty, currentFile]
   );
 
   const deleteColumn = useCallback(() => {
     if (!activeCell || columns.length <= 1) return;
-    saveToHistory();
     const deleteIndex = activeCell.col;
     const newColumns = columns.filter((_, i) => i !== deleteIndex);
     // Rename columns
@@ -808,11 +752,10 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       });
       return newRow;
     });
-    setColumns(renamedColumns);
-    setData(newData);
+    commitDraft({ columns: renamedColumns, data: newData });
     setActiveCell(null);
     if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-  }, [activeCell, columns, saveToHistory, data, setColumns, setData, setTabDirty, currentFile]);
+  }, [activeCell, columns, data, commitDraft, setTabDirty, currentFile]);
 
   const toggleColumnVisibility = useCallback((colKey: string) => {
     setHiddenColumns((prev) => {
@@ -880,9 +823,8 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
   const replaceOne = useCallback(() => {
     if (findReplace.currentMatchIndex < 0 || findReplace.matches.length === 0) return;
-    saveToHistory();
     const match = findReplace.matches[findReplace.currentMatchIndex];
-    const newData = [...data];
+    const newData = data.map((row) => ({ ...row }));
     const colKey = columns[match.col].key;
     let cellValue = String(newData[match.row][colKey] ?? '');
     if (findReplace.matchWholeCell) {
@@ -895,7 +837,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       cellValue = cellValue.replace(regex, findReplace.replaceText);
     }
     newData[match.row][colKey] = cellValue;
-    setData(newData);
+    commitDraft({ data: newData });
     if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     // Re-run find
     setTimeout(performFind, 0);
@@ -906,10 +848,9 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     findReplace.replaceText,
     findReplace.findText,
     findReplace.matchCase,
-    saveToHistory,
     data,
     columns,
-    setData,
+    commitDraft,
     setTabDirty,
     currentFile,
     performFind,
@@ -917,8 +858,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
   const replaceAll = useCallback(() => {
     if (findReplace.matches.length === 0) return;
-    saveToHistory();
-    const newData = [...data];
+    const newData = data.map((row) => ({ ...row }));
     const regex = new RegExp(
       findReplace.findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
       findReplace.matchCase ? 'g' : 'gi'
@@ -933,7 +873,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       }
       newData[match.row][colKey] = cellValue;
     });
-    setData(newData);
+    commitDraft({ data: newData });
     if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     setFindReplace((prev) => ({ ...prev, matches: [], currentMatchIndex: -1 }));
   }, [
@@ -942,9 +882,8 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     findReplace.matchCase,
     findReplace.matchWholeCell,
     findReplace.replaceText,
-    saveToHistory,
     data,
-    setData,
+    commitDraft,
     setTabDirty,
     currentFile,
     columns,
@@ -1071,10 +1010,9 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           setEditValue(String(data[row][columns[col].key] ?? ''));
           return;
         case 'Delete': {
-          saveToHistory();
-          const newData = [...data];
+          const newData = data.map((row) => ({ ...row }));
           newData[row][columns[col].key] = '';
-          setData(newData);
+          commitDraft({ data: newData });
           if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
           return;
         }
@@ -1112,8 +1050,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     toggleBold,
     toggleItalic,
     toggleUnderline,
-    saveToHistory,
-    setData,
+    commitDraft,
     rowOrder,
   ]);
 
@@ -1155,13 +1092,13 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           if (tr !== null && tc < columns.length) newData[tr][columns[tc].key] = cell;
         });
       });
-      setData(newData);
+      commitDraft({ data: newData });
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     } catch (err) {
       editSession.completeDeferredEdit(ticket, false);
       console.error('Failed to paste:', err);
     }
-  }, [activeCell, data, setData, setTabDirty, currentFile, rowOrder, columns, editSession]);
+  }, [activeCell, data, commitDraft, setTabDirty, currentFile, rowOrder, columns, editSession]);
 
   // ============== Export / save ==============
   const handleExport = useCallback(() => {
@@ -1254,7 +1191,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           <div className="flex items-center gap-1">
             <button
               onClick={handleUndo}
-              disabled={historyIndex <= 0}
+              disabled={!canUndo}
               className="p-1.5 rounded-lg hover:bg-gray-100/70 dark:hover:bg-gray-700/70 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               title="Undo (Ctrl+Z)"
             >
@@ -1262,7 +1199,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
             </button>
             <button
               onClick={handleRedo}
-              disabled={historyIndex >= history.length - 1}
+              disabled={!canRedo}
               className="p-1.5 rounded-lg hover:bg-gray-100/70 dark:hover:bg-gray-700/70 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               title="Redo (Ctrl+Y)"
             >
@@ -1720,9 +1657,9 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                                       value={editValue}
                                       onChange={(e) => setEditValue(e.target.value)}
                                       onBlur={() => {
-                                        const newData = [...data];
+                                        const newData = data.map((row) => ({ ...row }));
                                         newData[sourceRow][columns[colIndex].key] = editValue;
-                                        setData(newData);
+                                        commitDraft({ data: newData });
                                         setEditingCell(null);
                                         if (setTabDirty && currentFile)
                                           setTabDirty(currentFile.id, true);
@@ -1815,10 +1752,9 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           <button
             onClick={() => {
               if (activeCell) {
-                saveToHistory();
-                const newData = [...data];
+                const newData = data.map((row) => ({ ...row }));
                 newData[activeCell.row][columns[activeCell.col].key] = '';
-                setData(newData);
+                commitDraft({ data: newData });
                 if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
               }
               setContextMenu(null);
@@ -1838,14 +1774,13 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           <button
             onClick={() => {
               if (activeCell) {
-                saveToHistory();
-                const newData = [...data];
+                const newData = data.map((row) => ({ ...row }));
                 const newRow: CSVRow = {};
                 columns.forEach((col) => {
                   newRow[col.key] = '';
                 });
                 newData.splice(activeCell.row, 0, newRow);
-                setData(newData);
+                commitDraft({ data: newData });
                 if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
               }
               setContextMenu(null);
@@ -1857,14 +1792,13 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           <button
             onClick={() => {
               if (activeCell) {
-                saveToHistory();
-                const newData = [...data];
+                const newData = data.map((row) => ({ ...row }));
                 const newRow: CSVRow = {};
                 columns.forEach((col) => {
                   newRow[col.key] = '';
                 });
                 newData.splice(activeCell.row + 1, 0, newRow);
-                setData(newData);
+                commitDraft({ data: newData });
                 if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
               }
               setContextMenu(null);
@@ -1876,10 +1810,9 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           <button
             onClick={() => {
               if (activeCell && data.length > 1) {
-                saveToHistory();
-                const newData = [...data];
+                const newData = data.map((row) => ({ ...row }));
                 newData.splice(activeCell.row, 1);
-                setData(newData);
+                commitDraft({ data: newData });
                 if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
               }
               setContextMenu(null);

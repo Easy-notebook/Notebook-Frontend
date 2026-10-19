@@ -608,3 +608,67 @@ it('isolates editor history and open menus when the same file identity moves bet
     fileId: 'book::table.csv',
   });
 });
+
+it('undoes and redoes cell edits, then discards redo when a new edit branches from history', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::history.csv',
+    name: 'history.csv',
+    path: 'history.csv',
+    type: 'csv',
+    content: 'Ada',
+  };
+  render(<DataTable showFormulaBar={false} />);
+  const edit = (old: string, next: string) => {
+    fireEvent.doubleClick(screen.getByText(old, { exact: true }));
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: next } });
+    fireEvent.blur(input);
+  };
+  edit('Ada', 'Bob');
+  fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+  expect(screen.getByText('Ada', { exact: true })).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Redo (Ctrl+Y)' }));
+  expect(screen.getByText('Bob', { exact: true })).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+  edit('Ada', 'Carol');
+  expect(
+    (screen.getByRole('button', { name: 'Redo (Ctrl+Y)' }) as HTMLButtonElement).disabled
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('Carol', {
+    surface: 'normal',
+    fileId: 'book::history.csv',
+  });
+});
+
+it('undoes column insertion as one atomic change of both columns and cell values', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::columns.csv',
+    name: 'columns.csv',
+    path: 'columns.csv',
+    type: 'csv',
+    content: 'left,right',
+  };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.contextMenu(screen.getByText('left', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Column Right' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('left,"",right', {
+    surface: 'normal',
+    fileId: 'book::columns.csv',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('left,right', {
+    surface: 'normal',
+    fileId: 'book::columns.csv',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Redo (Ctrl+Y)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('left,"",right', {
+    surface: 'normal',
+    fileId: 'book::columns.csv',
+  });
+});

@@ -268,8 +268,8 @@ source matching the current file ID and content before a write is allowed.
 ## Spreadsheet edit ownership
 
 `SpreadsheetEditSession` owns the source identity, draft revision, current save
-ticket and last accepted commit echo. Data, columns and formatting state advance
-the revision at setter admission, before React batches a render. Only the latest
+ticket and last accepted commit echo. Data, columns and formatting commit together through `SpreadsheetHistory`,
+which advances the revision before publishing a snapshot to React. Only the latest
 save of an unchanged revision with matching committed content may clear the dirty
 marker. Failure, different readback contents, another source, and unmount revoke
 that acknowledgement.
@@ -316,3 +316,18 @@ identity unmounts that complete owner instead of manually resetting a subset of
 its state. The boundary is inside the exported spreadsheet component, so it does
 not depend on a caller's file-only React key. Content updates for the same identity
 keep the mounted owner and its existing save-echo protection.
+
+## Spreadsheet history
+
+`SpreadsheetHistory` is the single owner of the current grid snapshot and its
+undo/redo cursor. Every value, column or formatting command commits a complete
+snapshot; column structure and row data change atomically. Snapshots are cloned
+and recursively frozen, so later draft mutations cannot rewrite history. Undo
+and redo publish existing snapshots, and committing after undo truncates the
+old redo branch. Up to 50 undo steps are retained. Source loading resets the
+baseline, including empty documents, while an owned save echo keeps history.
+
+History transitions notify the edit session before subscribers, preserving the
+same revision checks for saving and deferred clipboard reads. The separate
+React history array/index, pre-edit recording calls, skip-next-history flag,
+JSON cloning and per-field revision hook have been removed.
