@@ -1,7 +1,13 @@
 import useNotebookStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
+import type { ExecutionResult } from '@Store/models/code';
 import { WorkflowState } from '../observation/WorkflowState';
 import { useAIPlanningContextStore } from './aiPlanningContext';
+
+/** Preserve the existing public output/error return contract at the API boundary. */
+export function scriptCodeResultValue(result: ExecutionResult | false) {
+  return result === false ? false : result.success ? result.outputs : result.error;
+}
 
 /** Owns the notebook-facing effects of one code execution, including delayed debug focus. */
 export class ScriptCodeExecution {
@@ -12,7 +18,8 @@ export class ScriptCodeExecution {
 
   constructor(
     private readonly cellId: string,
-    private readonly signal?: AbortSignal
+    private readonly signal?: AbortSignal,
+    private readonly onCompleted?: (result: ExecutionResult) => void
   ) {}
 
   private readonly abort = () => this.settle();
@@ -35,7 +42,11 @@ export class ScriptCodeExecution {
     if (this.timer !== undefined) clearTimeout(this.timer);
   }
 
-  async run(needOutput: boolean, autoDebug: boolean) {
+  async run(
+    needOutput: boolean,
+    autoDebug: boolean,
+    beforeExecute?: () => void
+  ): Promise<ExecutionResult | false> {
     this.signal?.throwIfAborted();
     if (!this.cellId || !this.owns()) return false;
     this.unsubscribe = useNotebookStore.subscribe((notebook) => {
@@ -46,6 +57,9 @@ export class ScriptCodeExecution {
     });
     this.signal?.addEventListener('abort', this.abort, { once: true });
     try {
+      beforeExecute?.();
+      this.signal?.throwIfAborted();
+      if (!this.owns()) return false;
       const code = useCodeStore.getState();
       if (needOutput) code.setCellMode(this.cellId, 'output_only');
       if (!this.owns()) return false;
@@ -89,6 +103,9 @@ export class ScriptCodeExecution {
         if (!this.owns()) return false;
       }
 
+      this.onCompleted?.(result);
+      if (!this.owns()) return false;
+
       if (autoDebug && !result.success) {
         this.phase = 'waiting-focus';
         this.timer = setTimeout(() => {
@@ -99,7 +116,7 @@ export class ScriptCodeExecution {
           }
         }, 1000);
       }
-      return result.success ? result.outputs : result.error;
+      return result;
     } catch (error) {
       this.signal?.throwIfAborted();
       if (this.owns()) console.error(`[ScriptStore] Error executing cell ${this.cellId}:`, error);

@@ -102,5 +102,14 @@ check cancellation before post-execution indicators or debug metadata writes. Th
 clear-effects operation also starts from a detached snapshot. ScriptStore checks cancellation
 before action admission and before recording success, settling an existing action record through
 the error path. Other action implementations and transition-owned actions still require their
-own cancellation propagation. The legacy code-result return shape remains unchanged; interpreting
-that shape as a structured success object in debug metadata requires separate correction.
+own cancellation propagation.
+
+ScriptCodeExecution now retains the structured ExecutionResult internally. The existing public
+execCodeCell boundary alone projects it to output/error/false; repair metadata never infers
+success from that lossy representation. RepairedCodeExecution is shared by workflow and
+operation-stream exec_new_version handlers. It selects a code cell, clears effects while the
+execution subscription is active, and records the actual success flag through the owned
+completion callback. Metadata is merged with the live cell, preserving edits made during
+execution. Missing targets and mismatched operation notebook IDs do not clear effects or execute.
+Both entry points retain their existing return conventions. Unexpected execution exceptions
+still follow the existing false-return contract rather than manufacturing a successful result.

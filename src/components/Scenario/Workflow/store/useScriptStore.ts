@@ -20,7 +20,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // External dependencies
 import useNotebookStore from '@Store/notebookStore';
-import { ScriptCodeExecution } from './ScriptCodeExecution';
+import { ScriptCodeExecution, scriptCodeResultValue } from './ScriptCodeExecution';
 
 // ==============================================
 // Types
@@ -324,8 +324,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     }
   },
 
-  execCodeCell: (codecellId, needOutput = true, autoDebug = false, signal) =>
-    new ScriptCodeExecution(codecellId, signal).run(needOutput, autoDebug),
+  execCodeCell: async (codecellId, needOutput = true, autoDebug = false, signal) =>
+    scriptCodeResultValue(
+      await new ScriptCodeExecution(codecellId, signal).run(needOutput, autoDebug)
+    ),
 
   updateTitle: (title: string): void => {
     useNotebookStore.getState().updateTitle(title);
