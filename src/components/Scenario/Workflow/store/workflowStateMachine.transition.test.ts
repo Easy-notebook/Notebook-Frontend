@@ -7,6 +7,7 @@ import { WorkflowState as WorkflowStateModel } from '../observation/WorkflowStat
 
 const initial = useWorkflowStateMachine.getState();
 afterEach(() => {
+  useWorkflowStateMachine.getState().reset();
   vi.restoreAllMocks();
   useWorkflowStateMachine.setState(initial, true);
 });

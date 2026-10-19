@@ -100,7 +100,8 @@ export class AsyncStateMachineAdapter {
    * @param stateJSON - Current state JSON
    * @returns Tuple of (updated state JSON, transition name)
    */
-  async step(stateJSON: StateJSON): Promise<[StateJSON, string | null]> {
+  async step(stateJSON: StateJSON, signal?: AbortSignal): Promise<[StateJSON, string | null]> {
+    signal?.throwIfAborted();
     // Reset transition name tracking
     this.lastTransitionName = null;
 
@@ -137,9 +138,11 @@ export class AsyncStateMachineAdapter {
       const coordinator = getTransitionCoordinator();
       const { state: newState, transitionName } =
         await coordinator.autoTriggerNextTransition(workflowState);
+      signal?.throwIfAborted();
 
       if (transitionName) {
         console.log(`[AsyncFSM] Auto-triggered transition: ${transitionName}`);
+        signal?.throwIfAborted();
         this.lastTransitionName = transitionName;
         return [newState.toJSON(), transitionName];
       }
@@ -158,6 +161,7 @@ export class AsyncStateMachineAdapter {
       // Call the API via the State object
       // The State object uses its internal handlers which are initialized with apiClient
       let apiResponse = await state.callAPI(workflowState, predictedTransitionName);
+      signal?.throwIfAborted();
 
       // Get TransitionCoordinator
       const coordinator = getTransitionCoordinator();
@@ -178,6 +182,7 @@ export class AsyncStateMachineAdapter {
         const scriptStore = coordinator.getContext().scriptStore;
 
         for await (const rawAction of apiResponse) {
+          signal?.throwIfAborted();
           const actionIndex = actions.length;
 
           // IMPORTANT: Backend returns {"action": {...}} format, need to unwrap
@@ -202,10 +207,12 @@ export class AsyncStateMachineAdapter {
 
               console.log(`[AsyncFSM] Executing action step:`, executionStep);
               await scriptStore.execAction(executionStep);
+              signal?.throwIfAborted();
 
               streamingLogger.actionExecutionEnd(actionIndex);
               console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
             } catch (error) {
+              signal?.throwIfAborted();
               const errorMsg = error instanceof Error ? error.message : String(error);
               streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
               console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
@@ -230,6 +237,7 @@ export class AsyncStateMachineAdapter {
 
         // Update stateJSON to latest from store as actions might have changed it
         const { useWorkflowStateMachine } = await import('../store/workflowStateMachine');
+        signal?.throwIfAborted();
         const latestStateJSON = useWorkflowStateMachine.getState().stateJSON;
         // Re-wrap in WorkflowState
         workflowState = new WorkflowState(latestStateJSON);
@@ -238,6 +246,7 @@ export class AsyncStateMachineAdapter {
         parsedResponse = this.parseAPIResponse(apiResponse);
       }
 
+      signal?.throwIfAborted();
       // Apply transition (TransitionCoordinator selects appropriate handler)
       // Note: For generating/reflecting, actions are already executed above, but we pass them
       // to the coordinator so handlers like NextBehaviorHandler can inspect them.
@@ -248,11 +257,13 @@ export class AsyncStateMachineAdapter {
         true // auto-trigger enabled
       );
 
+      signal?.throwIfAborted();
       this.lastTransitionName = transitionName;
       console.log(`[AsyncFSM] Transition applied: ${transitionName}`);
 
       return [updatedState.toJSON(), transitionName];
     } catch (error) {
+      signal?.throwIfAborted();
       console.error(`[AsyncFSM] API call error for ${normalized}:`, error);
       // TODO: Trigger FAIL event
       return [stateJSON, null];
