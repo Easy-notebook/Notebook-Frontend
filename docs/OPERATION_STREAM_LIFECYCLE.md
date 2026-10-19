@@ -50,8 +50,8 @@ after each handler so later events cannot run after cancellation. History public
 the signal again before dispatching a handler, covering synchronous Store subscribers.
 
 An already-running handler cannot be forcibly interrupted by this boundary and may finish its
-own work; async action effects still require captured ownership individually. Kernel initialization
-also has no abort API here, so cancellation suppresses this operation's continuation but cannot
-undo notebook mutations or server-side creation performed internally by initialization. Cancellation
+own work; async action effects still require captured ownership individually. CodeStore kernel initialization now uses a notebook-owned KernelSession, which invalidates
+late adoption/readiness publication on notebook changes. Backend create/restart requests still
+have no rollback here; effects already applied before cancellation are not undone. Cancellation
 does not roll back events already applied. The parser expects the existing JSON-object protocol;
 it does not add SSE or array-root framing.
