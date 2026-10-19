@@ -95,3 +95,12 @@ Firefox/WebKit behavior. Vitest excludes this directory and continues running th
 existing event-double/unit tests separately.
 
 Runner configuration follows [Playwright web server documentation](https://playwright.dev/docs/test-webserver).
+
+Autosave admission regressions (`autosave.spec.js`):
+
+- Nested caller edits after queue admission cannot change the saved revision; the accepted
+  cells, outputs and metadata survive a page reload and a new service instance.
+- Uncloneable pause input leaves scheduling and pending revision intact without writing;
+  a later valid pause persists the previously accepted document.
+- A native transaction aborted after the content request succeeds retries the same accepted
+  body despite caller mutation, with one committed file and consistent notebook totals.

@@ -99,3 +99,13 @@ or loading. The event describes one operation; status describes current aggregat
 This does not change save revisions, transaction admission, retry backoff, or the independent
 scheduling/lifecycle fields. It does not count time waiting for initialization or a scoped drain
 as a started load. Three regressions cover concurrent reads and both read/write completion orders.
+
+## Native verification of revision admission
+
+The Chromium fixture now exercises these latest boundaries using the production AutoSaveService
+and actual IndexedDB: accepted nested snapshot data survives a page reload; failed pause cloning
+leaves the native database empty until a subsequent valid drain; aborting a native transaction
+after its content request succeeds causes a retry with the identical accepted body and one final
+file. All three tests in tests/browser/autosave.spec.js pass. The fixture uses an isolated browser
+context and does not touch a user's browser profile. This verifies these scenarios in Chromium;
+it is not a crash/power-loss durability guarantee or a cross-browser performance audit.
