@@ -63,3 +63,11 @@ large incomplete code/output message as small network chunks arrive. Framing tak
 work in decoded input size and retains the current object until it can be parsed. There is
 no new message-size limit. A generator yields each completed object before scanning the next,
 so handler backpressure and cancellation also apply within a single buffered network chunk.
+
+Code-output submission uses `CodeOutputSubmissionService` for both the workflow action and
+public command adapter. It captures the current cell and notebook before dispatch and delegates
+ownership/cancellation to the dispatcher. The workflow reports success only after admission;
+busy, failed and cancelled receipts report failure with the dispatcher message. Success does
+not wait for stream completion and does not assert successful analysis. The public void-returning
+adapter retains its signature. Missing output snapshots still trigger execution and report
+that nothing was submitted; an empty output array remains a valid silent execution snapshot.
