@@ -404,8 +404,8 @@ spreadsheet calculation engine computes them.
 
 External workbook and 3D references are left unchanged. Array formula regions,
 advanced structured-reference syntax and full Excel calculation semantics remain
-incomplete. Source presentation metadata outside the supported draft formats and
-full merged-cell layout also remain incomplete.
+incomplete. Advanced presentation beyond the supported draft formats and font metadata, and
+full merged-cell layout, remain incomplete.
 
 ## Observable spreadsheet save state
 
@@ -437,3 +437,19 @@ other page inputs or another preview surface from changing this draft. Editable
 inputs keep their native editing keys; save remains an explicit editor-wide command.
 Navigation does not consume toolbar button/link activation. Shortcut letters are
 normalized so Command-Shift-Z redo works with the uppercase browser key value.
+
+## Spreadsheet cell presentation
+
+`SpreadsheetCellPresentation` is the typed view conversion boundary for normalized
+workbook styles and draft format overrides. It consumes reader-resolved RGB values,
+including resolved theme colors, rather than substituting a hardcoded theme palette.
+The old flattened-fill aliases, alternate font flags and private CSS alignment
+properties have been removed. Explicit false formatting overrides remain effective.
+Font size uses points, matching the workbook style unit, and font family and vertical
+alignment are applied to the rendered text container.
+
+Imported presentations are indexed by original worksheet cell identity. Rendering
+resolves them through the snapshot's current source mapping, so row/column changes
+and undo preserve font presentation without leaking it into inserted cells or other
+surviving cells. This does not add full border, row-height or advanced Excel layout
+support.

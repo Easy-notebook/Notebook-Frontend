@@ -1149,3 +1149,39 @@ it('routes grid undo and uppercase Command-Shift-Z redo through the editor owner
     (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
   ).toBe(false);
 });
+
+it('keeps imported font presentation attached to its source cell after insertion and undo', async () => {
+  const XLSX = await import('xlsx-js-style');
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      C3: {
+        t: 's',
+        v: 'Styled name',
+        s: { font: { name: 'Arial', sz: 18 }, alignment: { vertical: 'bottom' } },
+      },
+      C4: { t: 's', v: 'Other name' },
+      '!ref': 'C3:C4',
+    },
+    'Main'
+  );
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    type: 'xlsx',
+    content: XLSX.write(book, { type: 'base64', bookType: 'xlsx' }),
+  };
+  render(<DataTable showFormulaBar={false} />);
+  const style = () => screen.getByText('Styled name', { exact: true }).closest('div')!.style;
+  expect(style().fontFamily).toBe('Arial');
+  expect(style().fontSize).toBe('18pt');
+  fireEvent.contextMenu(screen.getByText('Styled name', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  expect(style().fontFamily).toBe('Arial');
+  expect(style().alignItems).toBe('flex-end');
+  expect(screen.getByText('Other name', { exact: true }).closest('div')!.style.fontFamily).not.toBe(
+    'Arial'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+  expect(style().fontSize).toBe('18pt');
+});

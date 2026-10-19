@@ -1,3 +1,8 @@
+import {
+  importedCellPresentation,
+  spreadsheetCellPresentation,
+  type ImportedCellPresentation,
+} from './SpreadsheetCellPresentation';
 import { getExcelColumnName } from './SpreadsheetCoordinates';
 import { SpreadsheetStructureChange } from './SpreadsheetStructureChange';
 import type {
@@ -190,7 +195,9 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
   // 原始 sheet 合并/样式（仅 XLSX 有意义）
   const sheetMerges = workbookState?.merges;
-  const [styleMap, setStyleMap] = useState<Record<string, React.CSSProperties>>({});
+  const [sourcePresentations, setSourcePresentations] = useState<
+    Record<string, ImportedCellPresentation>
+  >({});
 
   const sourceRef = useRef<{
     fileId: string;
@@ -248,7 +255,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       (fileType === 'xlsx' && !content)
     ) {
       draftHistory.reset({ data: [], columns: [], cellFormats: {} });
-      setStyleMap({});
+      setSourcePresentations({});
       return;
     }
 
@@ -267,7 +274,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         workbook = document;
         const grid = document.readGrid();
         const rows: string[][] = [];
-        const nextStyleMap: Record<string, React.CSSProperties> = {};
+        const nextPresentations: Record<string, ImportedCellPresentation> = {};
 
         for (let r = 0; r < grid.cells.length; r++) {
           const row: string[] = [];
@@ -278,184 +285,11 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
               if (cell.w != null) val = String(cell.w);
               else if (cell.v != null) val = String(cell.v);
 
-              // 样式 => CSS
-              const s = cell.s;
-              if (s) {
-                const css: React.CSSProperties = {};
-
-                // ===== 字体样式 =====
-                if (s.font) {
-                  // 粗体：常见字段有 bold / b（有的库用 1 表示 true）
-                  const boldFlag = s.font.bold === true || s.font.b === true || s.font.b === 1;
-                  if (boldFlag) css.fontWeight = 700;
-
-                  // 斜体
-                  const italicFlag = s.font.italic === true || s.font.i === true || s.font.i === 1;
-                  if (italicFlag) css.fontStyle = 'italic';
-                }
-
-                // 处理其他字体属性
-                if (s.font) {
-                  // 处理颜色：可能是 rgb 或 theme/tint
-                  if (s.font.color) {
-                    if (s.font.color.rgb) {
-                      // RGB 颜色可能是 6 位或 8 位（带 alpha）
-                      let rgb = String(s.font.color.rgb);
-                      if (rgb.length === 8) {
-                        rgb = rgb.substring(2); // 移除前2位alpha
-                      }
-                      css.color = rgb.startsWith('#') ? rgb : `#${rgb}`;
-                    } else if (s.font.color.theme !== undefined) {
-                      // Excel 主题颜色映射
-                      const themeColors = [
-                        '#000000',
-                        '#FFFFFF',
-                        '#E7E6E6',
-                        '#44546A',
-                        '#5B9BD5',
-                        '#ED7D31',
-                        '#A5A5A5',
-                        '#FFC000',
-                        '#4472C4',
-                        '#70AD47',
-                      ];
-                      const themeIndex = s.font.color.theme || 0;
-                      css.color = themeColors[themeIndex] || '#000000';
-
-                      // 应用 tint（色调）如果存在
-                      if (s.font.color.tint && s.font.color.tint !== 0) {
-                        // 简化的色调处理
-                        const tint = s.font.color.tint;
-                        if (tint < 0) {
-                          // 变暗
-                          css.filter = `brightness(${1 + tint})`;
-                        } else {
-                          // 变亮
-                          css.filter = `brightness(${1 + tint * 0.5})`;
-                        }
-                      }
-                    }
-                  }
-
-                  // 字体大小
-                  if (s.font.sz) {
-                    css.fontSize = `${s.font.sz}px`;
-                  }
-
-                  // 字体名称
-                  if (s.font.name) {
-                    css.fontFamily = s.font.name;
-                  }
-                }
-
-                // 背景色 - 支持两种结构：s.fill 和直接在 s 上
-                if (
-                  s.fgColor?.rgb ||
-                  s.bgColor?.rgb ||
-                  (s.fill && (s.fill.fgColor?.rgb || s.fill.bgColor?.rgb))
-                ) {
-                  // 直接在样式对象上的颜色（新格式）
-                  if (s.fgColor?.rgb) {
-                    let rgb = String(s.fgColor.rgb);
-                    if (rgb.length === 8) {
-                      rgb = rgb.substring(2); // 移除前2位alpha
-                    }
-                    css.backgroundColor = rgb.startsWith('#') ? rgb : `#${rgb}`;
-                  } else if (s.bgColor?.rgb) {
-                    let rgb = String(s.bgColor.rgb);
-                    if (rgb.length === 8) {
-                      rgb = rgb.substring(2); // 移除前2位alpha
-                    }
-                    css.backgroundColor = rgb.startsWith('#') ? rgb : `#${rgb}`;
-                  }
-                  // 在 fill 对象中的颜色（旧格式）
-                  else if (s.fill?.fgColor?.rgb) {
-                    let rgb = String(s.fill.fgColor.rgb);
-                    if (rgb.length === 8) {
-                      rgb = rgb.substring(2); // 移除前2位alpha
-                    }
-                    css.backgroundColor = rgb.startsWith('#') ? rgb : `#${rgb}`;
-                  } else if (s.fill?.bgColor?.rgb) {
-                    let rgb = String(s.fill.bgColor.rgb);
-                    if (rgb.length === 8) {
-                      rgb = rgb.substring(2); // 移除前2位alpha
-                    }
-                    css.backgroundColor = rgb.startsWith('#') ? rgb : `#${rgb}`;
-                  }
-                }
-
-                // 主题颜色背景
-                if (s.fgColor?.theme !== undefined || s.fill?.fgColor?.theme !== undefined) {
-                  const themeColors = [
-                    '#000000',
-                    '#FFFFFF',
-                    '#E7E6E6',
-                    '#44546A',
-                    '#5B9BD5',
-                    '#ED7D31',
-                    '#A5A5A5',
-                    '#FFC000',
-                    '#4472C4',
-                    '#70AD47',
-                  ];
-                  const themeColor = s.fgColor || s.fill?.fgColor;
-                  const theme = themeColor.theme;
-                  let bgColor = themeColors[theme] || '#FFFFFF';
-
-                  // 应用 tint 到背景色
-                  if (themeColor.tint && themeColor.tint !== 0) {
-                    const tint = themeColor.tint;
-                    if (tint < 0) {
-                      // 变暗
-                      css.backgroundColor = bgColor;
-                      css.filter = `brightness(${1 + tint})`;
-                    } else {
-                      // 变亮
-                      css.backgroundColor = bgColor;
-                      css.filter = `brightness(${1 + tint * 0.5})`;
-                    }
-                  } else {
-                    css.backgroundColor = bgColor;
-                  }
-                }
-
-                // ===== 对齐 =====
-                const a = s.alignment || s.align;
-                if (a) {
-                  const horiz = String(a.horizontal || a.h || '').toLowerCase();
-                  const vert = String(a.vertical || a.v || '').toLowerCase();
-                  (css as any).__horiz = horiz;
-                  (css as any).__vert = vert;
-
-                  // 设置传统 textAlign（兼容性）
-                  if (horiz === 'center') css.textAlign = 'center';
-                  else if (horiz === 'right') css.textAlign = 'right';
-                  else css.textAlign = 'left';
-                }
-
-                // 边框样式
-                if (s.border) {
-                  const borderStyle = '1px solid #d1d5db'; // 默认边框样式
-                  if (s.border.top) css.borderTop = borderStyle;
-                  if (s.border.right) css.borderRight = borderStyle;
-                  if (s.border.bottom) css.borderBottom = borderStyle;
-                  if (s.border.left) css.borderLeft = borderStyle;
-                }
-
-                parsedFormats[`${r}:${c}`] = {
-                  bold: Boolean(s.font?.bold),
-                  italic: Boolean(s.font?.italic),
-                  underline: Boolean(s.font?.underline),
-                  textAlign: s.alignment?.horizontal,
-                  color: typeof css.color === 'string' ? css.color : undefined,
-                  backgroundColor:
-                    typeof css.backgroundColor === 'string' ? css.backgroundColor : undefined,
-                };
-
-                // 只有当有实际样式时才添加到map
-                if (Object.keys(css).length > 0) {
-                  nextStyleMap[`${r}:${c}`] = css;
-                }
+              if (cell.s) {
+                const presentation = importedCellPresentation(cell.s);
+                parsedFormats[`${r}:${c}`] = presentation.format;
+                const source = grid.workbook.sources[`${r}:${c}`];
+                if (source) nextPresentations[`${source.r}:${source.c}`] = presentation;
               }
             }
             row.push(val);
@@ -463,7 +297,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           rows.push(row);
         }
 
-        setStyleMap(nextStyleMap);
+        setSourcePresentations(nextPresentations);
         parsedWorkbookState = grid.workbook;
 
         if (rows.length > 0) {
@@ -499,7 +333,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         parsedData = rows.map((values) =>
           Object.fromEntries(headers.map((key, i) => [key, values[i] ?? '']))
         );
-        setStyleMap({});
+        setSourcePresentations({});
         parsedColumns = headers.map((key) => ({
           key,
           displayName: key,
@@ -519,7 +353,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       sourceRef.current = null;
       console.error('Failed to parse file:', err);
       draftHistory.reset({ data: [], columns: [], cellFormats: {} });
-      setStyleMap({});
+      setSourcePresentations({});
       setIsLoading(false);
     }
   }, [currentFile, typeOverride, isInSplitView, editSession, draftHistory]);
@@ -1532,84 +1366,16 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
                             if (coveredSet.has(dataKey)) return null;
 
-                            const xlsCss = styleMap[dataKey] || {};
-
-                            // 拆分成"单元格级样式（背景/对齐）"与"文本级样式（粗斜体/颜色）"
-                            const cellStyle: React.CSSProperties = {};
-                            const textStyle: React.CSSProperties = {};
-
-                            // Get custom cell format
-                            const customFormat = cellFormats[getCellFormatKey(sourceRow, colIndex)];
-
-                            // 背景色 -> <td> (custom format takes priority)
-                            if (customFormat?.backgroundColor) {
-                              cellStyle.backgroundColor = customFormat.backgroundColor;
-                            } else if (xlsCss.backgroundColor) {
-                              cellStyle.backgroundColor = xlsCss.backgroundColor;
-                            }
-                            // 水平对齐 -> <td> (custom format takes priority)
-                            if (customFormat?.textAlign) {
-                              cellStyle.textAlign = customFormat.textAlign;
-                            } else if (xlsCss.textAlign) {
-                              cellStyle.textAlign = xlsCss.textAlign as any;
-                            }
-                            // 垂直对齐：Excel 的 center 映射为 HTML 的 middle
-                            if (xlsCss.verticalAlign) {
-                              const v = String(xlsCss.verticalAlign).toLowerCase();
-                              cellStyle.verticalAlign = (v === 'center' ? 'middle' : v) as any;
-                            } else {
-                              cellStyle.verticalAlign = 'middle';
-                            }
-
-                            // 文本样式 -> 内层 <div>/<span> (merge xlsCss and custom format)
-                            textStyle.fontWeight =
-                              customFormat?.bold !== undefined
-                                ? customFormat.bold
-                                  ? 700
-                                  : 400
-                                : xlsCss.fontWeight;
-                            textStyle.fontStyle =
-                              customFormat?.italic !== undefined
-                                ? customFormat.italic
-                                  ? 'italic'
-                                  : 'normal'
-                                : xlsCss.fontStyle;
-                            textStyle.textDecoration = customFormat?.underline
-                              ? 'underline'
-                              : 'none';
-                            if (customFormat?.color) {
-                              textStyle.color = customFormat.color;
-                            } else if (xlsCss.color) {
-                              textStyle.color = xlsCss.color;
-                            }
-
-                            // 数字默认右对齐（若未指定）
-                            if (columns[colIndex]?.type === 'number' && !cellStyle.textAlign) {
-                              cellStyle.textAlign = 'right';
-                            }
-
-                            // 提取对齐信息用于 flex 布局
-                            const horiz =
-                              customFormat?.textAlign ??
-                              ((xlsCss as any).__horiz as string | undefined);
-                            const vert = (xlsCss as any).__vert as string | undefined;
-
-                            const justifyContent =
-                              horiz === 'center'
-                                ? 'center'
-                                : horiz === 'right'
-                                  ? 'flex-end'
-                                  : // 数字列默认右对齐
-                                    columns[colIndex]?.type === 'number' && !horiz
-                                    ? 'flex-end'
-                                    : 'flex-start';
-
-                            const alignItems =
-                              vert === 'center'
-                                ? 'center'
-                                : vert === 'bottom'
-                                  ? 'flex-end'
-                                  : 'flex-start';
+                            const source = workbookState?.sources[dataKey];
+                            const imported = source
+                              ? sourcePresentations[`${source.r}:${source.c}`]
+                              : undefined;
+                            const { cellStyle, textStyle, justifyContent, alignItems } =
+                              spreadsheetCellPresentation(
+                                cellFormats[dataKey],
+                                imported,
+                                columns[colIndex]?.type === 'number'
+                              );
 
                             const isActive = !!(
                               activeCell &&
