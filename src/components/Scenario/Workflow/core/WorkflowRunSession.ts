@@ -27,11 +27,15 @@ const terminal = new Set([
 /** One local automatic loop; only the current run can publish or release its busy flag. */
 export class WorkflowRunSession {
   private current?: Run;
+  private commandVersion = 0;
   constructor(private readonly ports: Ports) {}
 
   start(snapshot: StateJSON): Promise<void> {
     const input = structuredClone(snapshot);
-    this.stop();
+    const command = ++this.commandVersion;
+    if (this.current) this.finish(this.current);
+    // Cleanup notifies subscribers and abort listeners, which may issue a newer command.
+    if (command !== this.commandVersion) return Promise.resolve();
     let resolve!: () => void;
     const completion = new Promise<void>((done) => {
       resolve = done;
@@ -44,14 +48,20 @@ export class WorkflowRunSession {
       resolve,
     };
     this.current = run;
-    run.unsubscribe = this.ports.watch(() => {
+    const unsubscribe = this.ports.watch(() => {
       if (this.current === run && this.ports.notebookId() !== run.owner) this.finish(run);
     });
+    if (run.phase === 'settled') {
+      unsubscribe();
+      return completion;
+    }
+    run.unsubscribe = unsubscribe;
     void this.execute(run, input);
     return completion;
   }
 
   stop(): void {
+    this.commandVersion++;
     if (this.current) this.finish(this.current);
   }
 
@@ -64,7 +74,7 @@ export class WorkflowRunSession {
     run.phase = 'settled';
     this.current = undefined;
     run.unsubscribe();
-    this.ports.busy(false);
+    if (!this.current) this.ports.busy(false);
     run.controller.abort();
     run.resolve();
   }

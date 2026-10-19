@@ -123,3 +123,9 @@ writes and rejects the transition without publishing its cloned state. Two concu
 through the same handler retain independent signals. Already-applied notebook actions are not
 rolled back. Direct Store transitions without an automatic-run signal retain their existing
 optimistic snapshot publication guard; they are not newly enrolled in automatic-run cancellation.
+
+Run admission orders start/stop commands before notifying cleanup observers. If a busy-state,
+abort or unsubscribe callback issues another command synchronously, that later command wins;
+the interrupted start resolves without installing a second owner. Old unsubscribe cleanup cannot
+clear a replacement run's busy flag. A subscription that immediately invalidates its run is
+released as soon as registration returns, before any initial snapshot or preparation is published.

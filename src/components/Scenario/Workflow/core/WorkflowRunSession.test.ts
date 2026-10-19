@@ -23,7 +23,7 @@ function setup(limit = 5) {
         listeners.delete(check);
       };
     },
-    prepare: vi.fn(async () => step),
+    prepare: vi.fn<(signal: AbortSignal) => Promise<typeof step>>(async () => step),
     publish: vi.fn(),
     busy: vi.fn(),
     fail: vi.fn(),
@@ -162,4 +162,88 @@ it('accepts no-transition completion at the exact limit', async () => {
   await f.session.start(createInitialStateJSON());
   expect(f.step).toHaveBeenCalledOnce();
   expect(f.ports.fail).not.toHaveBeenCalled();
+});
+
+it.each(['busy', 'abort'])(
+  'keeps a newer start issued by the old %s cleanup callback',
+  async (source) => {
+    const f = setup();
+    const ready = deferred<typeof f.step>();
+    f.ports.prepare.mockReturnValue(ready.promise);
+    const first = f.session.start(createInitialStateJSON());
+    let latest!: Promise<void>;
+    const latestState = createInitialStateJSON();
+    latestState.metadata = { marker: 'latest' };
+    const replace = () => {
+      latest = f.session.start(latestState);
+    };
+    if (source === 'busy') {
+      f.ports.busy.mockImplementationOnce(replace);
+    } else {
+      f.ports.prepare.mock.calls[0][0].addEventListener('abort', replace, { once: true });
+    }
+    const superseded = f.session.start(createInitialStateJSON());
+    await first;
+    await superseded;
+    expect(f.ports.prepare).toHaveBeenCalledTimes(2);
+    expect(f.ports.publish).toHaveBeenLastCalledWith(latestState);
+    expect(f.ports.busy).toHaveBeenLastCalledWith(true);
+    f.session.stop();
+    await latest;
+    expect(f.ports.prepare.mock.calls[1][0].aborted).toBe(true);
+    ready.resolve(f.step);
+    await Promise.resolve();
+    expect(f.step).not.toHaveBeenCalled();
+  }
+);
+
+it('honors a stop issued synchronously during replacement cleanup', async () => {
+  const f = setup();
+  const ready = deferred<typeof f.step>();
+  f.ports.prepare.mockReturnValue(ready.promise);
+  const first = f.session.start(createInitialStateJSON());
+  f.ports.busy.mockImplementationOnce(() => f.session.stop());
+  await f.session.start(createInitialStateJSON());
+  await first;
+  expect(f.ports.prepare).toHaveBeenCalledOnce();
+  expect(f.ports.publish).toHaveBeenCalledOnce();
+  expect(f.ports.busy).toHaveBeenLastCalledWith(false);
+  ready.resolve(f.step);
+});
+
+it('releases a subscription that invalidates the run synchronously during registration', async () => {
+  const f = setup();
+  const release = vi.fn();
+  vi.spyOn(f.ports, 'watch').mockImplementation((check) => {
+    f.switchOwner('b');
+    check();
+    return release;
+  });
+  await f.session.start(createInitialStateJSON());
+  expect(release).toHaveBeenCalledOnce();
+  expect(f.ports.publish).not.toHaveBeenCalled();
+  expect(f.ports.prepare).not.toHaveBeenCalled();
+});
+
+it('does not clear a newer run busy flag when unsubscribe starts it', async () => {
+  const f = setup();
+  const ready = deferred<typeof f.step>();
+  f.ports.prepare.mockReturnValue(ready.promise);
+  let next!: Promise<void>;
+  const originalWatch = f.ports.watch;
+  vi.spyOn(f.ports, 'watch').mockImplementationOnce((check) => {
+    const release = originalWatch(check);
+    return () => {
+      release();
+      next = f.session.start(createInitialStateJSON());
+    };
+  });
+  const first = f.session.start(createInitialStateJSON());
+  f.session.stop();
+  await first;
+  expect(f.ports.prepare).toHaveBeenCalledTimes(2);
+  expect(f.ports.busy).toHaveBeenLastCalledWith(true);
+  f.session.stop();
+  await next;
+  ready.resolve(f.step);
 });
