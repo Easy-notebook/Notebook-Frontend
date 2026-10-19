@@ -1,3 +1,4 @@
+import { FileUploadAttempt } from '@Services/notebook/FileUploadAttempt';
 import type {
   FileUploadClient,
   FileUploadConfig as UploadConfig,
@@ -161,13 +162,16 @@ export const handleFileUpload = async ({
 }: HandleFileUploadParams): Promise<void> => {
   if (!files || files.length === 0) return;
 
-  abortControllerRef.current = new AbortController();
-
-  setUploading(true);
-  setUploadProgress(0);
-  setError(null);
+  files = [...files];
+  uploadConfig = { ...uploadConfig, allowedTypes: [...uploadConfig.allowedTypes] };
+  const attempt = new FileUploadAttempt(abortControllerRef);
 
   try {
+    attempt.publish(() => setUploading(true));
+    attempt.publish(() => setUploadProgress(0));
+    attempt.publish(() => setError(null));
+    if (!attempt.isCurrent) return;
+    attempt.checkCancellation();
     if (
       uploadConfig.mode === 'restricted' &&
       uploadConfig.maxFiles &&
@@ -183,52 +187,67 @@ export const handleFileUpload = async ({
       files,
       uploadConfig,
       (progressEvent: ProgressEvent) => {
-        const percentCompleted: number = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        setUploadProgress(percentCompleted);
+        attempt.progress(progressEvent.loaded, progressEvent.total, setUploadProgress);
       },
-      abortControllerRef.current!.signal
+      attempt.signal
     );
 
+    if (!attempt.isCurrent) return;
+    attempt.checkCancellation();
     if (result.status === 'ok') {
+      if (!attempt.beginRefresh()) return;
       await fetchFileList();
-      setIsPreview(true);
-      toast({
-        title: 'Upload Successful',
-        description: `Successfully uploaded ${files.length} file(s)`,
-        variant: 'success',
-      });
+      if (!attempt.succeed()) return;
+      attempt.publish(() => setIsPreview(true));
+      attempt.publish(() =>
+        toast({
+          title: 'Upload Successful',
+          description: `Successfully uploaded ${files.length} file(s)`,
+          variant: 'success',
+        })
+      );
 
       if (onUpdate) {
-        onUpdate(cellId, { uploadedFiles: files.map((file: File) => file.name) });
+        attempt.publish(() =>
+          onUpdate(cellId, { uploadedFiles: files.map((file: File) => file.name) })
+        );
       }
     } else {
       throw new Error(result.message || 'Upload failed');
     }
   } catch (err: unknown) {
-    const error = err as Error;
-    if (error.name === 'AbortError') {
-      setError('Upload cancelled');
-      toast({
-        title: 'Upload Cancelled',
-        description: 'File upload was cancelled',
-        variant: 'info',
-      });
+    const outcome = attempt.fail(err);
+    if (!outcome) return;
+    const error = err instanceof Error ? err : new Error('Unknown error');
+    if (outcome === 'cancelled') {
+      attempt.publish(() => setError('Upload cancelled'));
+      attempt.publish(() =>
+        toast({
+          title: 'Upload Cancelled',
+          description: 'File upload was cancelled',
+          variant: 'info',
+        })
+      );
     } else {
       const errorMessage = error.message || 'Unknown error';
-      setError(errorMessage);
-      toast({
-        title: 'Upload Failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      attempt.publish(() => setError(errorMessage));
+      attempt.publish(() =>
+        toast({
+          title: 'Upload Failed',
+          description: errorMessage,
+          variant: 'destructive',
+        })
+      );
     }
   } finally {
-    setUploading(false);
-    setUploadProgress(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    try {
+      attempt.publish(() => setUploading(false));
+      attempt.publish(() => setUploadProgress(0));
+      attempt.publish(() => {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      });
+    } finally {
+      attempt.release();
     }
   }
 };

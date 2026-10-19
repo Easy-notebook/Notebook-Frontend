@@ -44,8 +44,9 @@ it('drives the actual upload workflow through the upload-only client with direct
     [file],
     config,
     expect.any(Function),
-    controller.current?.signal
+    expect.any(AbortSignal)
   );
+  expect(controller.current).toBeNull();
   expect(setUploadProgress).toHaveBeenCalledWith(50);
   expect(fetchFileList).toHaveBeenCalledOnce();
   expect(onUpdate).toHaveBeenCalledWith('cell', { uploadedFiles: ['note.txt'] });
