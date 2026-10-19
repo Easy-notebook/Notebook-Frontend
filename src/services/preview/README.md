@@ -124,3 +124,16 @@ follow-up tab persistence from the obsolete activation.
 Tab-manager operations are a static dependency (the service does not depend on
 the store). The obsolete filename-specific localStorage cleanup is removed:
 persisted state already restores only `dirtyMap`, ignoring historical tab fields.
+
+## New preview record sizes
+
+Both network loaders measure the UTF-8 bytes of the renderer content actually
+written to cache. They do not use JavaScript character counts or the size of a
+placeholder `File`. For binary previews this measures the stored data-URL
+representation, not the original binary transfer size. This matches local
+content-edit accounting; storage-budget usage remains independently measured by
+`StorageUsage` and is unchanged.
+
+Normal network previews use `saveFile`'s committed metadata through
+`fileFromCache`, including cache/access timestamps and access count, rather than
+synthesizing another metadata snapshot after the write.

@@ -233,9 +233,6 @@ const usePreviewStore = create<PreviewStore>()(
         check();
         publish({ isLoading: true, error: null });
 
-        // Generate a unique ID for the file
-        const fileId = makeFileId(notebookId, filePath);
-
         // Check if file exists in cache with optimized query
         const cachedFile =
           admittedCacheRecord === undefined
@@ -279,39 +276,17 @@ const usePreviewStore = create<PreviewStore>()(
               backendBaseUrl: window.Backend_BASE_URL,
             });
 
-            // Create file object data for cache
-            const fileObjectData = {
-              id: fileId,
+            const metadata = await persistenceService.files.saveFile({
               notebookId,
-              path: filePath,
-              name: file.name,
+              filePath,
+              fileName: file.name,
               content,
-              type: fileType,
+              fileType,
               lastModified: String(lastModifiedBackend || new Date().toISOString()),
-              size: content.length || 0,
-            };
-
-            // Save to optimized IndexedDB
-            await persistenceService.files.saveFile({
-              notebookId: fileObjectData.notebookId,
-              filePath: fileObjectData.path,
-              fileName: fileObjectData.name,
-              content: fileObjectData.content,
-              fileType: fileObjectData.type,
-              lastModified: fileObjectData.lastModified,
-              size: fileObjectData.size,
+              size: new Blob([content]).size,
             });
             check();
-
-            // Create full file object for state
-            const fileObject: FileObject = {
-              ...fileObjectData,
-              cachedAt: Date.now(),
-              accessCount: 1,
-              lastAccessed: Date.now(),
-            };
-
-            return activatePreviewFile(request, fileObject);
+            return activatePreviewFile(request, fileFromCache({ metadata, content }));
           } catch (error) {
             check();
             const missing = error instanceof HttpResponseError && error.status === 404;
@@ -832,7 +807,7 @@ const usePreviewStore = create<PreviewStore>()(
                 path: filePath,
                 content,
                 type: fileType,
-                size: file.size,
+                size: new Blob([content]).size,
                 lastModified: new Date(lastModifiedBackend || Date.now()).toISOString(),
                 cachedAt: Date.now(),
                 accessCount: 1,

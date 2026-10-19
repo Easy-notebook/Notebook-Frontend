@@ -72,7 +72,20 @@ beforeEach(() => {
   io.defaults.mockResolvedValue([]);
   io.loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
   io.fileRead.mockResolvedValue(undefined);
-  io.fileSave.mockResolvedValue(undefined);
+  io.fileSave.mockImplementation(async (data) => ({
+    id: `${data.notebookId}::${data.filePath}`,
+    notebookId: data.notebookId,
+    filePath: data.filePath,
+    fileName: data.fileName,
+    fileType: data.fileType,
+    size: data.size,
+    lastModified: data.lastModified,
+    cachedAt: 101,
+    accessCount: 2,
+    lastAccessedAt: 102,
+    storageType: 'local',
+    hasLocalContent: true,
+  }));
   io.fileUpdate.mockResolvedValue(true);
   io.tabSave.mockResolvedValue(undefined);
   io.fileDelete.mockResolvedValue(true);
@@ -874,5 +887,46 @@ describe.each(['cached', 'fetched'] as const)('%s preview activation', (source) 
     } finally {
       unsubscribe();
     }
+  });
+});
+
+describe('new preview cache record accounting', () => {
+  it.each(['', 'ASCII', '中文', '🧪'])(
+    'measures the stored representation of %j in both preview modes',
+    async (content) => {
+      io.read.mockResolvedValue(undefined);
+      io.fetch.mockResolvedValue({ status: 'ok', content });
+      const file = new File(['placeholder source with unrelated size'], 'file.txt');
+      const expectedSize = new TextEncoder().encode(content).byteLength;
+      const normal = await state().previewFile('book', 'file.txt', { file });
+      const split = await state().previewFileInSplit('book', 'file.txt', { file });
+      expect(normal?.size).toBe(expectedSize);
+      expect(split?.size).toBe(expectedSize);
+      expect(io.fileSave).toHaveBeenCalledWith(
+        expect.objectContaining({ size: expectedSize, content })
+      );
+      expect(io.save).toHaveBeenCalledWith(
+        'book',
+        'file.txt',
+        expect.objectContaining({ size: expectedSize, content })
+      );
+    }
+  );
+
+  it('sizes the converted binary renderer payload that is actually cached', async () => {
+    io.read.mockResolvedValue(undefined);
+    io.fetch.mockResolvedValue({ status: 'ok', content: 'aGVsbG8=' });
+    const expectedContent = 'data:image/png;base64,aGVsbG8=';
+    const expectedSize = new TextEncoder().encode(expectedContent).byteLength;
+    const normal = await state().previewFile('book', 'image.png');
+    const split = await state().previewFileInSplit('book', 'image.png');
+    expect(normal).toMatchObject({ content: expectedContent, size: expectedSize });
+    expect(split).toMatchObject({ content: expectedContent, size: expectedSize });
+  });
+
+  it('uses committed cache timestamps and access counters in the normal preview', async () => {
+    const result = await state().previewFile('book', 'file.txt');
+    expect(result).toMatchObject({ cachedAt: 101, accessCount: 2, lastAccessed: 102 });
+    expect(state().activeFile).toBe(result);
   });
 });
