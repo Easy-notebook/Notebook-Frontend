@@ -25,6 +25,22 @@ import type { NotebookState, StateJSON } from '@Store/models';
 import { createInitialStateJSON } from '@Store/models';
 import { WorkflowEvent, WorkflowState } from '@Store/models';
 import { WORKFLOW_MAX_ITERATIONS } from '../../../../config/workflow';
+import { WorkflowState as WorkflowStateModel } from '../observation/WorkflowState';
+
+/** Keep the Store serializable while transition handlers operate on domain objects. */
+async function applySnapshotTransition(
+  snapshot: StateJSON,
+  response: Record<string, unknown>,
+  apiType?: string
+): Promise<StateJSON> {
+  const { state } = await getTransitionCoordinator().applyTransition(
+    new WorkflowStateModel(structuredClone(snapshot)),
+    response,
+    apiType,
+    true
+  );
+  return state.toJSON();
+}
 
 // ==============================================
 // TYPES & INTERFACES
@@ -114,24 +130,15 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     console.log(`[FSM] Transition requested: ${event} from state ${currentFSMState}`);
 
     try {
-      // Get coordinator
-      const coordinator = getTransitionCoordinator();
-
-      // Apply transition
-      const { state: updatedStateJSON } = await coordinator.applyTransition(
-        currentStateJSON,
-        apiResponse || {},
-        undefined,
-        true // auto-trigger enabled
-      );
+      const updatedStateJSON = await applySnapshotTransition(currentStateJSON, apiResponse || {});
 
       // Extract new FSM state
-      const newFSMState = (updatedStateJSON as StateJSON).state.FSM.state;
+      const newFSMState = updatedStateJSON.state.FSM.state;
 
       // Update store
       set({
         currentState: newFSMState as WorkflowState,
-        stateJSON: updatedStateJSON as StateJSON,
+        stateJSON: updatedStateJSON,
         transitionHistory: [
           ...get().transitionHistory,
           {
@@ -421,21 +428,13 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
     console.log(`[FSM] Handling API response (type: ${apiType})`);
 
     try {
-      const coordinator = getTransitionCoordinator();
-      const currentStateJSON = get().stateJSON;
+      const updatedStateJSON = await applySnapshotTransition(get().stateJSON, apiResponse, apiType);
 
-      const { state: updatedStateJSON } = await coordinator.applyTransition(
-        currentStateJSON,
-        apiResponse,
-        apiType,
-        true
-      );
-
-      const newFSMState = (updatedStateJSON as StateJSON).state.FSM.state;
+      const newFSMState = updatedStateJSON.state.FSM.state;
 
       set({
         currentState: newFSMState as WorkflowState,
-        stateJSON: updatedStateJSON as StateJSON,
+        stateJSON: updatedStateJSON,
       });
 
       console.log(`[FSM] API response handled, new state: ${newFSMState}`);
