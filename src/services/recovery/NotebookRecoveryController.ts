@@ -9,6 +9,7 @@ interface RecoveryState {
   drafts: readonly NotebookRecoveryRecord[];
   error: string | null;
   notice: string | null;
+  pendingDeletion: Readonly<NotebookRecoveryRecord> | null;
   restored: Pick<NotebookEntity, 'id' | 'name'> | null;
 }
 
@@ -16,6 +17,7 @@ interface RecoveryState {
 export class NotebookRecoveryController {
   private state: RecoveryState = {
     phase: 'idle',
+    pendingDeletion: null,
     drafts: [],
     error: null,
     notice: null,
@@ -47,6 +49,22 @@ export class NotebookRecoveryController {
       if (generation === this.generation)
         this.publish({ ...this.state, phase: 'failed', error: this.message(error) });
     }
+  }
+
+  requestDeletion(draft: NotebookRecoveryRecord): void {
+    if (this.busy || this.state.pendingDeletion) return;
+    this.publish({ ...this.state, pendingDeletion: draft });
+  }
+
+  cancelDeletion(): void {
+    if (this.busy) return;
+    this.publish({ ...this.state, pendingDeletion: null });
+  }
+
+  async confirmDeletion(): Promise<void> {
+    const draft = this.state.pendingDeletion;
+    if (!draft || this.busy) return;
+    await this.discard(draft);
   }
 
   async discard(draft: Pick<NotebookRecoveryRecord, 'id' | 'revision'>): Promise<void> {
@@ -94,7 +112,12 @@ export class NotebookRecoveryController {
       await this.refreshAfterMutation(generation);
     } catch (error) {
       if (generation === this.generation)
-        this.publish({ ...this.state, phase: 'failed', error: this.message(error) });
+        this.publish({
+          ...this.state,
+          phase: 'failed',
+          pendingDeletion: null,
+          error: this.message(error),
+        });
     }
   }
 
@@ -107,7 +130,7 @@ export class NotebookRecoveryController {
         const drafts = await this.repository.listDrafts();
         if (version === this.refreshVersion) {
           if (generation === this.generation)
-            this.publish({ ...this.state, phase: 'ready', drafts });
+            this.publish({ ...this.state, phase: 'ready', pendingDeletion: null, drafts });
           return;
         }
       } catch (error) {
@@ -119,6 +142,7 @@ export class NotebookRecoveryController {
   private publish(state: RecoveryState): void {
     this.state = Object.freeze({
       ...state,
+      pendingDeletion: state.pendingDeletion ? Object.freeze({ ...state.pendingDeletion }) : null,
       restored: state.restored ? Object.freeze({ ...state.restored }) : null,
       drafts: Object.freeze(state.drafts.map((draft) => Object.freeze({ ...draft }))),
     });

@@ -687,6 +687,13 @@ discarded; another notebook's success, a superseded revision's commit, a new edi
 global status error cannot erase it. Disposal releases all pending failure warnings.
 
 NotebookRecoveryController owns idle/loading/ready/deleting/restoring/failed UI data transitions.
+It also owns the immutable deletion-confirmation snapshot. Request/cancel/confirm actions
+preserve the exact reviewed revision; cancellation and replacement are blocked while a
+mutation and its follow-up refresh are pending. The terminal ready/failed transition clears
+the old confirmation atomically before notifying observers. A new confirmation opened by
+an observer at that transition therefore cannot be dismissed by a previous UI continuation.
+The view renders this snapshot directly and performs no post-await confirmation cleanup.
+
 Generations suppress delayed read results after a newer refresh or deletion. Accepted deletes
 block duplicate mutations and refresh their final list. Refresh notifications received while a
 mutation is busy advance an invalidation version. Notifications before the final read coalesce

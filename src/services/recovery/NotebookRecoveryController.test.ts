@@ -226,3 +226,68 @@ it('honors a queued refresh after a failed list without retrying the committed r
     error: null,
   });
 });
+
+it('captures the reviewed confirmation revision through caller edits and list refreshes', async () => {
+  const { repository, controller } = setup();
+  const reviewed = draft(1);
+  controller.requestDeletion(reviewed);
+  reviewed.revision = 9;
+  repository.listDrafts.mockResolvedValue([draft(2)]);
+  await controller.refresh();
+  expect(controller.getSnapshot().pendingDeletion?.revision).toBe(1);
+  expect(Object.isFrozen(controller.getSnapshot().pendingDeletion)).toBe(true);
+  await controller.confirmDeletion();
+  expect(repository.discardDraft).toHaveBeenCalledExactlyOnceWith('draft', 1);
+  expect(controller.getSnapshot().pendingDeletion).toBeNull();
+});
+
+it('cancellation and unconfirmed clicks never delete a copy', async () => {
+  const { repository, controller } = setup();
+  controller.requestDeletion(draft(1));
+  controller.cancelDeletion();
+  await controller.confirmDeletion();
+  expect(repository.discardDraft).not.toHaveBeenCalled();
+});
+
+it('keeps the confirmation owned until deletion and its refresh both finish', async () => {
+  const { repository, controller } = setup();
+  let finish!: (records: NotebookRecoveryRecord[]) => void;
+  repository.listDrafts.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    })
+  );
+  controller.requestDeletion(draft(1));
+  const pending = controller.confirmDeletion();
+  await vi.waitFor(() => expect(repository.listDrafts).toHaveBeenCalledOnce());
+  controller.cancelDeletion();
+  controller.requestDeletion(draft(2));
+  await controller.confirmDeletion();
+  expect(controller.getSnapshot()).toMatchObject({ phase: 'deleting', pendingDeletion: draft(1) });
+  expect(repository.discardDraft).toHaveBeenCalledOnce();
+  finish([draft(2)]);
+  await pending;
+  expect(controller.getSnapshot()).toMatchObject({ phase: 'ready', pendingDeletion: null });
+});
+
+it.each([false, true])(
+  'old completion cannot dismiss a new confirmation opened at the terminal transition (failure=%s)',
+  async (failure) => {
+    const { repository, controller } = setup();
+    if (failure) repository.discardDraft.mockRejectedValueOnce(new Error('unavailable'));
+    controller.requestDeletion(draft(1));
+    let opened = false;
+    controller.subscribe(() => {
+      const state = controller.getSnapshot();
+      if (!opened && (state.phase === 'ready' || state.phase === 'failed')) {
+        expect(state.pendingDeletion).toBeNull();
+        opened = true;
+        controller.requestDeletion(draft(2));
+      }
+    });
+    await controller.confirmDeletion();
+    expect(opened).toBe(true);
+    expect(controller.getSnapshot().pendingDeletion?.revision).toBe(2);
+    expect(repository.discardDraft).toHaveBeenCalledExactlyOnceWith('draft', 1);
+  }
+);

@@ -31,7 +31,7 @@ export function NotebookRecoveryCenter() {
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const [open, setOpen] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [pendingDeletion, setPendingDeletion] = useState<NotebookRecoveryRecord | null>(null);
+  const pendingDeletion = state.pendingDeletion;
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const autoSave = AutoSaveService.getInstance();
   const subscribeToSaves = useMemo(
@@ -157,7 +157,7 @@ export function NotebookRecoveryCenter() {
                   <Button disabled={busy} onClick={() => void controller.restore(draft)}>
                     Restore as new notebook
                   </Button>
-                  <Button danger disabled={busy} onClick={() => setPendingDeletion(draft)}>
+                  <Button danger disabled={busy} onClick={() => controller.requestDeletion(draft)}>
                     Delete recovery copy
                   </Button>
                 </Space>
@@ -181,15 +181,8 @@ export function NotebookRecoveryCenter() {
         okText="Delete copy"
         okButtonProps={{ danger: true }}
         confirmLoading={busy}
-        onCancel={() => {
-          if (!busy) setPendingDeletion(null);
-        }}
-        onOk={async () => {
-          const draft = pendingDeletion;
-          if (!draft) return;
-          await controller.discard(draft);
-          setPendingDeletion(null);
-        }}
+        onCancel={() => controller.cancelDeletion()}
+        onOk={() => void controller.confirmDeletion()}
       >
         <Typography.Paragraph>
           {pendingDeletion ? titleOf(pendingDeletion) : ''}
