@@ -717,6 +717,6 @@ Tips:
 
     // Check if it's a registered action (try both original and normalized)
     const ActionClass = getStreamActionClass(actionType) || getStreamActionClass(normalized);
-    return ActionClass !== null;
+    return ActionClass !== undefined;
   }
 }

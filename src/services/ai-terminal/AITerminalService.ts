@@ -128,9 +128,7 @@ class AITerminalService {
 
       // Not an action command, proceed with original command handling
       callbacks.setActiveView('script');
-      const commandId = `action-${Date.now()}`;
       const actionData = {
-        id: commandId,
         type: EVENT_TYPES.USER_NEW_INSTRUCTION,
         timestamp,
         content: command,
@@ -142,7 +140,7 @@ class AITerminalService {
         attachedFiles: files,
       };
 
-      useAIAgentStore.getState().addAction(actionData);
+      const commandId = useAIAgentStore.getState().addAction(actionData);
 
       // Prepare Command Agent memory context
       const commandMemoryContext = AgentMemoryService.prepareMemoryContextForBackend(
