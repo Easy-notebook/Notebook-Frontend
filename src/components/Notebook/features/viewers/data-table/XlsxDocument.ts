@@ -23,6 +23,25 @@ export class XlsxDocument {
     return this.workbook.Sheets[this.workbook.SheetNames[0]];
   }
 
+  /** Project worksheet coordinates into the zero-based grid used by the editor. */
+  readGrid(): { cells: (XLSX.CellObject | undefined)[][]; merges: XLSX.Range[] } {
+    const sheet = this.worksheet;
+    if (!sheet['!ref']) return { cells: [], merges: [] };
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+    const cells = Array.from({ length: range.e.r - range.s.r + 1 }, (_, row) =>
+      Array.from({ length: range.e.c - range.s.c + 1 }, (_, column) => {
+        const address = XLSX.utils.encode_cell({ r: range.s.r + row, c: range.s.c + column });
+        return structuredClone(sheet[address] as XLSX.CellObject | undefined);
+      })
+    );
+    const local = (cell: XLSX.CellAddress): XLSX.CellAddress => ({
+      r: cell.r - range.s.r,
+      c: cell.c - range.s.c,
+    });
+    const merges = (sheet['!merges'] || []).map(({ s, e }) => ({ s: local(s), e: local(e) }));
+    return { cells, merges };
+  }
+
   serialize(
     rows: readonly Readonly<Record<string, TableCellValue>>[],
     columns: readonly { readonly key: string }[],

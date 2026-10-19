@@ -246,6 +246,14 @@ Unicode, and normalizes null/undefined cells to empty strings while retaining
 zero and false. Repeated CSV save/read cycles do not insert coordinate rows.
 CSV export remains an explicit text conversion. Saving XLSX instead uses
 `XlsxDocument`, which owns the parsed source workbook and writes base64 XLSX.
+`readGrid` projects source cell records and merged ranges into one zero-based grid.
+It preserves empty positions inside the used range and returns cloned cell records,
+so editing a projection cannot mutate the retained workbook. Empty worksheets
+produce an empty grid. Imported style keys use the same grid coordinates as values,
+including worksheets whose used range starts away from A1. Merge coordinates are
+normalized, but the flex renderer still does not implement complete merged-cell
+spanning.
+
 It projects the visible grid back at the source sheet's original range origin,
 retains undisplayed worksheets and workbook properties, and preserves unchanged
 cell records (including numeric/boolean types, number formats and formulas).

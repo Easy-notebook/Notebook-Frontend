@@ -781,3 +781,31 @@ it('revokes an old save acknowledgement after external replacement of the same f
   expect(model.state.setTabDirty).not.toHaveBeenCalled();
   expect(screen.getByText('new draft', { exact: true })).toBeDefined();
 });
+
+it('renders imported XLSX fill at the displayed cell when the worksheet starts at C3', async () => {
+  const XLSX = await import('xlsx-js-style');
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      C3: {
+        t: 's',
+        v: 'Offset cell',
+        s: { fill: { patternType: 'solid', fgColor: { rgb: '12AB34' } } },
+      },
+      '!ref': 'C3',
+    },
+    'Main'
+  );
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::offset.xlsx',
+    name: 'offset.xlsx',
+    path: 'offset.xlsx',
+    type: 'xlsx',
+    content: XLSX.write(book, { type: 'base64', bookType: 'xlsx' }),
+  };
+  render(<DataTable showFormulaBar={false} />);
+  const cell = screen.getByText('Offset cell', { exact: true }).closest('div')!.parentElement!;
+  expect(cell.style.backgroundColor).toBe('rgb(18, 171, 52)');
+});

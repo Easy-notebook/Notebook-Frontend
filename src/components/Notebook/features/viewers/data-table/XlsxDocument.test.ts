@@ -100,3 +100,33 @@ it('writes user formatting into the actual cell style references, including unch
   expect(writtenCellStyle(saved, 'C4').font.getElementsByTagName('i')).toHaveLength(1);
   expect(XLSX.read(saved, { type: 'base64' }).Sheets.Main.C4.f).toBe('D3*2');
 });
+
+it('projects cells and merged regions through the same worksheet origin without exposing mutable source cells', () => {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      C3: { t: 's', v: 'merged' },
+      E4: { t: 'n', v: 7 },
+      '!ref': 'C3:E4',
+      '!merges': [{ s: { r: 2, c: 2 }, e: { r: 2, c: 3 } }],
+    },
+    'Main'
+  );
+  const document = XlsxDocument.fromBase64(XLSX.write(book, { type: 'base64', bookType: 'xlsx' }));
+  const grid = document.readGrid();
+  expect(grid.cells.map((row) => row.map((cell) => cell?.v))).toEqual([
+    ['merged', undefined, undefined],
+    [undefined, undefined, 7],
+  ]);
+  expect(grid.merges).toEqual([{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }]);
+  grid.cells[0][0]!.v = 'changed projection';
+  expect(document.worksheet.C3.v).toBe('merged');
+});
+
+it('projects a worksheet without a used range as an empty grid', () => {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, {}, 'Empty');
+  const document = XlsxDocument.fromBase64(XLSX.write(book, { type: 'base64', bookType: 'xlsx' }));
+  expect(document.readGrid()).toEqual({ cells: [], merges: [] });
+});

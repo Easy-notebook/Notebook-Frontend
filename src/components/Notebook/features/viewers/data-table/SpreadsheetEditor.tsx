@@ -11,7 +11,6 @@ import React, {
   useRef,
   useSyncExternalStore,
 } from 'react';
-import * as XLSX from 'xlsx-js-style';
 import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
 import { SpreadsheetRowOrder } from './SpreadsheetRowOrder';
@@ -260,17 +259,14 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       if (fileType === 'xlsx') {
         const document = XlsxDocument.fromBase64(content);
         workbook = document;
-        const ws = document.worksheet;
-        const ref = (ws as any)['!ref'] || 'A1';
-        const range = XLSX.utils.decode_range(ref);
-        const rows: any[][] = [];
+        const grid = document.readGrid();
+        const rows: string[][] = [];
         const nextStyleMap: Record<string, React.CSSProperties> = {};
 
-        for (let r = range.s.r; r <= range.e.r; r++) {
-          const row: any[] = [];
-          for (let c = range.s.c; c <= range.e.c; c++) {
-            const addr = XLSX.utils.encode_cell({ r, c });
-            const cell: any = (ws as any)[addr];
+        for (let r = 0; r < grid.cells.length; r++) {
+          const row: string[] = [];
+          for (let c = 0; c < grid.cells[r].length; c++) {
+            const cell = grid.cells[r][c];
             let val = '';
             if (cell) {
               if (cell.w != null) val = String(cell.w);
@@ -452,12 +448,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         }
 
         setStyleMap(nextStyleMap);
-        setSheetMerges(
-          ((ws as any)['!merges'] || []) as Array<{
-            s: { r: number; c: number };
-            e: { r: number; c: number };
-          }>
-        );
+        setSheetMerges(grid.merges);
 
         if (rows.length > 0) {
           const maxCols = Math.max(0, ...rows.map((r) => r.length));
@@ -841,7 +832,6 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
   // ============== 合并单元格映射（关键新增） ==============
   // 使用数据区坐标（rowIndex/colIndex）
-  const headerOffset = 0;
   const { spanMap, coveredSet } = useMemo(() => {
     const map: Record<string, { rowSpan: number; colSpan: number }> = {};
     const covered = new Set<string>();
@@ -849,8 +839,8 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     if (sheetMerges.length > 0 && columns.length > 0 && data.length > 0) {
       sheetMerges.forEach((m) => {
         // 映射到数据区
-        const r0Data = m.s.r - headerOffset;
-        const r1Data = m.e.r - headerOffset;
+        const r0Data = m.s.r;
+        const r1Data = m.e.r;
         const c0Data = m.s.c;
         const c1Data = m.e.c;
 
@@ -1475,9 +1465,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
                             if (coveredSet.has(dataKey)) return null;
 
-                            // 从 styleMap 读取工作表样式（sheet 坐标 = 数据行 + headerOffset）
-                            const sheetKey = `${sourceRow + headerOffset}:${colIndex}`;
-                            const xlsCss = styleMap[sheetKey] || {};
+                            const xlsCss = styleMap[dataKey] || {};
 
                             // 拆分成"单元格级样式（背景/对齐）"与"文本级样式（粗斜体/颜色）"
                             const cellStyle: React.CSSProperties = {};
