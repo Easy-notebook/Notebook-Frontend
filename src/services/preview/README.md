@@ -306,3 +306,13 @@ the current revision; another deferred edit supersedes it, and any draft change,
 source change or unmount revokes it. Only the current successful completion can
 apply its text, once. Accepted paste builds new row objects instead of mutating
 the captured draft. Save echoes do not invalidate an otherwise unchanged edit.
+
+## Spreadsheet component ownership
+
+`DataTable` selects the preview source and keys `SpreadsheetEditor` by surface,
+file ID and effective format. The editor owns its draft, save/deferred-edit
+session, history, selection, input state, menus, filters and formatting. Switching
+identity unmounts that complete owner instead of manually resetting a subset of
+its state. The boundary is inside the exported spreadsheet component, so it does
+not depend on a caller's file-only React key. Content updates for the same identity
+keep the mounted owner and its existing save-echo protection.

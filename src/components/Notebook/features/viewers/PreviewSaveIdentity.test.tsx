@@ -73,6 +73,13 @@ beforeEach(() => {
     type: 'javascript',
     content: 'original',
   };
+  model.state.activeSplitFile = {
+    ...model.state.activeFile,
+    id: 'book::split.js',
+    name: 'split.js',
+    path: 'split.js',
+    content: 'split',
+  };
 });
 afterEach(cleanup);
 
@@ -570,3 +577,34 @@ it.each(['navigation', 'newer edit', 'unmount'])(
     }
   }
 );
+
+it('isolates editor history and open menus when the same file identity moves between preview surfaces', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.csv',
+    name: 'table.csv',
+    path: 'table.csv',
+    type: 'csv',
+    content: 'name\nAda',
+  };
+  const view = render(<DataTable />);
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  expect(
+    (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+  ).toBe(false);
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  model.state.activeSplitFile = { ...model.state.activeFile, content: 'name\nGrace' };
+  model.notebook.detachedCellId = 'cell';
+  view.rerender(<DataTable />);
+  expect(screen.getByText('Grace', { exact: true })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Insert Row Above' })).toBeNull();
+  expect(
+    (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\nGrace', {
+    surface: 'split',
+    fileId: 'book::table.csv',
+  });
+});
