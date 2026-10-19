@@ -4,7 +4,9 @@ import type { IStorageProvider } from '../interfaces';
 import { DB_STORES, type TabEntry } from '../../../storage/schema';
 
 const put = vi.fn();
-const repository = new TabRepository({ put } as unknown as IStorageProvider);
+const get = vi.fn();
+const getAll = vi.fn();
+const repository = new TabRepository({ put, get, getAll } as unknown as IStorageProvider);
 const tab = (path = 'file.txt'): TabEntry => ({
   id: `book::${path}`,
   path,
@@ -75,4 +77,46 @@ it('propagates commit failure to the caller', async () => {
   const error = new Error('commit aborted');
   put.mockRejectedValueOnce(error);
   await expect(repository.saveTabState('book', [tab()], null)).rejects.toBe(error);
+});
+
+it('validates and detaches records read from storage without rewriting them', async () => {
+  const stored = { notebookId: 'book', tabList: [tab()], activeTabId: tab().id, lastUpdated: 123 };
+  get.mockResolvedValueOnce(stored);
+  const result = await repository.getTabState('book');
+  expect(result).toEqual(stored);
+  result!.tabList[0].name = 'caller mutation';
+  expect(stored.tabList[0].name).toBe('file.txt');
+  expect(put).not.toHaveBeenCalled();
+});
+
+it.each([undefined, null])('returns null only for an absent record: %s', async (missing) => {
+  get.mockResolvedValueOnce(missing);
+  expect(await repository.getTabState('book')).toBeNull();
+});
+
+it.each([
+  false,
+  0,
+  {},
+  { notebookId: 'other', tabList: [], activeTabId: null, lastUpdated: 1 },
+  { notebookId: 'book', tabList: new Array(1), activeTabId: null, lastUpdated: 1 },
+  { notebookId: 'book', tabList: [tab(), tab()], activeTabId: null, lastUpdated: 1 },
+  { notebookId: 'book', tabList: [tab()], activeTabId: 'book::missing', lastUpdated: 1 },
+  { notebookId: 'book', tabList: [tab()], activeTabId: null, lastUpdated: NaN },
+  { notebookId: 'book', tabList: [tab()], activeTabId: null, lastUpdated: -1 },
+])('rejects corrupt stored state rather than reporting a cache miss: %j', async (record) => {
+  get.mockResolvedValueOnce(record);
+  await expect(repository.getTabState('book')).rejects.toThrow('Invalid');
+  expect(put).not.toHaveBeenCalled();
+});
+
+it('validates every enumerated record and propagates storage read failures', async () => {
+  const valid = { notebookId: 'book', tabList: [tab()], activeTabId: null, lastUpdated: 1 };
+  getAll.mockResolvedValueOnce([valid]);
+  expect(await repository.getAllTabStates()).toEqual([valid]);
+  getAll.mockResolvedValueOnce([valid, { ...valid, activeTabId: 'missing' }]);
+  await expect(repository.getAllTabStates()).rejects.toThrow('Invalid active tab');
+  const failure = new Error('read transaction aborted');
+  get.mockRejectedValueOnce(failure);
+  await expect(repository.getTabState('book')).rejects.toBe(failure);
 });

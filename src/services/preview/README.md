@@ -485,3 +485,13 @@ An empty clipboard produces no edit. An explicitly copied blank cell is quoted
 and can still clear a target cell. Malformed quoted text fails before committing
 a draft. Existing revision-scoped paste admission and sorted-row projection remain
 in force.
+
+## Persisted tab record validation
+
+`TabStateRecord` is the shared read/write boundary for persisted notebook tab state.
+It validates notebook ownership, ordered unique file identities, nonempty entry
+fields, active-tab membership and a valid timestamp, then returns detached records.
+`TabRepository.getTabState` returns null only for a missing record; corrupt stored
+state rejects, as do provider failures. Enumeration validates every returned record.
+Reads never repair or delete invalid data, so a failed load cannot silently turn
+corruption into a missing-state discovery path or destroy recovery evidence.

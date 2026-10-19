@@ -3859,3 +3859,40 @@ test('aborted split edits reject and preserve the committed record', async ({ pa
   expect(result.message).toBe('split edit aborted');
   expect(result.after).toEqual(result.original);
 });
+
+test('tab reads reject corrupt persisted selections without repairing or deleting the stored record', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, TabRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new TabRepository(provider);
+    const record = {
+      notebookId: 'book',
+      tabList: [{ id: 'book::file.txt', path: 'file.txt', name: 'file', type: 'text' }],
+      activeTabId: 'book::missing.txt',
+      lastUpdated: Date.now(),
+    };
+    await provider.put(DB_CONFIG.STORES.TAB_STATES, record);
+    let singleError;
+    let listError;
+    try {
+      await repository.getTabState('book');
+    } catch (error) {
+      singleError = error.message;
+    }
+    try {
+      await repository.getAllTabStates();
+    } catch (error) {
+      listError = error.message;
+    }
+    const retained = await provider.get(DB_CONFIG.STORES.TAB_STATES, 'book');
+    const missing = await repository.getTabState('missing');
+    await provider.close();
+    return { record, retained, singleError, listError, missing };
+  });
+  expect(result.singleError).toContain('Invalid active tab');
+  expect(result.listError).toContain('Invalid active tab');
+  expect(result.retained).toEqual(result.record);
+  expect(result.missing).toBeNull();
+});
