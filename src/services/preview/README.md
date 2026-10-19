@@ -20,8 +20,21 @@ subscribers can cancel before I/O begins.
 Cancellation does not abort an already started HTTP request or cache transaction.
 An admitted cache write may finish after cancellation; its result cannot reopen
 the split preview. The existing public return type remains `FileObject | undefined`.
-Normal tab loading and saved-tab restoration have separate asynchronous lifetimes
-and are not covered by this owner.
+Normal previews use a second owner shared by notebook switching, tab discovery,
+saved-tab restoration, and file activation. Public methods admit a request; their
+private nested operations retain its ticket instead of admitting competing work.
+The shared publication guard checks both before and after notifying subscribers.
+This prevents a synchronous replacement from being followed by another write or
+persistence operation from the obsolete request. Same-notebook refreshes are
+separate requests, just like cross-notebook navigation.
+
+Reset, explicit file/view selection, and tab closing supersede pending normal
+loads. Tab removal is immediate; neighbor selection belongs to the close request
+and cannot later republish an old tab list. Saved-tab misses can start default
+discovery only while their original request is current.
+
+Cache maintenance and content editing have separate lifetimes; this owner does
+not yet govern their post-write state updates.
 
 `src/store/previewStore.lifecycle.test.ts` exercises the real store with controlled
 cache/network promises, including replacement, failures, close/reset, notebook

@@ -1,14 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const io = vi.hoisted(() => ({ read: vi.fn(), save: vi.fn(), fetch: vi.fn() }));
+const io = vi.hoisted(() => ({
+  read: vi.fn(),
+  save: vi.fn(),
+  fetch: vi.fn(),
+  fileRead: vi.fn(),
+  fileSave: vi.fn(),
+  loadTabs: vi.fn(),
+  defaults: vi.fn(),
+}));
 vi.mock('@Services/persistence/instance', () => ({
-  persistenceService: { splitFiles: { getFile: io.read, saveFile: io.save } },
+  persistenceService: {
+    splitFiles: { getFile: io.read, saveFile: io.save },
+    files: { getFile: io.fileRead, saveFile: io.fileSave },
+  },
 }));
 vi.mock('@Services/notebook/FileService', () => ({ FileService: { getFile: io.fetch } }));
 vi.mock('@Services/tab/TabManagerService', () => ({
   tabManagerService: {
-    loadDefaultTabs: vi.fn(async () => []),
-    loadTabs: vi.fn(async () => ({ tabs: [], activeTabId: null })),
+    loadDefaultTabs: io.defaults,
+    loadTabs: io.loadTabs,
+    saveTabs: vi.fn(async () => undefined),
   },
 }));
 import usePreviewStore from './previewStore';
@@ -42,6 +54,10 @@ beforeEach(() => {
   io.read.mockImplementation(async (_book, path) => cached(path));
   io.fetch.mockResolvedValue({ status: 'ok', content: 'network content' });
   io.save.mockResolvedValue(undefined);
+  io.defaults.mockResolvedValue([]);
+  io.loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
+  io.fileRead.mockResolvedValue(undefined);
+  io.fileSave.mockResolvedValue(undefined);
 });
 
 describe('split preview request ownership', () => {
@@ -180,5 +196,211 @@ describe('split preview request ownership', () => {
       usePreviewStore.setState({ saveTabState });
     }
     expect(state().currentNotebookId).toBe('other');
+  });
+});
+
+const tab = (book: string, path = 'file.txt') => ({
+  id: `${book}::${path}`,
+  path,
+  name: path,
+  type: 'text' as const,
+});
+const fileRecord = (book: string, path = 'file.txt') => ({
+  metadata: {
+    id: `${book}::${path}`,
+    notebookId: book,
+    filePath: path,
+    fileName: path,
+    fileType: 'text',
+    lastModified: '2026-01-01',
+    size: 1,
+    cachedAt: 1,
+    accessCount: 1,
+    lastAccessedAt: 1,
+  },
+  content: `${book}/${path}`,
+});
+
+describe('normal preview request ownership', () => {
+  it.each(['same', 'other'])(
+    'keeps the latest default tabs when an older %s notebook request finishes',
+    async (nextBook) => {
+      const old = deferred<ReturnType<typeof tab>[]>();
+      io.defaults.mockReturnValueOnce(old.promise);
+      const pending = state().loadNotebookTabs('same');
+      await vi.waitFor(() => expect(io.defaults).toHaveBeenCalledOnce());
+      const latest = [tab(nextBook, 'new.txt')];
+      io.defaults.mockResolvedValueOnce(latest);
+      await state().loadNotebookTabs(nextBook);
+      old.resolve([tab('same', 'old.txt')]);
+      await pending;
+      expect(state().currentPreviewFiles).toEqual(latest);
+      expect(state().currentNotebookId).toBe(nextBook);
+      expect(state().isLoading).toBe(false);
+    }
+  );
+
+  it('ignores an old discovery error while the latest request is loading', async () => {
+    const old = deferred<ReturnType<typeof tab>[]>();
+    const next = deferred<ReturnType<typeof tab>[]>();
+    io.defaults.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const pending = state().loadNotebookTabs('old');
+    await vi.waitFor(() => expect(io.defaults).toHaveBeenCalledTimes(1));
+    const current = state().loadNotebookTabs('new');
+    await vi.waitFor(() => expect(io.defaults).toHaveBeenCalledTimes(2));
+    old.reject(new Error('obsolete discovery failure'));
+    await pending;
+    expect(state().isLoading).toBe(true);
+    expect(state().error).toBeNull();
+    next.resolve([tab('new')]);
+    await current;
+  });
+
+  it('does not start default discovery after an obsolete saved-state miss', async () => {
+    const old = deferred<null>();
+    io.loadTabs.mockReturnValueOnce(old.promise);
+    const pending = state().loadTabState('old');
+    await vi.waitFor(() => expect(io.loadTabs).toHaveBeenCalledOnce());
+    await state().loadTabState('new');
+    old.resolve(null);
+    await pending;
+    expect(io.defaults).not.toHaveBeenCalled();
+    expect(state().currentNotebookId).toBe('new');
+  });
+
+  it('restores saved active content through the same request', async () => {
+    io.loadTabs.mockResolvedValueOnce({ tabs: [tab('book')], activeTabId: 'book::file.txt' });
+    io.fileRead.mockResolvedValueOnce(fileRecord('book'));
+    await state().loadTabState('book');
+    expect(state().activeFile?.content).toBe('book/file.txt');
+    expect(state().previewMode).toBe('file');
+    expect(state().isLoading).toBe(false);
+  });
+
+  it('cannot activate a stale restored file after switching notebooks', async () => {
+    const old = deferred<ReturnType<typeof fileRecord>>();
+    io.loadTabs.mockResolvedValueOnce({ tabs: [tab('old')], activeTabId: 'old::file.txt' });
+    io.fileRead.mockReturnValueOnce(old.promise);
+    const pending = state().loadTabState('old');
+    await vi.waitFor(() => expect(io.fileRead).toHaveBeenCalledOnce());
+    await state().loadNotebookTabs('new');
+    old.resolve(fileRecord('old'));
+    await pending;
+    expect(state().currentNotebookId).toBe('new');
+    expect(state().activeFile).toBeNull();
+    expect(state().previewMode).toBe('notebook');
+  });
+
+  it('does not admit a stale switch after its outgoing tab save completes', async () => {
+    const save = deferred<void>();
+    const original = state().saveTabState;
+    usePreviewStore.setState({ currentNotebookId: 'origin', saveTabState: () => save.promise });
+    const old = state().switchToNotebook('old');
+    try {
+      await state().loadNotebookTabs('new');
+      save.resolve();
+      await old;
+      expect(state().currentNotebookId).toBe('new');
+      expect(io.loadTabs).not.toHaveBeenCalled();
+    } finally {
+      usePreviewStore.setState({ saveTabState: original });
+    }
+  });
+
+  it.each(['clearNotebookState', 'resetToNotebookMode'] as const)(
+    '%s prevents a saved state from returning',
+    async (action) => {
+      const old = deferred<{ tabs: ReturnType<typeof tab>[]; activeTabId: null }>();
+      io.loadTabs.mockReturnValueOnce(old.promise);
+      const pending = state().loadTabState('old');
+      await vi.waitFor(() => expect(io.loadTabs).toHaveBeenCalledOnce());
+      state()[action]();
+      old.resolve({ tabs: [tab('old')], activeTabId: null });
+      await pending;
+      expect(state().currentPreviewFiles).toEqual([]);
+      expect(state().isLoading).toBe(false);
+    }
+  );
+
+  it('explicit file selection supersedes a pending restoration', async () => {
+    const old = deferred<ReturnType<typeof fileRecord>>();
+    io.fileRead.mockReturnValueOnce(old.promise);
+    const pending = state().loadFileById('book::old.txt');
+    state().setActiveFile(null);
+    old.resolve(fileRecord('book', 'old.txt'));
+    expect(await pending).toBeNull();
+    expect(state().activeFile).toBeNull();
+  });
+
+  it('cancels a network response before it can write or activate a file', async () => {
+    const response = deferred<{ status: string; content: string }>();
+    io.fetch.mockReturnValueOnce(response.promise);
+    const pending = state().previewFile('book', 'old.txt');
+    await vi.waitFor(() => expect(io.fetch).toHaveBeenCalledOnce());
+    state().resetToNotebookMode();
+    response.resolve({ status: 'ok', content: 'obsolete' });
+    expect(await pending).toBeUndefined();
+    expect(io.fileSave).not.toHaveBeenCalled();
+    expect(state().activeFile).toBeNull();
+  });
+
+  it('preserves replacement state when a subscriber replaces a just-published file', async () => {
+    io.fileRead.mockResolvedValueOnce(fileRecord('book'));
+    const unsubscribe = usePreviewStore.subscribe((next) => {
+      if (next.activeFile) next.clearNotebookState();
+    });
+    try {
+      expect(await state().previewFile('book', 'file.txt')).toBeUndefined();
+      expect(state().currentPreviewFiles).toEqual([]);
+      expect(state().activeFile).toBeNull();
+      expect(state().isLoading).toBe(false);
+    } finally {
+      unsubscribe();
+    }
+  });
+  it('closing the active tab removes it immediately without restoring stale neighbors', async () => {
+    io.fileRead.mockResolvedValueOnce(fileRecord('book', 'first.txt'));
+    await state().loadFileById('book::first.txt');
+    usePreviewStore.setState({
+      currentNotebookId: 'book',
+      currentPreviewFiles: [tab('book', 'first.txt'), tab('book', 'second.txt')],
+    });
+    const neighbor = deferred<ReturnType<typeof fileRecord>>();
+    io.fileRead.mockReturnValueOnce(neighbor.promise);
+    state().closePreviewFile('book::first.txt');
+    expect(state().currentPreviewFiles).toEqual([tab('book', 'second.txt')]);
+    await state().loadNotebookTabs('new');
+    neighbor.resolve(fileRecord('book', 'second.txt'));
+    // Drain the close operation's chained continuation.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(state().currentNotebookId).toBe('new');
+    expect(state().currentPreviewFiles).toEqual([]);
+    expect(state().activeFile).toBeNull();
+  });
+
+  it('an explicit view change supersedes pending active-tab restoration', async () => {
+    const read = deferred<ReturnType<typeof fileRecord>>();
+    io.loadTabs.mockResolvedValueOnce({ tabs: [tab('book')], activeTabId: 'book::file.txt' });
+    io.fileRead.mockReturnValueOnce(read.promise);
+    const pending = state().loadTabState('book');
+    await vi.waitFor(() => expect(io.fileRead).toHaveBeenCalledOnce());
+    usePreviewStore.setState({ previewMode: 'file' });
+    state().changePreviewMode();
+    read.resolve(fileRecord('book'));
+    await pending;
+    expect(state().previewMode).toBe('notebook');
+    expect(state().activeFile).toBeNull();
+    expect(state().isLoading).toBe(false);
+  });
+  it('clears a previous notebook active file when restoring a notebook without an active tab', async () => {
+    io.fileRead.mockResolvedValueOnce(fileRecord('old'));
+    await state().loadFileById('old::file.txt');
+    usePreviewStore.setState({ currentNotebookId: 'old', previewMode: 'file' });
+    await state().loadTabState('new');
+    expect(state().currentNotebookId).toBe('new');
+    expect(state().activeFile).toBeNull();
+    expect(state().activePreviewMode).toBeNull();
+    expect(state().previewMode).toBe('notebook');
   });
 });
