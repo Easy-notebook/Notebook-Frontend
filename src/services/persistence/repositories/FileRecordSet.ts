@@ -1,3 +1,4 @@
+import { FileContentRecord } from './FileContentRecord';
 import { makeFileId } from '../../../storage/fileIdentity';
 import type { FileContentEntity, FileMetadataEntity } from '../../../storage/schema';
 import { DEFAULT_STORAGE_CONFIG } from '../../../storage/schema';
@@ -20,6 +21,7 @@ export class FileRecordSet {
       throw new Error('Invalid file size or storage threshold');
     }
     const fileId = makeFileId(data.notebookId, data.filePath);
+    const payload = new FileContentRecord({ fileId, content: data.content }, fileId).toRecord();
     const hasRemoteReference =
       typeof data.remoteUrl === 'string' && data.remoteUrl.trim().length > 0;
     const isRemote = data.size > maxFileSize && !options.forceLocal && hasRemoteReference;
@@ -40,13 +42,12 @@ export class FileRecordSet {
       hasLocalContent: !isRemote,
       remoteUrl: data.remoteUrl,
       isLargeFile: isRemote,
-      contentPreview: isRemote ? data.content.substring(0, 500) : undefined,
+      contentPreview: isRemote ? payload.content.substring(0, 500) : undefined,
     };
     this.content = isRemote
       ? undefined
       : {
-          fileId,
-          content: data.content,
+          ...payload,
           compressed: false,
           encoding: 'utf8',
         };

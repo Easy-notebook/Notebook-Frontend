@@ -10,12 +10,12 @@ import {
 } from '../interfaces';
 import {
   FileMetadataEntity,
-  FileContentEntity,
   NotebookEntity,
   NotebookActivityEntity,
   StorageConfigEntity,
 } from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
+import { FileContentRecord } from './FileContentRecord';
 import { FileRecordSet } from './FileRecordSet';
 
 export class FileRepository implements IFileRepository {
@@ -74,43 +74,19 @@ export class FileRepository implements IFileRepository {
     let result: Awaited<ReturnType<IFileRepository['getFile']>> = null;
     // Read the revision, update its access counters and read its content under one lock.
     // Separate transactions can overwrite a concurrent save with stale metadata.
-    await this.storage.transaction(
-      this.mutationStores,
-      'readwrite',
-      (stores) =>
-        new Promise<void>((resolve, reject) => {
-          const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
-          const request = metadataStore.get(fileId);
-          request.onerror = () => reject(request.error);
-          request.onsuccess = async () => {
-            try {
-              const metadata = request.result as FileMetadataEntity | undefined;
-              if (!metadata) {
-                resolve();
-                return;
-              }
-              metadata.lastAccessedAt = Date.now();
-              metadata.accessCount += 1;
-              metadataStore.put(metadata);
-              await this.recordAccess(stores, notebookId, filePath);
-              result = { metadata, needsRemoteFetch: true };
-              if (!metadata.hasLocalContent) {
-                resolve();
-                return;
-              }
-              const content = stores[DB_CONFIG.STORES.FILES_CONTENT].get(fileId);
-              content.onerror = () => reject(content.error);
-              content.onsuccess = () => {
-                const entity = content.result as FileContentEntity | undefined;
-                if (entity) result = { metadata, content: entity.content, needsRemoteFetch: false };
-                resolve();
-              };
-            } catch (error) {
-              reject(error);
-            }
-          };
-        })
-    );
+    await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
+      const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
+      const metadata = await this.read<FileMetadataEntity | undefined>(metadataStore.get(fileId));
+      if (metadata == null) return;
+      const content = metadata.hasLocalContent
+        ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], fileId)
+        : undefined;
+      metadata.lastAccessedAt = Date.now();
+      metadata.accessCount += 1;
+      metadataStore.put(metadata);
+      await this.recordAccess(stores, notebookId, filePath);
+      result = { metadata, content, needsRemoteFetch: content === undefined };
+    });
     return result;
   }
 
@@ -122,45 +98,24 @@ export class FileRepository implements IFileRepository {
     }> = [];
     const storeNames: string[] = [DB_CONFIG.STORES.FILES_METADATA];
     if (includeContent) storeNames.push(DB_CONFIG.STORES.FILES_CONTENT);
-    await this.storage.transaction(
-      storeNames,
-      'readonly',
-      (stores) =>
-        new Promise<void>((resolve, reject) => {
-          const request = stores[DB_CONFIG.STORES.FILES_METADATA]
-            .index('notebookId')
-            .getAll(notebookId);
-          request.onerror = () => reject(request.error);
-          request.onsuccess = () => {
-            try {
-              const metadata = request.result as FileMetadataEntity[];
-              results = metadata.map((metadata) => ({
-                metadata,
-                content: undefined,
-                needsRemoteFetch: !metadata.hasLocalContent,
-              }));
-              let pending = 0;
-              if (includeContent) {
-                for (const file of results) {
-                  if (!file.metadata.hasLocalContent) continue;
-                  const content = stores[DB_CONFIG.STORES.FILES_CONTENT].get(file.metadata.id);
-                  pending++;
-                  content.onerror = () => reject(content.error);
-                  content.onsuccess = () => {
-                    const entity = content.result as FileContentEntity | undefined;
-                    file.content = entity?.content;
-                    file.needsRemoteFetch = !entity;
-                    if (--pending === 0) resolve();
-                  };
-                }
-              }
-              if (pending === 0) resolve();
-            } catch (error) {
-              reject(error);
-            }
+    await this.storage.transaction(storeNames, 'readonly', async (stores) => {
+      const metadata = await this.read<FileMetadataEntity[]>(
+        stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(notebookId)
+      );
+      results = await Promise.all(
+        metadata.map(async (metadata) => {
+          const content =
+            includeContent && metadata.hasLocalContent
+              ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], metadata.id)
+              : undefined;
+          return {
+            metadata,
+            content,
+            needsRemoteFetch: includeContent ? content === undefined : !metadata.hasLocalContent,
           };
         })
-    );
+      );
+    });
     return results;
   }
 
@@ -302,6 +257,11 @@ export class FileRepository implements IFileRepository {
         retention: 'persistent',
       } satisfies NotebookEntity);
     }
+  }
+
+  private async readContent(store: IDBObjectStore, fileId: string): Promise<string | undefined> {
+    const stored = await this.read<unknown>(store.get(fileId));
+    return stored == null ? undefined : new FileContentRecord(stored, fileId).toRecord().content;
   }
 
   private read<T>(request: IDBRequest<T>): Promise<T> {

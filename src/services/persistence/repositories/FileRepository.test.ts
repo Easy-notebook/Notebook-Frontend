@@ -5,7 +5,7 @@ import { DB_CONFIG } from '../../../storage/database';
 
 function setup(
   metadata: unknown = { id: 'book::note.json', hasLocalContent: true, accessCount: 2 },
-  content: unknown = { content: 'revision two' }
+  content?: unknown
 ) {
   const request = (result: unknown) => {
     const value = { result, onsuccess: undefined as undefined | (() => void), onerror: undefined };
@@ -26,7 +26,17 @@ function setup(
       ),
     })),
   };
-  const contentStore = { get: vi.fn(() => request(content)), put: vi.fn(), delete: vi.fn() };
+  const contentStore = {
+    get: vi.fn((fileId?: string) =>
+      request(
+        content === undefined
+          ? { fileId, content: 'revision two', compressed: false, encoding: 'utf8' }
+          : content
+      )
+    ),
+    put: vi.fn(),
+    delete: vi.fn(),
+  };
   const stores = {
     [DB_CONFIG.STORES.CONFIG]: { get: vi.fn(() => request(undefined)) },
     [DB_CONFIG.STORES.NOTEBOOKS]: { get: vi.fn(() => request(null)), put: vi.fn() },
@@ -321,4 +331,49 @@ it('honors forced local persistence even when a large file has a remote referenc
     expect.objectContaining({ content: 'local snapshot' })
   );
   expect(contentStore.delete).not.toHaveBeenCalled();
+});
+
+it.each([
+  false,
+  0,
+  {},
+  { fileId: 'other::file', content: '', compressed: false, encoding: 'utf8' },
+  { fileId: 'book::note.json', content: null, compressed: false, encoding: 'utf8' },
+])('rejects corrupt content before recording access: %j', async (content) => {
+  const { repository, metadataStore, stores } = setup(undefined, content);
+  await expect(repository.getFile('book', 'note.json')).rejects.toThrow('Invalid file content');
+  expect(metadataStore.put).not.toHaveBeenCalled();
+  expect(stores[DB_CONFIG.STORES.ACTIVITIES].add).not.toHaveBeenCalled();
+  await expect(repository.getFilesForNotebook('book', true)).rejects.toThrow(
+    'Invalid file content'
+  );
+});
+
+it('returns empty content as a valid cache hit', async () => {
+  const { repository } = setup(undefined, {
+    fileId: 'book::note.json',
+    content: '',
+    compressed: false,
+    encoding: 'utf8',
+  });
+  expect(await repository.getFile('book', 'note.json')).toMatchObject({
+    content: '',
+    needsRemoteFetch: false,
+  });
+});
+
+it('rejects malformed write content before changing persisted records', async () => {
+  const { repository, metadataStore, contentStore } = setup();
+  await expect(
+    repository.saveFile({
+      notebookId: 'book',
+      filePath: 'file',
+      fileName: 'file',
+      content: null as unknown as string,
+      size: 0,
+      lastModified: 'old',
+    })
+  ).rejects.toThrow('Invalid file content payload');
+  expect(metadataStore.put).not.toHaveBeenCalled();
+  expect(contentStore.put).not.toHaveBeenCalled();
 });

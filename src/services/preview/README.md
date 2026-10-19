@@ -508,3 +508,15 @@ replacing content. Missing records return false; corrupt records reject without
 being overwritten. Read failures are not cache misses, and statistics reject
 invalid records instead of producing misleading totals. Supplied sizes and
 modification strings retain their existing public semantics.
+
+## File content payload admission
+
+`FileContentRecord` validates the consumed content payload for both prepared writes
+and database reads: the owning file identity must match and the body must be a
+string. Empty strings are valid cache hits. Missing body records request a remote
+fetch; present malformed records reject instead of masquerading as missing data.
+Historical encoding annotations do not alter the existing raw-string read behavior.
+
+Single-file reads validate content before recording access, under the same existing
+transaction lock. Notebook enumeration uses the same admission rule within one
+readonly transaction, preserving indexed order. Neither path repairs corrupt bodies.

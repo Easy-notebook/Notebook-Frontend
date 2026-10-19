@@ -3935,3 +3935,63 @@ test('corrupt split files reject reads and edits while preserving recovery evide
   for (const message of result.errors) expect(message).toContain('Invalid split file');
   expect(result.retained).toEqual(result.corrupt);
 });
+
+test('corrupt file content rejects reads without changing access accounting', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new FileRepository(provider);
+    const stores = DB_CONFIG.STORES;
+    await repository.saveFile({
+      notebookId: 'book',
+      filePath: 'file.txt',
+      fileName: 'file.txt',
+      content: 'original',
+      size: 8,
+      lastModified: 'old',
+    });
+    const metadata = await provider.get(stores.FILES_METADATA, 'book::file.txt');
+    const notebook = await provider.get(stores.NOTEBOOKS, 'book');
+    const activities = await provider.getAll(stores.ACTIVITIES);
+    const corrupt = {
+      fileId: 'book::file.txt',
+      content: null,
+      compressed: false,
+      encoding: 'utf8',
+    };
+    await provider.put(stores.FILES_CONTENT, corrupt);
+    const errors = [];
+    for (const operation of [
+      () => repository.getFile('book', 'file.txt'),
+      () => repository.getFilesForNotebook('book', true),
+    ]) {
+      try {
+        await operation();
+        errors.push(null);
+      } catch (error) {
+        errors.push(error.message);
+      }
+    }
+    const retained = await provider.get(stores.FILES_CONTENT, 'book::file.txt');
+    const afterMetadata = await provider.get(stores.FILES_METADATA, 'book::file.txt');
+    const afterNotebook = await provider.get(stores.NOTEBOOKS, 'book');
+    const afterActivities = await provider.getAll(stores.ACTIVITIES);
+    await provider.close();
+    return {
+      errors,
+      corrupt,
+      retained,
+      metadata,
+      afterMetadata,
+      notebook,
+      afterNotebook,
+      activities,
+      afterActivities,
+    };
+  });
+  expect(result.errors).toEqual(['Invalid file content payload', 'Invalid file content payload']);
+  expect(result.retained).toEqual(result.corrupt);
+  expect(result.afterMetadata).toEqual(result.metadata);
+  expect(result.afterNotebook).toEqual(result.notebook);
+  expect(result.afterActivities).toEqual(result.activities);
+});
