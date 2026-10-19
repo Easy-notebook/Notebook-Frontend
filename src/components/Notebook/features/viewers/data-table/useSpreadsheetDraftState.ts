@@ -1,0 +1,18 @@
+import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
+import type { SpreadsheetSaveSession } from './SpreadsheetSaveSession';
+
+/** Invalidate acknowledgements at edit admission, before React batches the next render. */
+export function useSpreadsheetDraftState<T>(
+  initial: T,
+  session: SpreadsheetSaveSession
+): [T, Dispatch<SetStateAction<T>>] {
+  const [value, setValue] = useState(initial);
+  const update = useCallback<Dispatch<SetStateAction<T>>>(
+    (next) => {
+      session.changed();
+      setValue(next);
+    },
+    [session]
+  );
+  return [value, update];
+}

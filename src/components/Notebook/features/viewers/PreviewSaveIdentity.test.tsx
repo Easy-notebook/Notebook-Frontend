@@ -53,7 +53,10 @@ vi.mock('./image/ImageDisplay', () => ({ default: () => null }));
 vi.mock('./pdf/PDFDisplay', () => ({ default: () => null }));
 vi.mock('./hex/HexDisplay', () => ({ default: () => null }));
 vi.mock('./web/IframeViewer', () => ({ default: () => null }));
-vi.mock('react-virtualized-auto-sizer', () => ({ default: () => null }));
+vi.mock('react-virtualized-auto-sizer', () => ({
+  default: ({ children }: { children: (size: { width: number; height: number }) => ReactNode }) =>
+    children({ width: 800, height: 400 }),
+}));
 import PreviewApp from './PreviewApp';
 import TabbedPreviewApp from './TabbedPreviewApp';
 import DataTable from './data-table/DataTable';
@@ -293,4 +296,53 @@ it('cannot overwrite malformed CSV with an empty grid after parsing fails', asyn
   } finally {
     log.mockRestore();
   }
+});
+
+it('keeps edits made during a save when the store publishes that save result', async () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.csv',
+    name: 'table.csv',
+    path: 'table.csv',
+    type: 'csv',
+    content: 'name\nAda',
+  };
+  const view = render(<DataTable showFormulaBar={false} />);
+  const insert = (position: 'Above' | 'Below') => {
+    fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: `Insert Row ${position}` }));
+  };
+  insert('Above');
+  let finish!: (file: typeof model.state.activeFile) => void;
+  model.state.updatePreviewFileContent.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    })
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\n""\nAda', {
+    surface: 'normal',
+    fileId: 'book::table.csv',
+  });
+  insert('Below');
+  model.state.setTabDirty.mockClear();
+  model.state.activeFile = { ...model.state.activeFile, content: 'name\n""\nAda' };
+  view.rerender(<DataTable showFormulaBar={false} />);
+  await act(async () => {
+    finish(model.state.activeFile);
+  });
+  expect(screen.getByText('Ada', { exact: true })).toBeDefined();
+  expect(model.state.setTabDirty).not.toHaveBeenCalledWith('book::table.csv', false);
+  model.state.updatePreviewFileContent.mockResolvedValueOnce({
+    ...model.state.activeFile,
+    content: 'name\n""\nAda\n""',
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(model.state.setTabDirty).toHaveBeenCalledWith('book::table.csv', false)
+  );
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\n""\nAda\n""', {
+    surface: 'normal',
+    fileId: 'book::table.csv',
+  });
 });

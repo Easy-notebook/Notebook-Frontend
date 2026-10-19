@@ -264,3 +264,19 @@ synthetic final record produced by the parser for a trailing line terminator.
 The encoder quotes empty cells explicitly so an empty final row is unambiguous.
 Malformed quoted input fails admission to saving; both formats require a loaded
 source matching the current file ID and content before a write is allowed.
+
+## Spreadsheet save ownership
+
+`SpreadsheetSaveSession` owns the source identity, draft revision, current save
+ticket and last accepted commit echo. Data, columns and formatting state advance
+the revision at setter admission, before React batches a render. Only the latest
+save of an unchanged revision with matching committed content may clear the dirty
+marker. Failure, different readback contents, another source, and unmount revoke
+that acknowledgement.
+
+The source effect distinguishes a save's own committed contents from a new source.
+An owned echo updates the source baseline without reparsing the visible draft,
+so edits made while the write was pending survive. File, preview-surface, format
+or external-content changes still load the newly selected source. Unit tests
+exercise both echo/promise orders, and a rendered-grid test inserts another row
+while saving, publishes the earlier result, then saves the retained newer grid.

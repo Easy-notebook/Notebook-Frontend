@@ -3,6 +3,8 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx-js-style';
 import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
+import { SpreadsheetSaveSession } from './SpreadsheetSaveSession';
+import { useSpreadsheetDraftState } from './useSpreadsheetDraftState';
 import {
   useReactTable,
   getCoreRowModel,
@@ -174,8 +176,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   const isInSplitView = !!detachedCellId;
   const currentFile = isInSplitView ? activeSplitFile : activeFile;
 
-  const [data, setData] = useState<CSVRow[]>([]);
-  const [columns, setColumns] = useState<ColumnInfo[]>([]);
+  const [saveSession] = useState(() => new SpreadsheetSaveSession());
+  const [data, setData] = useSpreadsheetDraftState<CSVRow[]>([], saveSession);
+  const [columns, setColumns] = useSpreadsheetDraftState<ColumnInfo[]>([], saveSession);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [selection, setSelection] = useState<CellSelection | null>(null);
@@ -206,7 +209,10 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   const isUndoRedoAction = useRef(false);
 
   // ============== Cell Formatting ==============
-  const [cellFormats, setCellFormats] = useState<Record<string, CellFormat>>({});
+  const [cellFormats, setCellFormats] = useSpreadsheetDraftState<Record<string, CellFormat>>(
+    {},
+    saveSession
+  );
 
   // ============== Column Visibility & Freeze ==============
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
@@ -231,6 +237,11 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   useEffect(() => {
     const fileType = typeOverride || currentFile?.type;
     const content = currentFile?.content ?? '';
+    const key = currentFile ? JSON.stringify([isInSplitView, currentFile.id, fileType]) : null;
+    if (!saveSession.receiveSource(key, content)) {
+      if (sourceRef.current) sourceRef.current.source = content;
+      return;
+    }
     sourceRef.current = null;
 
     if (
@@ -511,7 +522,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setStyleMap({});
       setIsLoading(false);
     }
-  }, [currentFile, typeOverride]); // Removed columnWidths from dependency array
+  }, [currentFile, typeOverride, isInSplitView, saveSession, setColumns, setData]);
+
+  useEffect(() => () => saveSession.close(), [saveSession]);
 
   // ============== Save to History (for Undo/Redo) ==============
   const saveToHistory = useCallback(() => {
@@ -557,7 +570,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setHistoryIndex((prev) => prev - 1);
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     }
-  }, [historyIndex, history, setTabDirty, currentFile]);
+  }, [historyIndex, history, setData, setColumns, setCellFormats, setTabDirty, currentFile]);
 
   const handleRedo = useCallback(() => {
     if (historyIndex < history.length - 1) {
@@ -569,7 +582,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setHistoryIndex((prev) => prev + 1);
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     }
-  }, [historyIndex, history, setTabDirty, currentFile]);
+  }, [historyIndex, history, setData, setColumns, setCellFormats, setTabDirty, currentFile]);
 
   // ============== Cell Formatting Functions ==============
   const getCellFormatKey = (row: number, col: number) => `${row}:${col}`;
@@ -596,7 +609,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setCellFormats(newFormats);
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     },
-    [selection, activeCell, cellFormats, saveToHistory, setTabDirty, currentFile]
+    [saveToHistory, cellFormats, selection, activeCell, setCellFormats, setTabDirty, currentFile]
   );
 
   const toggleBold = useCallback(() => {
@@ -679,7 +692,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setData(newData);
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     },
-    [activeCell, columns, data, saveToHistory, setTabDirty, currentFile]
+    [activeCell, saveToHistory, columns, data, setColumns, setData, setTabDirty, currentFile]
   );
 
   const deleteColumn = useCallback(() => {
@@ -706,7 +719,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     setData(newData);
     setActiveCell(null);
     if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-  }, [activeCell, columns, data, saveToHistory, setTabDirty, currentFile]);
+  }, [activeCell, columns, saveToHistory, data, setColumns, setData, setTabDirty, currentFile]);
 
   const toggleColumnVisibility = useCallback((colKey: string) => {
     setHiddenColumns((prev) => {
@@ -793,7 +806,21 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     // Re-run find
     setTimeout(performFind, 0);
-  }, [findReplace, data, columns, saveToHistory, setTabDirty, currentFile, performFind]);
+  }, [
+    findReplace.currentMatchIndex,
+    findReplace.matches,
+    findReplace.matchWholeCell,
+    findReplace.replaceText,
+    findReplace.findText,
+    findReplace.matchCase,
+    saveToHistory,
+    data,
+    columns,
+    setData,
+    setTabDirty,
+    currentFile,
+    performFind,
+  ]);
 
   const replaceAll = useCallback(() => {
     if (findReplace.matches.length === 0) return;
@@ -816,7 +843,19 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     setData(newData);
     if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     setFindReplace((prev) => ({ ...prev, matches: [], currentMatchIndex: -1 }));
-  }, [findReplace, data, columns, saveToHistory, setTabDirty, currentFile]);
+  }, [
+    findReplace.matches,
+    findReplace.findText,
+    findReplace.matchCase,
+    findReplace.matchWholeCell,
+    findReplace.replaceText,
+    saveToHistory,
+    data,
+    setData,
+    setTabDirty,
+    currentFile,
+    columns,
+  ]);
 
   // ============== 合并单元格映射（关键新增） ==============
   // 使用数据区坐标（rowIndex/colIndex）
@@ -1040,6 +1079,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     toggleItalic,
     toggleUnderline,
     saveToHistory,
+    setData,
   ]);
 
   // ============== 复制/粘贴（原样保留） ==============
@@ -1084,7 +1124,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     } catch (err) {
       console.error('Failed to paste:', err);
     }
-  }, [activeCell, data, columns, setTabDirty, currentFile]);
+  }, [activeCell, data, setData, setTabDirty, currentFile, columns]);
 
   // ============== Export / save ==============
   const handleExport = useCallback(() => {
@@ -1114,15 +1154,22 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       const content = isWorkbook
         ? source.workbook!.serialize(data, columns)
         : serializeTableCsv(data, columns);
-      const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
-        surface: isInSplitView ? 'split' : 'normal',
-        fileId: currentFile.id,
-      });
-      if (saved && setTabDirty) setTabDirty(currentFile.id, false);
+      const ticket = saveSession.begin(content);
+      try {
+        const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
+          surface: isInSplitView ? 'split' : 'normal',
+          fileId: currentFile.id,
+        });
+        if (saveSession.complete(ticket, saved?.content ?? null))
+          setTabDirty(currentFile.id, false);
+      } catch (error) {
+        saveSession.complete(ticket, null);
+        throw error;
+      }
     } catch (err) {
       console.error('Failed to save:', err);
     }
-  }, [currentFile, data, columns, setTabDirty, isInSplitView, typeOverride]);
+  }, [currentFile, data, columns, setTabDirty, isInSplitView, typeOverride, saveSession]);
 
   if (
     !currentFile ||
