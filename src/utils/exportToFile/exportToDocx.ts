@@ -2,6 +2,7 @@
 
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun } from 'docx';
 import Prism from 'prismjs';
+import type { Cell, OutputItem as CellOutput } from '@Store/models';
 import type { Token } from 'prismjs';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
@@ -28,31 +29,12 @@ interface VSCodeTheme {
   punctuation: string;
 }
 
-interface CellOutput {
-  type: 'image' | 'error' | 'text';
-  content: string;
-}
-
-interface Cell {
-  id: string;
-  type: 'markdown' | 'code' | 'hybrid';
-  content: string;
-  outputs?: CellOutput[];
-  language?: string;
-  [key: string]: any;
-}
-
 interface ParagraphStyle {
   size?: number;
   color?: string;
   bold?: boolean;
   spacing?: { before?: number; after?: number };
   paragraph?: any;
-}
-
-interface PrismToken {
-  type: string;
-  content: string | PrismToken[];
 }
 
 // VSCode light theme colors
@@ -187,14 +169,18 @@ const parseCodeTokens = (tokens: (string | Token)[]): TextRun[] => {
 const createImageRun = (base64String: string, width = 600, height = 400): ImageRun | null => {
   // 移除 Base64 前缀
   const matches: RegExpMatchArray | null = base64String.match(
-    /^data:image\/([a-zA-Z]+);base64,(.+)$/
+    /^data:image\/([a-zA-Z]+);base64,(.+)$/i
   );
   if (!matches) {
     console.error('Invalid Base64 image string:', base64String);
     return null;
   }
 
-  const mimeType: string = matches[1];
+  const format = matches[1].toLowerCase();
+  const type = format === 'jpeg' ? 'jpg' : format;
+  if (type !== 'png' && type !== 'jpg' && type !== 'gif' && type !== 'bmp') {
+    throw new Error(`Unsupported DOCX image format: ${format}`);
+  }
   const imageData: string = matches[2];
   const binaryString: string = atob(imageData);
   const len: number = binaryString.length;
@@ -204,6 +190,7 @@ const createImageRun = (base64String: string, width = 600, height = 400): ImageR
   }
 
   return new ImageRun({
+    type,
     data: bytes,
     transformation: {
       width,
