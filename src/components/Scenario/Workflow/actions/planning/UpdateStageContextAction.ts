@@ -27,46 +27,46 @@ export class UpdateStageContextAction extends ActionBase {
     }
 
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
-    const observation = stateJSON.observation;
+    stateMachine.updateState((stateJSON) => {
+      const observation = stateJSON.observation;
 
-    // Validate observation structure
-    if (!observation?.location?.progress?.stages?.planned) {
-      console.warn('[UpdateStageContextAction] Invalid observation structure:', {
-        hasObservation: !!observation,
-        hasLocation: !!observation?.location,
-        hasProgress: !!observation?.location?.progress,
-        hasStages: !!observation?.location?.progress?.stages,
-        hasPlanned: !!observation?.location?.progress?.stages?.planned,
+      // Validate observation structure
+      if (!observation?.location?.progress?.stages?.planned) {
+        console.warn('[UpdateStageContextAction] Invalid observation structure:', {
+          hasObservation: !!observation,
+          hasLocation: !!observation?.location,
+          hasProgress: !!observation?.location?.progress,
+          hasStages: !!observation?.location?.progress?.stages,
+          hasPlanned: !!observation?.location?.progress?.stages?.planned,
+        });
+        return;
+      }
+
+      // Find the stage
+      const stage = observation.location.progress.stages.planned.find(
+        (s: any) => s.stage_id === stage_id
+      );
+
+      if (!stage) {
+        console.warn(`[UpdateStageContextAction] Stage not found: ${stage_id}`);
+        return;
+      }
+
+      // Update context
+      if (focus !== undefined) {
+        stage.focus = focus;
+      }
+      if (notes !== undefined) {
+        stage.notes = notes;
+      }
+
+      console.log(`[UpdateStageContextAction] ✅ Updated context for stage: ${stage_id}`, {
+        focus,
+        notes,
       });
-      return;
-    }
 
-    // Find the stage
-    const stage = observation.location.progress.stages.planned.find(
-      (s: any) => s.stage_id === stage_id
-    );
-
-    if (!stage) {
-      console.warn(`[UpdateStageContextAction] Stage not found: ${stage_id}`);
-      return;
-    }
-
-    // Update context
-    if (focus !== undefined) {
-      stage.focus = focus;
-    }
-    if (notes !== undefined) {
-      stage.notes = notes;
-    }
-
-    console.log(`[UpdateStageContextAction] ✅ Updated context for stage: ${stage_id}`, {
-      focus,
-      notes,
+      // Update workflow state machine with modified stateJSON
     });
-
-    // Update workflow state machine with modified stateJSON
-    stateMachine.setState(stateJSON);
   }
 }
 

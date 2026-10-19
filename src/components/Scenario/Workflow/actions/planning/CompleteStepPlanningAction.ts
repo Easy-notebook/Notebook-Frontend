@@ -28,28 +28,27 @@ export class CompleteStepPlanningAction extends ActionBase {
 
     // Use WorkflowStateMachine as the single source of truth
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
+    stateMachine.updateState((stateJSON) => {
+      console.log(`[CompleteStepPlanningAction] Step planning complete: ${step_id}`);
 
-    console.log(`[CompleteStepPlanningAction] Step planning complete: ${step_id}`);
+      // Find and mark step as planning complete
+      const currentStep = stateJSON.observation.location.progress.steps.planned?.find(
+        (s) => s.step_id === step_id
+      );
 
-    // Find and mark step as planning complete
-    const currentStep = stateJSON.observation.location.progress.steps.planned?.find(
-      (s) => s.step_id === step_id
-    );
+      if (currentStep) {
+        currentStep.planning_complete = true;
+      }
 
-    if (currentStep) {
-      currentStep.planning_complete = true;
-    }
+      // Transition to BEHAVIOR_RUNNING, ready to call /generating API
+      // This follows the same pattern as CompleteWorkflowPlanningAction and CompleteStagePlanningAction
+      if (stateJSON.state.FSM.state === WorkflowState.STEP_RUNNING) {
+        stateJSON.state.FSM.state = WorkflowState.BEHAVIOR_RUNNING;
+        console.log('[CompleteStepPlanningAction] ✅ Transitioned to BEHAVIOR_RUNNING');
+      }
 
-    // Transition to BEHAVIOR_RUNNING, ready to call /generating API
-    // This follows the same pattern as CompleteWorkflowPlanningAction and CompleteStagePlanningAction
-    if (stateJSON.state.FSM.state === WorkflowState.STEP_RUNNING) {
-      stateJSON.state.FSM.state = WorkflowState.BEHAVIOR_RUNNING;
-      console.log('[CompleteStepPlanningAction] ✅ Transitioned to BEHAVIOR_RUNNING');
-    }
-
-    // Update workflow state machine with modified stateJSON
-    stateMachine.setState(stateJSON);
+      // Update workflow state machine with modified stateJSON
+    });
   }
 }
 

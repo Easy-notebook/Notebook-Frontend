@@ -16,6 +16,7 @@
  */
 
 import { create } from 'zustand';
+import { Immer } from 'immer';
 import {
   getTransitionCoordinator,
   initializeTransitionCoordinator,
@@ -29,6 +30,9 @@ import { WorkflowState as WorkflowStateModel } from '../observation/WorkflowStat
 import { WorkflowRunSession } from '../core/WorkflowRunSession';
 import { WorkflowTransitionSession } from '../core/WorkflowTransitionSession';
 import useNotebookStore, { notebookExecutionActivity } from '@Store/notebookStore';
+
+// Local copy-on-write updates keep published snapshots plain rather than freezing shared data.
+const snapshotUpdates = new Immer({ autoFreeze: false });
 
 // ==============================================
 // TYPES & INTERFACES
@@ -73,6 +77,7 @@ interface WorkflowStateMachineActions {
   // State access
   getState: () => StateJSON;
   setState: (newState: StateJSON) => void;
+  updateState: (update: (draft: StateJSON) => void) => void;
   getCurrentLocation: () => StateJSON['observation']['location']['current'];
 
   // Notebook state sync
@@ -268,6 +273,15 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   // ==============================================
   getState: () => {
     return get().stateJSON;
+  },
+
+  updateState: (update) => {
+    set((current) => {
+      const stateJSON = snapshotUpdates.produce(current.stateJSON, update);
+      return stateJSON === current.stateJSON
+        ? current
+        : { stateJSON, currentState: stateJSON.state.FSM.state };
+    });
   },
 
   setState: (newState: StateJSON) => {

@@ -171,3 +171,12 @@ CompleteWorkflowPlanningAction awaits its first-stage heading action before publ
 STAGE_RUNNING. It prepares a detached snapshot, forwards cancellation, propagates heading errors,
 and discards a result if another workflow snapshot has replaced its input. This removes the
 unowned fire-and-forget action and mutation of already-published planning state.
+
+Synchronous planning actions use the Store's updateState recipe boundary. A local Immer instance
+creates copy-on-write snapshots without globally freezing shared state; currentState and stateJSON
+publish together only when the recipe changes data. A thrown recipe publishes nothing, and no-op
+recipes preserve Store/snapshot identity so they do not invalidate pending transition ownership.
+Stage/step planning, stage context, delegation and behavior completion now use this boundary.
+CompleteStagePlanning validates that steps exist before setting planning_complete, allowing a
+later retry instead of retaining a completion flag from a rejected transition. Asynchronous actions
+continue to use explicit captured snapshots and ownership checks rather than async recipes.

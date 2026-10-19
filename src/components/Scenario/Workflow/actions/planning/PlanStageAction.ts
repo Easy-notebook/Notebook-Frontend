@@ -30,42 +30,42 @@ export class PlanStageAction extends ActionBase {
     }
 
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
-    const observation = stateJSON.observation;
+    stateMachine.updateState((stateJSON) => {
+      const observation = stateJSON.observation;
 
-    // Initialize planned stages array if not exists
-    if (!observation.location.progress.stages.planned) {
-      observation.location.progress.stages.planned = [];
-    }
+      // Initialize planned stages array if not exists
+      if (!observation.location.progress.stages.planned) {
+        observation.location.progress.stages.planned = [];
+      }
 
-    // Check if stage already exists
-    const existingIndex = observation.location.progress.stages.planned.findIndex(
-      (s: any) => s.stage_id === stageId
-    );
+      // Check if stage already exists
+      const existingIndex = observation.location.progress.stages.planned.findIndex(
+        (s: any) => s.stage_id === stageId
+      );
 
-    const stageData = {
-      stage_id: stageId,
-      title,
-      task,
-      acceptance,
-      planning_complete: false,
-    };
-
-    if (existingIndex >= 0) {
-      // Update existing stage
-      observation.location.progress.stages.planned[existingIndex] = {
-        ...observation.location.progress.stages.planned[existingIndex],
-        ...stageData,
+      const stageData = {
+        stage_id: stageId,
+        title,
+        task,
+        acceptance,
+        planning_complete: false,
       };
-      console.log(`[PlanStageAction] ✅ Updated stage: ${stageId}`);
-    } else {
-      // Add new stage
-      observation.location.progress.stages.planned.push(stageData);
-      console.log(`[PlanStageAction] ✅ Added new stage: ${stageId}`);
-    }
 
-    // Update workflow state machine with modified stateJSON
-    stateMachine.setState(stateJSON);
+      if (existingIndex >= 0) {
+        // Update existing stage
+        observation.location.progress.stages.planned[existingIndex] = {
+          ...observation.location.progress.stages.planned[existingIndex],
+          ...stageData,
+        };
+        console.log(`[PlanStageAction] ✅ Updated stage: ${stageId}`);
+      } else {
+        // Add new stage
+        observation.location.progress.stages.planned.push(stageData);
+        console.log(`[PlanStageAction] ✅ Added new stage: ${stageId}`);
+      }
+
+      // Update workflow state machine with modified stateJSON
+    });
   }
 }
 

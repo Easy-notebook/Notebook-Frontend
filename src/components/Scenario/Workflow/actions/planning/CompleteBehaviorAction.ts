@@ -17,19 +17,18 @@ export class CompleteBehaviorAction extends ActionBase {
   execute(step: ExecutionStep): void {
     // Use WorkflowStateMachine as the single source of truth
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
+    stateMachine.updateState((stateJSON) => {
+      console.log(`[CompleteBehaviorAction] Behavior execution complete`);
 
-    console.log(`[CompleteBehaviorAction] Behavior execution complete`);
+      // Transition to BEHAVIOR_COMPLETED
+      if (stateJSON.state.FSM.state === WorkflowState.BEHAVIOR_RUNNING) {
+        stateJSON.state.FSM.state = WorkflowState.BEHAVIOR_COMPLETED;
+        stateJSON.state.FSM.last_transition = WorkflowEvent.COMPLETE_BEHAVIOR;
+        console.log('[CompleteBehaviorAction] ✅ Transitioned to BEHAVIOR_COMPLETED');
+      }
 
-    // Transition to BEHAVIOR_COMPLETED
-    if (stateJSON.state.FSM.state === WorkflowState.BEHAVIOR_RUNNING) {
-      stateJSON.state.FSM.state = WorkflowState.BEHAVIOR_COMPLETED;
-      stateJSON.state.FSM.last_transition = WorkflowEvent.COMPLETE_BEHAVIOR;
-      console.log('[CompleteBehaviorAction] ✅ Transitioned to BEHAVIOR_COMPLETED');
-    }
-
-    // Update workflow state machine with modified stateJSON
-    stateMachine.setState(stateJSON);
+      // Update workflow state machine with modified stateJSON
+    });
   }
 }
 
