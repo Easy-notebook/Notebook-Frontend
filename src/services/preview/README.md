@@ -430,3 +430,10 @@ committed or unchanged value adds no history frame. Saving serializes that curre
 snapshot rather than a React render captured before the input commit. Cell elements
 are focusable by mouse, and the editor handles save keys only within its subtree;
 composition and repeated keydown events cannot accidentally submit another save.
+
+Grid undo/redo, find, formatting and navigation also route through the editor's
+React key handler. The former document keydown listener is removed, preventing
+other page inputs or another preview surface from changing this draft. Editable
+inputs keep their native editing keys; save remains an explicit editor-wide command.
+Navigation does not consume toolbar button/link activation. Shortcut letters are
+normalized so Command-Shift-Z redo works with the uppercase browser key value.

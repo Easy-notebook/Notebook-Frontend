@@ -908,22 +908,30 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   }, []);
 
   // ============== 键盘导航 & 快捷键 ==============
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+  const handleGridKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (
+        e.target instanceof Element &&
+        e.target.closest(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false"])'
+        )
+      )
+        return;
       const isMeta = e.metaKey || e.ctrlKey;
 
-      // Global shortcuts (work even without active cell)
-      if (isMeta && e.key === 'z' && !e.shiftKey) {
+      const key = e.key.toLowerCase();
+      // Commands belong to this editor, even without an active cell.
+      if (isMeta && key === 'z' && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
         return;
       }
-      if (isMeta && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      if (isMeta && (key === 'y' || (key === 'z' && e.shiftKey))) {
         e.preventDefault();
         handleRedo();
         return;
       }
-      if (isMeta && e.key === 'f') {
+      if (isMeta && key === 'f') {
         e.preventDefault();
         setFindReplace((prev) => ({ ...prev, isOpen: true }));
         return;
@@ -932,22 +940,23 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       if (!activeCell || editingCell) return;
 
       // Formatting shortcuts
-      if (isMeta && e.key === 'b') {
+      if (isMeta && key === 'b') {
         e.preventDefault();
         toggleBold();
         return;
       }
-      if (isMeta && e.key === 'i') {
+      if (isMeta && key === 'i') {
         e.preventDefault();
         toggleItalic();
         return;
       }
-      if (isMeta && e.key === 'u') {
+      if (isMeta && key === 'u') {
         e.preventDefault();
         toggleUnderline();
         return;
       }
 
+      if (e.target instanceof Element && e.target.closest('button, a')) return;
       const { row, col } = activeCell;
       let newRow = row,
         newCol = col;
@@ -965,10 +974,12 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           newCol = Math.min(columns.length - 1, col + 1);
           break;
         case 'Enter':
+          e.preventDefault();
           setEditingCell({ row, col });
           setEditValue(String(data[row][columns[col].key] ?? ''));
           return;
         case 'Delete': {
+          e.preventDefault();
           const newData = data.map((row) => ({ ...row }));
           newData[row][columns[col].key] = '';
           commitDraft({ data: newData });
@@ -993,25 +1004,24 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           else setSelection({ ...selection, endRow: newRow, endCol: newCol });
         } else setSelection(null);
       }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [
-    activeCell,
-    editingCell,
-    data,
-    columns,
-    selection,
-    setTabDirty,
-    currentFile,
-    handleUndo,
-    handleRedo,
-    toggleBold,
-    toggleItalic,
-    toggleUnderline,
-    commitDraft,
-    rowOrder,
-  ]);
+    },
+    [
+      activeCell,
+      editingCell,
+      data,
+      columns,
+      selection,
+      setTabDirty,
+      currentFile,
+      handleUndo,
+      handleRedo,
+      toggleBold,
+      toggleItalic,
+      toggleUnderline,
+      commitDraft,
+      rowOrder,
+    ]
+  );
 
   // ============== 复制/粘贴（原样保留） ==============
   const handleCopy = useCallback(() => {
@@ -1147,7 +1157,10 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           event.preventDefault();
           event.stopPropagation();
           if (!event.repeat) void handleSave();
+          return;
         }
+        handleGridKeyDown(event);
+        if (event.defaultPrevented) event.stopPropagation();
       }}
     >
       {/* Toolbar */}

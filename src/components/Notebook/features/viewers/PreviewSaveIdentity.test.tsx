@@ -490,8 +490,11 @@ it('keyboard navigation and range copy follow sorted visible rows', async () => 
     render(<DataTable showFormulaBar={false} />);
     fireEvent.click(screen.getByRole('button', { name: 'Sort column A' }));
     fireEvent.click(screen.getByText('Alpha', { exact: true }));
-    fireEvent.keyDown(document, { key: 'ArrowDown', shiftKey: true });
-    fireEvent.keyDown(document, { key: 'Enter' });
+    fireEvent.keyDown(screen.getByText('Alpha', { exact: true }), {
+      key: 'ArrowDown',
+      shiftKey: true,
+    });
+    fireEvent.keyDown(screen.getByText('Alpha', { exact: true }), { key: 'Enter' });
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Bravo');
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
     fireEvent.contextMenu(screen.getByText('Bravo', { exact: true }));
@@ -1087,4 +1090,62 @@ it('does not save a spreadsheet for a keyboard event outside its editor', async 
     });
   });
   expect(model.state.updatePreviewFileContent).not.toHaveBeenCalled();
+});
+
+it('keeps undo, find and deletion isolated from other page inputs', () => {
+  model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'Ada' };
+  render(
+    <>
+      <input aria-label="Other editor" />
+      <DataTable showFormulaBar={false} />
+    </>
+  );
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  const input = screen.getByRole('textbox', { name: 'Other editor' });
+  expect(fireEvent.keyDown(input, { key: 'z', ctrlKey: true })).toBe(true);
+  expect(fireEvent.keyDown(input, { key: 'f', metaKey: true })).toBe(true);
+  expect(fireEvent.keyDown(input, { key: 'Delete' })).toBe(true);
+  expect(screen.getByText('Ada', { exact: true })).toBeDefined();
+  expect(
+    (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+  ).toBe(false);
+  expect(screen.queryByPlaceholderText('Search text...')).toBeNull();
+});
+
+it('preserves native input undo while a cell is being edited', () => {
+  model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'Ada' };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  fireEvent.doubleClick(screen.getByText('Ada', { exact: true }));
+  const input = screen.getByRole('textbox');
+  expect(fireEvent.keyDown(input, { key: 'z', ctrlKey: true })).toBe(true);
+  expect(screen.getByRole('textbox')).toBe(input);
+  expect(
+    (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+  ).toBe(false);
+});
+
+it('routes grid undo and uppercase Command-Shift-Z redo through the editor owner', () => {
+  model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'Ada' };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  expect(
+    fireEvent.keyDown(screen.getByText('Ada', { exact: true }), { key: 'z', metaKey: true })
+  ).toBe(false);
+  expect(
+    (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+  ).toBe(true);
+  expect(
+    fireEvent.keyDown(screen.getByText('Ada', { exact: true }), {
+      key: 'Z',
+      metaKey: true,
+      shiftKey: true,
+    })
+  ).toBe(false);
+  expect(
+    (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+  ).toBe(false);
 });
