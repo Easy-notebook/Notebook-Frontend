@@ -1152,8 +1152,10 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         columns.map((col) => col.displayName).join(','),
         ...data.map((row) => columns.map((col) => String(row[col.key] ?? '')).join(',')),
       ].join('\n');
-      await usePreviewStore.getState().updateActiveFileContent(csvContent);
-      if (setTabDirty) setTabDirty(currentFile.id, false);
+      const saved = await usePreviewStore
+        .getState()
+        .updateActiveFileContent(csvContent, currentFile.id);
+      if (saved && setTabDirty) setTabDirty(currentFile.id, false);
     } catch (err) {
       console.error('Failed to save:', err);
     }

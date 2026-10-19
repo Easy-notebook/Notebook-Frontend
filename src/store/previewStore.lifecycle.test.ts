@@ -601,6 +601,30 @@ describe('active file content commit ownership', () => {
     expect(state().activeFile).toBe(result);
   });
 
+  it('rejects a previous editor callback without writing into the newly selected file', async () => {
+    await openFile();
+    const originalId = state().activeFile!.id;
+    io.fileRead.mockResolvedValueOnce(fileRecord('other'));
+    const selected = await state().loadFileById('other::file.txt');
+    io.fileRead.mockClear();
+    expect(await state().updateActiveFileContent('old editor content', originalId)).toBeNull();
+    expect(io.fileUpdate).not.toHaveBeenCalled();
+    expect(io.fileRead).not.toHaveBeenCalled();
+    expect(state().activeFile).toBe(selected);
+  });
+
+  it('a rejected editor callback cannot revoke an admitted save for the current file', async () => {
+    await openFile();
+    const write = deferred<boolean>();
+    io.fileUpdate.mockReturnValueOnce(write.promise);
+    const pending = state().updateActiveFileContent('current edit', 'book::file.txt');
+    expect(await state().updateActiveFileContent('stale edit', 'other::file.txt')).toBeNull();
+    io.fileRead.mockResolvedValueOnce(committed('current edit'));
+    write.resolve(true);
+    expect((await pending)?.content).toBe('current edit');
+    expect(io.fileUpdate).toHaveBeenCalledOnce();
+  });
+
   it('does not resurrect a deleted file through an upsert', async () => {
     await openFile();
     const original = state().activeFile;

@@ -80,7 +80,7 @@ export interface PreviewStoreActions {
   deleteFileFromCache: (notebookId: string, filePath: string) => Promise<boolean>;
   clearCacheForNotebook: (notebookId: string) => Promise<boolean>;
   getCSVData: () => string | null;
-  updateActiveFileContent: (content: string) => Promise<FileObject | null>;
+  updateActiveFileContent: (content: string, expectedFileId?: string) => Promise<FileObject | null>;
   setTabDirty: (fileId: string, value: boolean) => void;
   isTabDirty: (fileId: string) => boolean;
 
@@ -670,9 +670,14 @@ const usePreviewStore = create<PreviewStore>()(
         },
 
         // Edits target the captured file; navigation only revokes UI publication.
-        updateActiveFileContent: async (content: string): Promise<FileObject | null> => {
+        updateActiveFileContent: async (
+          content: string,
+          expectedFileId?: string
+        ): Promise<FileObject | null> => {
           const file = get().activeFile;
           if (!file || !hasNotebookId(file.notebookId)) return null;
+          // Reject callbacks from a previously rendered editor before admitting any work.
+          if (expectedFileId !== undefined && file.id !== expectedFileId) return null;
           const request = normalRequests.begin();
           set({ isLoading: false });
           try {

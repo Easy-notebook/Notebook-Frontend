@@ -103,7 +103,7 @@ const PreviewApp: React.FC = () => {
             fileContent={currentFile.content}
             onContentChange={async (newContent: string) => {
               setTabDirty(currentFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newContent);
+              await usePreviewStore.getState().updateActiveFileContent(newContent, currentFile.id);
             }}
             showControls
           />
@@ -122,7 +122,7 @@ const PreviewApp: React.FC = () => {
             fileName={currentFile.name}
             onContentChange={async (newContent: string) => {
               setTabDirty(currentFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newContent);
+              await usePreviewStore.getState().updateActiveFileContent(newContent, currentFile.id);
             }}
             showControls
           />
@@ -137,7 +137,7 @@ const PreviewApp: React.FC = () => {
             language="jsx"
             onCodeChange={async (newCode: string) => {
               setTabDirty(currentFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newCode);
+              await usePreviewStore.getState().updateActiveFileContent(newCode, currentFile.id);
             }}
           />
         );

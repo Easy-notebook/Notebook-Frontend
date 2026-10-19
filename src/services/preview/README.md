@@ -213,3 +213,18 @@ This integrity check complements `TabManagerService`'s UI scoping policy: the
 service filters foreign UI tabs, while the repository rejects inconsistent raw
 snapshots. Browser tests verify invalid replacement and native commit failure
 both retain the prior complete saved selection. The stored shape is unchanged.
+
+## Editor callback identity
+
+Editors pass their rendered file ID to `updateActiveFileContent`. The store checks
+this identity before admitting a request or writing, so a delayed callback from
+another file cannot modify the active file or revoke its pending save. The public
+one-argument call still targets the active file at invocation. Navigation after
+admission retains the existing rule: the captured write finishes, but stale UI
+publication returns null.
+
+A null result is not a save acknowledgement. The spreadsheet retains its dirty
+marker for rejected or obsolete results, and the tab wrapper no longer clears
+markers merely on Ctrl/Cmd+S. Split-view editing still needs its own write target
+and acknowledgement lifecycle; this identity guard prevents it from writing into
+a different normal-preview file but does not implement split-cache editing.
