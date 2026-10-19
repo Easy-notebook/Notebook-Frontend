@@ -101,3 +101,11 @@ Tests exercise actual download/delete utilities against mocked transport outcome
 temporary-resource cleanup on successful/failed clicks, and file selection through the
 explorer component with the browser File constructor unavailable. Download completion
 means browser handoff, not confirmation that the user saved the file to disk.
+
+File selection delegates preview transitions to `previewFile` and `switchToNotebook`.
+Unsupported extensions leave the existing view untouched. The explorer no longer probes
+for obsolete setters or toggles modes before preview admission. Notebook-file selection
+navigates synchronously through the route Store, then awaits the existing notebook-preview
+lifecycle with error handling; it does not schedule navigation after a module import.
+Component tests cover ordinary selection, unsupported types, immediate notebook navigation,
+and rejected notebook switching alongside the preview Store's lifecycle suite.

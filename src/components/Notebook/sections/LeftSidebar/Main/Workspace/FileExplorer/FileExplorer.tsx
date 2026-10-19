@@ -12,6 +12,7 @@ import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-f
 import { fileActionClient } from '@Services/notebook/FileActionClient';
 import { handleFileUpload, handleDownload, handleDeleteFile } from '@Utils/fileUtils';
 import usePreviewStore from '@Store/previewStore';
+import useRouteStore from '@Store/routeStore';
 import useStore from '@Store/notebookStore';
 import { FILE_PREVIEW_CONFIG } from '@LeftSidebar/shared/constants';
 import { LoadingIndicator } from '@LeftSidebar/shared/components';
@@ -261,33 +262,19 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     [toast, notebookId]
   );
 
-  const switchToNotebookMode = useCallback(() => {
-    const ps: any = usePreviewStore.getState();
-
-    console.log(`FileExplorer: Switching to notebook mode for ${notebookId}`);
-    console.log(`FileExplorer: Current previewMode: ${ps?.previewMode}`);
-
-    // 1. 导航到workspace路由
-    if (notebookId) {
-      // 动态导入 useRouteStore 避免循环依赖
-      import('@Store/routeStore').then(({ default: useRouteStore }) => {
-        useRouteStore.getState().navigateToWorkspace(notebookId);
+  const switchToNotebookMode = useCallback(async () => {
+    if (!notebookId) return;
+    try {
+      useRouteStore.getState().navigateToWorkspace(notebookId);
+      await usePreviewStore.getState().switchToNotebook(notebookId);
+    } catch (error) {
+      toast({
+        title: 'Notebook Switch Error',
+        description: error instanceof Error ? error.message : 'Failed to switch to notebook',
+        variant: 'destructive',
       });
     }
-
-    // 2. 切换到notebook (现在会自动设置previewMode和清除activeFile)
-    if (typeof ps?.switchToNotebook === 'function' && notebookId) {
-      ps.switchToNotebook(notebookId);
-    } else {
-      // 如果switchToNotebook不存在，手动处理
-      ps.setActiveFile(null);
-      if (ps?.previewMode === 'file' && typeof ps?.changePreviewMode === 'function') {
-        ps.changePreviewMode();
-      }
-    }
-
-    console.log(`FileExplorer: Notebook switch initiated for ${notebookId}`);
-  }, [notebookId]);
+  }, [notebookId, toast]);
 
   const handleFileSelect = useCallback(
     async (file: FileNodeFile) => {
@@ -297,19 +284,9 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
       // 特殊处理 .easynb 文件 - 应该切换到 notebook 模式
       if (ext === 'easynb') {
-        console.log(`FileExplorer: Clicked .easynb file: ${file.name}`);
-
-        // 直接调用统一的切换函数
-        switchToNotebookMode();
+        await switchToNotebookMode();
         return;
       }
-
-      // 其他文件的处理逻辑
-      const ps: any = usePreviewStore.getState();
-      if (ps?.previewMode !== 'file' && typeof ps?.setPreviewMode === 'function')
-        ps.setPreviewMode('file');
-      else if (ps?.previewMode !== 'file' && typeof ps?.changePreviewMode === 'function')
-        ps.changePreviewMode();
 
       const jsxTypes = ['.jsx', '.tsx'];
       const allPreviewable = [
@@ -320,7 +297,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         ...jsxTypes,
       ];
       const isPreviewable = allPreviewable.includes(`.${ext}`);
-      if (isPreviewable) handlePreviewFile(file);
+      if (isPreviewable) await handlePreviewFile(file);
       else
         toast({
           title: 'File Type Not Supported',
@@ -354,7 +331,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   const handleTreeDrop: TreeProps['onDrop'] = useCallback(
     (info: { dragNode: FileTreeDataNode; node: FileTreeDataNode; dropPosition: number }) => {
-      const { dragNode, node, dropPosition } = info as any;
+      const { dragNode, node, dropPosition } = info;
       console.log('Tree drop:', { dragKey: dragNode?.key, dropKey: node?.key, dropPosition });
       toast({
         title: 'Drop Operation',
