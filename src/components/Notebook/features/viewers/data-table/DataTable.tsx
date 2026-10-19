@@ -3,6 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx-js-style';
 import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
+import { SpreadsheetRowOrder } from './SpreadsheetRowOrder';
 import { SpreadsheetSaveSession } from './SpreadsheetSaveSession';
 import { useSpreadsheetDraftState } from './useSpreadsheetDraftState';
 import { VirtualSpreadsheetRow, type SpreadsheetRowRenderer } from './VirtualSpreadsheetRow';
@@ -539,6 +540,77 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
 
   useEffect(() => () => saveSession.close(), [saveSession]);
 
+  // ============== 表格列定义 ==============
+  const tableColumns = useMemo<ColumnDef<CSVRow, unknown>[]>(() => {
+    return columns.map((col, colIndex) => ({
+      id: col.key,
+      accessorKey: col.key,
+      header: ({ column }) => (
+        <div className="relative flex items-center justify-between h-full">
+          <div className="flex-1 flex items-center gap-1">
+            <span className="text-xs font-medium truncate">{getExcelColumnName(colIndex)}</span>
+            {column.getIsSorted() &&
+              (column.getIsSorted() === 'asc' ? (
+                <SortAsc className="w-3 h-3 text-theme-600" />
+              ) : (
+                <SortDesc className="w-3 h-3 text-theme-600" />
+              ))}
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              column.toggleSorting();
+            }}
+            aria-label={`Sort column ${col.displayName}`}
+            className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+          >
+            <ChevronDown className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+          </button>
+          <div
+            className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-theme-500"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              resizeHandleRef.current = {
+                col: col.key,
+                startX: e.clientX,
+                startWidth: columnWidths[col.key] || col.width,
+              };
+            }}
+          />
+        </div>
+      ),
+      size: columnWidths[col.key] || col.width,
+      // 单元格的渲染在 <tbody> 里处理 rowSpan/colSpan，这里只保留内容渲染逻辑
+      cell: ({ getValue }) => {
+        const value = getValue();
+        return <span className="truncate">{formatCellValue(value, col.type)}</span>;
+      },
+    }));
+  }, [columns, columnWidths]);
+
+  // ============== 初始化表格 ==============
+  const table = useReactTable({
+    data,
+    columns: tableColumns,
+    state: { sorting, columnFilters },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  const visibleRows = table.getRowModel().rows;
+  const rowOrder = useMemo(
+    () => new SpreadsheetRowOrder(visibleRows.map((row) => row.index)),
+    [visibleRows]
+  );
+
+  const selectedSourceRows = useMemo(
+    () => new Set(selection ? rowOrder.between(selection.startRow, selection.endRow) : []),
+    [selection, rowOrder]
+  );
+
   // ============== Save to History (for Undo/Redo) ==============
   const saveToHistory = useCallback(() => {
     if (isUndoRedoAction.current) {
@@ -605,11 +677,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       saveToHistory();
       const newFormats = { ...cellFormats };
       if (selection) {
-        const sr = Math.min(selection.startRow, selection.endRow);
-        const er = Math.max(selection.startRow, selection.endRow);
         const sc = Math.min(selection.startCol, selection.endCol);
         const ec = Math.max(selection.startCol, selection.endCol);
-        for (let r = sr; r <= er; r++) {
+        for (const r of rowOrder.between(selection.startRow, selection.endRow)) {
           for (let c = sc; c <= ec; c++) {
             const key = getCellFormatKey(r, c);
             newFormats[key] = { ...newFormats[key], ...format };
@@ -622,7 +692,16 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setCellFormats(newFormats);
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     },
-    [saveToHistory, cellFormats, selection, activeCell, setCellFormats, setTabDirty, currentFile]
+    [
+      saveToHistory,
+      cellFormats,
+      selection,
+      activeCell,
+      setCellFormats,
+      setTabDirty,
+      currentFile,
+      rowOrder,
+    ]
   );
 
   const toggleBold = useCallback(() => {
@@ -909,65 +988,6 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     return { spanMap: map, coveredSet: covered };
   }, [sheetMerges, data.length, columns.length]);
 
-  // ============== 表格列定义 ==============
-  const tableColumns = useMemo<ColumnDef<CSVRow, unknown>[]>(() => {
-    return columns.map((col, colIndex) => ({
-      id: col.key,
-      accessorKey: col.key,
-      header: ({ column }) => (
-        <div className="relative flex items-center justify-between h-full">
-          <div className="flex-1 flex items-center gap-1">
-            <span className="text-xs font-medium truncate">{getExcelColumnName(colIndex)}</span>
-            {column.getIsSorted() &&
-              (column.getIsSorted() === 'asc' ? (
-                <SortAsc className="w-3 h-3 text-theme-600" />
-              ) : (
-                <SortDesc className="w-3 h-3 text-theme-600" />
-              ))}
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              column.toggleSorting();
-            }}
-            className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-          >
-            <ChevronDown className="w-3 h-3 text-gray-400 dark:text-gray-500" />
-          </button>
-          <div
-            className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-theme-500"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              resizeHandleRef.current = {
-                col: col.key,
-                startX: e.clientX,
-                startWidth: columnWidths[col.key] || col.width,
-              };
-            }}
-          />
-        </div>
-      ),
-      size: columnWidths[col.key] || col.width,
-      // 单元格的渲染在 <tbody> 里处理 rowSpan/colSpan，这里只保留内容渲染逻辑
-      cell: ({ getValue }) => {
-        const value = getValue();
-        return <span className="truncate">{formatCellValue(value, col.type)}</span>;
-      },
-    }));
-  }, [columns, columnWidths]);
-
-  // ============== 初始化表格 ==============
-  const table = useReactTable({
-    data,
-    columns: tableColumns,
-    state: { sorting, columnFilters },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
   // ============== 列宽拖拽 ==============
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -1034,10 +1054,10 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         newCol = col;
       switch (e.key) {
         case 'ArrowUp':
-          newRow = Math.max(0, row - 1);
+          newRow = rowOrder.move(row, -1);
           break;
         case 'ArrowDown':
-          newRow = Math.min(data.length - 1, row + 1);
+          newRow = rowOrder.move(row, 1);
           break;
         case 'ArrowLeft':
           newCol = Math.max(0, col - 1);
@@ -1093,6 +1113,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     toggleUnderline,
     saveToHistory,
     setData,
+    rowOrder,
   ]);
 
   // ============== 复制/粘贴（原样保留） ==============
@@ -1100,12 +1121,10 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     if (!activeCell) return;
     let textToCopy = '';
     if (selection) {
-      const sr = Math.min(selection.startRow, selection.endRow);
-      const er = Math.max(selection.startRow, selection.endRow);
       const sc = Math.min(selection.startCol, selection.endCol);
       const ec = Math.max(selection.startCol, selection.endCol);
       const rowsArr: string[] = [];
-      for (let r = sr; r <= er; r++) {
+      for (const r of rowOrder.between(selection.startRow, selection.endRow)) {
         const colsArr: string[] = [];
         for (let c = sc; c <= ec; c++) colsArr.push(String(data[r][columns[c].key] ?? ''));
         rowsArr.push(colsArr.join('\t'));
@@ -1115,7 +1134,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       textToCopy = String(data[activeCell.row][columns[activeCell.col].key] ?? '');
     }
     navigator.clipboard.writeText(textToCopy);
-  }, [activeCell, selection, data, columns]);
+  }, [activeCell, selection, rowOrder, data, columns]);
 
   const handlePaste = useCallback(async () => {
     if (!activeCell) return;
@@ -1127,9 +1146,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         startCol = activeCell.col;
       rows.forEach((row, r) => {
         row.forEach((cell, c) => {
-          const tr = startRow + r,
+          const tr = rowOrder.offset(startRow, r),
             tc = startCol + c;
-          if (tr < newData.length && tc < columns.length) newData[tr][columns[tc].key] = cell;
+          if (tr !== null && tc < columns.length) newData[tr][columns[tc].key] = cell;
         });
       });
       setData(newData);
@@ -1137,7 +1156,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     } catch (err) {
       console.error('Failed to paste:', err);
     }
-  }, [activeCell, data, setData, setTabDirty, currentFile, columns]);
+  }, [activeCell, data, setData, setTabDirty, currentFile, rowOrder, columns]);
 
   // ============== Export / save ==============
   const handleExport = useCallback(() => {
@@ -1535,6 +1554,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                     width={Math.max(width, table.getTotalSize() + 48)} // Ensure width covers all columns + row number col
                     itemData={(index, style) => {
                       const row = table.getRowModel().rows[index];
+                      const sourceRow = row.index;
                       const isEvenRow = index % 2 === 0;
                       return (
                         <div
@@ -1550,12 +1570,12 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                           {row.getVisibleCells().map((cell) => {
                             const colId = cell.column.id;
                             const colIndex = columns.findIndex((c) => c.key === colId);
-                            const dataKey = `${index}:${colIndex}`;
+                            const dataKey = `${sourceRow}:${colIndex}`;
 
                             if (coveredSet.has(dataKey)) return null;
 
                             // 从 styleMap 读取工作表样式（sheet 坐标 = 数据行 + headerOffset）
-                            const sheetKey = `${index + headerOffset}:${colIndex}`;
+                            const sheetKey = `${sourceRow + headerOffset}:${colIndex}`;
                             const xlsCss = styleMap[sheetKey] || {};
 
                             // 拆分成"单元格级样式（背景/对齐）"与"文本级样式（粗斜体/颜色）"
@@ -1563,7 +1583,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                             const textStyle: React.CSSProperties = {};
 
                             // Get custom cell format
-                            const customFormat = cellFormats[getCellFormatKey(index, colIndex)];
+                            const customFormat = cellFormats[getCellFormatKey(sourceRow, colIndex)];
 
                             // 背景色 -> <td> (custom format takes priority)
                             if (customFormat?.backgroundColor) {
@@ -1631,13 +1651,14 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
 
                             const isActive = !!(
                               activeCell &&
-                              activeCell.row === index &&
+                              activeCell.row === sourceRow &&
                               activeCell.col === colIndex
                             );
                             const inSelection = !!(
                               selection &&
-                              index >= Math.min(selection.startRow, selection.endRow) &&
-                              index <= Math.max(selection.startRow, selection.endRow) &&
+                              rowOrder
+                                .between(selection.startRow, selection.endRow)
+                                .includes(sourceRow) &&
                               colIndex >= Math.min(selection.startCol, selection.endCol) &&
                               colIndex <= Math.max(selection.startCol, selection.endCol)
                             );
@@ -1661,17 +1682,19 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                                   // For now, flex layout assumes no spans or handles them via width adjustments if implemented
                                 }}
                                 onClick={() => {
-                                  setActiveCell({ row: index, col: colIndex });
+                                  setActiveCell({ row: sourceRow, col: colIndex });
                                   setSelection(null);
                                 }}
                                 onDoubleClick={() => {
-                                  setActiveCell({ row: index, col: colIndex });
-                                  setEditingCell({ row: index, col: colIndex });
-                                  setEditValue(String(data[index][columns[colIndex].key] ?? ''));
+                                  setActiveCell({ row: sourceRow, col: colIndex });
+                                  setEditingCell({ row: sourceRow, col: colIndex });
+                                  setEditValue(
+                                    String(data[sourceRow][columns[colIndex].key] ?? '')
+                                  );
                                 }}
                                 onContextMenu={(e) => {
                                   e.preventDefault();
-                                  setActiveCell({ row: index, col: colIndex });
+                                  setActiveCell({ row: sourceRow, col: colIndex });
                                   setContextMenu({ x: e.clientX, y: e.clientY });
                                 }}
                               >
@@ -1685,7 +1708,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                                   }}
                                 >
                                   {editingCell &&
-                                  editingCell.row === index &&
+                                  editingCell.row === sourceRow &&
                                   editingCell.col === colIndex ? (
                                     <input
                                       type="text"
@@ -1693,7 +1716,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                                       onChange={(e) => setEditValue(e.target.value)}
                                       onBlur={() => {
                                         const newData = [...data];
-                                        newData[index][columns[colIndex].key] = editValue;
+                                        newData[sourceRow][columns[colIndex].key] = editValue;
                                         setData(newData);
                                         setEditingCell(null);
                                         if (setTabDirty && currentFile)
@@ -1739,8 +1762,8 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
           </div>
           {selection && (
             <span className="px-2 py-0.5 bg-theme-100/50 dark:bg-theme-900/30 text-theme-700 dark:text-theme-300 rounded-md">
-              {Math.abs(selection.endRow - selection.startRow) + 1} ×{' '}
-              {Math.abs(selection.endCol - selection.startCol) + 1} cells selected
+              {selectedSourceRows.size} × {Math.abs(selection.endCol - selection.startCol) + 1}{' '}
+              cells selected
             </span>
           )}
         </div>

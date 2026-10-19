@@ -423,3 +423,87 @@ it('releases context-menu listeners when an open table unmounts', () => {
     remove.mockRestore();
   }
 });
+
+it('edits the selected source row after sorting instead of the row at its display position', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::sorted.csv',
+    name: 'sorted.csv',
+    path: 'sorted.csv',
+    type: 'csv',
+    content: 'Zulu,first\nAlpha,second',
+  };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Sort column A' }));
+  fireEvent.doubleClick(screen.getByText('Alpha', { exact: true }));
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  expect(input.value).toBe('Alpha');
+  fireEvent.change(input, { target: { value: 'Bravo' } });
+  fireEvent.blur(input);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith(
+    'Zulu,first\nBravo,second',
+    { surface: 'normal', fileId: 'book::sorted.csv' }
+  );
+});
+
+it('keyboard navigation and range copy follow sorted visible rows', async () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::sorted.csv',
+    name: 'sorted.csv',
+    path: 'sorted.csv',
+    type: 'csv',
+    content: 'Zulu\nBravo\nAlpha',
+  };
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  try {
+    render(<DataTable showFormulaBar={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sort column A' }));
+    fireEvent.click(screen.getByText('Alpha', { exact: true }));
+    fireEvent.keyDown(document, { key: 'ArrowDown', shiftKey: true });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Bravo');
+    fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    fireEvent.contextMenu(screen.getByText('Bravo', { exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: /^Copy/ }));
+    expect(writeText).toHaveBeenCalledWith('Alpha\nBravo');
+  } finally {
+    if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+
+it('pastes consecutive rows in visible sorted order without changing unrelated source rows', async () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::sorted.csv',
+    name: 'sorted.csv',
+    path: 'sorted.csv',
+    type: 'csv',
+    content: 'Zulu\nBravo\nAlpha',
+  };
+  const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { readText: vi.fn().mockResolvedValue('A1\nB1') },
+  });
+  try {
+    render(<DataTable showFormulaBar={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sort column A' }));
+    fireEvent.contextMenu(screen.getByText('Alpha', { exact: true }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Paste/ }));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('Zulu\nB1\nA1', {
+      surface: 'normal',
+      fileId: 'book::sorted.csv',
+    });
+  } finally {
+    if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});

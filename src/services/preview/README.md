@@ -289,3 +289,14 @@ callback, not installed as a new component type. Editing state can therefore
 update without unmounting the row's input. The regression test first failed on
 input DOM identity after one character; it now verifies identity, focus across
 consecutive edits, and the final persisted CSV value. Virtualization is retained.
+
+## Sorted spreadsheet coordinates
+
+The grid resolves each rendered row through TanStack's source `row.index` for
+editing, active-cell identity, cell formats and source values. Display positions
+are not used to index the draft. `SpreadsheetRowOrder` owns the visible-to-source
+projection for arrow navigation, rectangular selections, copy and paste. Selected
+source rows are memoized once per projection/selection. Saving retains canonical
+source order; sorting changes the view rather than rewriting the source file.
+Regression tests cover selecting/editing a moved row, keyboard range copy and
+multi-row paste after sorting, plus filtered row-order boundaries.
