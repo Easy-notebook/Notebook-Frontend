@@ -18,7 +18,9 @@ export class AddContentToAnswerAction extends StreamAction {
 
     if (contentQid !== undefined && contentQid !== null && content) {
       const qidStr = Array.isArray(contentQid) ? contentQid[0] : contentQid.toString();
-      await globalUpdateInterface.addContentToAnswer(qidStr, content.toString());
+      const accepted = await globalUpdateInterface.addContentToAnswer(qidStr, content.toString());
+      context.signal?.throwIfAborted();
+      if (!accepted) return;
 
       await QAViewPresenter.show(context.signal);
     } else {

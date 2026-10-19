@@ -73,3 +73,36 @@ it('leaves state and subscribers untouched for a missing question', () => {
     unsubscribe();
   }
 });
+
+it.each(['completed', 'interrupted'] as const)(
+  'ignores late chunks and completion after %s',
+  (phase) => {
+    state().initStreamingAnswer('qa');
+    state().addContentToAnswer('qa', 'original content');
+    if (phase === 'completed') state().finishStreamingAnswer('qa');
+    else state().cancelStreamingAnswer('qa');
+    const settled = state();
+    vi.setSystemTime(9000);
+    expect(state().addContentToAnswer('qa', 'late chunk')).toBe(false);
+    expect(state().finishStreamingAnswer('qa', 'late final')).toBe(false);
+    expect(state()).toBe(settled);
+    expect(state().qaList[0].resolved).toBe(phase === 'completed');
+    state().initStreamingAnswer('qa');
+    expect(state().addContentToAnswer('qa', 'new round')).toBe(true);
+    expect(state().finishStreamingAnswer('qa')).toBe(true);
+  }
+);
+
+it('preserves early content/final response support before an explicit initialization event', () => {
+  expect(state().addContentToAnswer('qa', 'early')).toBe(true);
+  expect(state().finishStreamingAnswer('qa')).toBe(true);
+  expect(state().qaList[0].content).toBe('original questionearly');
+});
+
+it('does not emit updates for missing IDs or empty chunks', () => {
+  const before = state();
+  expect(state().addContentToAnswer('missing', 'chunk')).toBe(false);
+  expect(state().finishStreamingAnswer('missing')).toBe(false);
+  expect(state().addContentToAnswer('qa', '')).toBe(false);
+  expect(state()).toBe(before);
+});

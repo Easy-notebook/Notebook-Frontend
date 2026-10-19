@@ -1,6 +1,7 @@
 import { AttachmentRecordResources } from '@Services/ai-terminal/AttachmentRecordResources';
 // src/store/AIAgentStore.ts
 import { create } from 'zustand';
+import { StreamingAnswer } from './models/StreamingAnswer';
 import { agentLog } from '@Utils/logger';
 import { ActionItem, QAItem, QAEvent } from '@Store/models/agent';
 
@@ -61,8 +62,8 @@ export interface AIAgentActions {
 
   // 流式回答相关
   initStreamingAnswer: (qaId: string) => void;
-  addContentToAnswer: (qaId: string, content: string) => void;
-  finishStreamingAnswer: (qaId: string, response?: string) => void;
+  addContentToAnswer: (qaId: string, content: string) => boolean;
+  finishStreamingAnswer: (qaId: string, response?: string) => boolean;
   cancelStreamingAnswer: (qaId: string) => void;
   // Tool call logging for QA
   addToolCallToQA: (qaId: string, toolCall: QAEvent) => void;
@@ -187,15 +188,7 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
           : [];
 
       // 3. 更新目标 QA：清空 content、设为未解决、设为正在处理
-      const updatedTargetQA: QAItem = {
-        ...targetQA,
-        content: '',
-        type: 'assistant',
-        resolved: false,
-        onProcess: true,
-        thinkingStartAtMs: Date.now(),
-        thinkingEndAtMs: undefined,
-      };
+      const updatedTargetQA = new StreamingAnswer(targetQA).restart(Date.now());
 
       // 4. 组装新的 qaList
       const newQaList = [
@@ -209,57 +202,53 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
     });
   },
 
-  // 追加内容到答案
   addContentToAnswer: (qaId: string, content: string) => {
-    set((state) => ({
-      qaList: state.qaList.map((qa) =>
-        qa.id === qaId ? { ...qa, content: qa.content + content } : qa
-      ),
-    }));
+    let accepted = false;
+    set((state) => {
+      const answer = state.qaList.find((qa) => qa.id === qaId);
+      if (!answer) return state;
+      const next = new StreamingAnswer(answer).append(content);
+      if (next === answer) return state;
+      accepted = true;
+      return { qaList: state.qaList.map((qa) => (qa === answer ? next : qa)) };
+    });
+    return accepted;
   },
 
-  // Interrupted answers retain received content without claiming resolution.
   cancelStreamingAnswer: (qaId: string) => {
     set((state) => {
       const answer = state.qaList.find((qa) => qa.id === qaId);
-      if (!answer?.onProcess) return state;
+      if (!answer) return state;
       const endedAt = Date.now();
+      const next = new StreamingAnswer(answer).interrupt(endedAt);
+      if (next === answer) return state;
       return {
         qaList: state.qaList.map((qa) =>
-          qa.id === qaId || qa.id === `${qaId}-[0]`
-            ? { ...qa, onProcess: false, thinkingEndAtMs: endedAt }
-            : qa
+          qa === answer
+            ? next
+            : qa.id === `${qaId}-[0]`
+              ? { ...qa, onProcess: false, thinkingEndAtMs: endedAt }
+              : qa
         ),
       };
     });
   },
 
-  // 完成回答
   finishStreamingAnswer: (qaId: string, response?: string) => {
-    set((state) => ({
-      qaList: state.qaList.map((qa) => {
-        if (qa.id === qaId) {
-          return {
-            ...qa,
-            // 如果没有在流式过程中追加内容，则在结束时写入最终响应
-            content:
-              response !== undefined && response !== null && qa.content === ''
-                ? response
-                : qa.content,
-            resolved: true,
-            onProcess: false,
-            thinkingEndAtMs: Date.now(),
-          };
-        }
-        if (qa.id === `${qaId}-[0]`) {
-          return {
-            ...qa,
-            resolved: true,
-          };
-        }
-        return qa;
-      }),
-    }));
+    let accepted = false;
+    set((state) => {
+      const answer = state.qaList.find((qa) => qa.id === qaId);
+      if (!answer) return state;
+      const next = new StreamingAnswer(answer).complete(response, Date.now());
+      if (next === answer) return state;
+      accepted = true;
+      return {
+        qaList: state.qaList.map((qa) =>
+          qa === answer ? next : qa.id === `${qaId}-[0]` ? { ...qa, resolved: true } : qa
+        ),
+      };
+    });
+    return accepted;
   },
 
   addToolCallToQA: (qaId: string, toolCall) => {

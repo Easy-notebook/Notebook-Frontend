@@ -22,6 +22,7 @@ import { FinishStreamingAnswerAction } from './FinishStreamingAnswerAction';
 import { qaStreamManager } from '../../managers/QAStreamManager';
 beforeEach(() => {
   vi.resetAllMocks();
+  ports.finish.mockReturnValue(true);
   ports.notebookId = 'original';
   qaStreamManager.clearStreamingQaId();
 });
@@ -120,5 +121,15 @@ it('stops between memory publications when a context subscriber cancels', async 
     })
   ).rejects.toMatchObject({ name: 'AbortError' });
   expect(ports.update).toHaveBeenCalledOnce();
+  expect(ports.record).not.toHaveBeenCalled();
+});
+
+it('does not record successful completion for an ignored terminal event', async () => {
+  ports.finish.mockReturnValue(false);
+  await new FinishStreamingAnswerAction().execute({
+    payload: { QId: 'qa', response: 'late' },
+    showToast: vi.fn(),
+  });
+  expect(ports.update).not.toHaveBeenCalled();
   expect(ports.record).not.toHaveBeenCalled();
 });

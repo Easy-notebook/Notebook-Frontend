@@ -91,8 +91,8 @@ interface GlobalUpdateInterface {
 
   // AI Agent Store Methods
   initStreamingAnswer: (QId: string) => void;
-  addContentToAnswer: (QId: string, content: string) => void;
-  finishStreamingAnswer: (QId: string, response?: string) => void;
+  addContentToAnswer: (QId: string, content: string) => boolean;
+  finishStreamingAnswer: (QId: string, response?: string) => boolean;
 
   // AI Action Methods
   createUserAskQuestion: (content: string, relatedQAIds?: string[], cellId?: string | null) => void;

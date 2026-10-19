@@ -40,6 +40,7 @@ import { qaStreamManager } from '../../managers/QAStreamManager';
 import { QAViewPresenter } from './QAViewPresenter';
 beforeEach(() => {
   vi.resetAllMocks();
+  ports.append.mockReturnValue(true);
   ports.notebookId = 'original';
   ports.collapsed = true;
   ports.activeView = 'history';
@@ -145,4 +146,14 @@ it('detaches the stream cancellation listener when completion clears its session
   qaStreamManager.setStreamingQaId('qa', controller.signal);
   qaStreamManager.clearStreamingQaId(qaStreamManager.capture());
   expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+});
+
+it('does not reopen the QA view for a rejected late content chunk', async () => {
+  ports.append.mockReturnValue(false);
+  await new AddContentToAnswerAction().execute({
+    payload: { QId: 'qa', content: 'late' },
+    showToast: vi.fn(),
+  });
+  expect(ports.collapse).not.toHaveBeenCalled();
+  expect(ports.view).not.toHaveBeenCalled();
 });

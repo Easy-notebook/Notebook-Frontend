@@ -40,8 +40,9 @@ export class FinishStreamingAnswerAction extends StreamAction {
     }
 
     if (qidStr) {
-      await globalUpdateInterface.finishStreamingAnswer(qidStr, finalResponse);
+      const accepted = await globalUpdateInterface.finishStreamingAnswer(qidStr, finalResponse);
       context.signal?.throwIfAborted();
+      if (!accepted) return;
       if (session?.qaId === qidStr) qaStreamManager.clearStreamingQaId(session);
 
       // Record agent interaction completion
