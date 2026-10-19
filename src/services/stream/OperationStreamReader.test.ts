@@ -105,3 +105,58 @@ it('aborts a blocked reader and releases the lock', async () => {
   expect(cancel).toHaveBeenCalledOnce();
   expect(stream.locked).toBe(false);
 });
+
+it('frames messages correctly at every possible two-chunk boundary', async () => {
+  const messages = [{ code: 'print("汉字🙂\\"{}")', nested: [{ a: {} }] }, {}, { done: true }];
+  const bytes = encoder.encode(
+    ` \n${messages.map((value) => JSON.stringify(value)).join(' \t')}\n`
+  );
+  for (let split = 0; split <= bytes.length; split++) {
+    const receive = vi.fn();
+    await new OperationStreamReader().consume(
+      stream([bytes.slice(0, split), new Uint8Array(), bytes.slice(split)]),
+      receive
+    );
+    expect(receive.mock.calls.map(([message]) => message)).toEqual(messages);
+  }
+});
+
+it('assembles large code payloads delivered in many small chunks', async () => {
+  const message = { code: 'print("escaped \\\\ {汉字🙂}")\n'.repeat(10000) };
+  const bytes = encoder.encode(JSON.stringify(message));
+  let offset = 0;
+  const input = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (offset === bytes.length) return controller.close();
+      const end = Math.min(offset + 17, bytes.length);
+      controller.enqueue(bytes.slice(offset, end));
+      offset = end;
+    },
+  });
+  const receive = vi.fn();
+  await new OperationStreamReader().consume(input, receive);
+  expect(receive).toHaveBeenCalledExactlyOnceWith(message);
+  expect(input.locked).toBe(false);
+});
+
+it('does not parse or publish a buffered successor after a handler cancels', async () => {
+  const abort = new AbortController();
+  const input = stream([encoder.encode('{}invalid successor')]);
+  const receive = vi.fn(async () => abort.abort());
+  await expect(
+    new OperationStreamReader().consume(input, receive, abort.signal)
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(receive).toHaveBeenCalledOnce();
+  expect(input.locked).toBe(false);
+});
+
+it('publishes complete messages before rejecting a truncated successor', async () => {
+  const receive = vi.fn();
+  await expect(
+    new OperationStreamReader().consume(
+      stream([encoder.encode('{"first":true}{"next":"'), encoder.encode('unfinished')]),
+      receive
+    )
+  ).rejects.toThrow('incomplete JSON');
+  expect(receive).toHaveBeenCalledExactlyOnceWith({ first: true });
+});

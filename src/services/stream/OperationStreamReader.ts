@@ -1,3 +1,49 @@
+/** Frames one JSON object at a time without rescanning incomplete messages. */
+class OperationObjectFramer {
+  private fragments: string[] = [];
+  private depth = 0;
+  private stringState: 'outside' | 'quoted' | 'escaped' = 'outside';
+
+  *push(chunk: string): Generator<Record<string, unknown>> {
+    let start = 0;
+    for (let index = 0; index < chunk.length; index++) {
+      const char = chunk[index];
+      if (this.depth === 0) {
+        if (/\s/.test(char)) {
+          start = index + 1;
+          continue;
+        }
+        if (char !== '{') throw new Error('Operation stream must contain JSON objects');
+      }
+      if (this.stringState === 'escaped') {
+        this.stringState = 'quoted';
+      } else if (this.stringState === 'quoted') {
+        if (char === '\\') this.stringState = 'escaped';
+        else if (char === '"') this.stringState = 'outside';
+      } else if (char === '"') {
+        this.stringState = 'quoted';
+      } else if (char === '{') {
+        this.depth++;
+      } else if (char === '}') {
+        this.depth--;
+        if (this.depth === 0) {
+          this.fragments.push(chunk.slice(start, index + 1));
+          const object = this.fragments.join('');
+          this.fragments = [];
+          start = index + 1;
+          // Yield before inspecting the next object: handlers provide backpressure.
+          yield JSON.parse(object) as Record<string, unknown>;
+        }
+      }
+    }
+    if (start < chunk.length) this.fragments.push(chunk.slice(start));
+  }
+
+  finish(): void {
+    if (this.depth !== 0) throw new Error('Operation stream ended with incomplete JSON');
+  }
+}
+
 /** Reads the operation protocol's concatenated JSON objects in wire order. */
 export class OperationStreamReader {
   async consume(
@@ -13,42 +59,14 @@ export class OperationStreamReader {
     };
     signal?.addEventListener('abort', cancel, { once: true });
     const decoder = new TextDecoder('utf-8', { fatal: true });
-    let buffer = '';
+    const framer = new OperationObjectFramer();
     let ended = false;
-    const drain = async () => {
-      let start = 0;
-      let depth = 0;
-      let quoted = false;
-      let escaped = false;
-      for (let index = 0; index < buffer.length; index++) {
-        const char = buffer[index];
-        if (depth === 0) {
-          if (/\s/.test(char)) {
-            start = index + 1;
-            continue;
-          }
-          if (char !== '{') throw new Error('Operation stream must contain JSON objects');
-        }
-        if (quoted) {
-          if (escaped) escaped = false;
-          else if (char === '\\') escaped = true;
-          else if (char === '"') quoted = false;
-          continue;
-        }
-        if (char === '"') quoted = true;
-        else if (char === '{') depth++;
-        else if (char === '}') {
-          depth--;
-          if (depth === 0) {
-            const data: Record<string, unknown> = JSON.parse(buffer.slice(start, index + 1));
-            signal?.throwIfAborted();
-            await receive(data);
-            signal?.throwIfAborted();
-            start = index + 1;
-          }
-        }
+    const drain = async (chunk: string) => {
+      for (const data of framer.push(chunk)) {
+        signal?.throwIfAborted();
+        await receive(data);
+        signal?.throwIfAborted();
       }
-      buffer = buffer.slice(start);
     };
     try {
       while (true) {
@@ -57,13 +75,11 @@ export class OperationStreamReader {
         signal?.throwIfAborted();
         if (done) {
           ended = true;
-          buffer += decoder.decode();
-          await drain();
-          if (buffer.trim()) throw new Error('Operation stream ended with incomplete JSON');
+          await drain(decoder.decode());
+          framer.finish();
           return;
         }
-        buffer += decoder.decode(value, { stream: true });
-        await drain();
+        await drain(decoder.decode(value, { stream: true }));
       }
     } finally {
       signal?.removeEventListener('abort', cancel);

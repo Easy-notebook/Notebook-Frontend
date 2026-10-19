@@ -55,3 +55,11 @@ late adoption/readiness publication on notebook changes. Backend create/restart 
 have no rollback here; effects already applied before cancellation are not undone. Cancellation
 does not roll back events already applied. The parser expects the existing JSON-object protocol;
 it does not add SSE or array-root framing.
+
+Framing state (object depth and quoted/escaped string state) belongs to each consume call
+and persists across decoded chunks. Each character is scanned once; partial object fragments
+are joined only when the object closes. This avoids repeatedly scanning or concatenating a
+large incomplete code/output message as small network chunks arrive. Framing takes linear
+work in decoded input size and retains the current object until it can be parsed. There is
+no new message-size limit. A generator yields each completed object before scanning the next,
+so handler backpressure and cancellation also apply within a single buffered network chunk.
