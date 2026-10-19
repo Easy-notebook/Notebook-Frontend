@@ -673,3 +673,67 @@ describe('active file content commit ownership', () => {
     expect(io.fileSave).not.toHaveBeenCalled();
   });
 });
+
+describe.each(['previewFile', 'loadFileById'] as const)('%s complete cache hits', (entry) => {
+  const open = () =>
+    entry === 'previewFile'
+      ? state().previewFile('book', 'file.txt')
+      : state().loadFileById('book::file.txt');
+
+  it.each(['metadata-only', 'missing-content', 'remote-snippet'])(
+    'fetches %s records instead of presenting an empty or partial file',
+    async (kind) => {
+      const original = fileRecord('book');
+      io.fileRead.mockResolvedValue({
+        metadata: { ...original.metadata, hasLocalContent: kind === 'missing-content' },
+        content: kind === 'remote-snippet' ? 'incomplete preview' : undefined,
+        needsRemoteFetch: true,
+      });
+      io.fetch.mockResolvedValue({ status: 'ok', content: 'complete backend content' });
+      const result = await open();
+      expect(result?.content).toBe('complete backend content');
+      expect(state().activeFile).toBe(result);
+      expect(io.fileRead).toHaveBeenCalledOnce();
+      expect(io.fetch).toHaveBeenCalledExactlyOnceWith('book', 'file.txt');
+      expect(io.fileSave).toHaveBeenCalledWith(
+        expect.objectContaining({ content: 'complete backend content' })
+      );
+    }
+  );
+
+  it('treats a genuinely empty local file as a complete cache hit', async () => {
+    io.fileRead.mockResolvedValue({ ...fileRecord('book'), content: '', needsRemoteFetch: false });
+    const result = await open();
+    expect(result?.content).toBe('');
+    expect(state().activeFile).toBe(result);
+    expect(io.fileRead).toHaveBeenCalledOnce();
+    expect(io.fetch).not.toHaveBeenCalled();
+    expect(io.fileSave).not.toHaveBeenCalled();
+  });
+
+  it('requires content even when a stale availability flag claims it is local', async () => {
+    io.fileRead.mockResolvedValue({
+      metadata: fileRecord('book').metadata,
+      needsRemoteFetch: false,
+    });
+    io.fetch.mockResolvedValue({ status: 'ok', content: 'recovered body' });
+    expect((await open())?.content).toBe('recovered body');
+    expect(io.fetch).toHaveBeenCalledOnce();
+  });
+
+  it('cannot publish or cache a remote response after resetting the view', async () => {
+    io.fileRead.mockResolvedValue({
+      metadata: fileRecord('book').metadata,
+      needsRemoteFetch: true,
+    });
+    const remote = deferred<{ status: string; content: string }>();
+    io.fetch.mockReturnValueOnce(remote.promise);
+    const pending = open();
+    await vi.waitFor(() => expect(io.fetch).toHaveBeenCalledOnce());
+    state().resetToNotebookMode();
+    remote.resolve({ status: 'ok', content: 'obsolete remote content' });
+    expect(await pending).toBe(entry === 'previewFile' ? undefined : null);
+    expect(state().activeFile).toBeNull();
+    expect(io.fileSave).not.toHaveBeenCalled();
+  });
+});

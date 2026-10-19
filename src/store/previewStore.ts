@@ -3,7 +3,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { PreviewRequestLifecycle } from '@Services/preview/PreviewRequestLifecycle';
 import { formatPreviewContent } from '@Services/preview/formatPreviewContent';
-import { fileFromCache } from '@Services/preview/fileFromCache';
+import {
+  fileFromCache,
+  hasCachedContent,
+  type CachedFileRecord,
+} from '@Services/preview/fileFromCache';
 import type { FileContentResponse } from '@Services/types';
 import { FileService } from '@Services/notebook/FileService';
 import { fileLog, storeLog } from '@Utils/logger';
@@ -197,7 +201,8 @@ const usePreviewStore = create<PreviewStore>()(
         request: symbol,
         notebookId: string,
         filePath: string,
-        fileMetadata: FileMetadata = {} as FileMetadata
+        fileMetadata: FileMetadata = {} as FileMetadata,
+        admittedCacheRecord?: CachedFileRecord | null
       ): Promise<FileObject | undefined> => {
         const { check, publish } = requestScope(request);
         check();
@@ -207,7 +212,10 @@ const usePreviewStore = create<PreviewStore>()(
         const fileId = makeFileId(notebookId, filePath);
 
         // Check if file exists in cache with optimized query
-        const cachedFile = await persistenceService.files.getFile(notebookId, filePath);
+        const cachedFile =
+          admittedCacheRecord === undefined
+            ? await persistenceService.files.getFile(notebookId, filePath)
+            : admittedCacheRecord;
         check();
         const lastModifiedBackend = fileMetadata.lastModified || null;
         let file = fileMetadata.file;
@@ -231,7 +239,7 @@ const usePreviewStore = create<PreviewStore>()(
 
         // Determine if we need to fetch from backend
         const needsFetch =
-          !cachedFile ||
+          !hasCachedContent(cachedFile) ||
           (lastModifiedBackend && cachedFile.metadata.lastModified !== lastModifiedBackend);
 
         if (needsFetch) {
@@ -494,7 +502,7 @@ const usePreviewStore = create<PreviewStore>()(
           // Check cache first
           const cachedFile = await persistenceService.files.getFile(notebookId, filePath);
           check();
-          if (cachedFile) {
+          if (hasCachedContent(cachedFile)) {
             fileLog.info('Found file in cache', { filePath });
 
             const cachedMetadata = cachedFile.metadata;
@@ -513,7 +521,7 @@ const usePreviewStore = create<PreviewStore>()(
           // Try to fetch from server, but handle errors gracefully
           try {
             fileLog.info('Attempting to fetch file from server', { filePath });
-            const fetched = await previewFile(request, notebookId, filePath);
+            const fetched = await previewFile(request, notebookId, filePath, undefined, cachedFile);
             check();
             if (fetched) {
               fileLog.info('Successfully fetched and loaded file', { filePath });
@@ -902,7 +910,7 @@ const usePreviewStore = create<PreviewStore>()(
             // Read the committed record, including UTF-8 size and repository-assigned timestamps.
             const record = await persistenceService.files.getFile(file.notebookId, file.path);
             if (!normalRequests.isCurrent(request)) return null;
-            if (!record || record.needsRemoteFetch || record.content === undefined) {
+            if (!hasCachedContent(record)) {
               normalRequests.settle(request, 'failed');
               return null;
             }

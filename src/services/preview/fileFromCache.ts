@@ -1,18 +1,24 @@
-import type { FileMetadataEntity } from '@Storage/schema';
+import type { IFileRepository } from '@Services/persistence/interfaces';
 import type { FileObject } from '@Store/models';
 
-/** Project a committed cache record into the preview model without changing storage. */
-export function fileFromCache(record: {
-  metadata: FileMetadataEntity;
-  content?: string;
-}): FileObject {
-  const { metadata, content } = record;
+export type CachedFileRecord = NonNullable<Awaited<ReturnType<IFileRepository['getFile']>>>;
+type LocalFileRecord = CachedFileRecord & { content: string };
+
+/** Metadata or preview snippets alone do not constitute a displayable cache hit. */
+export function hasCachedContent(
+  record: CachedFileRecord | null | undefined
+): record is LocalFileRecord {
+  return !!record && !record.needsRemoteFetch && typeof record.content === 'string';
+}
+
+/** Project a complete committed cache record into the preview model. */
+export function fileFromCache({ metadata, content }: LocalFileRecord): FileObject {
   return {
     id: metadata.id,
     notebookId: metadata.notebookId,
     path: metadata.filePath,
     name: metadata.fileName,
-    content: content ?? '',
+    content,
     type: metadata.fileType,
     lastModified: metadata.lastModified,
     size: metadata.size,

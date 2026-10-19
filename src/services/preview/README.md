@@ -83,3 +83,15 @@ storage failures still reject the caller's promise.
 Native transaction admission already orders overlapping updates; browser tests
 cover consecutive edits and deletion admitted before an edit. No additional
 application write queue is used.
+
+## Complete cache hits
+
+`hasCachedContent` requires an actual string body and no remote-fetch requirement.
+Metadata-only records, missing content records, and remote preview snippets must
+fetch the complete backend body. An empty string is valid local content.
+`fileFromCache` accepts only the narrowed complete-record type; it cannot silently
+substitute an empty string for missing content.
+
+File-ID loading forwards its already-read cache result to the private preview
+operation under the same request ticket. This avoids a redundant read and access
+counter update while retaining all publication and cancellation checks.
