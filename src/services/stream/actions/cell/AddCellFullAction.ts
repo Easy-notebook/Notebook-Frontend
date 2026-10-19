@@ -13,39 +13,20 @@ export class AddCellFullAction extends StreamAction {
     const cell = payload?.cell;
     const position = payload?.position; // 'start', 'end', or specific index
 
-    console.log('📦 [AddCellFullAction] 添加完整cell对象:', {
-      hasCell: !!cell,
-      cellId: cell?.id,
-      cellType: cell?.type,
-      position,
-    });
+    if (!cell || typeof cell !== 'object' || Array.isArray(cell))
+      throw new Error('add_cell requires a cell object');
+    if (cell.id !== undefined && typeof cell.id !== 'string')
+      throw new Error('Cell identity must be a string');
+    if (
+      position !== undefined &&
+      position !== 'start' &&
+      position !== 'end' &&
+      (typeof position !== 'number' || !Number.isSafeInteger(position) || position < 0)
+    )
+      throw new Error('Cell position must be start, end, or a nonnegative safe integer');
 
-    if (!cell) {
-      console.error('❌ [AddCellFullAction] 没有提供cell对象');
-      return;
-    }
-
-    const state = useStore.getState();
-
-    if (position === 'start') {
-      if (typeof state.addCellAtIndex === 'function') {
-        state.addCellAtIndex(0, cell);
-        console.log('✅ [AddCellFullAction] Cell添加到开头');
-      } else {
-        console.error('❌ [AddCellFullAction] addCellAtIndex方法不存在');
-      }
-    } else if (typeof position === 'number') {
-      if (typeof state.addCellAtIndex === 'function') {
-        state.addCellAtIndex(position, cell);
-        console.log('✅ [AddCellFullAction] Cell添加到位置:', position);
-      } else {
-        console.error('❌ [AddCellFullAction] addCellAtIndex方法不存在');
-      }
-    } else {
-      // Default: add to end
-      state.addCell(cell);
-      console.log('✅ [AddCellFullAction] Cell添加到末尾');
-    }
+    const index = position === 'start' ? 0 : typeof position === 'number' ? position : undefined;
+    useStore.getState().addCell(cell, index);
   }
 }
 

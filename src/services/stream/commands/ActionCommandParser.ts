@@ -192,7 +192,6 @@ export class ActionCommandParser {
         break;
 
       case 'addCell2EndWithContent':
-      case 'add_cell':
         // AddCellAction expects: type, description (or content), metadata
         // Keep type and content/description at top level, don't nest in cell object
         if (!payload.description && payload.content) {
@@ -203,6 +202,18 @@ export class ActionCommandParser {
         }
         if (!payload.type) {
           payload.type = 'markdown'; // Default type
+        }
+        break;
+
+      case 'add_cell':
+        if (payload.cell === undefined) {
+          payload.cell = {
+            type: payload.type ?? 'markdown',
+            content: payload.content ?? payload.description ?? args[0] ?? '',
+            id: payload.id ?? payload.cellId,
+            metadata: payload.metadata,
+            language: payload.language,
+          };
         }
         break;
 

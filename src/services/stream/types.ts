@@ -17,6 +17,7 @@ export interface StreamPayload {
   content?: string;
   outputs?: any[];
   cell?: any;
+  position?: 'start' | 'end' | number;
   error?: string;
   type?: string;
   description?: string;
