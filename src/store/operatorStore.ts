@@ -5,7 +5,8 @@ import { handleStreamResponse } from '@Services/stream';
 import { showToast } from '@/components/UI/Toast';
 import useCodeStore from '@Store/codeStore';
 import { storeLog } from '@Utils/logger';
-import { apiLog } from '@Utils/logger';
+import { OperationStreamReader } from '@Services/stream/OperationStreamReader';
+import type { StreamData } from '@Services/stream';
 import type { Operation, OperationResponseData } from '@Store/models/operation';
 
 /**
@@ -72,142 +73,53 @@ const useOperatorStore = create<OperatorStore>((set, get) => ({
    * @param operation - 操作对象
    */
   sendOperation: async (notebookId: string | null, operation: Operation): Promise<void> => {
-    const state = get();
-
-    if (!notebookId) {
-      const kernelId = await useCodeStore.getState().initializeKernel();
-      if (!kernelId) {
-        showToast({
-          description: '无法初始化内核',
-          variant: 'destructive',
-        });
-        return;
-      }
-      notebookId = kernelId;
-    }
-
-    if (state.isSendingOperation) {
-      showToast({
-        description: '正在处理其他操作，请稍后...',
-        variant: 'default',
-      });
+    if (get().isSendingOperation) {
+      showToast({ description: '正在处理其他操作，请稍后...', variant: 'default' });
       return;
     }
-
+    // Reserve before kernel initialization: concurrent requests must not both pass admission.
     set({ isSendingOperation: true, error: null });
-    const operationId = get().addOperation(operation);
-
     try {
+      if (!notebookId) {
+        const kernelId = await useCodeStore.getState().initializeKernel();
+        if (!kernelId) throw new Error('无法初始化内核');
+        notebookId = kernelId;
+      }
+      const operationId = get().addOperation(operation);
       storeLog.debug('Sending operation', {
         operationId,
         operationType: operation.type,
         notebookId,
       });
 
-      // Use OperationService to send operation
       const stream = await OperationService.sendOperation(notebookId, operation);
-      if (!stream) return;
+      if (!stream) throw new Error('Operation response has no stream body');
+      await new OperationStreamReader().consume(stream, async (data) => {
+        set((state) => ({
+          operationResponses: {
+            ...state.operationResponses,
+            [operationId]: [...(state.operationResponses[operationId] || []), data],
+          },
+        }));
+        await handleStreamResponse(data as unknown as StreamData, async (toast) => {
+          showToast({
+            description: toast.message,
+            variant: toast.type === 'error' ? 'destructive' : 'default',
+          });
+        });
+      });
 
-      const reader = stream.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-
-      const readStream = async (): Promise<void> => {
-        const { done, value } = await reader.read();
-        if (done) {
-          apiLog.debug('Stream closed');
-          if (buffer.trim()) {
-            processBuffer();
-          }
-          return;
-        }
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        processBuffer();
-        readStream();
-      };
-
-      const processBuffer = () => {
-        let depth = 0;
-        let start = 0;
-        let inString = false;
-        let escape = false;
-
-        for (let i = 0; i < buffer.length; i++) {
-          const char = buffer[i];
-
-          if (escape) {
-            escape = false;
-            continue;
-          }
-
-          if (char === '\\') {
-            escape = true;
-            continue;
-          }
-
-          if (char === '"') {
-            inString = !inString;
-            continue;
-          }
-
-          if (inString) continue;
-
-          if (char === '{') {
-            depth++;
-          } else if (char === '}') {
-            depth--;
-            if (depth === 0) {
-              const jsonStr = buffer.substring(start, i + 1);
-              try {
-                const data = JSON.parse(jsonStr) as OperationResponseData;
-                apiLog.debug('Received stream update', {
-                  operationId,
-                  dataType: data.type,
-                  hasPayload: !!data.payload,
-                });
-
-                // Handle stream response (cast to StreamData as they're compatible)
-                // Wrap showToast to match expected signature
-                const toastWrapper = async (toast: {
-                  message: string;
-                  type: 'success' | 'error' | 'warning' | 'info';
-                }) => {
-                  showToast({
-                    description: toast.message,
-                    variant: toast.type === 'error' ? 'destructive' : 'default',
-                  });
-                };
-                handleStreamResponse(data as any, toastWrapper);
-
-                // Update operation responses
-                set((state) => ({
-                  operationResponses: {
-                    ...state.operationResponses,
-                    [operationId]: [...(state.operationResponses[operationId] || []), data],
-                  },
-                }));
-              } catch (e) {
-                apiLog.error('Failed to parse JSON', { error: e, json: jsonStr.substring(0, 100) });
-              }
-              start = i + 1;
-            }
-          }
-        }
-        buffer = buffer.substring(start);
-      };
-
-      await readStream();
       storeLog.debug('Operation completed', { operationId });
-    } catch (error: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       storeLog.error('Failed to send operation', {
-        error: error.message,
+        error: message,
         operationType: operation.type,
         notebookId,
       });
-      set({ error: error.message });
+      set({ error: message });
       showToast({
-        description: `操作发送失败: ${error.message}`,
+        description: `操作发送失败: ${message}`,
         variant: 'destructive',
       });
     } finally {

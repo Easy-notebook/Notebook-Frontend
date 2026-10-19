@@ -1,0 +1,95 @@
+import { expect, it, vi } from 'vitest';
+import { OperationStreamReader } from './OperationStreamReader';
+const encoder = new TextEncoder();
+function stream(chunks: Uint8Array[]) {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      chunks.forEach((chunk) => controller.enqueue(chunk));
+      controller.close();
+    },
+  });
+}
+it('decodes every byte boundary including Unicode, escaped strings and nested objects', async () => {
+  const messages = [
+    { text: '汉字🙂{quote:" slash:\\}', nested: { array: [{ a: 1 }] } },
+    { type: 'done' },
+  ];
+  const bytes = encoder.encode(messages.map((value) => JSON.stringify(value)).join('\n '));
+  const receive = vi.fn();
+  const input = stream(Array.from(bytes, (byte) => new Uint8Array([byte])));
+  await new OperationStreamReader().consume(input, receive);
+  expect(receive.mock.calls.map((call) => call[0])).toEqual(messages);
+  expect(input.locked).toBe(false);
+});
+it('awaits each handler in wire order and does not settle after the first chunk', async () => {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const input = new ReadableStream<Uint8Array>({
+    start(value) {
+      controller = value;
+    },
+  });
+  let release!: () => void;
+  const first = new Promise<void>((done) => {
+    release = done;
+  });
+  const receive = vi.fn().mockReturnValueOnce(first).mockResolvedValue(undefined);
+  const completed = vi.fn();
+  const pending = new OperationStreamReader().consume(input, receive).then(completed);
+  controller.enqueue(encoder.encode('{"n":1}{"n":2}'));
+  await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+  expect(completed).not.toHaveBeenCalled();
+  release();
+  await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+  expect(completed).not.toHaveBeenCalled();
+  controller.enqueue(encoder.encode('{"n":3}'));
+  controller.close();
+  await pending;
+  expect(receive.mock.calls.map((call) => call[0])).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+  expect(completed).toHaveBeenCalledOnce();
+});
+it.each(['{"unfinished":', 'not-json', '{"invalid":}', '[]'])(
+  'rejects invalid protocol input %s and releases the reader',
+  async (text) => {
+    const input = stream([encoder.encode(text)]);
+    await expect(new OperationStreamReader().consume(input, vi.fn())).rejects.toThrow();
+    expect(input.locked).toBe(false);
+  }
+);
+it('rejects truncated UTF-8 at EOF instead of publishing replacement characters', async () => {
+  const input = stream([encoder.encode('{"text":"'), new Uint8Array([0xe4, 0xb8])]);
+  await expect(new OperationStreamReader().consume(input, vi.fn())).rejects.toThrow();
+  expect(input.locked).toBe(false);
+});
+it('cancels transport and releases its lock after a handler failure', async () => {
+  const cancel = vi.fn();
+  const input = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('{}'));
+    },
+    cancel,
+  });
+  const error = new Error('handler failed');
+  await expect(
+    new OperationStreamReader().consume(input, async () => {
+      throw error;
+    })
+  ).rejects.toBe(error);
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(input.locked).toBe(false);
+});
+it('propagates failures from a later read and releases the lock', async () => {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const input = new ReadableStream<Uint8Array>({
+    start(value) {
+      controller = value;
+    },
+  });
+  const receive = vi.fn();
+  const pending = new OperationStreamReader().consume(input, receive);
+  controller.enqueue(encoder.encode('{}'));
+  await vi.waitFor(() => expect(receive).toHaveBeenCalledOnce());
+  const assertion = expect(pending).rejects.toThrow('lost connection');
+  controller.error(new Error('lost connection'));
+  await assertion;
+  expect(input.locked).toBe(false);
+});
