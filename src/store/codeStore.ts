@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import useStore from '@Store/notebookStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { KernelSession } from '@Services/notebook/KernelSession';
+import { CellStatusPoller } from '@Services/notebook/CellStatusPoller';
 import { CodeExecutionService } from '@Services/notebook/CodeExecutionService';
 import { storeLog } from '@Utils/logger';
 import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
@@ -11,7 +12,6 @@ import {
   type DisplayMode,
   type CellExecutionState,
   type ExecutionResult,
-  type ExecutionStatus,
 } from '@Store/models';
 
 // Re-export display modes for backward compatibility with UI imports
@@ -84,6 +84,20 @@ const useCodeStore = create<CodeStore>((set, get) => {
     adopt: (id) => useStore.getState().setNotebookId(id, { preserveContent: true }),
     publish: (ready, error) => set({ isKernelReady: ready, error }),
   });
+  const polling = new CellStatusPoller({
+    notebookId: () => useStore.getState().notebookId,
+    hasCell: (id) => useStore.getState().cells.some((cell) => cell.id === id),
+    executing: (id) => get().getCellExecState(id).isExecuting,
+    watch: (check) => useStore.subscribe(check),
+    status: (notebookId, signal) => CodeExecutionService.getExecutionStatus(notebookId, signal),
+    update: (id, state) => get().setCellExecState(id, state),
+    outputs: (id, outputs) => useStore.getState().updateCellOutputs(id, outputs),
+    error: (cellId, error) =>
+      storeLog.error('Error checking execution status', {
+        cellId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+  });
   return {
     // ========== 全局内核状态 ==========
     isKernelReady: false,
@@ -149,64 +163,8 @@ const useCodeStore = create<CodeStore>((set, get) => {
       }));
     },
 
-    // 停止定时器
-    stopStatusCheck: (cellId: string) => {
-      const cellExec = get().getCellExecState(cellId);
-      if (cellExec.statusCheckInterval) {
-        clearInterval(cellExec.statusCheckInterval);
-      }
-      get().setCellExecState(cellId, { statusCheckInterval: null });
-    },
-
-    // 启动定时器，每秒检查一次执行状态
-    startStatusCheck: (cellId: string) => {
-      const notebookId = useStore.getState().notebookId;
-      if (!notebookId) {
-        storeLog.error('Cannot start status polling - notebook ID does not exist', { cellId });
-        return;
-      }
-      // 先停掉旧的
-      get().stopStatusCheck(cellId);
-
-      const intervalId = setInterval(async () => {
-        try {
-          const status: ExecutionStatus = await CodeExecutionService.getExecutionStatus(notebookId);
-          const cellExec = get().getCellExecState(cellId);
-          // 如果已经不在执行，就停止轮询
-          if (!cellExec.isExecuting) {
-            clearInterval(intervalId);
-            return;
-          }
-
-          if (status.status === 'running') {
-            get().setCellExecState(cellId, { elapsedTime: status.elapsed_time || 0 });
-            if (status.outputs?.length && status.outputs.length > 0) {
-              useStore.getState().updateCellOutputs(cellId, status.outputs);
-            }
-          } else {
-            // 执行结束
-            clearInterval(intervalId);
-            get().setCellExecState(cellId, {
-              isExecuting: false,
-              elapsedTime: 0,
-              statusCheckInterval: null,
-            });
-            if (status.outputs?.length && status.outputs.length > 0) {
-              useStore.getState().updateCellOutputs(cellId, status.outputs);
-            }
-          }
-        } catch (err: any) {
-          storeLog.error('Error checking execution status', { cellId, error: err.message });
-          clearInterval(intervalId);
-          get().setCellExecState(cellId, {
-            isExecuting: false,
-            statusCheckInterval: null,
-          });
-        }
-      }, 1000) as any;
-
-      get().setCellExecState(cellId, { statusCheckInterval: intervalId });
-    },
+    stopStatusCheck: (cellId: string) => polling.stop(cellId),
+    startStatusCheck: (cellId: string) => polling.start(cellId),
 
     // 取消执行
     cancelCellExecution: async (cellId: string): Promise<ExecutionResult> => {
@@ -358,6 +316,7 @@ const useCodeStore = create<CodeStore>((set, get) => {
     // ========== 重置 ==========
     resetAll: () => {
       kernel.invalidate();
+      polling.reset();
       set({
         isKernelReady: false,
         error: null,

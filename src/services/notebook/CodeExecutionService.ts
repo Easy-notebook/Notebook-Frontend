@@ -48,10 +48,14 @@ export class CodeExecutionService extends BaseService {
   }
 
   // Get execution status
-  static async getExecutionStatus(notebookId: string): Promise<ExecutionStatus> {
+  static async getExecutionStatus(
+    notebookId: string,
+    signal?: AbortSignal
+  ): Promise<ExecutionStatus> {
     try {
       const response = await fetch(`${this.baseUrl}/execution_status/${notebookId}`, {
         method: 'GET',
+        signal,
       });
       return await this.handleResponse<ExecutionStatus>(response);
     } catch (error) {
