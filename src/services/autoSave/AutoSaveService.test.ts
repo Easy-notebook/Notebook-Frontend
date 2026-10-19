@@ -927,3 +927,42 @@ it('retries the same revision body after its caller mutates the input', async ()
   expect(writes[1]).toBe(writes[0]);
   expect(JSON.parse(writes[1]).cells[0].content).toBe('# accepted');
 });
+
+it('does not start pausing or drain accepted edits when pause snapshot admission fails', async () => {
+  await service.queueSave(snapshot('accepted'));
+  const previous = service.getSaveProgress('notebook');
+  const invalid = snapshot('invalid');
+  invalid.cells[0].metadata = { callback: () => {} };
+  await expect(service.pause(invalid)).rejects.toThrow();
+  await service.waitForComplete();
+  expect(service.getState().scheduling).toBe('running');
+  expect(service.getSaveProgress('notebook')).toBe(previous);
+  expect(storage.notebooks.saveNotebookSnapshot).not.toHaveBeenCalled();
+  await service.pause();
+  expect(service.isPaused()).toBe(true);
+  expect(JSON.parse(storage.notebooks.saveNotebookSnapshot.mock.calls[0][0].content).title).toBe(
+    'accepted'
+  );
+});
+
+it('preserves an active pause when a concurrent caller supplies an uncloneable edit', async () => {
+  const gate = deferred();
+  const started = deferred();
+  storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+    started.resolve();
+    await gate.promise;
+    return { id: 'file' };
+  });
+  const first = service.pause(snapshot('accepted'));
+  await started.promise;
+  const progress = service.getSaveProgress('notebook');
+  const invalid = snapshot('invalid');
+  invalid.cells[0].metadata = { callback: () => {} };
+  await expect(service.pause(invalid)).rejects.toThrow();
+  expect(service.getState().scheduling).toBe('pausing');
+  expect(service.getSaveProgress('notebook')).toBe(progress);
+  gate.resolve();
+  await first;
+  expect(service.isPaused()).toBe(true);
+  expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledOnce();
+});

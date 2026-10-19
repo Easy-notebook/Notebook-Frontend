@@ -375,6 +375,9 @@ export class AutoSaveService implements IAutoSaveService {
       return this.pauseCompletion;
     }
     if (this.isPaused() && !currentSnapshot) return;
+    // Admission may throw while copying input. It must finish before starting a pause.
+    // Queue admission has no callbacks; publish only after pause ownership is installed.
+    const queued = currentSnapshot ? this.saveQueue.enqueue(currentSnapshot) : undefined;
     const previousScheduling = this.state.scheduling;
     const completion = Promise.resolve().then(async () => {
       try {
@@ -408,8 +411,7 @@ export class AutoSaveService implements IAutoSaveService {
     });
     this.pauseCompletion = completion;
     this.debouncedSave.cancel();
-    // Capture the caller's snapshot before observers can submit newer edits.
-    if (currentSnapshot) this.enqueueSnapshot(currentSnapshot);
+    if (queued) this.publishQueuedSnapshot(queued);
     if (this.lifecycle.phase === 'active')
       this.publish({ scheduling: 'pausing' }, 'scheduling_changed');
     return completion;
@@ -520,9 +522,13 @@ export class AutoSaveService implements IAutoSaveService {
    */
   private enqueueSnapshot(snapshot: NotebookSnapshot): number {
     const queued = this.saveQueue.enqueue(snapshot);
+    this.publishQueuedSnapshot(queued);
+    return queued.revision;
+  }
+
+  private publishQueuedSnapshot(snapshot: QueuedSnapshot): void {
     this.scheduler.changed();
     this.publish({ activeNotebookId: snapshot.notebookId }, 'dirty_changed', snapshot.notebookId);
-    return queued.revision;
   }
 
   private async processSaveQueue(notebookId?: string): Promise<void> {

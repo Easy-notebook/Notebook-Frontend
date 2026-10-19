@@ -78,3 +78,13 @@ retry and cleanup failure). These tests use a mock service and jsdom, not a nati
 browser startup audit. Full-project typecheck remains at 305 diagnostics with none in
 PersistenceContext; targeted lint has zero errors and the pre-existing mixed-export
 Fast Refresh warning. Autosave shutdown and per-notebook state machines were implemented in later phases; see the save revision ownership section above.
+
+## Pause admission
+
+pause(snapshot) accepts and copies its supplied revision before creating a pause task or cancelling
+the debounce timer. Queue admission itself invokes no observers. Once accepted, pause ownership
+is installed before publishing the queued snapshot, so synchronous subscribers still share the
+same drain and can submit newer edits safely. Rejected input leaves scheduling and existing
+pending revisions unchanged; a rejected concurrent pause leaves the already-active pause intact.
+The regression reproduced a rejected pause nevertheless reaching paused before this ordering fix.
+The updated storage/autosave/session gate passes 326 tests across 20 files.
