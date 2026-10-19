@@ -40,6 +40,8 @@ export interface StreamPayload {
   status?: string;
   videoUrl?: string;
   href?: string;
+  url?: string;
+  filePath?: string;
   label?: string;
   notebook_id?: string;
   response?: string;

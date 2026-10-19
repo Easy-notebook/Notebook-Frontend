@@ -321,3 +321,8 @@ handlers have been removed so imports cannot silently select a different impleme
 Indexes must be nonnegative safe integers; missing, malformed, fractional and non-finite
 values fail before changing notebook selection. Positional inputs use the same value parser
 as flags, so numeric prefixes are never silently truncated.
+
+`open_link_in_split` uses `previewFileInSplit` for notebook paths and waits for an actual
+loaded file before reporting success. External HTTP(S) links follow the editor convention
+and open in a separate tab. Other URL schemes are rejected. File requests use the command
+context notebook, then the payload notebook, then the current notebook captured at admission.

@@ -1,46 +1,39 @@
 /**
  * Open Link Action - Handles open_link_in_split stream type
- * Opens a file or URL in split view with preview
+ * Previews notebook files in split view; HTTP(S) links follow the editor new-tab behavior.
  */
 
 import { StreamAction, registerStreamAction } from '../base';
 import type { StreamActionContext } from '../../types';
+import useStore from '@Store/notebookStore';
 
 export class OpenLinkAction extends StreamAction {
   async execute(context: StreamActionContext): Promise<void> {
     const { payload, showToast } = context;
-    const url = payload?.url;
-    const filePath = payload?.filePath;
-    const title = payload?.title;
+    const target = payload.url || payload.filePath;
+    if (typeof target !== 'string' || !target.trim())
+      throw new Error('A link or file path is required');
+    const title = payload.title || target;
 
-    const targetUrl = url || filePath;
-
-    if (targetUrl) {
-      console.log('[OpenLinkInSplit]', targetUrl);
-
-      try {
-        // Use dynamic import to avoid circular dependencies
-        const { default: usePreviewStore } = await import('@Store/previewStore');
-
-        // Open in split view
-        usePreviewStore.getState().openPreview({
-          url: targetUrl,
-          title: title || targetUrl,
-          type: filePath ? 'file' : 'web',
-        });
-
-        await showToast({
-          message: `已在分屏中打开: ${title || targetUrl}`,
-          type: 'success',
-        });
-      } catch (error) {
-        console.error('Failed to open link in split:', error);
-        await showToast({
-          message: '打开分屏失败',
-          type: 'error',
-        });
-      }
+    // Match the editor's existing link behavior: files split, web links open separately.
+    if (/^https?:\/\//i.test(target)) {
+      const url = new URL(target);
+      window.open(url.href, '_blank', 'noopener,noreferrer');
+      await showToast({ message: `已打开链接: ${title}`, type: 'success' });
+      return;
     }
+    if (/^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//'))
+      throw new Error('Only notebook file paths and HTTP(S) links are supported');
+
+    const notebookId = context.notebookId || payload.notebook_id || useStore.getState().notebookId;
+    if (!notebookId) throw new Error('A notebook is required to preview a file');
+    const { default: usePreviewStore } = await import('@Store/previewStore');
+    const file = await usePreviewStore.getState().previewFileInSplit(notebookId, target);
+    if (!file)
+      throw new Error(usePreviewStore.getState().error || 'Failed to open file in split preview');
+    const preview = usePreviewStore.getState();
+    if (preview.previewMode !== 'file') preview.changePreviewMode();
+    await showToast({ message: `已在分屏中打开: ${title}`, type: 'success' });
   }
 }
 
