@@ -25,7 +25,7 @@ checks same-tab concurrency plus a deterministic two-tab race: the first generat
 paused, the second is observed waiting for the lock, and both ciphertexts remain readable
 from both tabs after reload. Coordination is cooperative: old/uncoordinated clients and
 external key deletion/replacement are outside this guarantee. This does not serialize
-settings-record writes or implement multi-tab preference conflict resolution.
+settings-record writes; those use the separate settings lock described below.
 
 The lock lifecycle follows the [Web Locks specification](https://www.w3.org/TR/web-locks/):
 exclusive ownership lasts until the initialization callback settles.
@@ -78,9 +78,22 @@ each primary commit, including quota retries. A newer record observed after asyn
 work is preserved. Rejection does not latch the queue: externally repairing or explicitly
 removing the record allows a later save.
 
-These checks do not provide an atomic cross-tab compare-and-swap; another tab can still
-write between a storage read and write. Backups already created before a version change
-are not rolled back. Explicit removal remains an intentional deletion operation.
+All adapter operations also enter the origin-scoped `easy-notebook:settings` Web Lock.
+Successful reads and commits record the exact primary JSON snapshot (including absence).
+Before a write, the adapter compares that observed snapshot with storage while holding
+the lock. A changed or deleted record raises `SettingsWriteConflictError` before encryption
+or backup creation. Successful commits advance the baseline; rehydration explicitly reads
+the winner so a subsequent user update can proceed. In-flight local writes remain ordered
+by the existing promise queue. An adapter's first write without any prior read admits the
+current record as its baseline; application hydration normally establishes it first.
+
+This is cooperative conflict detection, not automatic field merging. Old clients or direct
+storage writers that ignore the lock remain outside the atomic guarantee; additional
+checks after asynchronous work still detect observed changes. Backups already created
+before an uncoordinated change are not rolled back. Explicit removal intentionally deletes
+the current record under the lock and resets the local baseline to absence. All settings
+persistence now requires Web Locks; no local-only write fallback is provided. Lock order
+is settings then encryption-key initialization; encryption never acquires settings ownership.
 
 ## Validation and remaining scope
 
@@ -101,7 +114,7 @@ so they cannot bypass migration. Unknown extension fields are preserved. Shared 
 live in `SettingsDefaults`, independent of the Store.
 
 This is structural validation, not a new URL/shortcut/business policy: string fields
-retain their existing accepted domain. Cross-tab writer coordination, explicit save-status
+retain their existing accepted domain. Automatic conflict merging, explicit save-status
 UI beyond the existing error field, and broader backup lifecycle improvements remain
 separate work.
 
@@ -139,3 +152,7 @@ this broad cleanup. Metadata parsing is typed and non-numeric metadata sorts as 
 
 Unit tests cover detached calls, zero usage, probe preservation, failure reporting and
 cleanup ordering/isolation. Chromium exercises destructured methods from the public hook.
+
+Cross-tab tests pause one writer during encryption, observe another waiting for settings
+ownership, then verify stale-write rejection, winner preservation, rehydration and retry.
+Unit tests also verify external deletion cannot be silently resurrected.

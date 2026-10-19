@@ -13,6 +13,7 @@ it('recovers an older decryptable candidate without deleting malformed or unread
   const report = vi.fn();
   const backups = new SettingsBackupRepository(() => localStorage, 'backup', report);
   const storage = new SettingsPersistenceStorage({
+    exclusive: (work) => work(),
     storage: () => localStorage,
     version: 2,
     readBackup: (decode) => backups.restore(decode),

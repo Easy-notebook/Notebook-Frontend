@@ -249,3 +249,73 @@ test('storage maintenance hook methods remain callable after destructuring', asy
   expect(result.available).toBe(true);
   expect(result.estimate.quota).toBeGreaterThan(result.estimate.usage);
 });
+
+test('competing tabs serialize settings writes and reject stale snapshots until rehydrated', async ({
+  page,
+  context,
+}) => {
+  const second = await context.newPage();
+  await Promise.all([
+    page.goto('/tests/browser/storage.html'),
+    second.goto('/tests/browser/storage.html'),
+  ]);
+  for (const tab of [page, second]) {
+    await tab.evaluate(async () => {
+      const { default: store } = await import('/src/store/settingsStore.ts');
+      await store.persist.rehydrate();
+      window.settingsStore = store;
+    });
+  }
+  await page.evaluate(() => {
+    const original = crypto.subtle.encrypt.bind(crypto.subtle);
+    crypto.subtle.encrypt = async (...args) => {
+      window.encryptionEntered = true;
+      await new Promise((resolve) => {
+        window.releaseEncryption = resolve;
+      });
+      return original(...args);
+    };
+    window.firstWrite = window.settingsStore
+      .getState()
+      .updateApiSettings({ apiKey: 'winning-key' });
+  });
+  await page.waitForFunction(() => window.encryptionEntered === true);
+  await second.evaluate(() => {
+    window.secondWrite = window.settingsStore
+      .getState()
+      .updateApiSettings({ apiKey: 'stale-key' })
+      .then(
+        () => 'unexpected success',
+        (error) => error.name
+      );
+  });
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const locks = await navigator.locks.query();
+        return locks.pending.filter((lock) => lock.name === 'easy-notebook:settings').length;
+      })
+    )
+    .toBe(1);
+  await page.evaluate(() => window.releaseEncryption());
+  await page.evaluate(() => window.firstWrite);
+  expect(await second.evaluate(() => window.secondWrite)).toBe('SettingsWriteConflictError');
+  const result = await second.evaluate(async () => {
+    const store = window.settingsStore;
+    const conflict = store.getState().error;
+    await store.persist.rehydrate();
+    const winner = store.getState().settings.apiKey;
+    await store.getState().updateApiSettings({ apiKey: 'rebased-key' });
+    return { conflict, winner };
+  });
+  expect(result.conflict).toContain('another context');
+  expect(result.winner).toBe('winning-key');
+  await page.reload();
+  expect(
+    await page.evaluate(async () => {
+      const { default: store } = await import('/src/store/settingsStore.ts');
+      await store.persist.rehydrate();
+      return store.getState().settings.apiKey;
+    })
+  ).toBe('rebased-key');
+});

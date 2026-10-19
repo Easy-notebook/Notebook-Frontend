@@ -43,6 +43,7 @@ function setup(overrides = {}) {
   const readBackup = vi.fn().mockResolvedValue(null);
   const writeBackup = vi.fn().mockResolvedValue(undefined);
   const storage = new SettingsPersistenceStorage({
+    exclusive: (work) => work(),
     storage: () => localStorage,
     readBackup,
     writeBackup,
@@ -229,4 +230,31 @@ it('treats an unversioned historical envelope as version zero for migration', as
   const { storage } = setup();
   localStorage.setItem('settings', JSON.stringify({ state: { settings: { apiKey: '' } } }));
   expect((await storage.getItem('settings'))?.version).toBe(0);
+});
+
+it('rejects stale snapshots from a second adapter until it reads the winning record', async () => {
+  const first = setup();
+  const second = setup();
+  await first.storage.getItem('settings');
+  await second.storage.getItem('settings');
+  await first.storage.setItem('settings', envelope('first'));
+  const winner = localStorage.getItem('settings');
+  await expect(second.storage.setItem('settings', envelope('second'))).rejects.toMatchObject({
+    name: 'SettingsWriteConflictError',
+  });
+  expect(localStorage.getItem('settings')).toBe(winner);
+  expect(second.writeBackup).not.toHaveBeenCalled();
+  await second.storage.getItem('settings');
+  await second.storage.setItem('settings', envelope('second'));
+  expect((await second.storage.getItem('settings'))?.state.settings?.language).toBe('second');
+});
+
+it('does not resurrect a primary record deleted after this adapter last read it', async () => {
+  const { storage } = setup();
+  await storage.setItem('settings', envelope());
+  localStorage.removeItem('settings');
+  await expect(storage.setItem('settings', envelope('en'))).rejects.toMatchObject({
+    name: 'SettingsWriteConflictError',
+  });
+  expect(localStorage.getItem('settings')).toBeNull();
 });

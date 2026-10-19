@@ -21,7 +21,15 @@ export function assertSupportedSettingsVersion(version: unknown, supported: numb
     throw new UnsupportedSettingsVersionError(version, supported);
 }
 
+export class SettingsWriteConflictError extends Error {
+  constructor() {
+    super('Settings changed in another context; reload settings before saving again');
+    this.name = 'SettingsWriteConflictError';
+  }
+}
+
 interface SettingsStorageDependencies {
+  exclusive: <T>(work: () => Promise<T>) => Promise<T>;
   storage: () => Storage;
   readBackup: (
     decode: (state: unknown) => Promise<PersistedState>
@@ -36,11 +44,12 @@ interface SettingsStorageDependencies {
 /** Serialized settings I/O. Runtime state stays plaintext; persisted credentials are encrypted. */
 export class SettingsPersistenceStorage implements PersistStorage<PersistedState, Promise<void>> {
   private tail: Promise<void> = Promise.resolve();
+  private readonly observed = new Map<string, string | null>();
 
   constructor(private readonly dependencies: SettingsStorageDependencies) {}
 
   private enqueue<T>(work: () => Promise<T>): Promise<T> {
-    const operation = this.tail.then(work);
+    const operation = this.tail.then(() => this.dependencies.exclusive(work));
     this.tail = operation.then(
       () => undefined,
       () => undefined
@@ -76,28 +85,34 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
 
   private assertWritable(name: string): void {
     const raw = this.dependencies.storage().getItem(name);
-    if (raw === null) return;
-    let value: unknown;
-    try {
-      value = JSON.parse(raw);
-    } catch (error) {
-      // Explicit saves may replace corrupt JSON after recovery.
-      if (error instanceof SyntaxError) return;
-      throw error;
+    if (raw !== null) {
+      let value: unknown;
+      try {
+        value = JSON.parse(raw);
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+      }
+      if (object(value)) assertSupportedSettingsVersion(value.version, this.dependencies.version);
     }
-    if (object(value)) assertSupportedSettingsVersion(value.version, this.dependencies.version);
+    if (this.observed.has(name) && this.observed.get(name) !== raw)
+      throw new SettingsWriteConflictError();
   }
 
   private commit(name: string, encoded: string): void {
     this.assertWritable(name);
     this.dependencies.storage().setItem(name, encoded);
+    this.observed.set(name, encoded);
   }
 
   getItem(name: string): Promise<StorageValue<PersistedState> | null> {
     return this.enqueue(async () => {
+      const raw = this.dependencies.storage().getItem(name);
+      if (raw === null) {
+        const recovered = await this.backup();
+        this.observed.set(name, raw);
+        return recovered;
+      }
       try {
-        const raw = this.dependencies.storage().getItem(name);
-        if (raw === null) return this.backup();
         const value: unknown = JSON.parse(raw);
         if (
           !object(value) ||
@@ -108,17 +123,22 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
         )
           throw new Error('Invalid settings storage envelope');
         assertSupportedSettingsVersion(value.version, this.dependencies.version);
-        return {
+        const result = {
           state: await this.transform(
             readSettingsState(value.state, value.version !== this.dependencies.version),
             'decrypt'
           ),
           version: (value.version as number | undefined) ?? 0,
         };
+        this.observed.set(name, raw);
+        return result;
       } catch (error) {
         if (error instanceof UnsupportedSettingsVersionError) throw error;
         const recovered = await this.backup();
-        if (recovered) return recovered;
+        if (recovered) {
+          this.observed.set(name, raw);
+          return recovered;
+        }
         throw error;
       }
     });
@@ -128,6 +148,8 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
     const captured = structuredClone(value);
     return this.enqueue(async () => {
       this.assertWritable(name);
+      if (!this.observed.has(name))
+        this.observed.set(name, this.dependencies.storage().getItem(name));
       const state = await this.transform(captured.state, 'encrypt');
       this.assertWritable(name);
       const encoded = JSON.stringify({ ...captured, state });
@@ -145,6 +167,7 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
   removeItem(name: string): Promise<void> {
     return this.enqueue(async () => {
       this.dependencies.storage().removeItem(name);
+      this.observed.set(name, null);
     });
   }
 

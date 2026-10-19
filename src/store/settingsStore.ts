@@ -224,6 +224,10 @@ const settingsBackups = new SettingsBackupRepository(
 );
 
 const settingsPersistence = new SettingsPersistenceStorage({
+  exclusive: async (work) => {
+    if (!navigator.locks) throw new Error('Web Locks is required for settings persistence');
+    return await navigator.locks.request('easy-notebook:settings', work);
+  },
   storage: () => localStorage,
   readBackup: (decode) => settingsBackups.restore(decode),
   writeBackup: (settings) => settingsBackups.create(settings),
