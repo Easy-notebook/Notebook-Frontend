@@ -94,3 +94,22 @@ it('rebuilds local storage state without changing the prior revision or access h
     size: 100,
   });
 });
+
+it.each([
+  ['', 'file'],
+  ['book', ''],
+  [42, 'file'],
+  ['book', 42],
+])('rejects malformed prepared ownership %j/%j', (notebookId, filePath) => {
+  expect(
+    () =>
+      new FileRecordSet({
+        notebookId: notebookId as string,
+        filePath: filePath as string,
+        fileName: 'file',
+        content: '',
+        size: 0,
+        lastModified: 'old',
+      })
+  ).toThrow();
+});

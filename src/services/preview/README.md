@@ -520,3 +520,15 @@ Historical encoding annotations do not alter the existing raw-string read behavi
 Single-file reads validate content before recording access, under the same existing
 transaction lock. Notebook enumeration uses the same admission rule within one
 readonly transaction, preserving indexed order. Neither path repairs corrupt bodies.
+
+## File metadata ownership
+
+`FileRecordOwnership` checks that persisted identity, notebook and opaque file path
+agree, and match the operation's requested owner. FileRepository applies it before
+reads, replacement, content edits, deletion, indexed listing and orphan accounting.
+FileRecordSet also applies it to newly prepared metadata. Content edits use the
+validated stored identity rather than overwriting it with request fields.
+
+Notebook clearing remains one transaction: if any record has conflicting ownership,
+all earlier deletions and accounting changes roll back. This check concerns identity;
+it does not claim to validate all metadata fields or accounting values.

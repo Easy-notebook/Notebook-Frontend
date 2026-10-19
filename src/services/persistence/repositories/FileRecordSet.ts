@@ -1,3 +1,4 @@
+import { FileRecordOwnership } from './FileRecordOwnership';
 import { FileContentRecord } from './FileContentRecord';
 import { makeFileId } from '../../../storage/fileIdentity';
 import type { FileContentEntity, FileMetadataEntity } from '../../../storage/schema';
@@ -44,6 +45,7 @@ export class FileRecordSet {
       isLargeFile: isRemote,
       contentPreview: isRemote ? payload.content.substring(0, 500) : undefined,
     };
+    new FileRecordOwnership(data.notebookId, data.filePath).verify(this.metadata);
     this.content = isRemote
       ? undefined
       : {

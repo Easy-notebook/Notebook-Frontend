@@ -1406,8 +1406,18 @@ test('updating orphan content establishes parent ownership and counts every asso
     const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
     const provider = new IndexedDBStorageProvider();
     const S = DB_CONFIG.STORES;
-    await provider.put(S.FILES_METADATA, { id: 'book::a', notebookId: 'book', size: 3 });
-    await provider.put(S.FILES_METADATA, { id: 'book::b', notebookId: 'book', size: 7 });
+    await provider.put(S.FILES_METADATA, {
+      id: 'book::a',
+      notebookId: 'book',
+      filePath: 'a',
+      size: 3,
+    });
+    await provider.put(S.FILES_METADATA, {
+      id: 'book::b',
+      notebookId: 'book',
+      filePath: 'b',
+      size: 7,
+    });
     await new FileRepository(provider).updateFileContent('book', 'a', '你好');
     const notebook = await provider.get(S.NOTEBOOKS, 'book');
     await provider.close();
@@ -1458,7 +1468,12 @@ test('deleting an orphan file does not recreate a deleted notebook', async ({ pa
     const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
     const provider = new IndexedDBStorageProvider();
     const S = DB_CONFIG.STORES;
-    await provider.put(S.FILES_METADATA, { id: 'gone::file', notebookId: 'gone', size: 3 });
+    await provider.put(S.FILES_METADATA, {
+      id: 'gone::file',
+      notebookId: 'gone',
+      filePath: 'file',
+      size: 3,
+    });
     await provider.put(S.FILES_CONTENT, { fileId: 'gone::file', content: 'old' });
     await new FileRepository(provider).deleteFile('gone', 'file');
     const notebooks = await provider.getAll(S.NOTEBOOKS);
@@ -3994,4 +4009,56 @@ test('corrupt file content rejects reads without changing access accounting', as
   expect(result.afterMetadata).toEqual(result.metadata);
   expect(result.afterNotebook).toEqual(result.notebook);
   expect(result.afterActivities).toEqual(result.activities);
+});
+
+test('corrupt file ownership rejects mutations and rolls back notebook deletion', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new FileRepository(provider);
+    const S = DB_CONFIG.STORES;
+    const data = {
+      notebookId: 'book',
+      filePath: 'b',
+      fileName: 'b',
+      content: 'body',
+      size: 4,
+      lastModified: 'old',
+    };
+    await repository.saveFile({ ...data, filePath: 'a', fileName: 'a' });
+    await repository.saveFile(data);
+    const original = await provider.get(S.FILES_METADATA, 'book::b');
+    await provider.put(S.FILES_METADATA, { ...original, filePath: 'wrong-path' });
+    const snapshot = async () =>
+      Promise.all(
+        [S.FILES_METADATA, S.FILES_CONTENT, S.NOTEBOOKS, S.ACTIVITIES].map((store) =>
+          provider.getAll(store)
+        )
+      );
+    const before = await snapshot();
+    const errors = [];
+    for (const operation of [
+      () => repository.getFile('book', 'b'),
+      () => repository.getFilesForNotebook('book', true),
+      () => repository.getLargeFiles('book'),
+      () => repository.saveFile({ ...data, content: 'new' }),
+      () => repository.updateFileContent('book', 'b', 'new'),
+      () => repository.deleteFile('book', 'b'),
+      () => repository.clearNotebook('book'),
+    ]) {
+      try {
+        await operation();
+        errors.push(null);
+      } catch (error) {
+        errors.push(error.message);
+      }
+    }
+    const after = await snapshot();
+    await provider.close();
+    return { before, after, errors };
+  });
+  expect(result.errors).toEqual(Array(7).fill('Invalid file metadata ownership'));
+  expect(result.after).toEqual(result.before);
 });

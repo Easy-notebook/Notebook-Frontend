@@ -4,7 +4,13 @@ import type { IStorageProvider } from '../interfaces';
 import { DB_CONFIG } from '../../../storage/database';
 
 function setup(
-  metadata: unknown = { id: 'book::note.json', hasLocalContent: true, accessCount: 2 },
+  metadata: unknown = {
+    id: 'book::note.json',
+    notebookId: 'book',
+    filePath: 'note.json',
+    hasLocalContent: true,
+    accessCount: 2,
+  },
   content?: unknown
 ) {
   const request = (result: unknown) => {
@@ -13,7 +19,18 @@ function setup(
     return value;
   };
   const metadataStore = {
-    get: vi.fn(() => request(metadata)),
+    get: vi.fn((id?: string) =>
+      request(
+        id &&
+          metadata &&
+          typeof metadata === 'object' &&
+          !Array.isArray(metadata) &&
+          'id' in metadata &&
+          metadata.id !== id
+          ? undefined
+          : metadata
+      )
+    ),
     put: vi.fn(),
     delete: vi.fn(),
     index: vi.fn(() => ({
@@ -59,9 +76,9 @@ function setup(
 
 function listSetup() {
   const metadata = [
-    { id: 'book::a', notebookId: 'book', hasLocalContent: true },
-    { id: 'book::b', notebookId: 'book', hasLocalContent: false },
-    { id: 'book::c', notebookId: 'book', hasLocalContent: true },
+    { id: 'book::a', notebookId: 'book', filePath: 'a', hasLocalContent: true },
+    { id: 'book::b', notebookId: 'book', filePath: 'b', hasLocalContent: false },
+    { id: 'book::c', notebookId: 'book', filePath: 'c', hasLocalContent: true },
   ];
   const context = setup(metadata);
   const getAll = vi.fn(() => context.metadataStore.get());
@@ -107,6 +124,7 @@ it('does not open per-file transactions when listing a large notebook', async ()
     ...Array.from({ length: 1000 }, (_, index) => ({
       id: `book::${index}`,
       notebookId: 'book',
+      filePath: String(index),
       hasLocalContent: true,
     }))
   );
@@ -197,12 +215,27 @@ it('does not read content or write access statistics for a missing file', async 
 });
 
 it('keeps remote and missing local content semantics', async () => {
-  const remote = setup({ hasLocalContent: false, accessCount: 0 });
+  const remote = setup({
+    id: 'book::remote',
+    notebookId: 'book',
+    filePath: 'remote',
+    hasLocalContent: false,
+    accessCount: 0,
+  });
   expect(await remote.repository.getFile('book', 'remote')).toMatchObject({
     needsRemoteFetch: true,
   });
   expect(remote.contentStore.get).not.toHaveBeenCalled();
-  const missing = setup({ hasLocalContent: true, accessCount: 0 }, null);
+  const missing = setup(
+    {
+      id: 'book::missing',
+      notebookId: 'book',
+      filePath: 'missing',
+      hasLocalContent: true,
+      accessCount: 0,
+    },
+    null
+  );
   expect(await missing.repository.getFile('book', 'missing')).toMatchObject({
     needsRemoteFetch: true,
   });
@@ -377,3 +410,37 @@ it('rejects malformed write content before changing persisted records', async ()
   expect(metadataStore.put).not.toHaveBeenCalled();
   expect(contentStore.put).not.toHaveBeenCalled();
 });
+
+it.each(['read', 'list', 'large', 'save', 'update', 'delete', 'clear'] as const)(
+  'rejects mismatched stored ownership during %s before mutating records',
+  async (operation) => {
+    const { repository, metadataStore, contentStore } = setup({
+      id: 'book::note.json',
+      notebookId: 'other',
+      filePath: 'note.json',
+      hasLocalContent: true,
+    });
+    const actions = {
+      read: () => repository.getFile('book', 'note.json'),
+      list: () => repository.getFilesForNotebook('book', true),
+      large: () => repository.getLargeFiles('book'),
+      save: () =>
+        repository.saveFile({
+          notebookId: 'book',
+          filePath: 'note.json',
+          fileName: 'note.json',
+          content: 'new',
+          size: 3,
+          lastModified: 'now',
+        }),
+      update: () => repository.updateFileContent('book', 'note.json', 'new'),
+      delete: () => repository.deleteFile('book', 'note.json'),
+      clear: () => repository.clearNotebook('book'),
+    };
+    await expect(actions[operation]()).rejects.toThrow('Invalid file metadata ownership');
+    expect(metadataStore.put).not.toHaveBeenCalled();
+    expect(metadataStore.delete).not.toHaveBeenCalled();
+    expect(contentStore.put).not.toHaveBeenCalled();
+    expect(contentStore.delete).not.toHaveBeenCalled();
+  }
+);

@@ -1,3 +1,4 @@
+import { FileRecordOwnership } from './FileRecordOwnership';
 import { makeFileId } from '../../../storage/fileIdentity';
 import { NotebookActivityRecord } from './NotebookActivityRecord';
 import { StorageConfiguration } from '../../../storage/StorageConfiguration';
@@ -52,6 +53,8 @@ export class FileRepository implements IFileRepository {
         const existing = await this.read<FileMetadataEntity | undefined>(
           stores[DB_CONFIG.STORES.FILES_METADATA].get(records.metadata.id)
         );
+        if (existing != null)
+          new FileRecordOwnership(data.notebookId, data.filePath).verify(existing);
         records.writeTo(
           stores[DB_CONFIG.STORES.FILES_METADATA],
           stores[DB_CONFIG.STORES.FILES_CONTENT]
@@ -78,6 +81,7 @@ export class FileRepository implements IFileRepository {
       const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
       const metadata = await this.read<FileMetadataEntity | undefined>(metadataStore.get(fileId));
       if (metadata == null) return;
+      new FileRecordOwnership(notebookId, filePath).verify(metadata);
       const content = metadata.hasLocalContent
         ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], fileId)
         : undefined;
@@ -104,6 +108,7 @@ export class FileRepository implements IFileRepository {
       );
       results = await Promise.all(
         metadata.map(async (metadata) => {
+          new FileRecordOwnership(notebookId).verify(metadata);
           const content =
             includeContent && metadata.hasLocalContent
               ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], metadata.id)
@@ -148,6 +153,7 @@ export class FileRepository implements IFileRepository {
     previous?: FileMetadataEntity
   ): Promise<void> {
     const fileId = makeFileId(notebookId, filePath);
+    if (previous != null) new FileRecordOwnership(notebookId, filePath).verify(previous);
     stores[DB_CONFIG.STORES.FILES_METADATA].delete(fileId);
     stores[DB_CONFIG.STORES.FILES_CONTENT].delete(fileId);
     if (previous) {
@@ -168,8 +174,9 @@ export class FileRepository implements IFileRepository {
     await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
       const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
       const metadata = await this.read<FileMetadataEntity | undefined>(metadataStore.get(fileId));
-      if (!metadata) return;
-      const records = FileRecordSet.localUpdate({ ...metadata, notebookId, filePath }, content);
+      if (metadata == null) return;
+      new FileRecordOwnership(notebookId, filePath).verify(metadata);
+      const records = FileRecordSet.localUpdate(metadata, content);
       records.writeTo(metadataStore, stores[DB_CONFIG.STORES.FILES_CONTENT]);
       await this.recordMutation(
         stores,
@@ -197,6 +204,8 @@ export class FileRepository implements IFileRepository {
         );
       }
     );
+    const ownership = new FileRecordOwnership(notebookId);
+    for (const file of files) ownership.verify(file);
     return files.filter((file) => file.isLargeFile);
   }
 
@@ -243,6 +252,8 @@ export class FileRepository implements IFileRepository {
       const files = await this.read<FileMetadataEntity[]>(
         stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(notebookId)
       );
+      const ownership = new FileRecordOwnership(notebookId);
+      for (const file of files) ownership.verify(file);
       store.put({
         id: notebookId,
         name: `Notebook ${notebookId.slice(0, 8)}`,
