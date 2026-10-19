@@ -854,3 +854,49 @@ it('restores saved formatting and lets the first toolbar click remove imported b
     underline: true,
   });
 });
+
+it.each(['Row Above', 'Column Left'])(
+  'saves original XLSX cell metadata after Insert %s and restores it on undo',
+  async (command) => {
+    const XLSX = await import('xlsx-js-style');
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      book,
+      {
+        C3: { t: 'n', v: 4, f: '2+2', z: '0.00' },
+        D3: { t: 'n', v: 4, z: '0.00' },
+        '!ref': 'C3:D3',
+      },
+      'Main'
+    );
+    model.state.activeFile = {
+      ...model.state.activeFile,
+      id: 'book::move.xlsx',
+      name: 'move.xlsx',
+      path: 'move.xlsx',
+      type: 'xlsx',
+      content: XLSX.write(book, { type: 'base64', bookType: 'xlsx' }),
+    };
+    render(<DataTable showFormulaBar={false} />);
+    fireEvent.contextMenu(screen.getAllByText('4', { exact: true })[0]);
+    fireEvent.click(screen.getByRole('button', { name: `Insert ${command}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const calls = model.state.updatePreviewFileContent.mock.calls;
+    const moved = XLSX.read(calls[calls.length - 1][0], { type: 'base64', cellNF: true }).Sheets
+      .Main;
+    expect(moved[command === 'Row Above' ? 'C4' : 'D3']).toMatchObject({
+      t: 'n',
+      v: 4,
+      f: '2+2',
+      z: '0.00',
+    });
+    expect(moved[command === 'Row Above' ? 'D4' : 'E3']).toMatchObject({ t: 'n', v: 4, z: '0.00' });
+    expect(moved[command === 'Row Above' ? 'D4' : 'E3'].f).toBeUndefined();
+    expect(moved.C3.f).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const restored = XLSX.read(calls[calls.length - 1][0], { type: 'base64' }).Sheets.Main;
+    expect(restored.C3.f).toBe('2+2');
+    expect(restored.D3.f).toBeUndefined();
+  }
+);

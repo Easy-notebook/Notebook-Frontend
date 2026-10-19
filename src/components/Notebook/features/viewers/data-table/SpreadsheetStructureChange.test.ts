@@ -54,3 +54,46 @@ it('rejects out-of-range edits before altering the source snapshot', () => {
   }
   expect(original).toEqual(source());
 });
+
+it.each(['row', 'column'] as const)(
+  'moves workbook cell identities and merges atomically with %s edits and undo',
+  (axis) => {
+    const initial = source();
+    initial.workbook = {
+      sources: { '0:0': { r: 2, c: 2 }, '1:1': { r: 3, c: 3 } },
+      merges: [{ s: { r: 0, c: 0 }, e: { r: 1, c: 1 } }],
+    };
+    const history = new SpreadsheetHistory(initial, vi.fn());
+    const changed = new SpreadsheetStructureChange(axis, 'insert', 0).apply(
+      history.getSnapshot().value
+    );
+    history.commit(changed);
+    expect(changed.workbook?.sources[axis === 'row' ? '1:0' : '0:1']).toEqual({ r: 2, c: 2 });
+    expect(changed.workbook?.sources['0:0']).toBeUndefined();
+    expect(changed.workbook?.merges).toEqual(
+      axis === 'row'
+        ? [{ s: { r: 1, c: 0 }, e: { r: 2, c: 1 } }]
+        : [{ s: { r: 0, c: 1 }, e: { r: 1, c: 2 } }]
+    );
+    expect(new SpreadsheetStructureChange(axis, 'delete', 0).apply(changed)).toEqual(initial);
+    history.undo();
+    expect(history.getSnapshot().value).toEqual(initial);
+  }
+);
+
+it('expands merges on interior insertion and shrinks or removes them on deletion', () => {
+  const initial = source();
+  initial.workbook = {
+    sources: { '0:0': { r: 2, c: 2 }, '1:0': { r: 3, c: 2 } },
+    merges: [{ s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }],
+  };
+  const inserted = new SpreadsheetStructureChange('row', 'insert', 1).apply(initial);
+  expect(inserted.workbook?.merges).toEqual([{ s: { r: 0, c: 0 }, e: { r: 2, c: 0 } }]);
+  expect(new SpreadsheetStructureChange('row', 'delete', 1).apply(inserted)).toEqual(initial);
+  const deleted = new SpreadsheetStructureChange('row', 'delete', 0).apply(initial);
+  expect(deleted.workbook).toEqual({ sources: { '0:0': { r: 3, c: 2 } }, merges: [] });
+  expect(new SpreadsheetStructureChange('column', 'delete', 0).apply(initial).workbook).toEqual({
+    sources: {},
+    merges: [],
+  });
+});

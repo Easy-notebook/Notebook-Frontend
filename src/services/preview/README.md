@@ -374,6 +374,18 @@ history commit, so undo restores structure and formatting together. Structural
 commands rebase the active cell and clear transient ranges/editing; undo/redo
 clear transient coordinates that may not exist in the restored snapshot.
 
-This mapping covers the editor's `cellFormats`. Imported XLSX merge/style metadata
-and formula reference translation still require integration with structural edits;
-the existing workbook codec limitations remain in effect.
+XLSX snapshots also own `SpreadsheetWorkbookState`: current merged ranges and a
+mapping from grid positions to original worksheet cell addresses. The same index
+transformation moves source identities and formats, drops deleted identities, and
+expands/shrinks merged ranges. Empty and single-cell merges are removed. Undo/redo
+restores this metadata together with values; the separate React merge state is gone.
+
+Serialization reads unchanged cell records from their original identity, rather
+than from their new destination address. Inserting a row/column therefore retains
+numeric types, number formats and formula records even when adjacent displayed
+values are equal. New cells cannot inherit destination formulas. Current merges
+are translated back through the source worksheet origin when saving.
+
+Formula reference translation within moved formulas and references from other
+sheets still require implementation. Source presentation metadata outside the
+supported draft formats and full merged-cell layout remain incomplete.

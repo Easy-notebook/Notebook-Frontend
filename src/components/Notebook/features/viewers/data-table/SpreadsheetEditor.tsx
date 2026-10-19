@@ -1,6 +1,12 @@
 import { getExcelColumnName } from './SpreadsheetCoordinates';
 import { SpreadsheetStructureChange } from './SpreadsheetStructureChange';
-import type { CSVRow, ColumnInfo, CellFormat, SpreadsheetSnapshot } from './SpreadsheetSnapshot';
+import type {
+  CSVRow,
+  ColumnInfo,
+  CellFormat,
+  SpreadsheetSnapshot,
+  SpreadsheetWorkbookState,
+} from './SpreadsheetSnapshot';
 export type { CSVRow } from './SpreadsheetSnapshot';
 // moved to features/viewers/data-table
 import React, {
@@ -161,7 +167,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       )
   );
   const {
-    value: { data, columns, cellFormats },
+    value: { data, columns, cellFormats, workbook: workbookState },
     canUndo,
     canRedo,
   } = useSyncExternalStore(draftHistory.subscribe, draftHistory.getSnapshot);
@@ -182,9 +188,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   // 原始 sheet 合并/样式（仅 XLSX 有意义）
-  const [sheetMerges, setSheetMerges] = useState<
-    Array<{ s: { r: number; c: number }; e: { r: number; c: number } }>
-  >([]);
+  const sheetMerges = workbookState?.merges;
   const [styleMap, setStyleMap] = useState<Record<string, React.CSSProperties>>({});
 
   const sourceRef = useRef<{
@@ -243,7 +247,6 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       (fileType === 'xlsx' && !content)
     ) {
       draftHistory.reset({ data: [], columns: [], cellFormats: {} });
-      setSheetMerges([]);
       setStyleMap({});
       return;
     }
@@ -252,6 +255,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
     try {
       let workbook: XlsxDocument | null = null;
+      let parsedWorkbookState: SpreadsheetWorkbookState | undefined;
       let parsedData: CSVRow[] = [];
       let parsedColumns: ColumnInfo[] = [];
       const parsedFormats: Record<string, CellFormat> = {};
@@ -459,7 +463,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         }
 
         setStyleMap(nextStyleMap);
-        setSheetMerges(grid.merges);
+        parsedWorkbookState = grid.workbook;
 
         if (rows.length > 0) {
           const maxCols = Math.max(0, ...rows.map((r) => r.length));
@@ -494,7 +498,6 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         parsedData = rows.map((values) =>
           Object.fromEntries(headers.map((key, i) => [key, values[i] ?? '']))
         );
-        setSheetMerges([]);
         setStyleMap({});
         parsedColumns = headers.map((key) => ({
           key,
@@ -504,13 +507,17 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         }));
         setIsLoading(false);
       }
-      draftHistory.reset({ data: parsedData, columns: parsedColumns, cellFormats: parsedFormats });
+      draftHistory.reset({
+        data: parsedData,
+        columns: parsedColumns,
+        cellFormats: parsedFormats,
+        ...(parsedWorkbookState ? { workbook: parsedWorkbookState } : {}),
+      });
       sourceRef.current = { fileId: currentFile.id, source: content, workbook };
     } catch (err) {
       sourceRef.current = null;
       console.error('Failed to parse file:', err);
       draftHistory.reset({ data: [], columns: [], cellFormats: {} });
-      setSheetMerges([]);
       setStyleMap({});
       setIsLoading(false);
     }
@@ -847,7 +854,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     const map: Record<string, { rowSpan: number; colSpan: number }> = {};
     const covered = new Set<string>();
 
-    if (sheetMerges.length > 0 && columns.length > 0 && data.length > 0) {
+    if (sheetMerges && sheetMerges.length > 0 && columns.length > 0 && data.length > 0) {
       sheetMerges.forEach((m) => {
         // 映射到数据区
         const r0Data = m.s.r;
@@ -1077,7 +1084,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         throw new Error('Spreadsheet is not ready for saving');
       }
       const content = isWorkbook
-        ? source.workbook!.serialize(data, columns, cellFormats)
+        ? source.workbook!.serialize(data, columns, cellFormats, workbookState)
         : serializeTableCsv(data, columns);
       const ticket = editSession.beginSave(content);
       try {
@@ -1099,6 +1106,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     data,
     columns,
     cellFormats,
+    workbookState,
     setTabDirty,
     isInSplitView,
     typeOverride,

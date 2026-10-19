@@ -119,7 +119,7 @@ it('projects cells and merged regions through the same worksheet origin without 
     ['merged', undefined, undefined],
     [undefined, undefined, 7],
   ]);
-  expect(grid.merges).toEqual([{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }]);
+  expect(grid.workbook.merges).toEqual([{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }]);
   grid.cells[0][0]!.v = 'changed projection';
   expect(document.worksheet.C3.v).toBe('merged');
 });
@@ -128,7 +128,7 @@ it('projects a worksheet without a used range as an empty grid', () => {
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, {}, 'Empty');
   const document = XlsxDocument.fromBase64(XLSX.write(book, { type: 'base64', bookType: 'xlsx' }));
-  expect(document.readGrid()).toEqual({ cells: [], merges: [] });
+  expect(document.readGrid()).toEqual({ cells: [], workbook: { sources: {}, merges: [] } });
 });
 
 it('restores font and alignment styles across repeated save and reopen cycles on every worksheet', () => {
@@ -168,4 +168,45 @@ it('restores font and alignment styles across repeated save and reopen cycles on
     expect(retainedStyle.font.getElementsByTagName('b')).toHaveLength(1);
     expect(retainedStyle.alignment.getAttribute('horizontal')).toBe('right');
   }
+});
+
+it('serializes current merge geometry at the worksheet origin and removes deleted merges', () => {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      C3: { t: 's', v: 'merged' },
+      '!ref': 'C3:D3',
+      '!merges': [{ s: { r: 2, c: 2 }, e: { r: 2, c: 3 } }],
+    },
+    'Main'
+  );
+  const document = XlsxDocument.fromBase64(XLSX.write(book, { type: 'base64', bookType: 'xlsx' }));
+  const state = {
+    sources: { '1:0': { r: 2, c: 2 } },
+    merges: [{ s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }],
+  };
+  const saved = XLSX.read(
+    document.serialize(
+      [
+        { A: '', B: '' },
+        { A: 'merged', B: '' },
+      ],
+      [{ key: 'A' }, { key: 'B' }],
+      {},
+      state
+    ),
+    { type: 'base64' }
+  );
+  expect(saved.Sheets.Main['!merges']).toEqual([{ s: { r: 3, c: 2 }, e: { r: 3, c: 3 } }]);
+  const unmerged = XLSX.read(
+    document.serialize(
+      [{ A: 'merged' }],
+      [{ key: 'A' }],
+      {},
+      { sources: { '0:0': { r: 2, c: 2 } }, merges: [] }
+    ),
+    { type: 'base64' }
+  );
+  expect(unmerged.Sheets.Main['!merges'] ?? []).toEqual([]);
 });

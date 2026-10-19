@@ -19,9 +19,25 @@ export interface CellFormat {
   backgroundColor?: string;
 }
 
+export interface GridAddress {
+  r: number;
+  c: number;
+}
+export interface GridRange {
+  s: GridAddress;
+  e: GridAddress;
+}
+
+/** Original cell identities and current merge geometry travel with the editable grid. */
+export interface SpreadsheetWorkbookState {
+  sources: Record<string, GridAddress>;
+  merges: GridRange[];
+}
+
 // History state for undo/redo
 export interface SpreadsheetSnapshot {
   data: CSVRow[];
   columns: ColumnInfo[];
   cellFormats: Record<string, CellFormat>;
+  workbook?: SpreadsheetWorkbookState;
 }

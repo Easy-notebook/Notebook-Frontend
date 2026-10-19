@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx-js-style';
 import type { TableCellValue } from './CsvCodec';
-import type { CellFormat } from './SpreadsheetSnapshot';
+import type { CellFormat, SpreadsheetWorkbookState } from './SpreadsheetSnapshot';
 import { xlsxCellFormat } from './XlsxCellFormat';
 import { restoreWorkbookStyles } from './XlsxStyleReader';
 
@@ -27,13 +27,16 @@ export class XlsxDocument {
   }
 
   /** Project worksheet coordinates into the zero-based grid used by the editor. */
-  readGrid(): { cells: (XLSX.CellObject | undefined)[][]; merges: XLSX.Range[] } {
+  readGrid(): { cells: (XLSX.CellObject | undefined)[][]; workbook: SpreadsheetWorkbookState } {
     const sheet = this.worksheet;
-    if (!sheet['!ref']) return { cells: [], merges: [] };
+    if (!sheet['!ref']) return { cells: [], workbook: { sources: {}, merges: [] } };
     const range = XLSX.utils.decode_range(sheet['!ref']);
+    const sources: SpreadsheetWorkbookState['sources'] = {};
     const cells = Array.from({ length: range.e.r - range.s.r + 1 }, (_, row) =>
       Array.from({ length: range.e.c - range.s.c + 1 }, (_, column) => {
         const address = XLSX.utils.encode_cell({ r: range.s.r + row, c: range.s.c + column });
+        if (sheet[address])
+          sources[`${row}:${column}`] = { r: range.s.r + row, c: range.s.c + column };
         return structuredClone(sheet[address] as XLSX.CellObject | undefined);
       })
     );
@@ -42,13 +45,14 @@ export class XlsxDocument {
       c: cell.c - range.s.c,
     });
     const merges = (sheet['!merges'] || []).map(({ s, e }) => ({ s: local(s), e: local(e) }));
-    return { cells, merges };
+    return { cells, workbook: { sources, merges } };
   }
 
   serialize(
     rows: readonly Readonly<Record<string, TableCellValue>>[],
     columns: readonly { readonly key: string }[],
-    formats: Readonly<Record<string, CellFormat>> = {}
+    formats: Readonly<Record<string, CellFormat>> = {},
+    state?: SpreadsheetWorkbookState
   ): string {
     const workbook = structuredClone(this.workbook);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -62,7 +66,15 @@ export class XlsxDocument {
       columns.forEach(({ key }, c) => {
         const address = XLSX.utils.encode_cell({ r: range.s.r + r, c: range.s.c + c });
         const value = row[key] ?? '';
-        const previous = original[address] as XLSX.CellObject | undefined;
+        const source = state?.sources[`${r}:${c}`];
+        const sourceAddress = state
+          ? source
+            ? XLSX.utils.encode_cell(source)
+            : undefined
+          : address;
+        const previous = sourceAddress
+          ? (original[sourceAddress] as XLSX.CellObject | undefined)
+          : undefined;
         const displayed = previous?.w ?? String(previous?.v ?? '');
         let cell: XLSX.CellObject;
         if (previous && String(value) === displayed) {
@@ -95,7 +107,13 @@ export class XlsxDocument {
           c: range.s.c + columns.length - 1,
         },
       });
-      sheet['!merges'] = (sheet['!merges'] || []).filter(
+      const merges = state
+        ? state.merges.map(({ s, e }) => ({
+            s: { r: range.s.r + s.r, c: range.s.c + s.c },
+            e: { r: range.s.r + e.r, c: range.s.c + e.c },
+          }))
+        : sheet['!merges'] || [];
+      sheet['!merges'] = merges.filter(
         (merge) => merge.e.r < range.s.r + rows.length && merge.e.c < range.s.c + columns.length
       );
     } else {
