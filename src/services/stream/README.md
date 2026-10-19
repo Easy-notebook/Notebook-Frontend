@@ -318,3 +318,6 @@ occupied name throws without changing the existing handler. Cell selection belon
 `cell`, phase navigation to `phase`, and pagination to `view`. Unreferenced alternate
 handlers have been removed so imports cannot silently select a different implementation.
 `update_current_step_index` uses the existing `stepIndex` payload emitted by CLI commands.
+Indexes must be nonnegative safe integers; missing, malformed, fractional and non-finite
+values fail before changing notebook selection. Positional inputs use the same value parser
+as flags, so numeric prefixes are never silently truncated.

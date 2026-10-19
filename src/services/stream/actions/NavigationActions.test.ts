@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest';
 import useStore from '@Store/notebookStore';
+import { UpdateStepIndexAction } from './phase/UpdateStepIndexAction';
 import { ActionCommandParser } from '../commands/ActionCommandParser';
 // Exercise the same complete registration catalog used by production dispatch.
 import './index';
@@ -49,3 +50,35 @@ it.each([0, 2])('uses the existing positional step-index protocol for %i', async
   ).resolves.toMatchObject({ success: true });
   expect(useStore.getState().currentStepIndex).toBe(index);
 });
+
+it.each([
+  '-1',
+  '1.5',
+  '2abc',
+  'NaN',
+  '9007199254740992',
+  '--stepIndex -1',
+  '--stepIndex 1.5',
+  '--stepIndex true',
+  '',
+])('rejects an invalid step-index command without changing selection: %j', async (argument) => {
+  useStore.setState({ currentStepIndex: 4 });
+  await expect(
+    ActionCommandParser.executeActionCommand(`/update_current_step_index ${argument}`, {})
+  ).resolves.toMatchObject({
+    success: false,
+    error: 'Step index must be a nonnegative safe integer',
+  });
+  expect(useStore.getState().currentStepIndex).toBe(4);
+});
+
+it.each([NaN, Infinity, -Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, undefined])(
+  'rejects invalid direct stream indexes without publishing: %s',
+  (stepIndex) => {
+    useStore.setState({ currentStepIndex: 4 });
+    expect(() =>
+      new UpdateStepIndexAction().execute({ payload: { stepIndex }, showToast: async () => {} })
+    ).toThrow('Step index must be a nonnegative safe integer');
+    expect(useStore.getState().currentStepIndex).toBe(4);
+  }
+);

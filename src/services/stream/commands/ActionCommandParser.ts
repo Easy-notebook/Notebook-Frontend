@@ -171,7 +171,7 @@ export class ActionCommandParser {
         break;
 
       case 'update_current_step_index':
-        if (args[0]) payload.stepIndex = parseInt(args[0], 10);
+        if (args[0]) payload.stepIndex = this.parseValue(args[0]);
         break;
 
       case 'set_current_cell':

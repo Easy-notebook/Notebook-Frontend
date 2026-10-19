@@ -12,9 +12,9 @@ export class UpdateStepIndexAction extends StreamAction {
     const { payload } = context;
     const stepIndex = payload?.stepIndex;
 
-    if (typeof stepIndex === 'number') {
-      globalUpdateInterface.setCurrentStepIndex(stepIndex);
-    }
+    if (typeof stepIndex !== 'number' || !Number.isSafeInteger(stepIndex) || stepIndex < 0)
+      throw new Error('Step index must be a nonnegative safe integer');
+    globalUpdateInterface.setCurrentStepIndex(stepIndex);
   }
 }
 
