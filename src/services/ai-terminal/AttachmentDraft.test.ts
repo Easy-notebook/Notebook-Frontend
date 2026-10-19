@@ -1,3 +1,4 @@
+import { AttachmentUrlRegistry } from './AttachmentUrlRegistry';
 import { expect, it, vi } from 'vitest';
 import { AttachmentDraft } from './AttachmentDraft';
 import type { UploadFile } from './types';
@@ -24,7 +25,8 @@ const add = (draft: AttachmentDraft, id: string) =>
   draft.upload([new File(['a'], 'a.txt')], async () => [attachment(id)], vi.fn());
 it('releases removed and detached draft URLs exactly once', async () => {
   const revoke = vi.fn();
-  const draft = new AttachmentDraft(revoke);
+  const urls = new AttachmentUrlRegistry(revoke);
+  const draft = new AttachmentDraft(urls);
   await add(draft, 'a');
   await add(draft, 'b');
   draft.remove('a');
@@ -35,7 +37,8 @@ it('releases removed and detached draft URLs exactly once', async () => {
 });
 it('discards a late upload after reset without disturbing a new upload', async () => {
   const revoke = vi.fn();
-  const draft = new AttachmentDraft(revoke);
+  const urls = new AttachmentUrlRegistry(revoke);
+  const draft = new AttachmentDraft(urls);
   const old = deferred<UploadFile[]>();
   const next = deferred<UploadFile[]>();
   const first = draft.upload([new File([], 'a.txt')], () => old.promise, vi.fn());
@@ -50,7 +53,7 @@ it('discards a late upload after reset without disturbing a new upload', async (
   expect(draft.getSnapshot().files.map((f) => f.id)).toEqual(['b']);
 });
 it('counts concurrent uploads and suppresses detached failures', async () => {
-  const draft = new AttachmentDraft(vi.fn());
+  const draft = new AttachmentDraft(new AttachmentUrlRegistry(vi.fn()));
   const old = deferred<UploadFile[]>();
   const error = vi.fn();
   const first = draft.upload([new File([], 'a.txt')], () => old.promise, error);
@@ -63,22 +66,26 @@ it('counts concurrent uploads and suppresses detached failures', async () => {
 });
 it('pins a submitting snapshot until disposition is known and preserves newly added files', async () => {
   const revoke = vi.fn();
-  const draft = new AttachmentDraft(revoke);
+  const urls = new AttachmentUrlRegistry(revoke);
+  const draft = new AttachmentDraft(urls);
   await add(draft, 'a');
   const submission = draft.beginSubmission();
   await add(draft, 'b');
   draft.remove('a');
   expect(revoke).not.toHaveBeenCalled();
-  submission.transfer();
+  const releaseRecord = urls.retainExisting('blob:a')!;
   submission.finish(true);
   submission.finish(true);
   expect(draft.getSnapshot().files.map((f) => f.id)).toEqual(['b']);
   draft.detach();
   expect(revoke.mock.calls).toEqual([['blob:b']]);
+  releaseRecord();
+  expect(revoke).toHaveBeenLastCalledWith('blob:a');
 });
 it('releases unconsumed attachments when a handled command creates no record', async () => {
   const revoke = vi.fn();
-  const draft = new AttachmentDraft(revoke);
+  const urls = new AttachmentUrlRegistry(revoke);
+  const draft = new AttachmentDraft(urls);
   await add(draft, 'a');
   draft.beginSubmission().finish(true);
   expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:a');
@@ -86,21 +93,25 @@ it('releases unconsumed attachments when a handled command creates no record', a
 });
 it('retains failed submissions for retry and preserves attachments already committed before failure', async () => {
   const revoke = vi.fn();
-  const draft = new AttachmentDraft(revoke);
+  const urls = new AttachmentUrlRegistry(revoke);
+  const draft = new AttachmentDraft(urls);
   await add(draft, 'a');
   const failed = draft.beginSubmission();
   failed.finish(false);
   expect(draft.getSnapshot().files).toHaveLength(1);
   expect(revoke).not.toHaveBeenCalled();
   const recorded = draft.beginSubmission();
-  recorded.transfer();
+  const releaseRecord = urls.retainExisting('blob:a')!;
   recorded.finish(false);
   draft.remove('a');
   expect(revoke).not.toHaveBeenCalled();
+  releaseRecord();
+  expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:a');
 });
 it('defers unmounted pending resources until the last concurrent submission settles', async () => {
   const revoke = vi.fn();
-  const draft = new AttachmentDraft(revoke);
+  const urls = new AttachmentUrlRegistry(revoke);
+  const draft = new AttachmentDraft(urls);
   await add(draft, 'a');
   const one = draft.beginSubmission();
   const two = draft.beginSubmission();
@@ -111,7 +122,7 @@ it('defers unmounted pending resources until the last concurrent submission sett
   expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:a');
 });
 it('does not publish an old submission completion after reset', async () => {
-  const draft = new AttachmentDraft(vi.fn());
+  const draft = new AttachmentDraft(new AttachmentUrlRegistry(vi.fn()));
   await add(draft, 'a');
   const submission = draft.beginSubmission();
   draft.reset();

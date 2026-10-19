@@ -223,7 +223,6 @@ const CommandInput: React.FC = () => {
               console.log(`[Toast ${options.type}]`, options.message);
             },
             setActiveView,
-            onAttachmentsCommitted: submission.transfer,
           }
         );
 

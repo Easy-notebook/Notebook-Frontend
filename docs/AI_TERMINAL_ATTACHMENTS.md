@@ -34,17 +34,29 @@ The input and drop handlers share the same upload path; the input resets at sele
 
 Each submission captures and pins its own attachment snapshot. An accepted submission removes
 only those attachments, preserving new uploads. Failure retains the current draft for retry.
-Removal/unmount during submission defers release until the last pin is settled. Once the AI
-service creates the QA/action record, its optional `onAttachmentsCommitted` callback transfers
-resource ownership. This occurs before subsequent memory/backend processing can fail. Built-in
-commands that consume no attachments create no record transfer, so accepted unused attachments
-are released. Settlement is idempotent and old epochs cannot publish into a newer draft.
+Removal/unmount during submission defers release until the last pin is settled. The message Store acquires its own resource lease as soon as a QA/action record
+references the attachment. Later memory/backend failure cannot revoke that record's resource.
+Built-in commands that consume no attachments create no record lease, so accepted unused
+attachments are released. Settlement is idempotent and old epochs cannot publish into a newer draft.
 
 `useAttachmentDraft` binds attachment cleanup to React layout lifecycle and committed notebook
 changes, including StrictMode replay. A null-to-first-notebook transition preserves the draft
 because attachment admission can create that notebook. Tests cover reset/unmount, late results,
 concurrent uploads/submissions, retry, record transfer before later failure, and snapshot clearing.
 
-Record-owned URLs intentionally remain alive after draft clearing. Final release on QA/action
-removal still belongs to the message-record lifecycle and remains outstanding. Text-input
+## Shared resource leases and record removal
+
+`AttachmentUrlRegistry` counts live leases for explicitly admitted blob URLs. Drafts own one
+lease per resource and keep it pinned while submissions are pending. `AttachmentRecordResources`
+reconciles the union of managed URLs referenced by actual QA/action records, acquiring additions
+before releasing removals. Store subscription covers CRUD, direct/bulk state replacement and
+streaming-created QA copies. A URL is revoked exactly once when its final lease is released.
+
+This replaces the temporary committed flag and explicit transfer callback: actual record state
+is authoritative. Removing a record while its failed submission still retains a draft leaves
+that draft valid. Removing a newly published record synchronously also cannot leak the URL after
+the submission settles. Tests exercise both directions of shared draft/record ownership.
+
+Remote URLs and blob URLs created outside this registry are not adopted or revoked. The separate
+empty-state command input's unmanaged attachments are outside this resource scope. Text-input
 submission and the global terminal loading indicator retain their existing lifecycle.

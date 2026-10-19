@@ -1,6 +1,7 @@
+import { attachmentUrlRegistry, type AttachmentUrlRegistry } from './AttachmentUrlRegistry';
 import type { UploadFile } from './types';
 
-type Resource = { file: UploadFile; inDraft: boolean; pins: number; committed: boolean };
+type Resource = { file: UploadFile; inDraft: boolean; pins: number; release: () => void };
 export interface AttachmentDraftState {
   files: UploadFile[];
   uploading: number;
@@ -13,7 +14,7 @@ export class AttachmentDraft {
   private state: AttachmentDraftState = { files: [], uploading: 0 };
   private readonly resources = new Map<string, Resource>();
   private readonly listeners = new Set<() => void>();
-  constructor(private readonly revoke: (url: string) => void = (url) => URL.revokeObjectURL(url)) {}
+  constructor(private readonly urls: AttachmentUrlRegistry = attachmentUrlRegistry) {}
   getSnapshot = (): AttachmentDraftState => this.state;
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -26,7 +27,7 @@ export class AttachmentDraft {
   private collect(resource: Resource): void {
     if (resource.inDraft || resource.pins) return;
     this.resources.delete(resource.file.id);
-    if (!resource.committed) this.revoke(resource.file.url);
+    resource.release();
   }
   attach(): void {
     this.active = true;
@@ -63,11 +64,16 @@ export class AttachmentDraft {
       if (!current()) return;
       const result = await load([...files]);
       if (!current()) {
-        result.forEach((file) => this.revoke(file.url));
+        result.forEach((file) => this.urls.acquire(file.url)());
         return;
       }
       result.forEach((file) =>
-        this.resources.set(file.id, { file, inDraft: true, pins: 0, committed: false })
+        this.resources.set(file.id, {
+          file,
+          inDraft: true,
+          pins: 0,
+          release: this.urls.acquire(file.url),
+        })
       );
       this.publish({ ...this.state, files: [...this.state.files, ...result] });
     } catch (error) {
@@ -84,12 +90,6 @@ export class AttachmentDraft {
     let settled = false;
     return {
       files,
-      transfer: () => {
-        if (settled) return;
-        resources.forEach((resource) => {
-          resource.committed = true;
-        });
-      },
       finish: (accepted: boolean) => {
         if (settled) return;
         settled = true;

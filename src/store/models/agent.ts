@@ -54,10 +54,11 @@ export interface QAItem {
   thinkingStartAtMs?: number;
   thinkingEndAtMs?: number;
   // Additional fields for UI attachments
-  attachedFiles?: any[];
+  attachedFiles?: unknown[];
 }
 
 export interface ActionItem {
+  attachedFiles?: unknown[];
   id: string;
   type: EventType;
   timestamp: string;

@@ -1,3 +1,4 @@
+import { AttachmentRecordResources } from '@Services/ai-terminal/AttachmentRecordResources';
 // src/store/AIAgentStore.ts
 import { create } from 'zustand';
 import { agentLog } from '@Utils/logger';
@@ -254,3 +255,11 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
     }));
   },
 }));
+
+// Derive URL ownership from actual records, including bulk replacement and streaming copies.
+const attachmentRecords = new AttachmentRecordResources();
+useAIAgentStore.subscribe((state, previous) => {
+  if (state.actions !== previous.actions || state.qaList !== previous.qaList) {
+    attachmentRecords.update([...state.actions, ...state.qaList]);
+  }
+});
