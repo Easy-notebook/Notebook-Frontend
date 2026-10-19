@@ -11,10 +11,7 @@ import { agentLog, networkLog } from '@Utils/logger';
 export class StreamHandler {
   private static instance: StreamHandler;
 
-  private constructor() {
-    // Initialize and register all actions
-    import('./actions');
-  }
+  private constructor() {}
 
   static getInstance(): StreamHandler {
     if (!StreamHandler.instance) {
@@ -56,8 +53,7 @@ export class StreamHandler {
 
     if (ActionClass) {
       try {
-        // Cast to any to bypass abstract class check (registry only contains concrete classes)
-        const action = new (ActionClass as any)();
+        const action = new ActionClass();
         await action.execute(context);
         agentLog.debug('Stream action executed successfully', { type: data.type });
 
