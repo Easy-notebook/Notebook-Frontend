@@ -20,9 +20,14 @@ Workspace attachment submission still pins its own snapshot. Empty-state workflo
 is awaited instead of launched in an unobserved async closure. The command draft receives thrown
 startup errors through the same failure path as other submission errors.
 
-Acceptance here is the existing local handler contract, not a backend execution receipt.
-`sendOperation` remains a fire-and-forget dispatch in those handlers and exposes no boolean
-acceptance result; workflow state-machine methods may record internal errors without rejecting.
-Transport admission/error contracts and workflow cancellation require further work before the
-input can promise retention for every remote refusal or downstream execution failure. Global
-loading describes pending local submission work, not the duration of all streamed AI execution.
+Both input handlers now await `submitOperation` admission. Busy, kernel initialization failure,
+HTTP failure or a missing response body return a refused receipt, retain text/attachment drafts,
+and remove provisional message records. Acceptance clears only the submitted unchanged text
+revision and submitted attachments; newly uploaded empty-state attachments remain intact.
+
+Acceptance means an HTTP stream was established, not that execution succeeded. Later stream
+failures continue through Store/toast reporting and cannot retroactively restore a draft that
+was already accepted. Workflow state-machine methods may still record internal errors without
+rejecting; workflow cancellation and execution receipts remain separate work. Global loading
+tracks pending submission admission, not the full duration of streamed AI execution. The existing
+`sendOperation` completion interface remains available through the same dispatcher.

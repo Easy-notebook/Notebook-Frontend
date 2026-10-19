@@ -106,3 +106,67 @@ it.each(['initialize', 'missing-body', 'handler', 'read'] as const)(
     expect(useOperatorStore.getState().error).toBeNull();
   }
 );
+
+it('returns acceptance before EOF while the completion promise and busy state remain pending', async () => {
+  const transport = controlledStream();
+  io.send.mockResolvedValue(transport.stream);
+  const receipt = await useOperatorStore.getState().submitOperation('notebook', operation);
+  expect(receipt.accepted).toBe(true);
+  if (!receipt.accepted) throw new Error('Expected acceptance');
+  const completed = vi.fn();
+  void receipt.completion.then(completed);
+  expect(useOperatorStore.getState().isSendingOperation).toBe(true);
+  const refused = await useOperatorStore.getState().submitOperation('notebook', operation);
+  expect(refused).toMatchObject({ accepted: false, reason: 'busy' });
+  expect(completed).not.toHaveBeenCalled();
+  transport.controller.close();
+  await receipt.completion;
+  expect(completed).toHaveBeenCalledOnce();
+  expect(useOperatorStore.getState().isSendingOperation).toBe(false);
+});
+it.each(['kernel', 'connection', 'body'] as const)(
+  'returns a failed receipt for %s admission failure',
+  async (stage) => {
+    if (stage === 'kernel') io.initialize.mockResolvedValue(false);
+    else if (stage === 'connection') io.send.mockRejectedValue(new Error('HTTP refused'));
+    else io.send.mockResolvedValue(null);
+    const receipt = await useOperatorStore
+      .getState()
+      .submitOperation(stage === 'kernel' ? null : 'notebook', operation);
+    expect(receipt).toMatchObject({ accepted: false, reason: 'failed' });
+    expect(useOperatorStore.getState().isSendingOperation).toBe(false);
+  }
+);
+it('captures the operation payload before kernel initialization awaits', async () => {
+  let initialized!: (id: string) => void;
+  io.initialize.mockReturnValue(
+    new Promise<string>((done) => {
+      initialized = done;
+    })
+  );
+  const transport = controlledStream();
+  io.send.mockResolvedValue(transport.stream);
+  const input = { type: 'user_question', payload: { content: 'original', nested: { version: 1 } } };
+  const pending = useOperatorStore.getState().submitOperation(null, input);
+  input.payload.content = 'changed';
+  input.payload.nested.version = 2;
+  initialized('created');
+  const receipt = await pending;
+  expect(io.send).toHaveBeenCalledWith('created', {
+    type: 'user_question',
+    payload: { content: 'original', nested: { version: 1 } },
+  });
+  transport.controller.close();
+  if (receipt.accepted) await receipt.completion;
+});
+it('reports a stream failure after acceptance without changing the original receipt', async () => {
+  const transport = controlledStream();
+  io.send.mockResolvedValue(transport.stream);
+  const receipt = await useOperatorStore.getState().submitOperation('notebook', operation);
+  if (!receipt.accepted) throw new Error('Expected acceptance');
+  transport.controller.error(new Error('later transport failure'));
+  await receipt.completion;
+  expect(receipt.accepted).toBe(true);
+  expect(useOperatorStore.getState().error).toBe('later transport failure');
+  expect(useOperatorStore.getState().isSendingOperation).toBe(false);
+});

@@ -70,7 +70,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const [presetQuestions, setPresetQuestions] = useState<VDSQuestion[]>(defaultPresetQuestions);
 
   const { setPreStage } = usePipelineStore();
-  const sendOperation = useOperatorStore((s) => s.sendOperation);
+  const submitOperation = useOperatorStore((s) => s.submitOperation);
 
   const { addAction, setActiveView, actions, qaList, addQA } = useAIAgentStore();
 
@@ -286,9 +286,9 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           onProcess: false,
           attachedFiles: files,
         };
-        addAction(actionData as any);
+        const recordedActionId = addAction(actionData as any);
 
-        sendOperation(useStore.getState().notebookId, {
+        const submission = await submitOperation(useStore.getState().notebookId, {
           type: 'user_command',
           payload: {
             current_view_mode: viewMode,
@@ -299,6 +299,10 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
             files,
           },
         });
+        if (!submission.accepted) {
+          useAIAgentStore.getState().removeAction(recordedActionId);
+          return false;
+        }
       } else {
         // QA 模式
         console.log('[DEBUG] AICommandInput - Entering QA mode for question:', command);
@@ -319,7 +323,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         };
         addQA(qaData as any);
         const action = createUserAskQuestionAction(command, [qaId], currentCellId);
-        useAIAgentStore.getState().addAction(action);
+        const recordedActionId = useAIAgentStore.getState().addAction(action);
 
         const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
           useStore.getState().notebookId || '',
@@ -349,11 +353,17 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
           },
         };
         console.log('[DEBUG] AICommandInput - Sending user_question operation:', finalPayload);
-        sendOperation(useStore.getState().notebookId, finalPayload);
+        const submission = await submitOperation(useStore.getState().notebookId, finalPayload);
+        if (!submission.accepted) {
+          useAIAgentStore.getState().removeQA(qaId);
+          useAIAgentStore.getState().removeAction(recordedActionId);
+          return false;
+        }
         console.log('[DEBUG] AICommandInput - user_question operation sent successfully');
       }
 
-      setFiles([]);
+      const submittedIds = new Set(files.map((file) => file.id));
+      setFiles((current) => current.filter((file) => !submittedIds.has(file.id)));
       return true;
     },
     [
@@ -363,7 +373,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       setActiveView,
       addAction,
       addQA,
-      sendOperation,
+      submitOperation,
       currentCellId,
       viewMode,
       currentPhaseId,

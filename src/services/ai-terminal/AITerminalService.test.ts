@@ -5,13 +5,13 @@ import { StreamAction, registerStreamAction, clearStreamRegistry } from '../stre
 import { ActionCommandParser } from '../stream/commands/ActionCommandParser';
 import type { CommandContext } from './types';
 
-const sendOperation = vi.hoisted(() => vi.fn());
+const submitOperation = vi.hoisted(() => vi.fn());
 const memory = vi.hoisted(() => ({
   prepareMemoryContextForBackend: vi.fn(),
   updateUserIntent: vi.fn(),
   recordOperationInteraction: vi.fn(),
 }));
-vi.mock('@Store/operatorStore', () => ({ default: { getState: () => ({ sendOperation }) } }));
+vi.mock('@Store/operatorStore', () => ({ default: { getState: () => ({ submitOperation }) } }));
 vi.mock('@Store/codeStore', () => ({ default: { getState: vi.fn() } }));
 vi.mock('@Services/agentMemoryService', () => ({ AgentMemoryService: memory }));
 vi.mock('@Store/notebookStore', () => ({
@@ -49,7 +49,11 @@ beforeEach(() => {
   registerStreamAction('known_action', KnownAction);
   useAIAgentStore.setState({ actions: [], qaList: [] });
   memory.prepareMemoryContextForBackend.mockReturnValue({ memory: 'context' });
-  sendOperation.mockResolvedValue(undefined);
+  submitOperation.mockResolvedValue({
+    accepted: true,
+    operationId: 'operation',
+    completion: Promise.resolve(),
+  });
 });
 afterEach(clearStreamRegistry);
 
@@ -62,7 +66,7 @@ it('routes unregistered slash commands to the backend with one authoritative his
   expect(records).toHaveLength(1);
   expect(useAIAgentStore.getState().qaList).toHaveLength(0);
   const id = records[0].id;
-  expect(sendOperation).toHaveBeenCalledExactlyOnceWith(
+  expect(submitOperation).toHaveBeenCalledExactlyOnceWith(
     'book',
     expect.objectContaining({
       type: 'user_command',
@@ -95,7 +99,7 @@ it.each(['/known_action', '/known-action'])(
       setActiveView: vi.fn(),
     });
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(sendOperation).not.toHaveBeenCalled();
+    expect(submitOperation).not.toHaveBeenCalled();
     expect(memory.prepareMemoryContextForBackend).not.toHaveBeenCalled();
   }
 );
@@ -113,3 +117,31 @@ it.each(['/unknown', '/', '', 'ordinary question'])(
     expect(ActionCommandParser.isActionCommand(command)).toBe(false);
   }
 );
+
+it.each(['/custom_instruction work', 'question'])(
+  'returns false and removes provisional records when %s is refused',
+  async (command) => {
+    submitOperation.mockResolvedValue({ accepted: false, reason: 'busy', message: 'busy' });
+    const accepted = await aiTerminalService.processCommand(command, [], context, {
+      showToast: vi.fn(),
+      setActiveView: vi.fn(),
+    });
+    expect(accepted).toBe(false);
+    expect(useAIAgentStore.getState().qaList).toEqual([]);
+    expect(useAIAgentStore.getState().actions).toEqual([]);
+  }
+);
+it('returns true on admission without waiting for response stream completion', async () => {
+  submitOperation.mockResolvedValue({
+    accepted: true,
+    operationId: 'accepted',
+    completion: new Promise<void>(() => {}),
+  });
+  expect(
+    await aiTerminalService.processCommand('question', [], context, {
+      showToast: vi.fn(),
+      setActiveView: vi.fn(),
+    })
+  ).toBe(true);
+  expect(useAIAgentStore.getState().qaList).toHaveLength(1);
+});

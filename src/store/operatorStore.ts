@@ -5,9 +5,13 @@ import { handleStreamResponse } from '@Services/stream';
 import { showToast } from '@/components/UI/Toast';
 import useCodeStore from '@Store/codeStore';
 import { storeLog } from '@Utils/logger';
-import { OperationStreamReader } from '@Services/stream/OperationStreamReader';
+import { OperationDispatcher } from '@Services/stream/OperationDispatcher';
 import type { StreamData } from '@Services/stream';
-import type { Operation, OperationResponseData } from '@Store/models/operation';
+import type {
+  Operation,
+  OperationResponseData,
+  OperationSubmission,
+} from '@Store/models/operation';
 
 /**
  * 流处理回调函数类型
@@ -37,6 +41,10 @@ export interface OperatorStoreState {
  */
 export interface OperatorStoreActions {
   addOperation: (operation: Operation) => string;
+  submitOperation: (
+    notebookId: string | null,
+    operation: Operation
+  ) => Promise<OperationSubmission>;
   sendOperation: (notebookId: string | null, operation: Operation) => Promise<void>;
   getOperationHistory: () => Operation[];
   getOperationResponses: (operationId: string) => OperationResponseData[];
@@ -49,105 +57,86 @@ export interface OperatorStoreActions {
  */
 export type OperatorStore = OperatorStoreState & OperatorStoreActions;
 
-const useOperatorStore = create<OperatorStore>((set, get) => ({
-  operations: [],
-  operationResponses: {},
-  isSendingOperation: false,
-  error: null,
-
-  addOperation: (operation: Operation): string => {
-    const newOperation: Operation = {
-      ...operation,
-      id: uuidv4(),
-      timestamp: new Date().toISOString(),
-    };
-    set((state) => ({
-      operations: [...state.operations, newOperation],
-    }));
-    return newOperation.id!;
-  },
-
-  /**
-   * 发送操作到后端
-   * @param notebookId - 笔记本ID
-   * @param operation - 操作对象
-   */
-  sendOperation: async (notebookId: string | null, operation: Operation): Promise<void> => {
-    if (get().isSendingOperation) {
-      showToast({ description: '正在处理其他操作，请稍后...', variant: 'default' });
-      return;
-    }
-    // Reserve before kernel initialization: concurrent requests must not both pass admission.
-    set({ isSendingOperation: true, error: null });
-    try {
-      if (!notebookId) {
-        const kernelId = await useCodeStore.getState().initializeKernel();
-        if (!kernelId) throw new Error('无法初始化内核');
-        notebookId = kernelId;
-      }
-      const operationId = get().addOperation(operation);
-      storeLog.debug('Sending operation', {
-        operationId,
-        operationType: operation.type,
-        notebookId,
-      });
-
-      const stream = await OperationService.sendOperation(notebookId, operation);
-      if (!stream) throw new Error('Operation response has no stream body');
-      await new OperationStreamReader().consume(stream, async (data) => {
-        set((state) => ({
-          operationResponses: {
-            ...state.operationResponses,
-            [operationId]: [...(state.operationResponses[operationId] || []), data],
-          },
-        }));
-        await handleStreamResponse(data as unknown as StreamData, async (toast) => {
-          showToast({
-            description: toast.message,
-            variant: toast.type === 'error' ? 'destructive' : 'default',
-          });
+const useOperatorStore = create<OperatorStore>((set, get) => {
+  const dispatcher = new OperationDispatcher({
+    initialize: () => useCodeStore.getState().initializeKernel(),
+    open: (notebookId, operation) => OperationService.sendOperation(notebookId, operation),
+    record: (operation) => get().addOperation(operation),
+    receive: async (operationId, data) => {
+      set((state) => ({
+        operationResponses: {
+          ...state.operationResponses,
+          [operationId]: [...(state.operationResponses[operationId] || []), data],
+        },
+      }));
+      await handleStreamResponse(data as unknown as StreamData, async (toast) => {
+        showToast({
+          description: toast.message,
+          variant: toast.type === 'error' ? 'destructive' : 'default',
         });
       });
-
-      storeLog.debug('Operation completed', { operationId });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      storeLog.error('Failed to send operation', {
-        error: message,
-        operationType: operation.type,
-        notebookId,
-      });
+    },
+    busy: (value) =>
+      set(value ? { isSendingOperation: true, error: null } : { isSendingOperation: false }),
+    error: (message) => {
+      storeLog.error('Operation failed', { error: message });
       set({ error: message });
-      showToast({
-        description: `操作发送失败: ${message}`,
-        variant: 'destructive',
-      });
-    } finally {
-      set({ isSendingOperation: false });
-    }
-  },
+      showToast({ description: `操作发送失败: ${message}`, variant: 'destructive' });
+    },
+    refused: (message) => showToast({ description: message, variant: 'default' }),
+  });
+  return {
+    operations: [],
+    operationResponses: {},
+    isSendingOperation: false,
+    error: null,
 
-  /**
-   * 获取操作历史
-   */
-  getOperationHistory: (): Operation[] => get().operations,
+    addOperation: (operation: Operation): string => {
+      const newOperation: Operation = {
+        ...operation,
+        id: uuidv4(),
+        timestamp: new Date().toISOString(),
+      };
+      set((state) => ({
+        operations: [...state.operations, newOperation],
+      }));
+      return newOperation.id!;
+    },
 
-  /**
-   * 获取某个操作的响应记录
-   * @param operationId - 操作ID
-   */
-  getOperationResponses: (operationId: string): OperationResponseData[] =>
-    get().operationResponses[operationId] || [],
+    /**
+     * 发送操作到后端
+     * @param notebookId - 笔记本ID
+     * @param operation - 操作对象
+     */
+    submitOperation: (notebookId, operation) => dispatcher.submit(notebookId, operation),
 
-  /**
-   * 清空操作历史和响应记录
-   */
-  clearOperations: () => set({ operations: [], operationResponses: {} }),
+    sendOperation: async (notebookId: string | null, operation: Operation): Promise<void> => {
+      const result = await dispatcher.submit(notebookId, operation);
+      if (result.accepted) await result.completion;
+    },
 
-  /**
-   * 重置错误状态
-   */
-  resetError: () => set({ error: null }),
-}));
+    /**
+     * 获取操作历史
+     */
+    getOperationHistory: (): Operation[] => get().operations,
+
+    /**
+     * 获取某个操作的响应记录
+     * @param operationId - 操作ID
+     */
+    getOperationResponses: (operationId: string): OperationResponseData[] =>
+      get().operationResponses[operationId] || [],
+
+    /**
+     * 清空操作历史和响应记录
+     */
+    clearOperations: () => set({ operations: [], operationResponses: {} }),
+
+    /**
+     * 重置错误状态
+     */
+    resetError: () => set({ error: null }),
+  };
+});
 
 export default useOperatorStore;

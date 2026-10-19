@@ -17,8 +17,24 @@ This removes the unawaited recursive reader and fire-and-forget handler calls th
 released busy state after the first read. Missing response bodies are errors. Initialization
 errors now enter the same Store error/toast/finally path as transport failures.
 
-The public `sendOperation(...): Promise<void>` interface and error/toast behavior remain.
-Its resolved Promise still does not distinguish refusal/failure from success: a separate
-acceptance contract is pending before command inputs can reliably retain text on remote
-refusal. There is no request cancellation/epoch binding to notebook switches yet. The parser
-expects this existing JSON-object protocol; it does not add SSE or array-root framing.
+`OperationDispatcher` owns explicit idle → initializing/connecting → streaming → idle
+transitions. Store loading is a projection, not the admission lock. Operation payloads are
+captured with structuredClone before initialization or subscriber callbacks can change them.
+The Store adapts history, responses and error notifications to the dispatcher.
+
+Two public entry points share this one lifecycle:
+
+- `submitOperation` resolves to a discriminated receipt: refusal (`busy` or `failed` plus a
+  message), or acceptance with an operation ID and a separately awaitable completion Promise.
+- `sendOperation(...): Promise<void>` preserves the existing public interface by waiting for
+  that same dispatcher's completion when accepted. Errors continue through Store/toast reporting.
+
+Acceptance means a successful HTTP response with a body was established. It does not assert
+business execution success; later decoding, stream or handler failure is reported through the
+Store while leaving the original receipt unchanged. Both command input handlers now wait for
+admission, retain drafts on refusal, and remove their provisional QA/action records. Operator
+attempt history remains available for failed connection attempts. Existing memory interaction
+logs still record attempted starts and are not rolled back.
+
+There is no request cancellation/epoch binding to notebook switches yet. The parser expects
+the existing JSON-object protocol; it does not add SSE or array-root framing.

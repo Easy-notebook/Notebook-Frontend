@@ -111,7 +111,7 @@ class AITerminalService {
         }
       );
 
-      useOperatorStore.getState().sendOperation(notebookId, {
+      const submission = await useOperatorStore.getState().submitOperation(notebookId, {
         type: 'user_command',
         payload: {
           current_view_mode: viewMode,
@@ -123,6 +123,8 @@ class AITerminalService {
           ...commandMemoryContext,
         },
       });
+      if (!submission.accepted) useAIAgentStore.getState().removeAction(commandId);
+      return submission.accepted;
     } else {
       // Question mode
       callbacks.setActiveView('qa');
@@ -142,7 +144,7 @@ class AITerminalService {
 
       useAIAgentStore.getState().addQA(qaData);
       const action = createUserAskQuestionAction(command, [qaId], currentCellId);
-      useAIAgentStore.getState().addAction(action);
+      const questionActionId = useAIAgentStore.getState().addAction(action);
 
       // Prepare Agent memory context
       console.log('AITerminal: Preparing memory context', { notebookId, command });
@@ -193,10 +195,15 @@ class AITerminalService {
         },
       };
       console.log('AITerminal: Sending final payload', finalPayload);
-      useOperatorStore.getState().sendOperation(notebookId, finalPayload);
+      const submission = await useOperatorStore
+        .getState()
+        .submitOperation(notebookId, finalPayload);
+      if (!submission.accepted) {
+        useAIAgentStore.getState().removeQA(qaId);
+        useAIAgentStore.getState().removeAction(questionActionId);
+      }
+      return submission.accepted;
     }
-
-    return true;
   }
 }
 
