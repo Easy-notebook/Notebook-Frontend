@@ -29,3 +29,38 @@ it.each(['drop', 'paste'] as const)('supplies the shared upload client for %s ev
   );
   expect(event.defaultPrevented).toBe(true);
 });
+
+it.each(['switch', 'destroy'] as const)(
+  'invalidates pending independent upload controls on editor %s',
+  async (event) => {
+    useStore.setState({ notebookId: 'owner' });
+    editor = new Editor({ extensions: [StarterKit, UploadDropExtension], content: '<p>Test</p>' });
+    let finish!: () => void;
+    vi.mocked(handleFileUpload).mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+    );
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', {
+      value: { files: [new File(['a'], 'a.txt')], getData: () => '' },
+    });
+    editor.view.dom.dispatchEvent(drop);
+    const control = vi.mocked(handleFileUpload).mock.calls[0][0].abortControllerRef;
+    const controller = new AbortController();
+    control.current = controller;
+    if (event === 'switch') useStore.setState({ notebookId: 'other' });
+    else {
+      editor.destroy();
+      editor = undefined;
+    }
+    expect(controller.signal.aborted).toBe(true);
+    expect(control.current).toBeNull();
+    const late = new AbortController();
+    control.current = late;
+    expect(late.signal.aborted).toBe(true);
+    expect(control.current).toBeNull();
+    finish();
+    await Promise.resolve();
+  }
+);

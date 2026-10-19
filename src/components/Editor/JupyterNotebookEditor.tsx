@@ -1,3 +1,4 @@
+import { useNotebookUploadControl } from '@Hooks/useNotebookUploadControl';
 import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 import React, {
   forwardRef,
@@ -69,7 +70,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
     const [, setUploading] = useState<boolean>(false);
     const [, setUploadProgress] = useState<number>(0);
     const [, setUploadError] = useState<string | null>(null);
-    const abortControllerRef = useRef<AbortController | null>(null);
+    const abortControllerRef = useNotebookUploadControl(notebookId);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
@@ -540,7 +541,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
               });
             },
             cellId: '',
-            abortControllerRef: abortControllerRef as MutableRefObject<AbortController | null>,
+            abortControllerRef,
             fetchFileList: async () => {
               try {
                 await FileService.listFiles(notebookId);
@@ -553,7 +554,7 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
           console.error('Editor drop upload failed:', err);
         }
       },
-      [notebookId, handleAddCell, setCellContent]
+      [notebookId, handleAddCell, setCellContent, abortControllerRef]
     );
 
     const lastIsMarkdown = cells[cells.length - 1]?.type === 'markdown';

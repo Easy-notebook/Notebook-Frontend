@@ -1,3 +1,4 @@
+import { FileUploadControl } from '@Services/notebook/FileUploadControl';
 import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
@@ -15,9 +16,26 @@ export const UploadDropExtension = Extension.create({
   addProseMirrorPlugins() {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
+    const controls = new Set<FileUploadControl>();
+    const detachUploads = () => {
+      const detached = [...controls];
+      controls.clear();
+      detached.forEach((control) => control.detach());
+    };
     return [
       new Plugin({
         key,
+        view() {
+          const unsubscribe = useStore.subscribe((state, previous) => {
+            if (state.notebookId !== previous.notebookId) detachUploads();
+          });
+          return {
+            destroy() {
+              unsubscribe();
+              detachUploads();
+            },
+          };
+        },
         props: {
           handleDOMEvents: {
             drop(view, event: Event) {
@@ -77,7 +95,8 @@ export const UploadDropExtension = Extension.create({
               const setUploadProgress = () => {};
               const setError = () => {};
               const fileInputRef = { current: null as any };
-              const abortControllerRef = { current: null as any };
+              const abortControllerRef = new FileUploadControl(notebookId);
+              controls.add(abortControllerRef);
               const toast = ({ title, description, variant }: any) => {
                 console.log(`${variant || 'info'}: ${title} - ${description}`);
               };
@@ -160,7 +179,7 @@ export const UploadDropExtension = Extension.create({
                   });
                 },
                 cellId: '',
-                abortControllerRef: abortControllerRef as any,
+                abortControllerRef,
                 fetchFileList: async () => {
                   try {
                     await FileService.listFiles(notebookId);
@@ -168,9 +187,14 @@ export const UploadDropExtension = Extension.create({
                     // Ignore file list errors
                   }
                 },
-              }).catch((err) => {
-                console.error('Upload failed (drop):', err);
-              });
+              })
+                .catch((err) => {
+                  console.error('Upload failed (drop):', err);
+                })
+                .finally(() => {
+                  controls.delete(abortControllerRef);
+                  abortControllerRef.detach();
+                });
 
               return true;
             },
@@ -211,7 +235,8 @@ export const UploadDropExtension = Extension.create({
               const setUploadProgress = () => {};
               const setError = () => {};
               const fileInputRef = { current: null as any };
-              const abortControllerRef = { current: null as any };
+              const abortControllerRef = new FileUploadControl(notebookId);
+              controls.add(abortControllerRef);
               const toast = ({ title, description, variant }: any) => {
                 console.log(`${variant || 'info'}: ${title} - ${description}`);
               };
@@ -294,7 +319,7 @@ export const UploadDropExtension = Extension.create({
                   });
                 },
                 cellId: '',
-                abortControllerRef: abortControllerRef as any,
+                abortControllerRef,
                 fetchFileList: async () => {
                   try {
                     await FileService.listFiles(notebookId);
@@ -302,9 +327,14 @@ export const UploadDropExtension = Extension.create({
                     // Ignore file list errors
                   }
                 },
-              }).catch((err) => {
-                console.error('Upload failed (paste):', err);
-              });
+              })
+                .catch((err) => {
+                  console.error('Upload failed (paste):', err);
+                })
+                .finally(() => {
+                  controls.delete(abortControllerRef);
+                  abortControllerRef.detach();
+                });
 
               return true;
             },

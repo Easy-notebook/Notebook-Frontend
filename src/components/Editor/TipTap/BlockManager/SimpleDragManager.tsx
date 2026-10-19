@@ -1,3 +1,4 @@
+import { useNotebookUploadControl } from '@Hooks/useNotebookUploadControl';
 import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
@@ -19,10 +20,10 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const { cells, notebookId } = useStore();
+  const abortControllerRef = useNotebookUploadControl(notebookId);
 
   // 清除隐藏定时器
   const clearHideTimeout = useCallback(() => {
@@ -317,7 +318,15 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
       container.removeEventListener('drop', handleDrop);
       clearHideTimeout();
     };
-  }, [editor, showToolbarForElement, scheduleHide, clearHideTimeout, isDragging, notebookId]);
+  }, [
+    editor,
+    showToolbarForElement,
+    scheduleHide,
+    clearHideTimeout,
+    isDragging,
+    notebookId,
+    abortControllerRef,
+  ]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full">

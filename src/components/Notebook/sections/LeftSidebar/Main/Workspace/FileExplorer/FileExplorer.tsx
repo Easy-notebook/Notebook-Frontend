@@ -1,3 +1,4 @@
+import { useNotebookUploadControl } from '@Hooks/useNotebookUploadControl';
 import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 // moved to sections/LeftSideBar/Main/Workspace/FileExplorer/FileExplorer.tsx
 import { useState, useEffect, useCallback, memo, useRef, useMemo } from 'react';
@@ -182,7 +183,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const abortControllerRef = useNotebookUploadControl(notebookId);
   const dropZoneRef = useRef<HTMLDivElement | null>(null);
 
   const [uploadState, setUploadState] = useState<{
@@ -194,6 +195,10 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     progress: 0,
     error: null,
   });
+
+  useEffect(() => {
+    setUploadState({ uploading: false, progress: 0, error: null });
+  }, [notebookId]);
 
   const { error: previewError, isLoading: previewLoading } = usePreviewStore();
 
@@ -603,7 +608,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
       el.removeEventListener('dragleave', onDragLeave);
       el.removeEventListener('drop', onDrop);
     };
-  }, [notebookId, uploadConfig, fetchFileListWrapper, toast]);
+  }, [notebookId, uploadConfig, fetchFileListWrapper, toast, abortControllerRef]);
 
   const handleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -627,12 +632,12 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         });
       }
     },
-    [notebookId, uploadConfig, fetchFileListWrapper, toast]
+    [notebookId, uploadConfig, fetchFileListWrapper, toast, abortControllerRef]
   );
 
   const handleCancelUpload = useCallback(() => {
     abortControllerRef.current?.abort();
-  }, []);
+  }, [abortControllerRef]);
 
   const gapClass = widthTier === 'narrow' ? 'gap-1.5' : 'gap-2';
   const showActions = widthTier !== 'narrow';

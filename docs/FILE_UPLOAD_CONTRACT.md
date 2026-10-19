@@ -38,5 +38,21 @@ refresh, cancellation, reentrant completion, unknown progress, and independent c
 
 Aborting HTTP does not guarantee rollback of files already accepted by the backend.
 This lifecycle guards publications made by the upload utility; a list-refresh callback
-that has already started owns its own internal state updates. Component unmount/notebook
-switch invalidation and the separate list-fetch lifecycle are not implemented here.
+that has already started owns its own internal state updates. The separate list-fetch
+lifecycle remains outside this utility.
+
+## UI attachment and notebook ownership
+
+`FileUploadControl` holds the notebook identity and the request slot. Detaching first
+revokes the slot, then aborts its request; stale callbacks cannot start requests through
+a detached control. React consumers use `useNotebookUploadControl`: each notebook gets
+a separate control, and layout-effect cleanup detaches on a committed notebook change
+or unmount. Effect setup reattaches for React StrictMode's setup/cleanup replay. The
+file explorer resets upload presentation when changing notebooks.
+
+The TipTap plugin keeps independent controls for each drop/paste request. A synchronous
+Store subscription detaches pending controls on notebook changes; plugin destruction
+unsubscribes and detaches all pending controls. Settled requests remove their controls.
+Tests exercise real React lifecycle cleanup, stale starts, StrictMode, ordinary rerenders,
+and real TipTap plugin destruction/notebook switching. React scope invalidation occurs
+at layout-effect cleanup, rather than synchronously at every external Store mutation.
