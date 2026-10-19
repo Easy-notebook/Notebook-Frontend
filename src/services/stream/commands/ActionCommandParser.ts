@@ -613,7 +613,7 @@ Examples:
       const fullContext: StreamActionContext = {
         payload,
         showToast: context.showToast || (async () => {}),
-        notebookId: context.notebookId || '',
+        notebookId: context.notebookId,
         currentCellId: context.currentCellId,
         viewMode: context.viewMode,
         currentPhaseId: context.currentPhaseId,

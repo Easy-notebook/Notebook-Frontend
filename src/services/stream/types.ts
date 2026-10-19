@@ -8,6 +8,7 @@ export interface ToastMessage {
 }
 
 export interface StreamPayload {
+  replace?: boolean;
   information?: string;
   category?: string;
   question?: string;

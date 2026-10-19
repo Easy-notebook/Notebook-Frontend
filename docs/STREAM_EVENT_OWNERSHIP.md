@@ -58,3 +58,14 @@ existing best-effort error behavior; cross-tab memory coordination is not implem
 
 Tests cover new/existing memory quota failures, isolation, retention, shared context updates,
 and a real Chromium reload through backend context preparation.
+
+## Rich-text update boundary
+
+`tiptap_update` accepts only boolean `replace` values: absent/false appends, true replaces
+(including replacement with an empty string). Malformed truthy wire values such as the
+string "false" reject before any document mutation. An explicitly different notebook
+context cannot update a same-ID cell in the current notebook. The command parser retains
+an omitted notebookId as undefined rather than inventing an empty-string owner.
+
+Tests cover append/replace, empty replacement, malformed flag rejection with unchanged
+state, cross-notebook isolation, and the public command parser's true/false/invalid modes.
