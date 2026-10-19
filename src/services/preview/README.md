@@ -244,5 +244,17 @@ header row. A/B/C column labels are view coordinates, not file contents.
 CSV for both save and export. It preserves embedded commas, quotes, CR/LF and
 Unicode, and normalizes null/undefined cells to empty strings while retaining
 zero and false. Repeated CSV save/read cycles do not insert coordinate rows.
-This serializer does not implement XLSX workbook persistence or preserve workbook
-formatting; that write path still requires a format-aware model.
+CSV export remains an explicit text conversion. Saving XLSX instead uses
+`XlsxDocument`, which owns the parsed source workbook and writes base64 XLSX.
+It projects the visible grid back at the source sheet's original range origin,
+retains undisplayed worksheets and workbook properties, and preserves unchanged
+cell records (including numeric/boolean types, number formats and formulas).
+Changed cells replace their prior value/formula; shortened grids remove old
+cells and merges outside the resulting range. Serialization clones the source
+so failed or repeated saves do not mutate the read model. A failed source load
+cannot save an empty replacement workbook.
+
+This is not a full Excel editing engine: structural edits do not translate formula
+references, UI-only formatting changes are not yet projected into workbook styles,
+and features unsupported by the installed workbook codec are not guaranteed to
+round-trip. Those remain explicit follow-ups.

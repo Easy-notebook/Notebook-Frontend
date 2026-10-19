@@ -196,3 +196,62 @@ it('exports the same CSV bytes as the save action', async () => {
     vi.unstubAllGlobals();
   }
 });
+
+it('saves XLSX as a readable workbook and retains undisplayed sheets', async () => {
+  const XLSX = await import('xlsx-js-style');
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    workbook,
+    XLSX.utils.aoa_to_sheet([
+      ['Name', 'Value'],
+      ['Ada', 42],
+    ]),
+    'Main'
+  );
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['other sheet']]), 'Other');
+  const content = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' }) as string;
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.xlsx',
+    name: 'table.xlsx',
+    path: 'table.xlsx',
+    type: 'xlsx',
+    content,
+  };
+  render(<DataTable />);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(model.state.updatePreviewFileContent).toHaveBeenCalledOnce());
+  const [savedContent, target] = model.state.updatePreviewFileContent.mock.calls[0];
+  const saved = XLSX.read(savedContent, { type: 'base64' });
+  expect(target).toEqual({ surface: 'normal', fileId: 'book::table.xlsx' });
+  expect(saved.SheetNames).toEqual(['Main', 'Other']);
+  expect(saved.Sheets.Main.B2).toMatchObject({ t: 'n', v: 42 });
+  expect(saved.Sheets.Other.A1.v).toBe('other sheet');
+});
+
+it('refuses to save a workbook whose current source could not be read', async () => {
+  const { XlsxDocument } = await import('./data-table/XlsxDocument');
+  const read = vi.spyOn(XlsxDocument, 'fromBase64').mockImplementation(() => {
+    throw new Error('unreadable workbook');
+  });
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    model.state.activeFile = {
+      ...model.state.activeFile,
+      id: 'book::broken.xlsx',
+      name: 'broken.xlsx',
+      path: 'broken.xlsx',
+      type: 'xlsx',
+      content: 'unreadable',
+    };
+    render(<DataTable />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+    expect(model.state.updatePreviewFileContent).not.toHaveBeenCalled();
+    expect(model.state.setTabDirty).not.toHaveBeenCalledWith('book::broken.xlsx', false);
+  } finally {
+    read.mockRestore();
+    log.mockRestore();
+  }
+});

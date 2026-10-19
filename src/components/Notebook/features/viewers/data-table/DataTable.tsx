@@ -3,6 +3,7 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import * as XLSX from 'xlsx-js-style';
 import Papa from 'papaparse';
 import { serializeTableCsv } from './serializeTableCsv';
+import { XlsxDocument } from './XlsxDocument';
 import {
   useReactTable,
   getCoreRowModel,
@@ -191,6 +192,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   >([]);
   const [styleMap, setStyleMap] = useState<Record<string, React.CSSProperties>>({});
 
+  const workbookRef = useRef<{ fileId: string; source: string; document: XlsxDocument } | null>(
+    null
+  );
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const resizeHandleRef = useRef<{ col: string; startX: number; startWidth: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -226,6 +230,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   useEffect(() => {
     const fileType = typeOverride || currentFile?.type;
     const content = currentFile?.content ?? '';
+    workbookRef.current = null;
 
     if (!content || (fileType !== 'csv' && fileType !== 'xlsx')) {
       setData([]);
@@ -242,20 +247,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       let headers: string[] = [];
 
       if (fileType === 'xlsx') {
-        // base64 -> Uint8Array
-        const bstr = atob(content);
-        const bytes = new Uint8Array(bstr.length);
-        for (let i = 0; i < bstr.length; i++) bytes[i] = bstr.charCodeAt(i);
-
-        // 读取工作簿，启用样式和其他格式选项
-        const wb = XLSX.read(bytes, {
-          type: 'array',
-          cellStyles: true, // 读取单元格样式
-          cellNF: true, // 读取数字格式
-          cellDates: true, // 解析日期
-          sheetStubs: true, // 包含空单元格
-        });
-        const ws = wb.Sheets[wb.SheetNames[0]];
+        const document = XlsxDocument.fromBase64(content);
+        workbookRef.current = { fileId: currentFile!.id, source: content, document };
+        const ws = document.worksheet;
         const ref = (ws as any)['!ref'] || 'A1';
         const range = XLSX.utils.decode_range(ref);
         const rows: any[][] = [];
@@ -539,6 +533,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
         return;
       }
     } catch (err) {
+      workbookRef.current = null;
       console.error('Failed to parse file:', err);
       setData([]);
       setColumns([]);
@@ -1136,8 +1131,18 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   const handleSave = useCallback(async () => {
     if (!currentFile) return;
     try {
-      const csvContent = serializeTableCsv(data, columns);
-      const saved = await usePreviewStore.getState().updatePreviewFileContent(csvContent, {
+      const isWorkbook = (typeOverride || currentFile.type) === 'xlsx';
+      const workbook = workbookRef.current;
+      if (
+        isWorkbook &&
+        (!workbook || workbook.fileId !== currentFile.id || workbook.source !== currentFile.content)
+      ) {
+        throw new Error('Workbook is not ready for saving');
+      }
+      const content = isWorkbook
+        ? workbook!.document.serialize(data, columns)
+        : serializeTableCsv(data, columns);
+      const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
         surface: isInSplitView ? 'split' : 'normal',
         fileId: currentFile.id,
       });
@@ -1145,7 +1150,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     } catch (err) {
       console.error('Failed to save:', err);
     }
-  }, [currentFile, data, columns, setTabDirty, isInSplitView]);
+  }, [currentFile, data, columns, setTabDirty, isInSplitView, typeOverride]);
 
   if (
     !currentFile ||
