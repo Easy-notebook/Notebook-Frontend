@@ -124,71 +124,8 @@ export const useTipTapSlashCommands = ({ editor }: UseTipTapSlashCommandsProps) 
     };
   }, [editor, detectSlashCommand, isMenuOpen, closeMenu]);
 
-  // 当菜单打开时，拦截编辑器的键盘事件
-  useEffect(() => {
-    if (!editor) return;
-
-    const handleKeyDown = (view: any, event: KeyboardEvent) => {
-      // 如果菜单打开，拦截某些键盘事件，让菜单组件处理
-      if (isMenuOpen) {
-        const interceptKeys = ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab'];
-        if (interceptKeys.includes(event.key)) {
-          console.log('Intercepting key in editor:', event.key);
-          // 不阻止事件，让菜单组件处理
-          return false; // 让 TipTap 知道我们没有处理这个事件
-        }
-      }
-      return false; // 让其他键盘事件正常处理
-    };
-
-    // 注册 ProseMirror 的键盘处理
-    const keydownHandler = editor.view.dom.addEventListener(
-      'keydown',
-      (event: KeyboardEvent) => {
-        if (isMenuOpen) {
-          const interceptKeys = ['ArrowDown', 'ArrowUp', 'Enter', 'Escape', 'Tab'];
-          if (interceptKeys.includes(event.key)) {
-            console.log('Preventing editor keydown:', event.key);
-            event.stopPropagation(); // 阻止事件向上传播给编辑器
-          }
-        }
-      },
-      true
-    ); // 使用 capture 阶段
-
-    return () => {
-      // 清理事件监听器
-      if (keydownHandler) {
-        editor.view.dom.removeEventListener('keydown', keydownHandler, true);
-      }
-    };
-  }, [editor, isMenuOpen]);
-
-  // 键盘快捷键 - 已注释以避免干扰全局命令快捷键
-  /*
-  useEffect(() => {
-    if (!editor) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const { ctrlKey, metaKey, key } = event;
-      const isModifierPressed = ctrlKey || metaKey;
-
-      if (isModifierPressed && key === '/') {
-        event.preventDefault();
-        
-        // 获取当前光标位置
-        const { state } = editor;
-        const { selection } = state;
-        const coords = editor.view.coordsAtPos(selection.from);
-        
-        openMenu({ x: coords.left, y: coords.bottom + 8 });
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editor, openMenu]);
-  */
+  // TipTapSlashCommands owns keyboard navigation and its listener lifecycle.
+  // This hook only detects the slash range and controls menu state.
 
   return {
     isMenuOpen,

@@ -33,3 +33,9 @@ ampersands and angle brackets without interpolating them into HTML. Both kinds u
 insertion path; insertion errors do not retry with a different HTML representation. Existing
 asset URLs, extension classification and Markdown payload conventions remain unchanged.
 Tests exercise the production node schemas and the wrapper's upload callback.
+
+Slash-command keyboard handling has one owner: `TipTapSlashCommands`. It filters composition,
+source input and read-only events and cleans up its document listener. `useTipTapSlashCommands`
+only detects text/range changes and controls menu state. Its duplicate capture listener was
+removed: treating addEventListener's void return as a cleanup handle leaked stale open-menu
+closures, swallowing Enter/navigation keys after close, editor replacement and unmount.
