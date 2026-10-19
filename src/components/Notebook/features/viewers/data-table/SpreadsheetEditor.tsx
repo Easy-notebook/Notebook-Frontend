@@ -1,3 +1,7 @@
+import { getExcelColumnName } from './SpreadsheetCoordinates';
+import { SpreadsheetStructureChange } from './SpreadsheetStructureChange';
+import type { CSVRow, ColumnInfo, CellFormat, SpreadsheetSnapshot } from './SpreadsheetSnapshot';
+export type { CSVRow } from './SpreadsheetSnapshot';
 // moved to features/viewers/data-table
 import React, {
   useState,
@@ -64,39 +68,11 @@ import type { FileObject } from '@Store/models';
 // =====================================================
 // Types & Interfaces
 // =====================================================
-export interface CSVRow {
-  [key: string]: string | number | boolean | null | undefined;
-}
-
 interface CellSelection {
   startRow: number;
   startCol: number;
   endRow: number;
   endCol: number;
-}
-
-interface ColumnInfo {
-  key: string;
-  displayName: string;
-  width: number;
-  type: 'string' | 'number' | 'date' | 'boolean' | 'mixed';
-}
-
-// Cell formatting style
-interface CellFormat {
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  textAlign?: 'left' | 'center' | 'right';
-  color?: string;
-  backgroundColor?: string;
-}
-
-// History state for undo/redo
-interface SpreadsheetSnapshot {
-  data: CSVRow[];
-  columns: ColumnInfo[];
-  cellFormats: Record<string, CellFormat>;
 }
 
 // Find & Replace state
@@ -113,15 +89,6 @@ interface FindReplaceState {
 // =====================================================
 // Utilities
 // =====================================================
-const getExcelColumnName = (index: number): string => {
-  let result = '';
-  while (index >= 0) {
-    result = String.fromCharCode(65 + (index % 26)) + result;
-    index = Math.floor(index / 26) - 1;
-  }
-  return result;
-};
-
 const getCellAddress = (row: number, col: number): string => {
   return `${getExcelColumnName(col)}${row + 1}`;
 };
@@ -620,11 +587,21 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   );
 
   const handleUndo = useCallback(() => {
-    if (draftHistory.undo() && currentFile) setTabDirty(currentFile.id, true);
+    if (draftHistory.undo()) {
+      setActiveCell(null);
+      setSelection(null);
+      setEditingCell(null);
+      if (currentFile) setTabDirty(currentFile.id, true);
+    }
   }, [draftHistory, currentFile, setTabDirty]);
 
   const handleRedo = useCallback(() => {
-    if (draftHistory.redo() && currentFile) setTabDirty(currentFile.id, true);
+    if (draftHistory.redo()) {
+      setActiveCell(null);
+      setSelection(null);
+      setEditingCell(null);
+      if (currentFile) setTabDirty(currentFile.id, true);
+    }
   }, [draftHistory, currentFile, setTabDirty]);
 
   // ============== Cell Formatting Functions ==============
@@ -693,69 +670,41 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     [applyFormatToSelection]
   );
 
-  // ============== Column Operations ==============
+  const changeStructure = useCallback(
+    (axis: 'row' | 'column', kind: 'insert' | 'delete', index: number) => {
+      const current = draftHistory.getSnapshot().value;
+      const size = axis === 'row' ? current.data.length : current.columns.length;
+      if (kind === 'delete' && size <= 1) return;
+      const change = new SpreadsheetStructureChange(axis, kind, index);
+      const next = change.apply(current);
+      draftHistory.commit(next);
+      if (activeCell) {
+        const previous = axis === 'row' ? activeCell.row : activeCell.col;
+        const mapped = change.mapIndex(previous);
+        const limit = axis === 'row' ? next.data.length : next.columns.length;
+        setActiveCell({
+          ...activeCell,
+          [axis === 'row' ? 'row' : 'col']: Math.min(mapped ?? index, limit - 1),
+        });
+      }
+      setSelection(null);
+      setEditingCell(null);
+      if (currentFile) setTabDirty(currentFile.id, true);
+    },
+    [draftHistory, activeCell, currentFile, setTabDirty]
+  );
+
   const insertColumn = useCallback(
     (position: 'left' | 'right') => {
-      if (!activeCell) return;
-      const insertIndex = position === 'left' ? activeCell.col : activeCell.col + 1;
-      const newColKey = getExcelColumnName(columns.length);
-      const newColumn: ColumnInfo = {
-        key: newColKey,
-        displayName: newColKey,
-        width: 100,
-        type: 'string',
-      };
-      const newColumns = [...columns];
-      newColumns.splice(insertIndex, 0, newColumn);
-      // Rename all column keys to maintain Excel-like naming
-      const renamedColumns = newColumns.map((col, i) => ({
-        ...col,
-        key: getExcelColumnName(i),
-        displayName: getExcelColumnName(i),
-      }));
-      // Update data with new column
-      const newData = data.map((row) => {
-        const newRow: CSVRow = {};
-        renamedColumns.forEach((col, i) => {
-          if (i < insertIndex) {
-            newRow[col.key] = row[columns[i]?.key] ?? '';
-          } else if (i === insertIndex) {
-            newRow[col.key] = '';
-          } else {
-            newRow[col.key] = row[columns[i - 1]?.key] ?? '';
-          }
-        });
-        return newRow;
-      });
-      commitDraft({ columns: renamedColumns, data: newData });
-      if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
+      if (activeCell)
+        changeStructure('column', 'insert', activeCell.col + (position === 'right' ? 1 : 0));
     },
-    [activeCell, columns, data, commitDraft, setTabDirty, currentFile]
+    [activeCell, changeStructure]
   );
 
   const deleteColumn = useCallback(() => {
-    if (!activeCell || columns.length <= 1) return;
-    const deleteIndex = activeCell.col;
-    const newColumns = columns.filter((_, i) => i !== deleteIndex);
-    // Rename columns
-    const renamedColumns = newColumns.map((col, i) => ({
-      ...col,
-      key: getExcelColumnName(i),
-      displayName: getExcelColumnName(i),
-    }));
-    // Update data
-    const newData = data.map((row) => {
-      const newRow: CSVRow = {};
-      renamedColumns.forEach((col, i) => {
-        const oldIndex = i >= deleteIndex ? i + 1 : i;
-        newRow[col.key] = row[columns[oldIndex]?.key] ?? '';
-      });
-      return newRow;
-    });
-    commitDraft({ columns: renamedColumns, data: newData });
-    setActiveCell(null);
-    if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-  }, [activeCell, columns, data, commitDraft, setTabDirty, currentFile]);
+    if (activeCell) changeStructure('column', 'delete', activeCell.col);
+  }, [activeCell, changeStructure]);
 
   const toggleColumnVisibility = useCallback((colKey: string) => {
     setHiddenColumns((prev) => {
@@ -1773,16 +1722,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           </div>
           <button
             onClick={() => {
-              if (activeCell) {
-                const newData = data.map((row) => ({ ...row }));
-                const newRow: CSVRow = {};
-                columns.forEach((col) => {
-                  newRow[col.key] = '';
-                });
-                newData.splice(activeCell.row, 0, newRow);
-                commitDraft({ data: newData });
-                if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-              }
+              if (activeCell) changeStructure('row', 'insert', activeCell.row + 0);
               setContextMenu(null);
             }}
             className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
@@ -1791,16 +1731,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           </button>
           <button
             onClick={() => {
-              if (activeCell) {
-                const newData = data.map((row) => ({ ...row }));
-                const newRow: CSVRow = {};
-                columns.forEach((col) => {
-                  newRow[col.key] = '';
-                });
-                newData.splice(activeCell.row + 1, 0, newRow);
-                commitDraft({ data: newData });
-                if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-              }
+              if (activeCell) changeStructure('row', 'insert', activeCell.row + 1);
               setContextMenu(null);
             }}
             className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100/70 dark:hover:bg-gray-700/70 transition-colors"
@@ -1809,12 +1740,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
           </button>
           <button
             onClick={() => {
-              if (activeCell && data.length > 1) {
-                const newData = data.map((row) => ({ ...row }));
-                newData.splice(activeCell.row, 1);
-                commitDraft({ data: newData });
-                if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
-              }
+              if (activeCell) changeStructure('row', 'delete', activeCell.row + 0);
               setContextMenu(null);
             }}
             className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50/70 dark:hover:bg-red-900/30 transition-colors"

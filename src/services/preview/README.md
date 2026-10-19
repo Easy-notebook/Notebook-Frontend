@@ -331,3 +331,17 @@ History transitions notify the edit session before subscribers, preserving the
 same revision checks for saving and deferred clipboard reads. The separate
 React history array/index, pre-edit recording calls, skip-next-history flag,
 JSON cloning and per-field revision hook have been removed.
+
+## Spreadsheet structural edits
+
+`SpreadsheetSnapshot` is a view-independent draft contract. `SpreadsheetStructureChange`
+uses one row/column index transformation for values, canonical column keys and
+user-applied cell-format coordinates. Insertions shift existing formats; deletions
+remove formats on deleted cells and shift survivors. The complete result is one
+history commit, so undo restores structure and formatting together. Structural
+commands rebase the active cell and clear transient ranges/editing; undo/redo
+clear transient coordinates that may not exist in the restored snapshot.
+
+This mapping covers the editor's `cellFormats`. Imported XLSX merge/style metadata
+and formula reference translation still require integration with structural edits;
+the existing workbook codec limitations remain in effect.

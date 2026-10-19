@@ -672,3 +672,29 @@ it('undoes column insertion as one atomic change of both columns and cell values
     fileId: 'book::columns.csv',
   });
 });
+
+it.each(['Row Above', 'Column Left'])(
+  'moves custom cell formatting with content when inserting %s',
+  (operation) => {
+    model.state.activeFile = {
+      ...model.state.activeFile,
+      id: 'book::format.csv',
+      name: 'format.csv',
+      path: 'format.csv',
+      type: 'csv',
+      content: 'Ada,first\nGrace,second',
+    };
+    render(<DataTable showFormulaBar={false} />);
+    fireEvent.click(screen.getByText('Ada', { exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bold (Ctrl+B)' }));
+    expect(screen.getByText('Ada', { exact: true }).closest('div')?.style.fontWeight).toBe('700');
+    fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: `Insert ${operation}` }));
+    expect(screen.getByText('Ada', { exact: true }).closest('div')?.style.fontWeight).toBe('700');
+    expect(screen.getByText('Grace', { exact: true }).closest('div')?.style.fontWeight).not.toBe(
+      '700'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+    expect(screen.getByText('Ada', { exact: true }).closest('div')?.style.fontWeight).toBe('700');
+  }
+);
