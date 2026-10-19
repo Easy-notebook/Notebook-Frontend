@@ -137,4 +137,7 @@ A later recovery failure is reported with the original conflict while the newest
 Continuous editing can extend this catch-up phase; copies remain coalesced to the latest revision
 observed after each write. Edits accepted after recovery completes still follow normal admission.
 Two deterministic regressions cover catch-up and a failure of the subsequent recovery write;
-the storage/autosave/session gate passes 333 tests. Native coverage of this specific race is pending.
+the storage/autosave/session gate passes 333 tests. Two Chromium regressions now inject an edit
+on the first recovery put request success, before transaction completion. The next transaction
+persists the newer revision; when deliberately aborted, it leaves the earlier recovery copy intact
+and the newest edit queued. Both cases preserve the canonical notebook content.

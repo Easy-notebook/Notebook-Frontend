@@ -107,6 +107,9 @@ Autosave admission regressions (`autosave.spec.js`):
 - A failed scoped A transaction leaves no partial metadata/content, while B and later C still
   save automatically. Neither triggers a retry of blocked A; explicit retry does, and a new
   corrected A revision can save and load successfully.
+- Edits admitted on the first recovery put success are captured by a second native recovery
+  transaction. If that second transaction aborts, the earlier copy survives and the latest
+  edit remains queued; canonical notebook content is unchanged in both cases.
 
 PDF export integration (`pdf-export.spec.js`):
 

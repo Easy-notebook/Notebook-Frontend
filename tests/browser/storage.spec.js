@@ -3405,9 +3405,7 @@ test('usage observes an atomic transfer from recovery draft to restored notebook
   expect([result.before, result.after]).toContainEqual(result.concurrent);
 });
 
-test('hidden edits arriving during conflict recovery are persisted by a follow-up flush', async ({
-  page,
-}) => {
+test('hidden edits remain recoverable through catch-up and a follow-up flush', async ({ page }) => {
   const result = await page.evaluate(async () => {
     const {
       AutoSaveService,
@@ -3480,7 +3478,7 @@ test('hidden edits arriving during conflict recovery are persisted by a follow-u
       await reported;
       const drafts = await recovery.listDrafts('hidden-conflict');
       return {
-        writes,
+        copies: drafts.length,
         errors,
         text: JSON.parse(drafts[0].content).cells[0].content,
         pending: service.hasPending('hidden-conflict'),
@@ -3495,7 +3493,7 @@ test('hidden edits arriving during conflict recovery are persisted by a follow-u
     }
   });
   expect(result).toEqual({
-    writes: 2,
+    copies: 1,
     errors: 2,
     text: 'latest',
     pending: true,

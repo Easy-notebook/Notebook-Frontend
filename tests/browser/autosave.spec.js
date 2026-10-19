@@ -299,3 +299,106 @@ test('a failed scoped transaction does not strand other notebooks or automatical
     });
   }
 });
+
+for (const failLatest of [false, true]) {
+  test(`native recovery catch-up ${failLatest ? 'retains pending edits after a later abort' : 'persists edits accepted before transaction completion'}`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (abortLatest) => {
+      const {
+        AutoSaveService,
+        IndexedDBStorageProvider,
+        NotebookRepository,
+        NotebookRecoveryRepository,
+        DB_CONFIG,
+      } = window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const notebooks = new NotebookRepository(provider);
+      const recovery = new NotebookRecoveryRepository(provider);
+      const id = 'recovery-catchup';
+      const canonical = JSON.stringify({
+        title: 'Winner',
+        cells: [{ id: 'cell', type: 'markdown', content: 'winner' }],
+        tasks: [],
+      });
+      await notebooks.saveNotebookSnapshot(
+        {
+          notebookId: id,
+          filePath: `notebook_${id}.json`,
+          fileName: 'Winner',
+          content: canonical,
+          size: canonical.length,
+          lastModified: 'now',
+        },
+        { id, name: 'Winner', lastAccessedAt: 1, accessCount: 1, cacheEnabled: true }
+      );
+      const service = AutoSaveService.getInstance({ debounceMs: 60000, maxRetries: 0 });
+      const snapshot = (content) => ({
+        notebookId: id,
+        notebookTitle: 'Local',
+        timestamp: Date.now(),
+        tasks: [],
+        cells: [{ id: 'cell', type: 'markdown', content }],
+      });
+      const original = IDBObjectStore.prototype.put;
+      const revisions = [];
+      let admitted;
+      IDBObjectStore.prototype.put = function (...args) {
+        const request = original.apply(this, args);
+        if (this.name === DB_CONFIG.STORES.NOTEBOOK_RECOVERY) {
+          revisions.push(args[0].revision);
+          const index = revisions.length;
+          request.addEventListener(
+            'success',
+            () => {
+              if (index === 1) admitted = service.queueSave(snapshot('latest'));
+              else if (abortLatest) this.transaction.abort();
+            },
+            { once: true }
+          );
+        }
+        return request;
+      };
+      let error;
+      try {
+        try {
+          await service.saveNow(snapshot('first'));
+        } catch (failure) {
+          error = failure.message;
+        }
+        await admitted;
+        const drafts = await recovery.listDrafts(id);
+        const stored = await provider.getAll(DB_CONFIG.STORES.FILES_CONTENT);
+        return {
+          error,
+          revisions,
+          progress: service.getSaveProgress(id),
+          pending: service.hasPending(id),
+          drafts: drafts.map((draft) => ({
+            revision: draft.revision,
+            text: JSON.parse(draft.content).cells[0].content,
+          })),
+          canonical: stored.map((record) => record.content),
+        };
+      } finally {
+        IDBObjectStore.prototype.put = original;
+        await AutoSaveService.resetInstance();
+        await provider.close();
+      }
+    }, failLatest);
+    expect(result.revisions).toEqual([1, 2]);
+    expect(result.drafts).toEqual([
+      { revision: failLatest ? 1 : 2, text: failLatest ? 'first' : 'latest' },
+    ]);
+    expect(result.progress).toMatchObject({
+      phase: 'blocked',
+      currentRevision: 2,
+      committedRevision: 0,
+    });
+    expect(result.pending).toBe(true);
+    expect(result.canonical).toHaveLength(1);
+    expect(JSON.parse(result.canonical[0]).cells[0].content).toBe('winner');
+    expect(result.error).toContain('content changed');
+    if (failLatest) expect(result.error).toContain('recovery could not be saved');
+  });
+}
