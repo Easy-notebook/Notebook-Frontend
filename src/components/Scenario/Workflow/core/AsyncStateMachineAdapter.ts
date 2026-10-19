@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Async State Machine Adapter
  * =============================
@@ -29,12 +30,6 @@ export interface APIType {
   value: string;
 }
 
-interface APIClient {
-  callPlanningAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
-  callGeneratingAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
-  callReflectingAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
-}
-
 interface ScriptStore {
   execAction: (step: ExecutionStep, signal?: AbortSignal) => Promise<void>;
 }
@@ -49,7 +44,7 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 export class AsyncStateMachineAdapter {
   private lastTransitionName: string | null = null;
 
-  constructor(apiClient?: APIClient, scriptStore?: ScriptStore) {
+  constructor(apiClient?: WorkflowAPIClientPort, scriptStore?: ScriptStore) {
     console.log('[AsyncFSM] Initialized AsyncStateMachineAdapter');
 
     // Omitted dependencies preserve the installed context. API injection must also
@@ -65,7 +60,7 @@ export class AsyncStateMachineAdapter {
   /**
    * Set or update the API client
    */
-  setApiClient(apiClient: APIClient): void {
+  setApiClient(apiClient: WorkflowAPIClientPort): void {
     // Inject into TransitionCoordinator
     const coordinator = getTransitionCoordinator();
     coordinator.setContext({ apiClient });

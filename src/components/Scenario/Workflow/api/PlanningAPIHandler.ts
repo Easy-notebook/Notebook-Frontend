@@ -46,8 +46,11 @@ export class PlanningAPIHandler extends BaseAPIHandler {
       for await (const actionData of actionStream) {
         signal?.throwIfAborted();
         // Extract action object (format: {"action": {...}})
+        if (typeof actionData !== 'object' || actionData === null || !('action' in actionData)) {
+          continue;
+        }
         const action = actionData.action;
-        if (!action || !action.type) {
+        if (typeof action !== 'object' || action === null || !('type' in action) || !action.type) {
           continue;
         }
 

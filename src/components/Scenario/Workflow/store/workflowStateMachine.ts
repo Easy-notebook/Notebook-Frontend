@@ -22,7 +22,7 @@ import {
   initializeTransitionCoordinator,
 } from '../transitions/TransitionCoordinator';
 import { StateFactory } from '../states/StateFactory';
-import type { NotebookState, StateJSON } from '@Store/models';
+import type { NotebookState, StateJSON, TransitionHandlerContext } from '@Store/models';
 import { createInitialStateJSON } from '@Store/models';
 import { WorkflowEvent, WorkflowState } from '@Store/models';
 import { WORKFLOW_MAX_ITERATIONS } from '../../../../config/workflow';
@@ -406,12 +406,7 @@ const automaticRun = new WorkflowRunSession({
  * Initialize the state machine with stores/context.
  * Call this once at app startup.
  */
-export function initializeStateMachine(context: {
-  scriptStore?: Record<string, unknown>;
-  apiClient?: Record<string, unknown>;
-  notebookStore?: Record<string, unknown>;
-  aiContextStore?: Record<string, unknown>;
-}) {
+export function initializeStateMachine(context: TransitionHandlerContext) {
   console.log('[FSM] Initializing state machine with context');
   initializeTransitionCoordinator(context);
 

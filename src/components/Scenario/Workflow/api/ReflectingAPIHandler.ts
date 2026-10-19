@@ -63,7 +63,7 @@ export class ReflectingAPIHandler extends BaseAPIHandler {
       for await (const action of iterator) {
         signal?.throwIfAborted();
         actionCount++;
-        console.log(`[ReflectingAPI] Action ${actionCount}: ${action.type || 'unknown'}`);
+        console.log(`[ReflectingAPI] Action ${actionCount}`);
         yield action;
       }
 

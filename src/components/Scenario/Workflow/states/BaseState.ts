@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Base State Class
  * ================
@@ -25,7 +26,6 @@ export enum APIResponseType {
 
 export abstract class BaseState {
   protected stateName: string;
-  protected apiClient: any;
 
   // API Handlers
   protected planningHandler: PlanningAPIHandler | null = null;
@@ -123,9 +123,7 @@ export abstract class BaseState {
    *
    * @param apiClient - WorkflowAPIClient instance
    */
-  setApiClient(apiClient: any): void {
-    this.apiClient = apiClient;
-
+  setApiClient(apiClient: WorkflowAPIClientPort): void {
     // Initialize API handlers (scriptStore not available in BaseState context)
     this.planningHandler = new PlanningAPIHandler(apiClient, undefined);
     this.generatingHandler = new GeneratingAPIHandler(apiClient, undefined);

@@ -1,3 +1,5 @@
+import type { StateJSON } from './statejson';
+
 // src/store/models/scenario.ts
 
 // Generic metadata attached to actions/cells in Scenario workflow
@@ -98,10 +100,17 @@ export interface RequestContext {
   thinkingLength: number;
 }
 
+/** Transport boundary: decoded response data remains untrusted until consumed. */
+export interface WorkflowAPIClientPort {
+  callPlanningAPI(state: StateJSON, signal?: AbortSignal): AsyncGenerator<unknown>;
+  callGeneratingAPI(state: StateJSON, signal?: AbortSignal): AsyncGenerator<unknown>;
+  callReflectingAPI(state: StateJSON, signal?: AbortSignal): AsyncGenerator<unknown>;
+}
+
 // Transition handler context (FSM transitions)
 export interface TransitionHandlerContext {
   scriptStore?: any;
-  apiClient?: any;
+  apiClient?: WorkflowAPIClientPort;
   notebookStore?: any;
   aiContextStore?: any;
 }

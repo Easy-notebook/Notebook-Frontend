@@ -13,7 +13,7 @@
  */
 
 import { StateJSON } from '@Store/models';
-import type { WorkflowAPIClientConfig } from '@Store/models';
+import type { WorkflowAPIClientConfig, WorkflowAPIClientPort } from '@Store/models';
 import useSettingsStore from '@Store/settingsStore';
 
 /**
@@ -37,7 +37,7 @@ const DEFAULT_CONFIG: WorkflowAPIClientConfig = {
 /**
  * Workflow API Client
  */
-export class WorkflowAPIClient {
+export class WorkflowAPIClient implements WorkflowAPIClientPort {
   private baseURL: string;
   private timeout: number;
 
@@ -57,15 +57,15 @@ export class WorkflowAPIClient {
     return settings.language || 'en';
   }
 
-  callPlanningAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<any> {
+  callPlanningAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<unknown> {
     return this.callActions('planning', stateJSON, signal);
   }
 
-  callGeneratingAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<any> {
+  callGeneratingAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<unknown> {
     return this.callActions('generating', stateJSON, signal);
   }
 
-  callReflectingAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<any> {
+  callReflectingAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<unknown> {
     return this.callActions('reflecting', stateJSON, signal);
   }
 

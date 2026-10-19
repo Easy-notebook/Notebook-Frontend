@@ -40,7 +40,7 @@ export class GeneratingAPIHandler extends BaseAPIHandler {
       for await (const action of iterator) {
         signal?.throwIfAborted();
         actionCount++;
-        console.log(`[GeneratingAPI] Action ${actionCount}: ${action.type || 'unknown'}`);
+        console.log(`[GeneratingAPI] Action ${actionCount}`);
         yield action;
       }
 

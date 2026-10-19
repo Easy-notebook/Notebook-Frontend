@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Base Transition Handler
  * Provides common functionality for all FSM transition handlers.
@@ -15,7 +16,7 @@ export abstract class BaseTransitionHandler {
   public readonly transitionName: WorkflowEvent;
 
   protected scriptStore?: any;
-  protected apiClient?: any;
+  protected apiClient?: WorkflowAPIClientPort;
   protected notebookStore?: any;
   protected aiContextStore?: any;
 

@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Workflow Initializer
  * ====================
@@ -106,7 +107,7 @@ export function getAsyncAdapter(): AsyncStateMachineAdapter | null {
  *
  * @param apiClient - The new API client
  */
-export function updateAPIClient(apiClient: any): void {
+export function updateAPIClient(apiClient: WorkflowAPIClientPort): void {
   console.log('[WorkflowInit] Updating API client...');
 
   // Update AsyncStateMachineAdapter
