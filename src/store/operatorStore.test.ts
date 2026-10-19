@@ -18,6 +18,7 @@ vi.mock('@Services/notebook/OperationService', () => ({
 vi.mock('@Services/stream', () => ({ handleStreamResponse: io.handle }));
 vi.mock('@/components/UI/Toast', () => ({ showToast: io.toast }));
 import useOperatorStore from './operatorStore';
+import { qaStreamManager } from '@Services/stream/managers/QAStreamManager';
 import useNotebookStore from './notebookStore';
 const initial = useOperatorStore.getState();
 const operation = { type: 'user_question', payload: { content: 'question' } };
@@ -37,13 +38,17 @@ function controlledStream() {
   };
 }
 beforeEach(() => {
+  qaStreamManager.clearStreamingQaId();
   vi.resetAllMocks();
   useNotebookStore.setState({ notebookId: null });
   useOperatorStore.setState(initial, true);
   io.initialize.mockResolvedValue('created');
   io.handle.mockResolvedValue(undefined);
 });
-afterEach(() => useOperatorStore.setState(initial, true));
+afterEach(() => {
+  qaStreamManager.clearStreamingQaId();
+  useOperatorStore.setState(initial, true);
+});
 it('holds admission through all chunks and asynchronous handlers until EOF', async () => {
   const transport = controlledStream();
   io.send.mockResolvedValue(transport.stream);
@@ -373,3 +378,48 @@ it('passes notebook cancellation into an already executing response handler', as
   expect(useOperatorStore.getState().error).toBeNull();
   expect(useOperatorStore.getState().isSendingOperation).toBe(false);
 });
+
+it.each(['eof', 'failure'] as const)(
+  'settles the unfinished answer on transport %s',
+  async (outcome) => {
+    const transport = controlledStream();
+    io.send.mockResolvedValue(transport.stream);
+    const interrupt = vi.fn();
+    io.handle.mockImplementation(async (_data, _notify, signal: AbortSignal) => {
+      qaStreamManager.setStreamingQaId('qa', signal, interrupt);
+    });
+    const receipt = await useOperatorStore.getState().submitOperation('book', operation);
+    if (!receipt.accepted) throw new Error('Expected admission');
+    transport.controller.enqueue(encoder.encode('{"type":"start"}'));
+    await vi.waitFor(() => expect(io.handle).toHaveBeenCalledOnce());
+    if (outcome === 'eof') transport.controller.close();
+    else transport.controller.error(new Error('transport failed'));
+    await receipt.completion;
+    expect(interrupt).toHaveBeenCalledOnce();
+    expect(qaStreamManager.isStreaming()).toBe(false);
+    expect(useOperatorStore.getState().isSendingOperation).toBe(false);
+  }
+);
+
+it.each(['completed', 'replacement'] as const)(
+  'does not interrupt a %s answer at old EOF',
+  async (kind) => {
+    const transport = controlledStream();
+    io.send.mockResolvedValue(transport.stream);
+    const interrupt = vi.fn();
+    io.handle.mockImplementation(async (_data, _notify, signal: AbortSignal) => {
+      qaStreamManager.setStreamingQaId('qa', signal, interrupt);
+    });
+    const receipt = await useOperatorStore.getState().submitOperation('book', operation);
+    if (!receipt.accepted) throw new Error('Expected admission');
+    transport.controller.enqueue(encoder.encode('{"type":"start"}'));
+    await vi.waitFor(() => expect(io.handle).toHaveBeenCalledOnce());
+    if (kind === 'completed') qaStreamManager.clearStreamingQaId(qaStreamManager.capture());
+    else qaStreamManager.setStreamingQaId('qa', new AbortController().signal, interrupt);
+    const remaining = qaStreamManager.capture();
+    transport.controller.close();
+    await receipt.completion;
+    expect(interrupt).not.toHaveBeenCalled();
+    expect(qaStreamManager.capture()).toBe(remaining);
+  }
+);

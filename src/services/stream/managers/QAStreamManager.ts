@@ -13,6 +13,7 @@ export interface QAStreamSession {
 export class QAStreamManager {
   private static instance: QAStreamManager;
   private session: QAStreamSession | null = null;
+  private transportSignal: AbortSignal | undefined;
   private onCancel: (() => void) | undefined;
   private detachCancellation: (() => void) | undefined;
 
@@ -34,6 +35,7 @@ export class QAStreamManager {
     this.detachCancellation = undefined;
     const session = Object.freeze({ qaId });
     this.session = session;
+    this.transportSignal = signal;
     this.onCancel = onCancel;
     if (signal) {
       const cancel = () => this.cancelStreamingQa(session);
@@ -61,6 +63,7 @@ export class QAStreamManager {
     this.detachCancellation?.();
     this.detachCancellation = undefined;
     this.onCancel = undefined;
+    this.transportSignal = undefined;
     const previousQaId = this.session?.qaId;
     this.session = null;
     if (previousQaId) {
@@ -74,6 +77,11 @@ export class QAStreamManager {
     const onCancel = this.onCancel;
     this.clearStreamingQaId(expected);
     onCancel?.();
+  }
+
+  /** EOF/failure without a finish event interrupts only this transport's answer. */
+  endTransport(signal: AbortSignal): void {
+    if (this.transportSignal === signal) this.cancelStreamingQa(this.session);
   }
 
   /**

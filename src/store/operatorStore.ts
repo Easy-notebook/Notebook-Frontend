@@ -6,6 +6,7 @@ import { showToast } from '@/components/UI/Toast';
 import useCodeStore from '@Store/codeStore';
 import useNotebookStore from '@Store/notebookStore';
 import { storeLog } from '@Utils/logger';
+import { qaStreamManager } from '@Services/stream/managers/QAStreamManager';
 import { OperationDispatcher } from '@Services/stream/OperationDispatcher';
 import type { StreamData } from '@Services/stream';
 import type {
@@ -85,6 +86,7 @@ const useOperatorStore = create<OperatorStore>((set, get) => {
         signal
       );
     },
+    settled: (signal) => qaStreamManager.endTransport(signal),
     busy: (value) =>
       set(value ? { isSendingOperation: true, error: null } : { isSendingOperation: false }),
     error: (message) => {

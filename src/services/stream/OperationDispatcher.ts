@@ -10,6 +10,7 @@ interface OperationPorts {
   ): Promise<ReadableStream<Uint8Array> | null>;
   record(operation: Operation): string;
   receive(operationId: string, data: Record<string, unknown>, signal: AbortSignal): Promise<void>;
+  settled(signal: AbortSignal): void;
   busy(value: boolean): void;
   error(message: string): void;
   refused(message: string): void;
@@ -167,7 +168,11 @@ export class OperationDispatcher {
         this.ports.error(error instanceof Error ? error.message : String(error));
       }
     } finally {
-      this.finish(attempt);
+      try {
+        this.ports.settled(signal);
+      } finally {
+        this.finish(attempt);
+      }
     }
   }
   private finish(attempt: Attempt): void {
