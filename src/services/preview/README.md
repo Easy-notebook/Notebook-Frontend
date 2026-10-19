@@ -545,3 +545,16 @@ Invalid values are not coerced to zero or concatenated as strings. Validation er
 propagate through the transaction owner, rolling back body, metadata, notebook and
 activity writes together. Explicit recalculation derives totals from valid file sizes;
 it does not trust the notebook's previous totals.
+
+## Access-history transitions
+
+`AccessHistory` owns the read-access transition for file and notebook records.
+It validates the existing nonnegative safe-integer counter and timestamp, increments
+exactly once and rejects counter overflow. Each transition returns detached values;
+repositories retain transaction ownership and publish only after commit.
+
+Reading a file updates its own and its parent's access history in one transaction.
+A malformed parent history therefore rolls back the file access and activity record
+as well. Direct notebook reads and `updateAccessTime` use the same transition.
+The timestamp remains the supplied wall-clock access time, preserving existing
+behavior when the system clock changes.

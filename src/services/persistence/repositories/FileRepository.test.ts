@@ -11,6 +11,7 @@ function setup(
     size: 0,
     hasLocalContent: true,
     accessCount: 2,
+    lastAccessedAt: 0,
   },
   content?: unknown
 ) {
@@ -222,6 +223,7 @@ it('keeps remote and missing local content semantics', async () => {
     filePath: 'remote',
     hasLocalContent: false,
     accessCount: 0,
+    lastAccessedAt: 0,
   });
   expect(await remote.repository.getFile('book', 'remote')).toMatchObject({
     needsRemoteFetch: true,
@@ -234,6 +236,7 @@ it('keeps remote and missing local content semantics', async () => {
       filePath: 'missing',
       hasLocalContent: true,
       accessCount: 0,
+      lastAccessedAt: 0,
     },
     null
   );

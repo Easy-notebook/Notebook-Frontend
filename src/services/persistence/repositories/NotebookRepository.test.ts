@@ -250,3 +250,13 @@ it('metadata refresh derives totals from current files and retains newer access 
   expect(stores.files_metadata.put).not.toHaveBeenCalled();
   expect(stores.files_content.put).not.toHaveBeenCalled();
 });
+
+it.each([
+  { accessCount: '1', lastAccessedAt: 10 },
+  { accessCount: 1, lastAccessedAt: NaN },
+  { accessCount: Number.MAX_SAFE_INTEGER, lastAccessedAt: 10 },
+])('rejects corrupt or exhausted access histories without a write: %j', async (history) => {
+  const { repository, stores } = setup({ ...notebook, ...history });
+  await expect(repository.getNotebook('book')).rejects.toThrow();
+  expect(stores.notebooks.put).not.toHaveBeenCalled();
+});

@@ -1,3 +1,4 @@
+import { AccessHistory } from './AccessHistory';
 import { NotebookFileTotals } from './NotebookFileTotals';
 import { FileRecordOwnership } from './FileRecordOwnership';
 import { makeFileId } from '../../../storage/fileIdentity';
@@ -86,11 +87,13 @@ export class FileRepository implements IFileRepository {
       const content = metadata.hasLocalContent
         ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], fileId)
         : undefined;
-      metadata.lastAccessedAt = Date.now();
-      metadata.accessCount += 1;
-      metadataStore.put(metadata);
+      const accessed = {
+        ...metadata,
+        ...new AccessHistory(metadata).accessedAt(Date.now()).toRecord(),
+      };
+      metadataStore.put(accessed);
       await this.recordAccess(stores, notebookId, filePath);
-      result = { metadata, content, needsRemoteFetch: content === undefined };
+      result = { metadata: accessed, content, needsRemoteFetch: content === undefined };
     });
     return result;
   }
@@ -219,7 +222,7 @@ export class FileRepository implements IFileRepository {
     const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
     const notebook = await this.read<NotebookEntity | undefined>(store.get(notebookId));
     if (notebook)
-      store.put({ ...notebook, lastAccessedAt: now, accessCount: notebook.accessCount + 1 });
+      store.put({ ...notebook, ...new AccessHistory(notebook).accessedAt(now).toRecord() });
     stores[DB_CONFIG.STORES.ACTIVITIES].add(
       new NotebookActivityRecord(notebookId, 'file_access', now, filePath)
     );

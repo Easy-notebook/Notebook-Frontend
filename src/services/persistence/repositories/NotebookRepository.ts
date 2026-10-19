@@ -1,3 +1,4 @@
+import { AccessHistory } from './AccessHistory';
 import { NotebookFileTotals } from './NotebookFileTotals';
 import { NotebookActivityRecord } from './NotebookActivityRecord';
 import {
@@ -155,29 +156,13 @@ export class NotebookRepository implements INotebookRepository {
 
   private async accessNotebook(id: string): Promise<NotebookEntity | undefined> {
     let notebook: NotebookEntity | undefined;
-    await this.storage.transaction(
-      [DB_CONFIG.STORES.NOTEBOOKS],
-      'readwrite',
-      (stores) =>
-        new Promise<void>((resolve, reject) => {
-          const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
-          const request = store.get(id);
-          request.onerror = () => reject(request.error);
-          request.onsuccess = () => {
-            try {
-              notebook = request.result as NotebookEntity | undefined;
-              if (notebook) {
-                notebook.lastAccessedAt = Date.now();
-                notebook.accessCount += 1;
-                store.put(notebook);
-              }
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          };
-        })
-    );
+    await this.storage.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite', async (stores) => {
+      const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+      const stored = await this.read<NotebookEntity | undefined>(store.get(id));
+      if (stored == null) return;
+      notebook = { ...stored, ...new AccessHistory(stored).accessedAt(Date.now()).toRecord() };
+      store.put(notebook);
+    });
     return notebook;
   }
 

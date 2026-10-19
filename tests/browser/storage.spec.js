@@ -544,6 +544,7 @@ test('migrated file reads retain old plain payloads and list remote references w
       id: 'a::old',
       notebookId: 'a',
       filePath: 'old',
+      lastAccessedAt: 0,
       size: new Blob(['old plain payload']).size,
       hasLocalContent: true,
       accessCount: 0,
@@ -4150,3 +4151,67 @@ test('notebook accounting overflow rejects the adjustment and preserves counters
   expect(result.error).toBe('Notebook file accounting overflow');
   expect(result.after).toEqual(result.before);
 });
+
+for (const target of ['file', 'notebook']) {
+  for (const fault of ['count', 'timestamp', 'overflow']) {
+    test(`${target} access history rejects ${fault} without partial access writes`, async ({
+      page,
+    }) => {
+      const result = await page.evaluate(
+        async ({ target, fault }) => {
+          const { IndexedDBStorageProvider, FileRepository, NotebookRepository, DB_CONFIG } =
+            window.storageHarness;
+          const provider = new IndexedDBStorageProvider();
+          const files = new FileRepository(provider);
+          const notebooks = new NotebookRepository(provider);
+          const S = DB_CONFIG.STORES;
+          await files.saveFile({
+            notebookId: 'book',
+            filePath: 'file',
+            fileName: 'file',
+            content: 'body',
+            size: 4,
+            lastModified: 'old',
+          });
+          const store = target === 'file' ? S.FILES_METADATA : S.NOTEBOOKS;
+          const id = target === 'file' ? 'book::file' : 'book';
+          const original = await provider.get(store, id);
+          const patch =
+            fault === 'timestamp'
+              ? { lastAccessedAt: NaN }
+              : { accessCount: fault === 'count' ? '1' : Number.MAX_SAFE_INTEGER };
+          await provider.put(store, { ...original, ...patch });
+          const snapshot = () =>
+            Promise.all(
+              [S.FILES_METADATA, S.FILES_CONTENT, S.NOTEBOOKS, S.ACTIVITIES].map((name) =>
+                provider.getAll(name)
+              )
+            );
+          const before = await snapshot();
+          const actions = [() => files.getFile('book', 'file')];
+          if (target === 'notebook')
+            actions.push(
+              () => notebooks.getNotebook('book'),
+              () => notebooks.updateAccessTime('book')
+            );
+          const errors = [];
+          for (const action of actions) {
+            try {
+              await action();
+              errors.push(null);
+            } catch (error) {
+              errors.push(error.message);
+            }
+          }
+          const after = await snapshot();
+          await provider.close();
+          return { errors, before, after };
+        },
+        { target, fault }
+      );
+      expect(result.errors).toHaveLength(target === 'file' ? 1 : 3);
+      for (const error of result.errors) expect(error.toLowerCase()).toContain('access');
+      expect(result.after).toEqual(result.before);
+    });
+  }
+}
