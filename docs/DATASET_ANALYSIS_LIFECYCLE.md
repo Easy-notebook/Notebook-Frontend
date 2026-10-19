@@ -31,7 +31,7 @@ Suggestions start after dataset preparation completes, replacing the former arbi
 wait. Responses are validated before publishing; obsolete completions and errors are ignored.
 
 Uploaded preview URLs returned after cancellation are released before acceptance. Accepted
-attachments still use the component's controlled file list; their draft/record lease integration
-is pending. Cancellation suppresses continuation effects, but does not abort backend network
+attachments enter the parent EmptyState attachment draft, which shares resource leases with
+QA/action records and releases them on replacement, removal or unmount. Cancellation suppresses continuation effects, but does not abort backend network
 requests or the Store's already-started parser computation. Dataset analysis remains owned by
 Store selection/reset, independently of the mounted command input.

@@ -6,8 +6,9 @@ import useCodeStore from '@Store/codeStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 
 import AICommandInput from './AICommandInput';
+import { useAttachmentDraft } from '@/hooks/useAttachmentDraft';
 import Header from './Header';
-import { UploadFile, AddCellFn, EmptyStateProps } from './types';
+import { AddCellFn, EmptyStateProps } from './types';
 import { navigateToLibrary } from '@Utils/navigation';
 import { uiLog } from '@Utils/logger';
 
@@ -29,7 +30,8 @@ const WHEEL_DOWN_TRIGGER = 220; // 竖向滚轮触发阈值
 const WHEEL_RIGHT_DECAY_MS = 140; // 横向滚轮“结束”判定间隔
 
 const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
-  const [files, setFiles] = useState<UploadFile[]>([]);
+  const notebookId = useStore((state) => state.notebookId);
+  const { draft, files } = useAttachmentDraft(notebookId);
   const [swipeDistance, setSwipeDistance] = useState(0); // 上滑视觉
   const [rightSwipeDistance, setRightSwipeDistance] = useState(0); // 右滑视觉
   const [showLibraryState, setShowLibraryState] = useState(false);
@@ -505,7 +507,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
           }}
         >
           <Header />
-          <AICommandInput files={files} setFiles={setFiles} />
+          <AICommandInput files={files} setFiles={draft.replaceFiles} />
         </div>
       </div>
     </div>

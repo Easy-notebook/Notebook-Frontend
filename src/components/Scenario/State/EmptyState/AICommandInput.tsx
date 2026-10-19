@@ -125,10 +125,11 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
   // ---------- 根据 VDS 模式和文件变化重置预设问题 ----------
   useEffect(() => {
-    if (!isVDSMode && files.length === 0) {
+    if (files.length === 0) {
+      setIsVDSMode(false);
       setPresetQuestions(defaultPresetQuestions);
     }
-  }, [isVDSMode, files.length, defaultPresetQuestions]);
+  }, [files.length, defaultPresetQuestions]);
 
   const preparation = useEmptyStatePreparationSession();
 

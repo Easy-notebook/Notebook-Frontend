@@ -57,9 +57,9 @@ is authoritative. Removing a record while its failed submission still retains a 
 that draft valid. Removing a newly published record synchronously also cannot leak the URL after
 the submission settles. Tests exercise both directions of shared draft/record ownership.
 
-Remote URLs and blob URLs created outside this registry are not adopted or revoked. The separate
-empty-state command input's unmanaged attachments are outside this resource scope. Text-input
-submission and the global terminal loading indicator retain their existing lifecycle.
+Remote URLs are never revoked. Record reconciliation only retains blob URLs already admitted
+by a draft. Text-input submission and the global terminal loading indicator retain their
+existing lifecycle.
 
 ## Empty-state notebook admission
 
@@ -71,8 +71,22 @@ upload response. Ownership checks reject a changed current notebook before publi
 The existing top-level and nested creation response shapes are accepted and validated.
 
 Both admission services use `createAttachmentFiles` for unique IDs and complete rollback of
-partial browser URL allocation. The empty-state component still owns its controlled file list,
-attachment draft; its preparation/suggestion/navigation sequence is now owned by
-`EmptyStatePreparationSession`. Draft leasing remains pending work. Notebook checks currently compare IDs, so an
-away-and-back switch to the same ID is not detected. Failed or superseded requests do not roll
-back server-side notebook/file creation.
+partial browser URL allocation. The production `EmptyState` owner uses `useAttachmentDraft`
+and passes its files plus `replaceFiles` to the unchanged controlled input interface. Replacing,
+removing or clearing a batch releases draft leases; QA/action records retain their own leases.
+A failed submission leaves the draft available, including after removal of its message record.
+Unmount and committed notebook changes release remaining draft resources. Initial notebook
+creation preserves the draft.
+
+`replaceFiles` accepts arrays or functional updates and acquires new leases before releasing
+removed ones. Reusing a URL under a new ID cannot revoke it prematurely. Replacing an ID with
+a different URL while an older submission is pinned keeps the two resources separate; settling
+the old submission cannot remove or release the replacement. Upload append and controlled
+replacement use the same admission logic.
+
+The preparation/suggestion/navigation sequence is owned by `EmptyStatePreparationSession`.
+That session rejects late results and frees their URLs before acceptance. Upload services
+currently compare notebook IDs, so they do not themselves detect away-and-back switches;
+the preparation hook does cancel those transitions. Failed or superseded requests do not
+roll back server-side notebook/file creation. The draft hook responds to committed React
+notebook changes rather than every external Store transition.

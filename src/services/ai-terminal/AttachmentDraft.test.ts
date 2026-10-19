@@ -131,3 +131,65 @@ it('does not publish an old submission completion after reset', async () => {
   submission.finish(true);
   expect(notify).not.toHaveBeenCalled();
 });
+
+it('replaces controlled batches and releases only attachments that leave the draft', () => {
+  const revoke = vi.fn();
+  const draft = new AttachmentDraft(new AttachmentUrlRegistry(revoke));
+  const a = attachment('a');
+  const b = attachment('b');
+  draft.replaceFiles([a]);
+  draft.replaceFiles([a, b]);
+  expect(revoke).not.toHaveBeenCalled();
+  draft.replaceFiles((previous) => previous.filter((file) => file.id !== 'a'));
+  expect(revoke.mock.calls).toEqual([['blob:a']]);
+  draft.replaceFiles([]);
+  draft.detach();
+  expect(revoke.mock.calls).toEqual([['blob:a'], ['blob:b']]);
+});
+it('acquires replacement leases before releasing an old ID sharing the same URL', () => {
+  const revoke = vi.fn();
+  const draft = new AttachmentDraft(new AttachmentUrlRegistry(revoke));
+  draft.replaceFiles([attachment('a')]);
+  draft.replaceFiles([{ ...attachment('b'), url: 'blob:a' }]);
+  expect(revoke).not.toHaveBeenCalled();
+  draft.detach();
+  expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:a');
+});
+it('preserves a replacement URL with the same ID when an older submission settles', () => {
+  const revoke = vi.fn();
+  const draft = new AttachmentDraft(new AttachmentUrlRegistry(revoke));
+  draft.replaceFiles([attachment('a')]);
+  const old = draft.beginSubmission();
+  const replacement = { ...attachment('a'), url: 'blob:replacement' };
+  draft.replaceFiles([replacement]);
+  expect(revoke).not.toHaveBeenCalled();
+  old.finish(true);
+  expect(draft.getSnapshot().files).toEqual([replacement]);
+  expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:a');
+  draft.detach();
+  expect(revoke).toHaveBeenLastCalledWith('blob:replacement');
+});
+it('keeps replaced pinned resources until all pending submissions settle', () => {
+  const revoke = vi.fn();
+  const draft = new AttachmentDraft(new AttachmentUrlRegistry(revoke));
+  draft.replaceFiles([attachment('a')]);
+  const first = draft.beginSubmission();
+  const second = draft.beginSubmission();
+  draft.replaceFiles([attachment('b')]);
+  draft.detach();
+  expect(revoke.mock.calls).toEqual([['blob:b']]);
+  first.finish(false);
+  expect(revoke).toHaveBeenCalledTimes(1);
+  second.finish(false);
+  expect(revoke).toHaveBeenLastCalledWith('blob:a');
+});
+it('releases incoming files after detach without publishing a new draft', () => {
+  const revoke = vi.fn();
+  const draft = new AttachmentDraft(new AttachmentUrlRegistry(revoke));
+  draft.detach();
+  const notify = vi.fn();
+  draft.subscribe(notify);
+  draft.replaceFiles([attachment('late')]);
+  expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:late');
+  expect(notify).not.toHaveBeenCalled();
+});

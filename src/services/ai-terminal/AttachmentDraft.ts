@@ -26,7 +26,7 @@ export class AttachmentDraft {
   }
   private collect(resource: Resource): void {
     if (resource.inDraft || resource.pins) return;
-    this.resources.delete(resource.file.id);
+    if (this.resources.get(resource.file.id) === resource) this.resources.delete(resource.file.id);
     resource.release();
   }
   attach(): void {
@@ -51,6 +51,38 @@ export class AttachmentDraft {
     this.collect(resource);
     this.publish({ ...this.state, files: this.state.files.filter((file) => file.id !== id) });
   };
+  /** Controlled inputs replace a batch; existing resource leases survive unchanged entries. */
+  replaceFiles = (update: UploadFile[] | ((previous: UploadFile[]) => UploadFile[])): void => {
+    const files = [...(typeof update === 'function' ? update([...this.state.files]) : update)];
+    if (!this.active) {
+      files.forEach((file) => this.urls.acquire(file.url)());
+      return;
+    }
+    if (new Set(files.map((file) => file.id)).size !== files.length)
+      throw new Error('Attachment IDs must be unique within a draft');
+    const previous = [...this.resources.values()];
+    const retained = new Set<Resource>();
+    // Acquire additions before releasing removals, including different IDs sharing one URL.
+    for (const file of files) {
+      let resource = this.resources.get(file.id);
+      if (!resource || resource.file.url !== file.url) {
+        resource = { file, inDraft: true, pins: 0, release: this.urls.acquire(file.url) };
+        this.resources.set(file.id, resource);
+      } else {
+        resource.file = file;
+        resource.inDraft = true;
+      }
+      retained.add(resource);
+    }
+    for (const resource of previous) {
+      if (!retained.has(resource)) {
+        resource.inDraft = false;
+        this.collect(resource);
+      }
+    }
+    this.publish({ ...this.state, files });
+  };
+
   async upload(
     files: File[],
     load: (files: File[]) => Promise<UploadFile[]>,
@@ -67,15 +99,7 @@ export class AttachmentDraft {
         result.forEach((file) => this.urls.acquire(file.url)());
         return;
       }
-      result.forEach((file) =>
-        this.resources.set(file.id, {
-          file,
-          inDraft: true,
-          pins: 0,
-          release: this.urls.acquire(file.url),
-        })
-      );
-      this.publish({ ...this.state, files: [...this.state.files, ...result] });
+      this.replaceFiles((previous) => [...previous, ...result]);
     } catch (error) {
       if (current()) onError(error);
     } finally {
@@ -99,10 +123,15 @@ export class AttachmentDraft {
           this.collect(resource);
         });
         if (accepted && this.active && epoch === this.epoch) {
-          const ids = new Set(files.map((file) => file.id));
+          const captured = new Set(resources);
           this.publish({
             ...this.state,
-            files: this.state.files.filter((file) => !ids.has(file.id)),
+            files: this.state.files.filter((file) => {
+              const resource = this.resources.get(file.id);
+              return resource
+                ? !captured.has(resource)
+                : !files.some((submitted) => submitted.id === file.id);
+            }),
           });
         }
       },
