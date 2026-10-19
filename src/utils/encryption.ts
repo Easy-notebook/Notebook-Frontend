@@ -19,15 +19,25 @@ class EncryptionKeyProvider {
     return request;
   }
 
+  private importStored(storedKey: string): Promise<CryptoKey> {
+    const keyBuffer = Uint8Array.from(atob(storedKey), (character) => character.charCodeAt(0));
+    return window.crypto.subtle.importKey('raw', keyBuffer, ALGORITHM, true, [
+      'encrypt',
+      'decrypt',
+    ]);
+  }
+
   private async load(): Promise<CryptoKey> {
     const storedKey = localStorage.getItem(STORAGE_KEY);
-    if (storedKey) {
-      const keyBuffer = Uint8Array.from(atob(storedKey), (character) => character.charCodeAt(0));
-      return window.crypto.subtle.importKey('raw', keyBuffer, ALGORITHM, true, [
-        'encrypt',
-        'decrypt',
-      ]);
-    }
+    if (storedKey) return this.importStored(storedKey);
+    if (!navigator.locks) throw new Error('Web Locks is required to initialize the encryption key');
+    return navigator.locks.request('easy-notebook:encryption-key', () => this.initialize());
+  }
+
+  private async initialize(): Promise<CryptoKey> {
+    // Another tab may have initialized the key while this request waited for ownership.
+    const storedKey = localStorage.getItem(STORAGE_KEY);
+    if (storedKey) return this.importStored(storedKey);
     const key = await window.crypto.subtle.generateKey(
       { name: ALGORITHM, length: KEY_LENGTH },
       true,

@@ -12,10 +12,23 @@ The AES-GCM algorithm, 12-byte IV, Base64 payload layout and persisted key forma
 remain unchanged. Typed-array buffers retain their inferred ArrayBuffer-backed types
 at the Web Crypto boundary, without BufferSource assertions.
 
-Four Web Crypto unit tests cover concurrent first use, failed-load retry, storage
-reset between operations and empty values. A Chromium test checks that all concurrent
-ciphertexts remain readable after page reload. This owner coordinates one application
-instance; cross-tab first-use coordination is not implemented here.
+Missing-key initialization acquires the origin-scoped Web Lock
+`easy-notebook:encryption-key`. The owner re-reads `enc_key` after acquisition, then
+imports the winner's key or generates and persists one before releasing the lock. Existing
+keys can be imported without initialization ownership. If Web Locks is unavailable,
+first-time key creation fails instead of silently permitting competing initializers;
+existing-key reads remain available. No local-only initialization fallback is used.
+
+Seven Web Crypto unit tests cover concurrent first use, failed-load retry, reset, empty
+values, unavailable coordination and re-reading after ownership acquisition. Chromium
+checks same-tab concurrency plus a deterministic two-tab race: the first generator is
+paused, the second is observed waiting for the lock, and both ciphertexts remain readable
+from both tabs after reload. Coordination is cooperative: old/uncoordinated clients and
+external key deletion/replacement are outside this guarantee. This does not serialize
+settings-record writes or implement multi-tab preference conflict resolution.
+
+The lock lifecycle follows the [Web Locks specification](https://www.w3.org/TR/web-locks/):
+exclusive ownership lasts until the initialization callback settles.
 
 ## Settings adapter
 
