@@ -20,9 +20,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // External dependencies
 import useNotebookStore from '@Store/notebookStore';
-import useCodeStore from '@Store/codeStore';
-import { useAIPlanningContextStore } from './aiPlanningContext';
-import { WorkflowState } from '../observation/WorkflowState';
+import { ScriptCodeExecution } from './ScriptCodeExecution';
 
 // ==============================================
 // Types
@@ -315,105 +313,8 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     }
   },
 
-  execCodeCell: async (codecellId: string, needOutput = true, autoDebug = false): Promise<any> => {
-    if (!codecellId) return Promise.resolve(false);
-
-    try {
-      const { setCellMode, executeCell } = useCodeStore.getState();
-      if (needOutput) setCellMode(codecellId, 'output_only');
-
-      const result = await executeCell(codecellId);
-
-      // Always update effects with execution results (success or failure)
-      // This ensures error outputs are available for debugging/reflecting
-      const stateMachine = (
-        await import('./workflowStateMachine')
-      ).useWorkflowStateMachine.getState();
-      const stateJSON = stateMachine.stateJSON;
-
-      // Ensure effects.current exists
-      if (!stateJSON.state.effects) {
-        stateJSON.state.effects = { current: [], history: [] };
-      }
-      if (!stateJSON.state.effects.current) {
-        stateJSON.state.effects.current = [];
-      }
-
-      // Get outputs from result or from notebookStore (for error cases)
-      let outputs: any[] = result?.outputs || [];
-      if (!outputs.length && !result?.success) {
-        // If no outputs in result but failed, get from notebookStore
-        const cell = useNotebookStore.getState().cells.find((c) => c.id === codecellId);
-        outputs = cell?.outputs || [];
-      }
-
-      if (outputs.length > 0) {
-        outputs.forEach((item: any) => {
-          // Map ExecutionOutput to Effect
-          const outputType = item.type || 'text';
-          let effectType: 'text' | 'image_url' | 'error' = 'text';
-          let effectContent = item.content || item.text || item.toString();
-
-          if (outputType === 'image') {
-            effectType = 'image_url';
-          } else if (outputType === 'error') {
-            effectType = 'error';
-          }
-
-          // Update AIPlanningContext (Legacy)
-          useAIPlanningContextStore.getState().addEffect(effectContent);
-
-          // Update WorkflowStateMachine (New Architecture)
-          // Use WorkflowState class to ensure safe state updates
-          const workflowState = new WorkflowState(stateJSON);
-          const effects = workflowState.state.effects;
-
-          if (effectType === 'error') {
-            effects.addCurrentEffect({
-              type: 'error',
-              error: {
-                name: 'ExecutionError',
-                message: effectContent,
-                traceback: [],
-              },
-              cell_ref: codecellId,
-            });
-          } else if (effectType === 'image_url') {
-            effects.addCurrentEffect({
-              type: 'image_url',
-              image_url: effectContent,
-              cell_ref: codecellId,
-            });
-          } else {
-            effects.addCurrentEffect({
-              type: 'text',
-              text: effectContent,
-              cell_ref: codecellId,
-            });
-          }
-
-          // Sync state back to store using toJSON() to ensure clean state
-          stateMachine.setState(workflowState.toJSON());
-        });
-
-        console.log(
-          `[ScriptStore] Updated state.effects.current with ${outputs.length} outputs from ${codecellId} (success: ${result?.success})`
-        );
-      }
-
-      if (autoDebug && !result?.success) {
-        setTimeout(() => {
-          useNotebookStore.getState().setCurrentCell(codecellId);
-        }, 1000);
-        return result.error;
-      }
-
-      return result.success ? result.outputs : result.error;
-    } catch (error) {
-      console.error(`[ScriptStore] Error executing cell ${codecellId}:`, error);
-      return Promise.resolve(false);
-    }
-  },
+  execCodeCell: (codecellId, needOutput = true, autoDebug = false) =>
+    new ScriptCodeExecution(codecellId).run(needOutput, autoDebug),
 
   updateTitle: (title: string): void => {
     useNotebookStore.getState().updateTitle(title);

@@ -79,3 +79,16 @@ the exact record ID returned by addAction, even when a synchronous subscriber in
 record during publication. This protects request and record identity; it does not yet bind every
 action's internal asynchronous side effects to a notebook session or interpret structured
 failure return values.
+
+`ScriptCodeExecution` owns the notebook-facing lifecycle of code execution through executing,
+publishing, waiting-focus and settled phases. Notebook changes or cell removal invalidate the
+attempt permanently, including away-and-back navigation and deletion/recreation with the same
+cell ID. Kernel initialization may assign the first ID to an unsaved notebook, matching the
+underlying execution session. Failed-code debug focus retains its subscription until its timer
+fires or the context invalidates, then releases both resources.
+
+Execution outputs are appended to a detached workflow snapshot and published once per result.
+The prior snapshot remains unchanged. Planning-context effects are also appended in one batch,
+with ownership rechecked after synchronous workflow subscribers run. Notebook invalidation
+returns false through the existing code-execution failure contract. Workflow pause/cancel on the
+same notebook is not yet forwarded into this action lifecycle; backend work is not rolled back.
