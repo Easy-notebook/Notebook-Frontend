@@ -108,3 +108,62 @@ it('cancels a response arriving after its fetch ignored cancellation', async () 
   expect(cancel).toHaveBeenCalledOnce();
   expect(stream.locked).toBe(false);
 });
+
+it.each(methods)('%s preserves cancellation when reader cleanup rejects', async (method) => {
+  const cleanupFailure = new Error('body cancellation failed');
+  const cancel = vi.fn().mockRejectedValue(cleanupFailure);
+  const stream = new ReadableStream<Uint8Array>({ cancel });
+  respond(stream);
+  const abort = new AbortController();
+  const reason = new Error('workflow stopped');
+  const pending = new WorkflowAPIClient()[method](createInitialStateJSON(), abort.signal).next();
+  const assertion = expect(pending).rejects.toBe(reason);
+  await vi.waitFor(() => expect(stream.locked).toBe(true));
+  abort.abort(reason);
+  await assertion;
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(stream.locked).toBe(false);
+});
+
+it('preserves cancellation when a late response fails to cancel its body', async () => {
+  let respondLate!: (response: Response) => void;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          respondLate = resolve;
+        })
+    )
+  );
+  const abort = new AbortController();
+  const reason = new Error('request superseded');
+  const pending = new WorkflowAPIClient()
+    .callPlanningAPI(createInitialStateJSON(), abort.signal)
+    .next();
+  const assertion = expect(pending).rejects.toBe(reason);
+  abort.abort(reason);
+  const cancel = vi.fn().mockRejectedValue(new Error('late body cleanup failed'));
+  const stream = new ReadableStream<Uint8Array>({ cancel });
+  respondLate(new Response(stream));
+  await assertion;
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(stream.locked).toBe(false);
+});
+
+it('reports cleanup failure when an otherwise successful consumer returns early', async () => {
+  const failure = new Error('cleanup failed');
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode('{"type":"first"}\n'));
+    },
+    cancel() {
+      throw failure;
+    },
+  });
+  respond(stream);
+  const iterator = new WorkflowAPIClient().callPlanningAPI(createInitialStateJSON());
+  await iterator.next();
+  await expect(iterator.return(undefined)).rejects.toBe(failure);
+  expect(stream.locked).toBe(false);
+});

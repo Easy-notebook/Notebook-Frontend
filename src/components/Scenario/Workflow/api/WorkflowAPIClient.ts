@@ -88,8 +88,13 @@ export class WorkflowAPIClient implements WorkflowAPIClientPort {
       }
     );
     if (signal.aborted) {
-      await response.body?.cancel();
-      signal.throwIfAborted();
+      try {
+        await response.body?.cancel();
+      } finally {
+        // A late response still belongs to the cancelled request. Cleanup must
+        // not replace the caller's cancellation reason.
+        signal.throwIfAborted();
+      }
     }
     if (!response.ok) {
       const message = await response.text();
@@ -105,6 +110,7 @@ export class WorkflowAPIClient implements WorkflowAPIClientPort {
     };
     signal.addEventListener('abort', cancel, { once: true });
     let ended = false;
+    let failed = false;
     const decoder = new TextDecoder();
     let buffer = '';
     try {
@@ -134,12 +140,19 @@ export class WorkflowAPIClient implements WorkflowAPIClientPort {
         }
         if (done) return;
       }
+    } catch (error) {
+      failed = true;
+      throw error;
     } finally {
       signal.removeEventListener('abort', cancel);
       try {
         if (!ended) {
           cancel();
-          await cancellationTask;
+          await cancellationTask?.catch((cleanupError: unknown) => {
+            // Preserve the operation failure (including cancellation). If the
+            // consumer merely returned early, cleanup is the primary failure.
+            if (!failed) throw cleanupError;
+          });
         }
       } finally {
         reader.releaseLock();
