@@ -32,8 +32,12 @@ updates await their persistence operation. Synchronous preference actions retain
 existing API; callers needing acknowledged durability must use the storage promise.
 
 Backups retain the existing raw-settings format and are wrapped into the correct
-Zustand envelope on recovery. The backup manager skips malformed JSON/payload records
-while searching newest-first. Primary read/decryption failure attempts backup recovery;
+Zustand envelope on recovery. `SettingsBackupRepository` owns discovery, retention and
+newest-first candidate recovery. Every candidate must pass JSON parsing, payload validation
+and decryption before selection; an unreadable ciphertext does not hide older usable copies.
+Recovery leaves rejected records intact. Backup names advance beyond the newest stored
+timestamp, so same-millisecond writes and clock rollback do not overwrite an earlier copy.
+Retention considers only exact backup-prefix keys with safe integer timestamp suffixes. Primary read/decryption failure attempts backup recovery;
 without a usable copy the error propagates. Reading a backup does not overwrite a
 corrupt primary record. Backup creation remains best-effort under the existing manager.
 
@@ -62,7 +66,9 @@ Unit tests cover the real Zustand envelope, encryption isolation, deferred write
 removal ordering, retry, backup recovery and quota preservation of unrelated data.
 Chromium exercises credential update/reload, recovery without a primary record, and
 v0 migration without double encryption, and future-version hydration/write rejection.
-Unit tests also cover version changes during encryption, backup creation and quota retry.
+Unit tests also cover version changes during encryption, backup creation and quota retry,
+unreadable backup candidates, timestamp collisions and foreign-key retention. Chromium
+confirms recovery from an older encrypted backup when the newest ciphertext is invalid.
 
 The envelope/credential guard is not a complete settings-field schema. Cross-tab writer
 coordination, failure-state presentation for synchronous

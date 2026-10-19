@@ -1,3 +1,4 @@
+import { SettingsBackupRepository } from '@Services/settings/SettingsBackupRepository';
 // store/settingsStore.ts
 import { create } from 'zustand';
 import { persist, type PersistOptions } from 'zustand/middleware';
@@ -244,52 +245,6 @@ const storageManager = {
       storeLog.error('Storage space check failed', { error: e });
       return false;
     }
-  },
-
-  async clearOldBackups(): Promise<void> {
-    const keys = Object.keys(localStorage);
-    const backupPattern = new RegExp(`${STORAGE_KEYS.BACKUP}-(\\d+)$`);
-    const backups = keys
-      .filter((key) => backupPattern.test(key))
-      .sort((a, b) => {
-        const timeA = parseInt(a.split('-').pop() || '0') || 0;
-        const timeB = parseInt(b.split('-').pop() || '0') || 0;
-        return timeB - timeA;
-      });
-
-    // Keep only the 2 most recent backups
-    for (let i = 2; i < backups.length; i++) {
-      localStorage.removeItem(backups[i]);
-    }
-  },
-
-  async createBackup(data: SettingsWithTimestamp): Promise<void> {
-    try {
-      const timestamp = Date.now();
-      const backupKey = `${STORAGE_KEYS.BACKUP}-${timestamp}`;
-      const compressed = JSON.stringify(data);
-      localStorage.setItem(backupKey, compressed);
-      await this.clearOldBackups();
-    } catch (error) {
-      storeLog.error('Backup creation failed', { error });
-    }
-  },
-
-  async restoreFromBackup(): Promise<PersistedState | null> {
-    const keys = Object.keys(localStorage);
-    const backupPattern = new RegExp(`${STORAGE_KEYS.BACKUP}-(\\d+)$`);
-    const backups = keys
-      .filter((key) => backupPattern.test(key))
-      .sort((a, b) => Number(b.split('-').pop()) - Number(a.split('-').pop()));
-    for (const key of backups) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw !== null) return readSettingsState({ settings: JSON.parse(raw) });
-      } catch (error) {
-        storeLog.error('Backup restoration failed', { key, error });
-      }
-    }
-    return null;
   },
 
   async cleanupStorage(): Promise<boolean> {
@@ -562,11 +517,17 @@ const createSettingsStore = (set: any, get: any): SettingsStore => ({
   },
 });
 
+const settingsBackups = new SettingsBackupRepository(
+  () => localStorage,
+  STORAGE_KEYS.BACKUP,
+  (error) => storeLog.error('Settings backup operation failed', { error })
+);
+
 const settingsPersistence = new SettingsPersistenceStorage({
   storage: () => localStorage,
-  readBackup: () => storageManager.restoreFromBackup(),
-  writeBackup: (settings) => storageManager.createBackup(settings),
-  pruneBackups: () => storageManager.clearOldBackups(),
+  readBackup: (decode) => settingsBackups.restore(decode),
+  writeBackup: (settings) => settingsBackups.create(settings),
+  pruneBackups: () => settingsBackups.prune(),
   version: STORE_VERSION,
 });
 

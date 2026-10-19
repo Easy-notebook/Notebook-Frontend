@@ -111,3 +111,28 @@ test('future settings survive hydration and an attempted API settings update', a
     backups: [],
   });
 });
+
+test('backup recovery skips an unreadable newest ciphertext', async ({ page }) => {
+  await page.goto('/tests/browser/storage.html');
+  const result = await page.evaluate(async () => {
+    const { encrypt } = await import('/src/utils/encryption.ts');
+    const prefix = 'easy-notebook-settings-backup';
+    localStorage.setItem(
+      `${prefix}-1`,
+      JSON.stringify({ apiKey: await encrypt('older-key'), language: 'en' })
+    );
+    localStorage.setItem(`${prefix}-2`, JSON.stringify({ apiKey: 'invalid-ciphertext' }));
+    const { default: store } = await import('/src/store/settingsStore.ts');
+    await store.persist.rehydrate();
+    return {
+      key: store.getState().settings.apiKey,
+      hydrated: store.persist.hasHydrated(),
+      primary: localStorage.getItem('easy-notebook-settings'),
+      newest: localStorage.getItem(`${prefix}-2`),
+    };
+  });
+  expect(result.key).toBe('older-key');
+  expect(result.hydrated).toBe(true);
+  expect(result.primary).toBeNull();
+  expect(JSON.parse(result.newest).apiKey).toBe('invalid-ciphertext');
+});

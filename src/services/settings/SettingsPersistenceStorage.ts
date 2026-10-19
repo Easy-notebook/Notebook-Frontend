@@ -29,7 +29,9 @@ export function assertSupportedSettingsVersion(version: unknown, supported: numb
 
 interface SettingsStorageDependencies {
   storage: () => Storage;
-  readBackup: () => Promise<PersistedState | null>;
+  readBackup: (
+    decode: (state: unknown) => Promise<PersistedState>
+  ) => Promise<PersistedState | null>;
   writeBackup: (settings: SettingsWithTimestamp) => Promise<void>;
   pruneBackups: () => Promise<void>;
   version: number;
@@ -67,11 +69,13 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
   }
 
   private async backup(): Promise<StorageValue<PersistedState> | null> {
-    const state = await this.dependencies.readBackup();
+    const state = await this.dependencies.readBackup((candidate) =>
+      this.transform(readSettingsState(candidate), 'decrypt')
+    );
     return state === null
       ? null
       : {
-          state: await this.transform(state, 'decrypt'),
+          state,
           version: this.dependencies.version,
         };
   }

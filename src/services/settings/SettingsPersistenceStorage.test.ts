@@ -127,7 +127,9 @@ it('orders removal after an admitted write and allows retry after an encryption 
 it('recovers a backup through the same envelope and decryption boundary without overwriting corrupt primary data', async () => {
   const { storage, readBackup } = setup();
   localStorage.setItem('settings', 'corrupt');
-  readBackup.mockResolvedValue({ settings: { ...settings(), apiKey: 'encoded:test-key' } });
+  readBackup.mockImplementation((decode) =>
+    decode({ settings: { ...settings(), apiKey: 'encoded:test-key' } })
+  );
   expect(await storage.getItem('settings')).toEqual(envelope());
   expect(localStorage.getItem('settings')).toBe('corrupt');
 });
