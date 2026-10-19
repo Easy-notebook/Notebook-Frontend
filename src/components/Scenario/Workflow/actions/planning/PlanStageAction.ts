@@ -20,7 +20,6 @@ export class PlanStageAction extends ActionBase {
    *   - acceptance: Acceptance criteria
    */
   execute(step: ExecutionStep): void {
-    // Backend sends stage_id, but convertActionToExecutionStep converts it to stageId
     const stageId = (step as any).stageId || (step as any).stage_id;
     const { title, task, acceptance } = step;
 

@@ -319,7 +319,8 @@ export class AsyncStateMachineAdapter {
       metadata: action.metadata || {},
     };
 
-    // Map snake_case fields to camelCase
+    // Map UI-facing aliases only. Domain identifiers such as stage_id must
+    // retain the names consumed by ExecutionStep and the planning actions.
     const fieldMapping: Record<string, string> = {
       shot_type: 'shotType',
       codecell_id: 'codecell_id', // Keep as is
@@ -330,7 +331,6 @@ export class AsyncStateMachineAdapter {
       text_array: 'textArray',
       thinking_text: 'thinkingText',
       step_id: 'stepId',
-      stage_id: 'stageId',
       phase_id: 'phaseId',
       total_steps: 'totalSteps',
       total_stages: 'totalStages',

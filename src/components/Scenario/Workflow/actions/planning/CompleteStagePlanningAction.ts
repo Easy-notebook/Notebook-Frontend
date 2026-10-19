@@ -19,7 +19,6 @@ export class CompleteStagePlanningAction extends ActionBase {
    *   - total_steps: Total number of steps planned
    */
   execute(step: ExecutionStep): void {
-    // Backend sends stage_id, but convertActionToExecutionStep converts it to stageId
     const stageId = (step as any).stageId || (step as any).stage_id;
     const totalSteps = (step as any).totalSteps || (step as any).total_steps;
 
