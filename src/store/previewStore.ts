@@ -8,8 +8,9 @@ import {
   hasCachedContent,
   type CachedFileRecord,
 } from '@Services/preview/fileFromCache';
-import type { FileContentResponse } from '@Services/types';
-import { FileService } from '@Services/notebook/FileService';
+import { HttpResponseError } from '@Services/notebook/HttpResponseError';
+import { previewFileSource } from '@Services/preview/PreviewFileSource';
+import { describeError } from '@Utils/errors';
 import { fileLog, storeLog } from '@Utils/logger';
 import { persistenceService } from '@Services/persistence/instance';
 import { getFileType, getActivePreviewMode, getMimeType } from '@Storage/index';
@@ -244,41 +245,8 @@ const usePreviewStore = create<PreviewStore>()(
 
         if (needsFetch) {
           try {
-            // Try multiple path variations for better compatibility
-            let response: FileContentResponse | null = null;
-            const pathsToTry = [
-              filePath,
-              `assets / ${filePath} `,
-              filePath.split('/').pop() || filePath, // Just filename
-            ];
-
-            for (const pathToTry of pathsToTry) {
-              try {
-                response = await FileService.getFile(notebookId, pathToTry);
-                check();
-                if (response && response.status !== 'error') {
-                  fileLog.debug('File found at path', {
-                    originalPath: filePath,
-                    resolvedPath: pathToTry,
-                  });
-                  break;
-                }
-              } catch {
-                check();
-                continue; // Try next path
-              }
-            }
-
-            // If no path worked, throw the original error
-            // Get file from backend
-            if (!response) {
-              response = await FileService.getFile(notebookId, filePath);
-              check();
-            }
-
-            if (!response || response.status === 'error') {
-              throw new Error(response?.message || 'Failed to fetch file for split preview');
-            }
+            const response = await previewFileSource.load(notebookId, filePath);
+            check();
 
             const { type: fileType, content } = formatPreviewContent({
               notebookId,
@@ -368,63 +336,18 @@ const usePreviewStore = create<PreviewStore>()(
               });
 
             return fileObject;
-          } catch (e: any) {
+          } catch (error) {
             check();
-            const msg = e && e.message ? String(e.message) : '';
-            fileLog.error('File fetch error', { message: msg, filePath });
-
-            const isNotFound = /not\s*found/i.test(msg) || /404/.test(msg);
-
-            // If it's a 404 error, don't create tabs for missing files
-            if (isNotFound) {
-              fileLog.warn('File not found - will not create tab', { filePath });
-              publish({ isLoading: false, error: null }); // Clear error, don't show to user
-              return undefined; // Return undefined instead of throwing
-            }
-
-            // For non-404 errors, try fallbacks
-            const baseName = filePath.split('/').pop() || filePath;
-
-            if (baseName !== filePath) {
-              fileLog.info('Trying fallback to basename', {
-                original: filePath,
-                fallback: baseName,
-              });
-              try {
-                return await previewFile(request, notebookId, baseName, fileMetadata);
-              } catch (fallbackError) {
-                check();
-                fileLog.warn('Basename fallback failed', { error: fallbackError, baseName });
-              }
-            }
-
-            // Try URL encoding the file path
-            if (filePath.includes(' ')) {
-              fileLog.info('Trying URL encoded path', { filePath });
-              const encodedPath = filePath
-                .split('/')
-                .map((part) => encodeURIComponent(part))
-                .join('/');
-              if (encodedPath !== filePath) {
-                try {
-                  return await previewFile(request, notebookId, encodedPath, fileMetadata);
-                } catch (encodingError) {
-                  check();
-                  fileLog.warn('URL encoding fallback failed', {
-                    error: encodingError,
-                    encodedPath,
-                  });
-                }
-              }
-            }
-
-            // All fallbacks failed, don't create a tab
-            publish({ isLoading: false, error: null }); // Clear error, don't show to user
-            fileLog.warn('All file load attempts failed - no tab will be created', { filePath });
-            return undefined; // Return undefined instead of throwing
+            const missing = error instanceof HttpResponseError && error.status === 404;
+            const message = describeError(error);
+            fileLog.error('File preview failed', { filePath, error });
+            publish({
+              isLoading: false,
+              error: missing ? null : `Failed to load file: ${message}`,
+            });
+            return undefined;
           }
         } else {
-          // File found in cache
           // File found in cache
           const cachedMetadata = cachedFile.metadata;
           const cachedMode = getActivePreviewMode(cachedMetadata.fileType as FileType);
@@ -518,46 +441,11 @@ const usePreviewStore = create<PreviewStore>()(
             return fileObject;
           }
 
-          // Try to fetch from server, but handle errors gracefully
-          try {
-            fileLog.info('Attempting to fetch file from server', { filePath });
-            const fetched = await previewFile(request, notebookId, filePath, undefined, cachedFile);
-            check();
-            if (fetched) {
-              fileLog.info('Successfully fetched and loaded file', { filePath });
-              return fetched;
-            } else {
-              fileLog.warn('File fetch returned undefined', { filePath });
-              return null;
-            }
-          } catch (e: any) {
-            check();
-            const msg = e?.message || String(e);
-            const isNotFound = /not\s*found/i.test(msg) || /404/.test(msg);
-
-            if (isNotFound) {
-              fileLog.warn('File not found on server - this is normal for missing files', {
-                filePath,
-              });
-
-              // Remove this tab from the preview files list since the file doesn't exist
-              const { currentPreviewFiles } = get();
-              const updatedFiles = currentPreviewFiles.filter((f) => f.id !== fileId);
-
-              publish({
-                currentPreviewFiles: updatedFiles,
-                error: null, // Don't show error to user for missing files
-              });
-
-              return null;
-            } else {
-              fileLog.error('Error loading file', { filePath, error: e });
-              return null;
-            }
-          }
+          return (await previewFile(request, notebookId, filePath, undefined, cachedFile)) ?? null;
         } catch (error) {
           check();
           fileLog.error('Error loading file by ID', { error });
+          publish({ error: `Failed to load file: ${describeError(error)}` });
           return null;
         }
       };
@@ -1006,12 +894,8 @@ const usePreviewStore = create<PreviewStore>()(
               fileLog.info('Split preview: Fetching from backend', { filePath });
 
               // Get file from backend
-              const response: FileContentResponse = await FileService.getFile(notebookId, filePath);
-
+              const response = await previewFileSource.load(notebookId, filePath);
               if (!splitRequests.isCurrent(request)) return undefined;
-              if (!response || response.status === 'error') {
-                throw new Error(response?.message || 'Failed to fetch file for split preview');
-              }
 
               const { type: fileType, content } = formatPreviewContent({
                 notebookId,

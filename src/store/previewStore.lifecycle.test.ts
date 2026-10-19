@@ -33,6 +33,7 @@ vi.mock('@Services/tab/TabManagerService', () => ({
   },
 }));
 import usePreviewStore from './previewStore';
+import { HttpResponseError } from '@Services/notebook/HttpResponseError';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -737,3 +738,74 @@ describe.each(['previewFile', 'loadFileById'] as const)('%s complete cache hits'
     expect(io.fileSave).not.toHaveBeenCalled();
   });
 });
+
+describe.each(['previewFile', 'loadFileById', 'previewFileInSplit'] as const)(
+  '%s exact resource identity',
+  (entry) => {
+    const path = 'reports/账单 #1.txt';
+    const open = () =>
+      entry === 'loadFileById'
+        ? state().loadFileById(`book::${path}`)
+        : state()[entry]('book', path);
+    const expectNoPublication = () => {
+      expect(state().activeFile).toBeNull();
+      expect(state().activeSplitFile).toBeNull();
+      expect(state().currentPreviewFiles).toEqual([]);
+      expect(io.fileSave).not.toHaveBeenCalled();
+      expect(io.save).not.toHaveBeenCalled();
+    };
+
+    beforeEach(() => {
+      io.read.mockResolvedValue(undefined);
+    });
+
+    it('passes the exact directory, Unicode, spaces and fragment character to the JSON API', async () => {
+      const result = await open();
+      expect(result?.path).toBe(path);
+      expect(io.fetch).toHaveBeenCalledExactlyOnceWith('book', path);
+    });
+
+    it.each([403, 500])('never substitutes a basename after HTTP %s', async (status) => {
+      io.fetch
+        .mockRejectedValueOnce(new HttpResponseError(status, 'Failure', 'request failed'))
+        .mockResolvedValue({ status: 'ok', content: 'WRONG FILE WITH SAME BASENAME' });
+      const result = await open();
+      expect(result).toBe(entry === 'loadFileById' ? null : undefined);
+      expect(io.fetch).toHaveBeenCalledExactlyOnceWith('book', path);
+      expect(state().error).toContain('request failed');
+      expectNoPublication();
+    });
+
+    it('does not rewrite paths after an application-level failure', async () => {
+      io.fetch
+        .mockResolvedValueOnce({ status: 'error', message: 'permission denied' })
+        .mockResolvedValue({ status: 'ok', content: 'WRONG FILE' });
+      await open();
+      expect(io.fetch).toHaveBeenCalledExactlyOnceWith('book', path);
+      expect(state().error).toContain('permission denied');
+      expectNoPublication();
+    });
+
+    it('does not infer a missing file from arbitrary message text', async () => {
+      io.fetch.mockRejectedValueOnce(
+        new HttpResponseError(
+          500,
+          'Internal Server Error',
+          'upstream cache not found; incident 4042'
+        )
+      );
+      await open();
+      expect(state().error).toContain('incident 4042');
+      expectNoPublication();
+    });
+
+    it('handles a genuine HTTP 404 without requesting another file', async () => {
+      io.fetch.mockRejectedValueOnce(new HttpResponseError(404, 'Not Found', 'missing file'));
+      await open();
+      expect(io.fetch).toHaveBeenCalledExactlyOnceWith('book', path);
+      if (entry === 'previewFileInSplit') expect(state().error).toContain('missing file');
+      else expect(state().error).toBeNull();
+      expectNoPublication();
+    });
+  }
+);

@@ -95,3 +95,19 @@ substitute an empty string for missing content.
 File-ID loading forwards its already-read cache result to the private preview
 operation under the same request ticket. This avoids a redundant read and access
 counter update while retaining all publication and cancellation checks.
+
+## Exact remote resource identity
+
+`PreviewFileSource` owns a single remote read and validates the application-level
+response. Normal and split preview pass the selected notebook ID and full path
+unchanged. The transport sends that path in JSON; the preview layer does not add
+asset prefixes, strip directories, encode the path, or recursively retry under
+another identity. Failed lookup can therefore never silently open a different
+file with the same basename.
+
+The source preserves transport exceptions, including `HttpResponseError.status`.
+Normal preview keeps the existing quiet failure for HTTP 404 and reports other
+failures through its error state. Split preview continues reporting all failures.
+Application-level errors are reported without guessing a status from message
+text. Error handling never creates a cache record or a new tab for the failed
+request, and obsolete requests still cannot publish errors.
