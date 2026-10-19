@@ -39,3 +39,16 @@ not yet govern their post-write state updates.
 `src/store/previewStore.lifecycle.test.ts` exercises the real store with controlled
 cache/network promises, including replacement, failures, close/reset, notebook
 transitions, and reentrant subscription cancellation.
+
+## Renderer content
+
+`formatPreviewContent` is the single pure conversion boundary for newly fetched
+normal and split preview content. File classification and MIME selection remain
+owned by `storage/fileTypes`. Binary payloads become compact data URLs, existing
+data URLs remain unchanged, and text/Excel payloads pass through verbatim. Empty
+Word content stays empty. Empty PDF content uses the existing encoded
+`/assets/{notebookId}/{basename}` route, relative to the supplied backend base.
+The formatter has no browser, persistence, or request-lifecycle dependency.
+
+Store integration tests assert both renderer output and cache payloads for PNG,
+JPEG, SVG, PDF, DOC/DOCX, existing data URLs, empty content, and text/Excel files.

@@ -404,3 +404,63 @@ describe('normal preview request ownership', () => {
     expect(state().previewMode).toBe('notebook');
   });
 });
+
+describe('shared renderer content across normal and split preview', () => {
+  it.each([
+    ['photo.PNG', 'aGVsbG8=', 'data:image/png;base64,aGVsbG8='],
+    ['photo.jpg', 'aGVsbG8=', 'data:image/jpeg;base64,aGVsbG8='],
+    ['icon.svg', 'PHN2Zy8+', 'data:image/svg+xml;base64,PHN2Zy8+'],
+    ['report.pdf', 'JVBERg==', 'data:application/pdf;base64,JVBERg=='],
+    ['report.doc', 'aGVsbG8=', 'data:application/msword;base64,aGVsbG8='],
+    [
+      'report.docx',
+      'aGVsbG8=',
+      'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,aGVsbG8=',
+    ],
+    ['photo.png', 'data:image/png;base64,original', 'data:image/png;base64,original'],
+    ['report.pdf', 'data:application/pdf;base64,original', 'data:application/pdf;base64,original'],
+    [
+      'report.docx',
+      'data:application/custom;base64,original',
+      'data:application/custom;base64,original',
+    ],
+    ['report.docx', '', ''],
+    ['notes.txt', '  exact text\n', '  exact text\n'],
+    ['sheet.xlsx', 'raw spreadsheet payload', 'raw spreadsheet payload'],
+  ])(
+    '%s publishes and caches the same renderer payload in both modes',
+    async (path, content, expected) => {
+      io.read.mockResolvedValue(undefined);
+      io.fetch.mockResolvedValue({ status: 'ok', content });
+      const normal = await state().previewFile('book', path);
+      const split = await state().previewFileInSplit('book', path);
+      expect(normal?.content).toBe(expected);
+      expect(split?.content).toBe(expected);
+      expect(io.fileSave).toHaveBeenCalledWith(expect.objectContaining({ content: expected }));
+      expect(io.save).toHaveBeenCalledWith(
+        'book',
+        path,
+        expect.objectContaining({ content: expected })
+      );
+    }
+  );
+
+  it.each(['', 'https://files.example.test/api/'])(
+    'routes an empty PDF through the encoded asset address with base %s',
+    async (base) => {
+      const original = window.Backend_BASE_URL;
+      window.Backend_BASE_URL = base;
+      try {
+        io.read.mockResolvedValue(undefined);
+        io.fetch.mockResolvedValue({ status: 'ok', content: '' });
+        const notebookId = 'book /一';
+        const path = 'folder/report #1.pdf';
+        const expected = `${base.replace(/\/$/, '')}/assets/book%20%2F%E4%B8%80/report%20%231.pdf`;
+        expect((await state().previewFile(notebookId, path))?.content).toBe(expected);
+        expect((await state().previewFileInSplit(notebookId, path))?.content).toBe(expected);
+      } finally {
+        window.Backend_BASE_URL = original;
+      }
+    }
+  );
+});

@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { PreviewRequestLifecycle } from '@Services/preview/PreviewRequestLifecycle';
+import { formatPreviewContent } from '@Services/preview/formatPreviewContent';
 import type { FileContentResponse } from '@Services/types';
 import { FileService } from '@Services/notebook/FileService';
 import { fileLog, storeLog } from '@Utils/logger';
@@ -248,72 +249,12 @@ const usePreviewStore = create<PreviewStore>()(
               throw new Error(response?.message || 'Failed to fetch file for split preview');
             }
 
-            // Determine the file content and type
-            let content = response.content || '';
-            const fileType = getFileType(filePath);
-            fileLog.typeDetection(filePath, fileType, 1.0, false);
-
-            // Special handling for xlsx files that might be cached as 'text'
-            const fileExt = filePath.split('.').pop()?.toLowerCase();
-            if (fileExt === 'xlsx' || fileExt === 'xls') {
-              fileLog.debug('Forcing xlsx type for Excel file', { filePath, fileExt });
-              // Ensure xlsx files are treated as xlsx, not text
-            }
-
-            // Handle specific file types
-            if (fileType === 'image') {
-              // For images, content should be the data URL
-              if (typeof content === 'string' && content.startsWith('data:')) {
-                // Already in correct format
-              } else {
-                // Convert to data URL if needed
-                const fileExt = filePath.split('.').pop()?.toLowerCase();
-                content = `data: image / ${fileExt}; base64, ${content} `;
-              }
-            } else if (fileType === 'pdf') {
-              // For PDFs, build data URL. If content empty, fall back to served assets URL
-              if (typeof content === 'string' && content.startsWith('data:')) {
-                // Already data URL
-              } else {
-                const dataUrl = content ? `data: application / pdf; base64, ${content} ` : '';
-                let assetsUrl = '';
-                try {
-                  const base = window.Backend_BASE_URL
-                    ? window.Backend_BASE_URL.replace(/\/$/, '')
-                    : '';
-                  const name = filePath.split('/').pop() || filePath;
-                  assetsUrl = `${base} /assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
-                } catch {
-                  check();
-                  // Ignore URL construction errors
-                }
-                content = dataUrl || assetsUrl;
-              }
-            } else if (fileType === 'docx') {
-              // For DOC/DOCX files, content should be base64 or data URL for binary files
-              fileLog.processing('parse', filePath, {
-                type: 'docx',
-                contentType: typeof content,
-                contentLength: content ? content.length : 0,
-                hasContent: !!content,
-              });
-
-              if (typeof content === 'string' && content.startsWith('data:')) {
-                fileLog.debug('Content is already data URL format', { filePath });
-                // Already data URL format
-              } else if (content) {
-                // Convert to data URL for binary handling
-                fileLog.debug('Converting to data URL format', { filePath });
-                const mimeType =
-                  fileExt === 'doc'
-                    ? 'application/msword'
-                    : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                content = `data:${mimeType};base64,${content}`;
-                fileLog.debug('Conversion completed', { filePath, finalLength: content.length });
-              } else {
-                fileLog.error('No content received for DOCX file', { filePath });
-              }
-            }
+            const { type: fileType, content } = formatPreviewContent({
+              notebookId,
+              filePath,
+              content: response.content || '',
+              backendBaseUrl: window.Backend_BASE_URL,
+            });
 
             // Create file object data for cache
             const fileObjectData = {
@@ -1093,46 +1034,12 @@ const usePreviewStore = create<PreviewStore>()(
                 throw new Error(response?.message || 'Failed to fetch file for split preview');
               }
 
-              // Process file content based on type (similar to regular preview)
-              let content = response.content || '';
-              const fileType = getFileType(filePath);
-
-              if (fileType === 'image') {
-                if (typeof content === 'string' && content.startsWith('data:')) {
-                  // Already in correct format
-                } else {
-                  const fileExt = filePath.split('.').pop()?.toLowerCase();
-                  content = `data:image/${fileExt};base64,${content}`;
-                }
-              } else if (fileType === 'pdf') {
-                if (typeof content === 'string' && content.startsWith('data:')) {
-                  // Already data URL
-                } else {
-                  const dataUrl = content ? `data:application/pdf;base64,${content}` : '';
-                  let assetsUrl = '';
-                  try {
-                    const base = window.Backend_BASE_URL
-                      ? window.Backend_BASE_URL.replace(/\/$/, '')
-                      : '';
-                    const name = filePath.split('/').pop() || filePath;
-                    assetsUrl = `${base}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
-                  } catch {
-                    // Ignore URL construction errors
-                  }
-                  content = dataUrl || assetsUrl;
-                }
-              } else if (fileType === 'docx') {
-                if (typeof content === 'string' && content.startsWith('data:')) {
-                  // Already data URL format
-                } else if (content) {
-                  const fileExt = filePath.split('.').pop()?.toLowerCase();
-                  const mimeType =
-                    fileExt === 'doc'
-                      ? 'application/msword'
-                      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                  content = `data:${mimeType};base64,${content}`;
-                }
-              }
+              const { type: fileType, content } = formatPreviewContent({
+                notebookId,
+                filePath,
+                content: response.content || '',
+                backendBaseUrl: window.Backend_BASE_URL,
+              });
 
               // Create file object (fill required fields for FileObject)
               fileObject = {
