@@ -1030,3 +1030,49 @@ it.each(['read', 'write'])(
     expect(service.getStatus()).toBe(AutoSaveStatus.IDLE);
   }
 );
+
+it.each(['failure', 'conflict'] as const)(
+  'keeps other notebooks scheduled after a targeted %s without retrying blocked work',
+  async (kind) => {
+    await AutoSaveService.resetInstance();
+    service = AutoSaveService.getInstance({ debounceMs: 10, maxRetries: 0, retryDelayMs: 0 });
+    vi.useFakeTimers();
+    try {
+      storage.notebooks.saveNotebookSnapshot.mockImplementation(async (file) => {
+        if (file.notebookId === 'a')
+          throw kind === 'conflict'
+            ? new NotebookConflictError('a', 'notebook.json')
+            : new Error('disk unavailable');
+        return { id: 'saved' };
+      });
+      await service.queueSave(snapshot('blocked edit', 'a'));
+      await service.queueSave(snapshot('other edit', 'b'));
+      await expect(service.flush('a')).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(10);
+      await service.waitForComplete();
+      expect(service.getSaveProgress('a')?.phase).toBe('blocked');
+      expect(service.getSaveProgress('b')?.phase).toBe('clean');
+      expect(
+        storage.notebooks.saveNotebookSnapshot.mock.calls.map(([file]) => file.notebookId)
+      ).toEqual(['a', 'b']);
+      await service.queueSave(snapshot('third edit', 'c'));
+      await vi.advanceTimersByTimeAsync(10);
+      await service.waitForComplete();
+      expect(
+        storage.notebooks.saveNotebookSnapshot.mock.calls.map(([file]) => file.notebookId)
+      ).toEqual(['a', 'b', 'c']);
+      await expect(service.flush('a')).rejects.toThrow();
+      expect(
+        storage.notebooks.saveNotebookSnapshot.mock.calls.map(([file]) => file.notebookId)
+      ).toEqual(['a', 'b', 'c', 'a']);
+      storage.notebooks.saveNotebookSnapshot.mockResolvedValue({ id: 'corrected' });
+      await service.queueSave(snapshot('corrected edit', 'a'));
+      await vi.advanceTimersByTimeAsync(10);
+      await service.waitForComplete();
+      expect(service.getSaveProgress('a')?.phase).toBe('clean');
+      expect(service.hasPending()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+);

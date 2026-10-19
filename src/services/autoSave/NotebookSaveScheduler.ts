@@ -37,7 +37,7 @@ export class NotebookSaveScheduler {
     private readonly options: SchedulerOptions
   ) {}
 
-  drain(notebookId?: string): Promise<void> {
+  drain(notebookId?: string, retryBlocked = true): Promise<void> {
     let resolve!: () => void;
     let reject!: (error: unknown) => void;
     const completion = new Promise<void>((onResolve, onReject) => {
@@ -47,7 +47,11 @@ export class NotebookSaveScheduler {
     this.requests.add({
       completion,
       notebookId,
-      blocked: new Set(),
+      blocked: new Set(
+        retryBlocked
+          ? []
+          : [...this.queue.keys()].filter((id) => this.queue.progress(id)?.phase === 'blocked')
+      ),
       failures: [],
       resolve,
       reject,

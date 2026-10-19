@@ -114,7 +114,7 @@ export class AutoSaveService implements IAutoSaveService {
     this.debouncedSave = debounce(
       () => {
         if (this.lifecycle.phase !== 'active' || this.state.scheduling !== 'running') return;
-        void this.processSaveQueue().catch((error) => {
+        void this.processSaveQueue(undefined, false).catch((error) => {
           notebookLog.error('AutoSaveService: Pending changes retained after save failure', {
             error,
           });
@@ -355,8 +355,6 @@ export class AutoSaveService implements IAutoSaveService {
     this.debouncedSave.cancel();
 
     await this.processSaveQueue(notebookId);
-    // A targeted flush must not cancel other notebooks' scheduled saves.
-    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size) this.scheduleSave();
   }
 
   /**
@@ -536,10 +534,21 @@ export class AutoSaveService implements IAutoSaveService {
     this.publish({ activeNotebookId: snapshot.notebookId }, 'dirty_changed', snapshot.notebookId);
   }
 
-  private async processSaveQueue(notebookId?: string): Promise<void> {
+  private async processSaveQueue(notebookId?: string, retryBlocked = true): Promise<void> {
     if (!this.canProcessSaves()) return;
-    await this.scheduler.drain(notebookId);
-    if (this.lifecycle.phase === 'active' && notebookId && this.saveQueue.size) this.scheduleSave();
+    try {
+      await this.scheduler.drain(notebookId, retryBlocked);
+    } finally {
+      // A scoped failure must not strand another notebook whose debounce was cancelled.
+      // Blocked revisions require an explicit retry or a newly admitted edit.
+      if (
+        notebookId &&
+        [...this.saveQueue.keys()].some(
+          (id) => id !== notebookId && this.saveQueue.progress(id)?.phase !== 'blocked'
+        )
+      )
+        this.scheduleSave();
+    }
   }
 
   /**

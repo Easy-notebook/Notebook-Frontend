@@ -109,3 +109,20 @@ after its content request succeeds causes a retry with the identical accepted bo
 file. All three tests in tests/browser/autosave.spec.js pass. The fixture uses an isolated browser
 context and does not touch a user's browser profile. This verifies these scenarios in Chromium;
 it is not a crash/power-loss durability guarantee or a cross-browser performance audit.
+
+## Scoped drain failures and automatic retry admission
+
+A targeted flush cancels the shared debounce timer, so its completion path must restore scheduling
+for other eligible notebooks even when that flush rejects. This decision now lives in the shared
+scoped-drain boundary rather than being duplicated in flush and queue processing.
+
+Automatic debounce drains exclude revisions already blocked when that drain is admitted. An
+unrelated edit must not silently retry exhausted writes or semantic conflicts. Explicit flush/drain
+requests may retry blocked revisions; a newly queued edit creates a scheduled revision and is
+eligible for automatic saving. Retry backoff within an admitted revision remains unchanged.
+
+The regression uses deterministic timers: A fails or conflicts, B still saves after A's targeted
+flush rejects, a later C edit does not retry A, an explicit A retry does attempt it, and a corrected
+new A revision returns to clean. The storage/autosave/session gate passes 331 tests; the three
+existing native Chromium autosave scenarios also pass. Those browser tests cover revision cloning,
+pause admission and transaction retries, not this new cross-notebook scheduling scenario directly.
