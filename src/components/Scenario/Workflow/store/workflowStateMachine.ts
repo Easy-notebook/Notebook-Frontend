@@ -27,22 +27,8 @@ import { WorkflowEvent, WorkflowState } from '@Store/models';
 import { WORKFLOW_MAX_ITERATIONS } from '../../../../config/workflow';
 import { WorkflowState as WorkflowStateModel } from '../observation/WorkflowState';
 import { WorkflowRunSession } from '../core/WorkflowRunSession';
+import { WorkflowTransitionSession } from '../core/WorkflowTransitionSession';
 import useNotebookStore from '@Store/notebookStore';
-
-/** Keep the Store serializable while transition handlers operate on domain objects. */
-async function applySnapshotTransition(
-  snapshot: StateJSON,
-  response: Record<string, unknown>,
-  apiType?: string
-): Promise<StateJSON> {
-  const { state } = await getTransitionCoordinator().applyTransition(
-    new WorkflowStateModel(structuredClone(snapshot)),
-    response,
-    apiType,
-    true
-  );
-  return state.toJSON();
-}
 
 // ==============================================
 // TYPES & INTERFACES
@@ -131,35 +117,18 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
 
     console.log(`[FSM] Transition requested: ${event} from state ${currentFSMState}`);
 
-    try {
-      const updatedStateJSON = await applySnapshotTransition(currentStateJSON, apiResponse || {});
-
-      if (get().stateJSON !== currentStateJSON) return;
-
-      // Extract new FSM state
+    await directTransitions.run(apiResponse || {}, undefined, (updatedStateJSON, previous) => {
       const newFSMState = updatedStateJSON.state.FSM.state;
-
-      // Update store
       set({
         currentState: newFSMState as WorkflowState,
         stateJSON: updatedStateJSON,
         transitionHistory: [
           ...get().transitionHistory,
-          {
-            from: currentFSMState,
-            to: newFSMState,
-            event,
-            timestamp: new Date(),
-          },
+          { from: previous.state.FSM.state, to: newFSMState, event, timestamp: new Date() },
         ],
       });
-
       console.log(`[FSM] Transition complete: ${currentFSMState} → ${newFSMState}`);
-    } catch (error) {
-      if (get().stateJSON !== currentStateJSON) return;
-      console.error('[FSM] Transition failed:', error);
-      get().fail(error as Error);
-    }
+    });
   },
 
   // ==============================================
@@ -339,30 +308,38 @@ export const useWorkflowStateMachine = create<WorkflowStateMachine>((set, get) =
   handleAPIResponse: async (apiResponse: Record<string, unknown>, apiType?: string) => {
     console.log(`[FSM] Handling API response (type: ${apiType})`);
 
-    const currentStateJSON = get().stateJSON;
-    try {
-      const updatedStateJSON = await applySnapshotTransition(
-        currentStateJSON,
-        apiResponse,
-        apiType
-      );
-      if (get().stateJSON !== currentStateJSON) return;
-
+    await directTransitions.run(apiResponse, apiType, (updatedStateJSON) => {
       const newFSMState = updatedStateJSON.state.FSM.state;
-
-      set({
-        currentState: newFSMState as WorkflowState,
-        stateJSON: updatedStateJSON,
-      });
-
+      set({ currentState: newFSMState as WorkflowState, stateJSON: updatedStateJSON });
       console.log(`[FSM] API response handled, new state: ${newFSMState}`);
-    } catch (error) {
-      if (get().stateJSON !== currentStateJSON) return;
-      console.error('[FSM] Failed to handle API response:', error);
-      get().fail(error as Error);
-    }
+    });
   },
 }));
+
+const directTransitions = new WorkflowTransitionSession({
+  snapshot: () => useWorkflowStateMachine.getState().stateJSON,
+  notebookId: () => useNotebookStore.getState().notebookId,
+  watch: (check) => {
+    const stopWorkflow = useWorkflowStateMachine.subscribe(check);
+    const stopNotebook = useNotebookStore.subscribe(check);
+    return () => {
+      stopWorkflow();
+      stopNotebook();
+    };
+  },
+  apply: async (snapshot, response, apiType, signal) => {
+    const { state } = await getTransitionCoordinator().applyTransition(
+      new WorkflowStateModel(snapshot),
+      response,
+      apiType,
+      true,
+      signal
+    );
+    return state.toJSON();
+  },
+  fail: (error) =>
+    useWorkflowStateMachine.getState().fail(error instanceof Error ? error : String(error)),
+});
 
 const automaticRun = new WorkflowRunSession({
   notebookId: () => useNotebookStore.getState().notebookId,

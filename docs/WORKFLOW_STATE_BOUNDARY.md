@@ -18,10 +18,10 @@ lifecycle concern.
 
 Control updates (fail/cancel/pause/resume and initial workflow variables) now copy the
 published snapshot before modification. Repeated pause is a no-op, preserving the original
-resume target. Direct transition/API-response publication compares its captured snapshot
-identity with the current Store snapshot after awaiting: if a control or another update
-replaced it, neither a late result nor a late error can publish over the replacement.
-This is optimistic publication ownership, not a queue or cancellation of handler side effects.
+resume target. Direct transition/API-response calls share WorkflowTransitionSession. Each
+invocation watches its captured snapshot identity and notebook identity. A control update,
+competing publication or notebook navigation aborts its transition signal and suppresses late
+results/errors. This is optimistic ownership with cooperative handler cancellation, not a queue.
 The automatic loop has its own run session, described below.
 
 
@@ -121,8 +121,11 @@ actions check at entry and between actions; the coordinator checks before dispat
 awaited results. Cancellation during a pending title action stops later description/section
 writes and rejects the transition without publishing its cloned state. Two concurrent calls
 through the same handler retain independent signals. Already-applied notebook actions are not
-rolled back. Direct Store transitions without an automatic-run signal retain their existing
-optimistic snapshot publication guard; they are not newly enrolled in automatic-run cancellation.
+rolled back. Direct Store transitions acquire their own signal from WorkflowTransitionSession,
+so they do not depend on an automatic run being active. Ownership loss releases both subscriptions
+immediately, even while a non-cooperative handler drains. Normal completion releases observers
+before publication so its own snapshot does not cancel the completed attempt. Responses and
+input snapshots are copied before dispatch, and history is recorded only by the owning transition.
 
 Run admission orders start/stop commands before notifying cleanup observers. If a busy-state,
 abort or unsubscribe callback issues another command synchronously, that later command wins;
