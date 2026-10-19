@@ -103,3 +103,55 @@ it('keeps concurrent command completions attached to their own records when they
     onProcess: false,
   });
 });
+
+it.each([
+  [new Error('parser failure'), 'parser failure'],
+  ['plain failure', 'plain failure'],
+  [{ message: 'remote failure' }, 'remote failure'],
+  [null, 'Unknown error'],
+  [Object.create(null), 'Unknown error'],
+])(
+  'settles admitted history when the parser unexpectedly rejects with %j',
+  async (failure, message) => {
+    parser.executeActionCommand.mockRejectedValue(failure);
+    const showToast = vi.fn().mockResolvedValue(undefined);
+    await expect(ActionCommandHandler.handleCommand('/failed', showToast)).resolves.toBe(true);
+    const record = useAIAgentStore.getState().actions[0];
+    expect(record).toMatchObject({
+      onProcess: false,
+      result: `Error: Failed to execute command\n${message}`,
+    });
+    expect(useAIAgentStore.getState().qaList[0]).toMatchObject({
+      type: 'assistant',
+      content: record.result,
+    });
+    expect(showToast).toHaveBeenCalledWith({
+      type: 'error',
+      message: `Failed to execute command\n${message}`,
+    });
+  }
+);
+
+it('settles command history before propagating a failed result notification', async () => {
+  parser.executeActionCommand.mockResolvedValue({ success: true, message: 'executed' });
+  await expect(
+    ActionCommandHandler.handleCommand(
+      '/done',
+      vi.fn().mockRejectedValue(new Error('toast unavailable'))
+    )
+  ).rejects.toThrow('toast unavailable');
+  expect(useAIAgentStore.getState().actions[0]).toMatchObject({
+    onProcess: false,
+    result: 'executed',
+  });
+});
+
+it('preserves warning severity for action notifications', async () => {
+  parser.executeActionCommand.mockImplementation(async (_command, context) => {
+    await context.showToast({ type: 'warning', message: 'review this action' });
+    return { success: true, message: 'done' };
+  });
+  const showToast = vi.fn().mockResolvedValue(undefined);
+  await ActionCommandHandler.handleCommand('/warning', showToast);
+  expect(showToast).toHaveBeenNthCalledWith(1, { type: 'warning', message: 'review this action' });
+});

@@ -4,6 +4,7 @@
  * Refactored from streamHandler.ts using OOP and action pattern
  */
 
+import { describeError } from '@Utils/errors';
 import { getStreamActionClass } from './actions';
 import type { StreamData, ShowToastFunction, StreamActionContext } from './types';
 import { agentLog, networkLog } from '@Utils/logger';
@@ -71,10 +72,10 @@ export class StreamHandler {
             viewMode: 'script' as any, // Default to script view or cast to any
           });
         }
-      } catch (error: any) {
+      } catch (error) {
         agentLog.error('Stream action execution failed', { type: data.type, error });
         await showToast({
-          message: `处理流式响应失败: ${error.message || error}`,
+          message: `处理流式响应失败: ${describeError(error)}`,
           type: 'error',
         });
       }

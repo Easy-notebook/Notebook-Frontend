@@ -12,6 +12,7 @@
  *   /update_view_mode --help
  */
 
+import { describeError } from '@Utils/errors';
 import { getStreamActionClass, getAllStreamActionTypes } from '../actions/base';
 import type { StreamActionContext } from '../types';
 
@@ -617,12 +618,12 @@ Examples:
         message: `✓ Executed: /${actionType}`,
         actionType,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error(`[ActionCommand] Error executing ${actionType}:`, error);
       return {
         success: false,
         message: `Failed to execute /${actionType}`,
-        error: error.message || String(error),
+        error: describeError(error),
         actionType,
       };
     }

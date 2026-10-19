@@ -3,8 +3,9 @@
  * Handles stream action commands in the AI terminal interface
  */
 
-import { ActionCommandParser } from './ActionCommandParser';
-import type { StreamActionContext } from '../types';
+import { ActionCommandParser, type ActionCommandResult } from './ActionCommandParser';
+import { describeError } from '@Utils/errors';
+import type { StreamActionContext, ShowToastFunction } from '../types';
 import useStore from '@Store/notebookStore';
 import { getAllStreamActionTypes } from '../actions/base';
 import { useAIAgentStore } from '@Store/AIAgentStore';
@@ -14,10 +15,7 @@ export class ActionCommandHandler {
    * Handle a command from AI Terminal
    * Returns true if the command was an action command, false otherwise
    */
-  static async handleCommand(
-    command: string,
-    showToast: (options: { message: string; type: 'success' | 'error' | 'info' }) => Promise<void>
-  ): Promise<boolean> {
+  static async handleCommand(command: string, showToast: ShowToastFunction): Promise<boolean> {
     // Check if it's an action command
     if (!ActionCommandParser.isActionCommand(command)) {
       return false;
@@ -61,21 +59,27 @@ export class ActionCommandHandler {
       onProcess: true,
     });
 
-    // Execute the action command
-    const result = await ActionCommandParser.executeActionCommand(command, context);
-
-    // Update Action History
-    if (actionId) {
-      aiAgentStore.updateAction(actionId, {
-        onProcess: false,
-        result: result.success ? result.message : `Error: ${result.message}\n${result.error || ''}`,
-      });
+    let result: ActionCommandResult;
+    try {
+      result = await ActionCommandParser.executeActionCommand(command, context);
+    } catch (error) {
+      result = {
+        success: false,
+        message: 'Failed to execute command',
+        error: describeError(error),
+      };
     }
+    const outcome = result.success
+      ? result.message
+      : `Error: ${result.message}\n${result.error || ''}`;
+
+    // Settle the admitted record before notification or other presentation work.
+    aiAgentStore.updateAction(actionId, { onProcess: false, result: outcome });
 
     // Add Assistant Answer (Result)
     aiAgentStore.addQA({
       type: 'assistant',
-      content: result.success ? result.message : `Error: ${result.message}\n${result.error || ''}`,
+      content: outcome,
       viewMode: state.viewMode,
       cellId: state.currentCellId ?? undefined,
       resolved: true,
@@ -90,13 +94,13 @@ export class ActionCommandHandler {
       await showToast({
         message: result.message,
         type: isInfoCommand ? 'info' : 'success',
-      } as any);
+      });
       console.log('[ActionCommand] Success:', result);
     } else {
       await showToast({
         message: `${result.message}${result.error ? `\n${result.error}` : ''}`,
         type: 'error',
-      } as any);
+      });
       console.error('[ActionCommand] Error:', result);
     }
 

@@ -70,3 +70,22 @@ it('retains command failure reporting when a concrete action rejects', async () 
     error: 'operation rejected',
   });
 });
+
+it.each([
+  [null, 'Unknown error'],
+  ['plain rejection', 'plain rejection'],
+  [{ message: 'object rejection' }, 'object rejection'],
+])('converts non-Error action rejection into a command failure: %j', async (failure, message) => {
+  class FailingAction extends StreamAction {
+    execute(): void {
+      throw failure;
+    }
+  }
+  registerStreamAction('test_non_error', FailingAction);
+  await expect(
+    ActionCommandParser.executeActionCommand('/test_non_error', {})
+  ).resolves.toMatchObject({
+    success: false,
+    error: message,
+  });
+});

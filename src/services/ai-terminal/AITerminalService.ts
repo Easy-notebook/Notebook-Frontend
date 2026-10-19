@@ -5,6 +5,7 @@ import useCodeStore from '@Store/codeStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { FileService } from '@Services/notebook/FileService';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
+import type { ShowToastFunction } from '@Services/stream/types';
 import { ActionCommandHandler } from '@Services/stream/commands';
 import { EVENT_TYPES } from '@Store/models/agent';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
@@ -96,10 +97,7 @@ class AITerminalService {
     files: UploadFile[],
     context: CommandContext,
     callbacks: {
-      showToast: (options: {
-        message: string;
-        type: 'success' | 'error' | 'info';
-      }) => Promise<void>;
+      showToast: ShowToastFunction;
       setActiveView: (view: 'script' | 'qa') => void;
     }
   ): Promise<boolean> {
