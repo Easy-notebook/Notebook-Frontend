@@ -16,4 +16,14 @@ Tests defer notification promises, switch the running QA, then verify all four a
 append only to the original owner. Additional tests cover explicit IDs, detached nested
 results and deleted/missing owners. Notification rejection still propagates and prevents
 recording, preserving current action sequencing; durable delivery/replay is not implemented.
-Other generation/communication action ownership remains separate migration scope.
+Image, webpage and video generation use `GenerationRequestAction` to share command
+construction, lazy operator loading, notification and captured event recording. Request
+context overrides current notebook selection when explicitly supplied; otherwise the
+current context is captured before asynchronous loading. Code execution captures both
+its QA owner and code text before execution; Agent communication honors explicit QId.
+
+Generation events record request initiation, not backend completion. Operator dispatch
+retains its asynchronous behavior and owns send failures; this change does not redefine
+the backend acknowledgement or generation-result lifecycle. Tests switch notebook/QA
+while the operator import is pending and verify all three commands retain their original
+context; additional tests cover explicit context, incomplete requests and code execution.
