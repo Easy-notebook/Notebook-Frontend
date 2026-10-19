@@ -4,7 +4,9 @@ import type { IStorageProvider, SplitFileSaveData } from '../interfaces';
 import { DB_STORES } from '../../../storage/schema';
 
 const put = vi.fn();
-const repository = new SplitFileRepository({ put } as unknown as IStorageProvider);
+const get = vi.fn();
+const getAll = vi.fn();
+const repository = new SplitFileRepository({ put, get, getAll } as unknown as IStorageProvider);
 const valid = (): SplitFileSaveData => ({
   name: 'file.txt',
   content: '中文',
@@ -81,4 +83,59 @@ it('reports storage commit failure instead of accepting the record', async () =>
   const error = new Error('write aborted');
   put.mockRejectedValueOnce(error);
   await expect(repository.saveFile('book', 'file.txt', valid())).rejects.toBe(error);
+});
+
+const stored = () => ({
+  id: 'book::file.txt',
+  notebookId: 'book',
+  filePath: 'file.txt',
+  fileName: 'file.txt',
+  content: '中文',
+  type: 'text',
+  size: 6,
+  lastModified: 'old',
+  cachedAt: 123,
+  metadata: { label: 'custom' },
+});
+
+it('detaches stored metadata and snapshots caller metadata before writing', async () => {
+  const record = stored();
+  get.mockResolvedValueOnce(record);
+  const result = await repository.getFile('book', 'file.txt');
+  (result!.metadata as { label: string }).label = 'changed';
+  expect(record.metadata.label).toBe('custom');
+  const data = valid();
+  await repository.saveFile('book', 'file.txt', data);
+  (data.metadata as { label: string }).label = 'later';
+  expect(put.mock.calls[0][1].metadata).toEqual({ label: 'custom' });
+});
+
+it.each([undefined, null])('returns null for absent split data: %s', async (value) => {
+  get.mockResolvedValueOnce(value);
+  expect(await repository.getFile('book', 'file.txt')).toBeNull();
+});
+
+it.each([
+  false,
+  0,
+  {},
+  { ...stored(), id: 'other::file.txt', notebookId: 'other' },
+  { ...stored(), filePath: 'other.txt' },
+  { ...stored(), content: undefined },
+  { ...stored(), size: -1 },
+  { ...stored(), cachedAt: NaN },
+])('rejects corrupt reads without rewriting the record: %j', async (value) => {
+  get.mockResolvedValueOnce(value);
+  await expect(repository.getFile('book', 'file.txt')).rejects.toThrow('Invalid split file');
+  expect(put).not.toHaveBeenCalled();
+});
+
+it('rejects corrupt statistics and preserves provider error identity', async () => {
+  getAll.mockResolvedValueOnce([stored()]);
+  expect(await repository.getStats()).toEqual({ totalFiles: 1, totalSize: 6 });
+  getAll.mockResolvedValueOnce([{ ...stored(), size: '6' }]);
+  await expect(repository.getStats()).rejects.toThrow('Invalid split file size');
+  const failure = new Error('read aborted');
+  get.mockRejectedValueOnce(failure);
+  await expect(repository.getFile('book', 'file.txt')).rejects.toBe(failure);
 });

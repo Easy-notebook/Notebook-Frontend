@@ -1,3 +1,4 @@
+import { SplitFileRecord } from './SplitFileRecord';
 import { makeFileId } from '../../../storage/fileIdentity';
 import { ISplitFileRepository, IStorageProvider, type SplitFileSaveData } from '../interfaces';
 import { SplitFileEntity, DB_STORES } from '../../../storage/schema';
@@ -6,39 +7,18 @@ export class SplitFileRepository implements ISplitFileRepository {
   constructor(private storage: IStorageProvider) {}
 
   async saveFile(notebookId: string, filePath: string, fileData: SplitFileSaveData): Promise<void> {
-    if (
-      typeof notebookId !== 'string' ||
-      !notebookId ||
-      typeof filePath !== 'string' ||
-      !filePath ||
-      !fileData ||
-      typeof fileData.name !== 'string' ||
-      !fileData.name ||
-      typeof fileData.content !== 'string' ||
-      typeof fileData.type !== 'string' ||
-      !fileData.type ||
-      typeof fileData.lastModified !== 'string' ||
-      !fileData.lastModified
-    ) {
-      throw new Error(
-        'Invalid split file: identity, name, content, type and modification time are required'
-      );
-    }
-    if (!Number.isSafeInteger(fileData.size) || fileData.size < 0) {
-      throw new Error('Invalid split file size');
-    }
-    const splitFile: SplitFileEntity = {
+    const splitFile = new SplitFileRecord({
       id: makeFileId(notebookId, filePath),
       notebookId,
       filePath,
-      fileName: fileData.name,
-      content: fileData.content,
-      type: fileData.type,
-      size: fileData.size,
-      lastModified: fileData.lastModified,
+      fileName: fileData?.name,
+      content: fileData?.content,
+      type: fileData?.type,
+      size: fileData?.size,
+      lastModified: fileData?.lastModified,
       cachedAt: Date.now(),
-      metadata: fileData.metadata,
-    };
+      metadata: fileData?.metadata,
+    }).toRecord();
 
     await this.storage.put(DB_STORES.SPLIT_FILES, splitFile);
   }
@@ -49,14 +29,15 @@ export class SplitFileRepository implements ISplitFileRepository {
     let updated = false;
     await this.storage.transaction([DB_STORES.SPLIT_FILES], 'readwrite', async (stores) => {
       const store = stores[DB_STORES.SPLIT_FILES];
-      const record = await new Promise<SplitFileEntity | undefined>((resolve, reject) => {
+      const record = await new Promise<unknown>((resolve, reject) => {
         const request = store.get(id);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
       });
-      if (!record) return;
+      if (record == null) return;
+      const validated = new SplitFileRecord(record, id).toRecord();
       store.put({
-        ...record,
+        ...validated,
         content,
         size: new Blob([content]).size,
         lastModified: new Date().toISOString(),
@@ -68,8 +49,8 @@ export class SplitFileRepository implements ISplitFileRepository {
 
   async getFile(notebookId: string, filePath: string): Promise<SplitFileEntity | null> {
     const id = makeFileId(notebookId, filePath);
-    const file = await this.storage.get<SplitFileEntity>(DB_STORES.SPLIT_FILES, id);
-    return file || null;
+    const file = await this.storage.get<unknown>(DB_STORES.SPLIT_FILES, id);
+    return file == null ? null : new SplitFileRecord(file, id).toRecord();
   }
 
   async deleteFile(notebookId: string, filePath: string): Promise<void> {
@@ -103,7 +84,8 @@ export class SplitFileRepository implements ISplitFileRepository {
   }
 
   async getStats(): Promise<{ totalFiles: number; totalSize: number }> {
-    const allFiles = await this.storage.getAll<SplitFileEntity>(DB_STORES.SPLIT_FILES);
+    const records = await this.storage.getAll<unknown>(DB_STORES.SPLIT_FILES);
+    const allFiles = records.map((record) => new SplitFileRecord(record).toRecord());
     return {
       totalFiles: allFiles.length,
       totalSize: allFiles.reduce((sum, f) => sum + f.size, 0),

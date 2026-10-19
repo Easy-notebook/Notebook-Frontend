@@ -3896,3 +3896,42 @@ test('tab reads reject corrupt persisted selections without repairing or deletin
   expect(result.retained).toEqual(result.record);
   expect(result.missing).toBeNull();
 });
+
+test('corrupt split files reject reads and edits while preserving recovery evidence', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, SplitFileRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new SplitFileRepository(provider);
+    await repository.saveFile('book', 'file.txt', {
+      name: 'file.txt',
+      content: 'original',
+      type: 'text',
+      size: 8,
+      lastModified: 'old',
+    });
+    const record = await repository.getFile('book', 'file.txt');
+    const corrupt = { ...record, content: null };
+    await provider.put(DB_CONFIG.STORES.SPLIT_FILES, corrupt);
+    const errors = [];
+    for (const operation of [
+      () => repository.getFile('book', 'file.txt'),
+      () => repository.updateFileContent('book', 'file.txt', 'replacement'),
+      () => repository.getStats(),
+    ]) {
+      try {
+        await operation();
+        errors.push(null);
+      } catch (error) {
+        errors.push(error.message);
+      }
+    }
+    const retained = await provider.get(DB_CONFIG.STORES.SPLIT_FILES, record.id);
+    await provider.close();
+    return { errors, retained, corrupt };
+  });
+  expect(result.errors).toHaveLength(3);
+  for (const message of result.errors) expect(message).toContain('Invalid split file');
+  expect(result.retained).toEqual(result.corrupt);
+});

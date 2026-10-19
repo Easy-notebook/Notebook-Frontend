@@ -495,3 +495,16 @@ fields, active-tab membership and a valid timestamp, then returns detached recor
 state rejects, as do provider failures. Enumeration validates every returned record.
 Reads never repair or delete invalid data, so a failed load cannot silently turn
 corruption into a missing-state discovery path or destroy recovery evidence.
+
+## Persisted split-file record validation
+
+`SplitFileRecord` owns validation for saves, reads, statistics and transactional
+content updates. It checks canonical identity and requested ownership, required
+fields, string content (including empty files), nonnegative safe-integer size and
+cache timestamp. Metadata is cloned at admission and when returning a snapshot.
+
+Updates validate the existing record inside the same read/write transaction before
+replacing content. Missing records return false; corrupt records reject without
+being overwritten. Read failures are not cache misses, and statistics reject
+invalid records instead of producing misleading totals. Supplied sizes and
+modification strings retain their existing public semantics.
