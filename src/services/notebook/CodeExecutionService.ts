@@ -4,10 +4,15 @@ import { ExecutionResult, ApiResponse, ExecutionStatus } from '../types';
 
 export class CodeExecutionService extends BaseService {
   // Execute code
-  static async executeCode(code: string, notebookId: string): Promise<ExecutionResult> {
+  static async executeCode(
+    code: string,
+    notebookId: string,
+    signal?: AbortSignal
+  ): Promise<ExecutionResult> {
     try {
       const response = await fetch(`${this.baseUrl}/execute`, {
         method: 'POST',
+        signal,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -32,10 +37,11 @@ export class CodeExecutionService extends BaseService {
   }
 
   // Cancel execution
-  static async cancelExecution(notebookId: string): Promise<ApiResponse> {
+  static async cancelExecution(notebookId: string, signal?: AbortSignal): Promise<ApiResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/cancel_execution/${notebookId}`, {
         method: 'POST',
+        signal,
         headers: {
           'Content-Type': 'application/json',
         },

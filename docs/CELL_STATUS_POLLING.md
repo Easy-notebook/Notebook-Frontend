@@ -21,8 +21,9 @@ Store tests cover slow requests, stop/restart, notebook switching, deletion, res
 outputs, stale/current errors and synchronous restart during output publication. Kernel/session
 regressions are included in targeted checks.
 
-The actual executeCode/cancelExecution requests still have independent continuation logic in
-CodeStore. Their stale-result publication and relationship to newer execution attempts require
-further refactoring; this phase guarantees polling ownership, not complete cell execution
-ownership. The backend status endpoint is notebook-wide, so concurrently executing multiple
-cells also requires an explicit kernel execution admission policy.
+Actual execute/cancel requests are now owned by CellExecutionSession. While that session
+is active, a terminal poll retires only polling and leaves isExecuting true until the execute
+response settles. Standalone polling still completes its execution projection as before.
+See CELL_EXECUTION_LIFECYCLE.md for execution admission, cancellation and output ownership.
+The backend status endpoint remains notebook-wide; independent external executions are outside
+the client session's admission boundary.

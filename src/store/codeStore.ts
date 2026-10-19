@@ -6,7 +6,7 @@ import { KernelSession } from '@Services/notebook/KernelSession';
 import { CellStatusPoller } from '@Services/notebook/CellStatusPoller';
 import { CodeExecutionService } from '@Services/notebook/CodeExecutionService';
 import { storeLog } from '@Utils/logger';
-import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
+import { CellExecutionSession } from '@Services/notebook/CellExecutionSession';
 import {
   DISPLAY_MODES,
   type DisplayMode,
@@ -88,6 +88,7 @@ const useCodeStore = create<CodeStore>((set, get) => {
     notebookId: () => useStore.getState().notebookId,
     hasCell: (id) => useStore.getState().cells.some((cell) => cell.id === id),
     executing: (id) => get().getCellExecState(id).isExecuting,
+    executionPending: (id) => execution.isActive(id),
     watch: (check) => useStore.subscribe(check),
     status: (notebookId, signal) => CodeExecutionService.getExecutionStatus(notebookId, signal),
     update: (id, state) => get().setCellExecState(id, state),
@@ -97,6 +98,20 @@ const useCodeStore = create<CodeStore>((set, get) => {
         cellId,
         error: error instanceof Error ? error.message : String(error),
       }),
+  });
+  const execution = new CellExecutionSession({
+    notebookId: () => useStore.getState().notebookId,
+    cell: (id) => useStore.getState().cells.find((cell) => cell.id === id),
+    watch: (check) => useStore.subscribe(check),
+    initialize: () => get().initializeKernel(),
+    execute: (code, owner, signal) => CodeExecutionService.executeCode(code, owner, signal),
+    cancel: (owner, signal) => CodeExecutionService.cancelExecution(owner, signal),
+    update: (id, state) => get().setCellExecState(id, state),
+    clear: (id) => useStore.getState().clearCellOutputs(id),
+    outputs: (id, outputs) => useStore.getState().updateCellOutputs(id, outputs),
+    save: () => useStore.getState().triggerAutoSave(),
+    startPolling: (id) => polling.start(id),
+    stopPolling: (id) => polling.stop(id),
   });
   return {
     // ========== 全局内核状态 ==========
@@ -117,7 +132,10 @@ const useCodeStore = create<CodeStore>((set, get) => {
     setError: (err: string | null) => set({ error: err }),
 
     initializeKernel: () => kernel.initialize(),
-    restartKernel: () => kernel.restart(),
+    restartKernel: () => {
+      execution.reset(true);
+      return kernel.restart();
+    },
 
     // ========== Actions: 每个 Cell 的执行状态管理 ==========
     initCellExecState: (cellId: string) => {
@@ -166,123 +184,8 @@ const useCodeStore = create<CodeStore>((set, get) => {
     stopStatusCheck: (cellId: string) => polling.stop(cellId),
     startStatusCheck: (cellId: string) => polling.start(cellId),
 
-    // 取消执行
-    cancelCellExecution: async (cellId: string): Promise<ExecutionResult> => {
-      const notebookId = useStore.getState().notebookId;
-      if (!notebookId) {
-        storeLog.error('Cannot cancel execution - notebook ID does not exist', { cellId });
-        return { success: false, error: 'no_notebook_id' };
-      }
-      get().setCellExecState(cellId, { isCancelling: true });
-
-      try {
-        await CodeExecutionService.cancelExecution(notebookId);
-        get().stopStatusCheck(cellId);
-        get().setCellExecState(cellId, {
-          isExecuting: false,
-          elapsedTime: 0,
-        });
-        return { success: false, error: 'canceled_by_user' };
-      } catch (error: any) {
-        storeLog.error('Error cancelling execution', { cellId, error: error.message });
-        return { success: false, error: error.message };
-      } finally {
-        get().setCellExecState(cellId, { isCancelling: false });
-      }
-    },
-
-    // 执行单个 Cell
-    executeCell: async (cellId: string): Promise<ExecutionResult> => {
-      // 如果正在执行 => 视作"取消"
-      const cellExec = get().getCellExecState(cellId);
-      if (cellExec.isExecuting) {
-        return get().cancelCellExecution(cellId);
-      }
-
-      const codeCell = useStore.getState().cells.find((cell) => cell.id === cellId);
-      if (!codeCell) return { success: false, error: 'Cell does not exist' };
-      if (!canExecuteCodeLanguage(codeCell.language)) {
-        return {
-          success: false,
-          error: `${codeCell.language} execution is unavailable; the kernel runs Python only`,
-        };
-      }
-
-      // 如果内核没就绪，先初始化
-      const ok = await get().initializeKernel();
-      const notebookId = useStore.getState().notebookId;
-      const notebookState = useStore.getState();
-      if (!ok) {
-        return { success: false, error: '内核初始化失败' };
-      }
-      if (notebookId) {
-        await CodeExecutionService.executeCode('print("fast check")', notebookId);
-      }
-
-      // 清除旧输出
-      notebookState.clearCellOutputs(cellId);
-      // 设置 isExecuting
-      get().setCellExecState(cellId, {
-        isExecuting: true,
-        elapsedTime: 0,
-      });
-
-      // 开始轮询
-      get().startStatusCheck(cellId);
-
-      // 真正发起执行请求
-      try {
-        const result = await CodeExecutionService.executeCode(codeCell.content, notebookId!);
-
-        // 更新 outputs
-        if (import.meta.env.DEV) {
-          console.log('🔍 [codeStore] Updating cell outputs after execution:', {
-            cellId: cellId.slice(0, 8),
-            outputsCount: result.outputs?.length || 0,
-          });
-        }
-
-        notebookState.updateCellOutputs(cellId, result.outputs || []);
-
-        // Trigger immediate auto-save after execution to ensure outputs are persisted
-        notebookState.triggerAutoSave();
-
-        let hasError = false;
-        let error: string | null = null;
-        if (result.outputs) {
-          for (let output of result.outputs) {
-            if (output.type === 'error') {
-              hasError = true;
-              error = output.content;
-              break;
-            }
-          }
-        }
-
-        // 停止轮询
-        get().stopStatusCheck(cellId);
-        get().setCellExecState(cellId, {
-          isExecuting: false,
-          elapsedTime: 0,
-        });
-
-        if (hasError) {
-          return { success: false, error: error || 'Unknown error' };
-        }
-
-        return { success: true, outputs: result.outputs };
-      } catch (error: any) {
-        storeLog.error('Cell execution error', {
-          cellId,
-          error: error.message,
-          stack: error.stack,
-        });
-        notebookState.updateCellOutputs(cellId, [{ type: 'error', content: error.message }]);
-        get().stopStatusCheck(cellId);
-        get().setCellExecState(cellId, { isExecuting: false });
-        return { success: false, error: error.message };
-      }
-    },
+    cancelCellExecution: (cellId: string) => execution.cancel(cellId),
+    executeCell: (cellId: string) => execution.execute(cellId),
 
     // ========== 显示模式管理 ==========
     setCellMode: (cellId: string, mode: DisplayMode) => {
@@ -316,6 +219,7 @@ const useCodeStore = create<CodeStore>((set, get) => {
     // ========== 重置 ==========
     resetAll: () => {
       kernel.invalidate();
+      execution.reset();
       polling.reset();
       set({
         isKernelReady: false,

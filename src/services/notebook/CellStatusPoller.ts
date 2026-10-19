@@ -4,6 +4,7 @@ interface PollingPorts {
   notebookId(): string | null;
   hasCell(id: string): boolean;
   executing(id: string): boolean;
+  executionPending(id: string): boolean;
   watch(check: () => void): () => void;
   status(notebookId: string, signal: AbortSignal): Promise<ExecutionStatus>;
   update(id: string, state: Partial<CellExecutionState>): void;
@@ -81,7 +82,11 @@ export class CellStatusPoller {
   private complete(cellId: string, session: PollingSession): void {
     this.retire(cellId, session);
     if (!this.sessions.has(cellId) && this.validOwner(cellId, session))
-      this.ports.update(cellId, { isExecuting: false, elapsedTime: 0, statusCheckInterval: null });
+      this.ports.update(cellId, {
+        ...(!this.ports.executionPending(cellId) ? { isExecuting: false } : {}),
+        elapsedTime: 0,
+        statusCheckInterval: null,
+      });
   }
   private async poll(cellId: string, session: PollingSession): Promise<void> {
     if (!this.current(cellId, session)) {
