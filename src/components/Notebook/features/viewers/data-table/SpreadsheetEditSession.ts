@@ -1,3 +1,7 @@
+interface DeferredEditTicket {
+  readonly revision: number;
+}
+
 interface SaveTicket {
   readonly id: symbol;
   readonly revision: number;
@@ -6,8 +10,9 @@ interface SaveTicket {
 
 type SaveState = { phase: 'ready' | 'failed' } | { phase: 'saving'; ticket: SaveTicket };
 
-/** Owns save acknowledgements and distinguishes our commit echo from a new document source. */
-export class SpreadsheetSaveSession {
+/** Owns revision-scoped deferred edits, save acknowledgements and committed source echoes. */
+export class SpreadsheetEditSession {
+  private deferredEdit: DeferredEditTicket | null = null;
   private source: { key: string; content: string } | null = null;
   private revision = 0;
   private state: SaveState = { phase: 'ready' };
@@ -29,9 +34,10 @@ export class SpreadsheetSaveSession {
 
   changed(): void {
     this.revision++;
+    this.deferredEdit = null;
   }
 
-  begin(content: string): SaveTicket {
+  beginSave(content: string): SaveTicket {
     if (!this.source) throw new Error('Spreadsheet session is not loaded');
     const ticket = Object.freeze({
       id: Symbol('spreadsheet-save'),
@@ -42,7 +48,7 @@ export class SpreadsheetSaveSession {
     return ticket;
   }
 
-  complete(ticket: SaveTicket, committedContent: string | null): boolean {
+  completeSave(ticket: SaveTicket, committedContent: string | null): boolean {
     if (this.state.phase !== 'saving' || this.state.ticket !== ticket) return false;
     const accepted = committedContent !== null && committedContent === ticket.content;
     this.state = { phase: accepted ? 'ready' : 'failed' };
@@ -50,7 +56,21 @@ export class SpreadsheetSaveSession {
     return accepted && this.revision === ticket.revision;
   }
 
+  beginDeferredEdit(): DeferredEditTicket | null {
+    if (!this.source) return null;
+    const ticket = Object.freeze({ revision: this.revision });
+    this.deferredEdit = ticket;
+    return ticket;
+  }
+
+  completeDeferredEdit(ticket: DeferredEditTicket, succeeded: boolean): boolean {
+    if (this.deferredEdit !== ticket) return false;
+    this.deferredEdit = null;
+    return succeeded && this.source !== null && this.revision === ticket.revision;
+  }
+
   close(): void {
+    this.deferredEdit = null;
     this.source = null;
     this.state = { phase: 'ready' };
     this.committedEcho = null;

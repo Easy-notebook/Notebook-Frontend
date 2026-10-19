@@ -265,9 +265,9 @@ The encoder quotes empty cells explicitly so an empty final row is unambiguous.
 Malformed quoted input fails admission to saving; both formats require a loaded
 source matching the current file ID and content before a write is allowed.
 
-## Spreadsheet save ownership
+## Spreadsheet edit ownership
 
-`SpreadsheetSaveSession` owns the source identity, draft revision, current save
+`SpreadsheetEditSession` owns the source identity, draft revision, current save
 ticket and last accepted commit echo. Data, columns and formatting state advance
 the revision at setter admission, before React batches a render. Only the latest
 save of an unchanged revision with matching committed content may clear the dirty
@@ -300,3 +300,9 @@ source rows are memoized once per projection/selection. Saving retains canonical
 source order; sorting changes the view rather than rewriting the source file.
 Regression tests cover selecting/editing a moved row, keyboard range copy and
 multi-row paste after sorting, plus filtered row-order boundaries.
+
+Clipboard reads are deferred edits owned by the same session. Admission captures
+the current revision; another deferred edit supersedes it, and any draft change,
+source change or unmount revokes it. Only the current successful completion can
+apply its text, once. Accepted paste builds new row objects instead of mutating
+the captured draft. Save echoes do not invalidate an otherwise unchanged edit.

@@ -507,3 +507,66 @@ it('pastes consecutive rows in visible sorted order without changing unrelated s
     else Reflect.deleteProperty(navigator, 'clipboard');
   }
 });
+
+it.each(['navigation', 'newer edit', 'unmount'])(
+  'ignores late clipboard text after %s',
+  async (change) => {
+    model.state.activeFile = {
+      ...model.state.activeFile,
+      id: 'book::paste.csv',
+      name: 'paste.csv',
+      path: 'paste.csv',
+      type: 'csv',
+      content: 'original',
+    };
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    let finish!: (text: string) => void;
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        readText: vi.fn(
+          () =>
+            new Promise<string>((resolve) => {
+              finish = resolve;
+            })
+        ),
+      },
+    });
+    try {
+      const view = render(<DataTable showFormulaBar={false} />);
+      fireEvent.contextMenu(screen.getByText('original', { exact: true }));
+      fireEvent.click(screen.getByRole('button', { name: /^Paste/ }));
+      if (change === 'navigation') {
+        model.state.activeFile = {
+          ...model.state.activeFile,
+          id: 'book::other.csv',
+          name: 'other.csv',
+          path: 'other.csv',
+          content: 'newer',
+        };
+        view.rerender(<DataTable showFormulaBar={false} />);
+      } else if (change === 'newer edit') {
+        fireEvent.doubleClick(screen.getByText('original', { exact: true }));
+        const input = screen.getByRole('textbox');
+        fireEvent.change(input, { target: { value: 'newer' } });
+        fireEvent.blur(input);
+      } else view.unmount();
+      model.state.setTabDirty.mockClear();
+      await act(async () => {
+        finish('obsolete clipboard');
+      });
+      expect(model.state.setTabDirty).not.toHaveBeenCalled();
+      if (change !== 'unmount') {
+        expect(screen.getByText('newer', { exact: true })).toBeDefined();
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('newer', {
+          surface: 'normal',
+          fileId: model.state.activeFile.id,
+        });
+      }
+    } finally {
+      if (originalClipboard) Object.defineProperty(navigator, 'clipboard', originalClipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  }
+);

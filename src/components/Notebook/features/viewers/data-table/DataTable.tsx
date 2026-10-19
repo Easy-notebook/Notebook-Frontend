@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx-js-style';
 import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
 import { SpreadsheetRowOrder } from './SpreadsheetRowOrder';
-import { SpreadsheetSaveSession } from './SpreadsheetSaveSession';
+import { SpreadsheetEditSession } from './SpreadsheetEditSession';
 import { useSpreadsheetDraftState } from './useSpreadsheetDraftState';
 import { VirtualSpreadsheetRow, type SpreadsheetRowRenderer } from './VirtualSpreadsheetRow';
 import {
@@ -178,9 +178,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   const isInSplitView = !!detachedCellId;
   const currentFile = isInSplitView ? activeSplitFile : activeFile;
 
-  const [saveSession] = useState(() => new SpreadsheetSaveSession());
-  const [data, setData] = useSpreadsheetDraftState<CSVRow[]>([], saveSession);
-  const [columns, setColumns] = useSpreadsheetDraftState<ColumnInfo[]>([], saveSession);
+  const [editSession] = useState(() => new SpreadsheetEditSession());
+  const [data, setData] = useSpreadsheetDraftState<CSVRow[]>([], editSession);
+  const [columns, setColumns] = useSpreadsheetDraftState<ColumnInfo[]>([], editSession);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [selection, setSelection] = useState<CellSelection | null>(null);
@@ -214,7 +214,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   // ============== Cell Formatting ==============
   const [cellFormats, setCellFormats] = useSpreadsheetDraftState<Record<string, CellFormat>>(
     {},
-    saveSession
+    editSession
   );
 
   // ============== Column Visibility & Freeze ==============
@@ -252,7 +252,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
     const fileType = typeOverride || currentFile?.type;
     const content = currentFile?.content ?? '';
     const key = currentFile ? JSON.stringify([isInSplitView, currentFile.id, fileType]) : null;
-    if (!saveSession.receiveSource(key, content)) {
+    if (!editSession.receiveSource(key, content)) {
       if (sourceRef.current) sourceRef.current.source = content;
       return;
     }
@@ -536,9 +536,9 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setStyleMap({});
       setIsLoading(false);
     }
-  }, [currentFile, typeOverride, isInSplitView, saveSession, setColumns, setData]);
+  }, [currentFile, typeOverride, isInSplitView, editSession, setColumns, setData]);
 
-  useEffect(() => () => saveSession.close(), [saveSession]);
+  useEffect(() => () => editSession.close(), [editSession]);
 
   // ============== 表格列定义 ==============
   const tableColumns = useMemo<ColumnDef<CSVRow, unknown>[]>(() => {
@@ -1138,10 +1138,13 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
 
   const handlePaste = useCallback(async () => {
     if (!activeCell) return;
+    const ticket = editSession.beginDeferredEdit();
+    if (!ticket) return;
     try {
       const text = await navigator.clipboard.readText();
+      if (!editSession.completeDeferredEdit(ticket, true)) return;
       const rows = text.split('\n').map((row) => row.split('\t'));
-      const newData = [...data];
+      const newData = data.map((row) => ({ ...row }));
       const startRow = activeCell.row,
         startCol = activeCell.col;
       rows.forEach((row, r) => {
@@ -1154,9 +1157,10 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       setData(newData);
       if (setTabDirty && currentFile) setTabDirty(currentFile.id, true);
     } catch (err) {
+      editSession.completeDeferredEdit(ticket, false);
       console.error('Failed to paste:', err);
     }
-  }, [activeCell, data, setData, setTabDirty, currentFile, rowOrder, columns]);
+  }, [activeCell, data, setData, setTabDirty, currentFile, rowOrder, columns, editSession]);
 
   // ============== Export / save ==============
   const handleExport = useCallback(() => {
@@ -1186,22 +1190,22 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       const content = isWorkbook
         ? source.workbook!.serialize(data, columns)
         : serializeTableCsv(data, columns);
-      const ticket = saveSession.begin(content);
+      const ticket = editSession.beginSave(content);
       try {
         const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
           surface: isInSplitView ? 'split' : 'normal',
           fileId: currentFile.id,
         });
-        if (saveSession.complete(ticket, saved?.content ?? null))
+        if (editSession.completeSave(ticket, saved?.content ?? null))
           setTabDirty(currentFile.id, false);
       } catch (error) {
-        saveSession.complete(ticket, null);
+        editSession.completeSave(ticket, null);
         throw error;
       }
     } catch (err) {
       console.error('Failed to save:', err);
     }
-  }, [currentFile, data, columns, setTabDirty, isInSplitView, typeOverride, saveSession]);
+  }, [currentFile, data, columns, setTabDirty, isInSplitView, typeOverride, editSession]);
 
   if (
     !currentFile ||
