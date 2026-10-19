@@ -346,3 +346,29 @@ it('keeps edits made during a save when the store publishes that save result', a
     fileId: 'book::table.csv',
   });
 });
+
+it('keeps the cell input mounted and focused through consecutive keystrokes', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.csv',
+    name: 'table.csv',
+    path: 'table.csv',
+    type: 'csv',
+    content: 'name\nAda',
+  };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.doubleClick(screen.getByText('Ada', { exact: true }));
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  expect(document.activeElement).toBe(input);
+  fireEvent.change(input, { target: { value: 'Bob' } });
+  expect(screen.getByRole('textbox')).toBe(input);
+  expect(document.activeElement).toBe(input);
+  fireEvent.change(input, { target: { value: 'Bobby' } });
+  expect(screen.getByRole('textbox')).toBe(input);
+  fireEvent.blur(input);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\nBobby', {
+    surface: 'normal',
+    fileId: 'book::table.csv',
+  });
+});

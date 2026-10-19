@@ -280,3 +280,12 @@ so edits made while the write was pending survive. File, preview-surface, format
 or external-content changes still load the newly selected source. Unit tests
 exercise both echo/promise orders, and a rendered-grid test inserts another row
 while saving, publishes the earlier result, then saves the retained newer grid.
+
+## Virtual spreadsheet row identity
+
+`VirtualSpreadsheetRow` is the stable component passed to react-window. The live
+row rendering function travels through `itemData` and is invoked as a render
+callback, not installed as a new component type. Editing state can therefore
+update without unmounting the row's input. The regression test first failed on
+input DOM identity after one character; it now verifies identity, focus across
+consecutive edits, and the final persisted CSV value. Virtualization is retained.

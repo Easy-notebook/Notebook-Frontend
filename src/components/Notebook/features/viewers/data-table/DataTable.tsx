@@ -5,6 +5,7 @@ import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
 import { SpreadsheetSaveSession } from './SpreadsheetSaveSession';
 import { useSpreadsheetDraftState } from './useSpreadsheetDraftState';
+import { VirtualSpreadsheetRow, type SpreadsheetRowRenderer } from './VirtualSpreadsheetRow';
 import {
   useReactTable,
   getCoreRowModel,
@@ -1515,13 +1516,12 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                   </div>
 
                   {/* Body */}
-                  <List
+                  <List<SpreadsheetRowRenderer>
                     height={height - 32} // Subtract header height
                     itemCount={table.getRowModel().rows.length}
                     itemSize={28} // Row height
                     width={Math.max(width, table.getTotalSize() + 48)} // Ensure width covers all columns + row number col
-                  >
-                    {({ index, style }) => {
+                    itemData={(index, style) => {
                       const row = table.getRowModel().rows[index];
                       const isEvenRow = index % 2 === 0;
                       return (
@@ -1708,6 +1708,8 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
                         </div>
                       );
                     }}
+                  >
+                    {VirtualSpreadsheetRow}
                   </List>
                 </div>
               </div>
