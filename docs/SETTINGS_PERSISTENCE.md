@@ -29,7 +29,16 @@ The adapter serializes admitted writes, reads and removal through one promise ch
 Inputs are cloned before asynchronous encryption. A rejected operation does not poison
 later work, and a removal cannot be overtaken by an earlier admitted write. API-key
 updates await their persistence operation. Synchronous preference actions retain their
-existing API; callers needing acknowledged durability must use the storage promise.
+existing API. `SettingsUpdateController` observes every preference write and reports
+asynchronous failures through the existing `error` state without swallowing rejection
+for awaiting API-setting callers. A revision guard prevents a superseded write failure
+from replacing the error state of a newer update. Synchronous validation still throws
+synchronously. Runtime preferences remain optimistic on persistence failure.
+
+Panel controls and error changes use the raw Zustand setter captured outside `persist`.
+They never create backups or write preferences. This also prevents persistence errors
+from recursively triggering another persistence attempt. All preference actions use the
+same controller instead of duplicated synchronous try/catch blocks.
 
 Backups retain the existing raw-settings format and are wrapped into the correct
 Zustand envelope on recovery. `SettingsBackupRepository` owns discovery, retention and
@@ -71,5 +80,9 @@ unreadable backup candidates, timestamp collisions and foreign-key retention. Ch
 confirms recovery from an older encrypted backup when the newest ciphertext is invalid.
 
 The envelope/credential guard is not a complete settings-field schema. Cross-tab writer
-coordination, failure-state presentation for synchronous
-preference actions, and broader backup lifecycle improvements remain separate work.
+coordination, explicit save-status UI beyond the existing error field, and broader backup
+lifecycle improvements remain separate work.
+
+Controller tests cover async rejection, synchronous validation and superseded failures.
+Chromium verifies that transient controls cause no writes and a failed void preference
+action reports its error with exactly one primary write attempt.

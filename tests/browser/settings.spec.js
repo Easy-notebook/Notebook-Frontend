@@ -136,3 +136,37 @@ test('backup recovery skips an unreadable newest ciphertext', async ({ page }) =
   expect(result.primary).toBeNull();
   expect(JSON.parse(result.newest).apiKey).toBe('invalid-ciphertext');
 });
+
+test('transient controls do not write settings and void preference actions report persistence failures', async ({
+  page,
+}) => {
+  await page.goto('/tests/browser/storage.html');
+  const result = await page.evaluate(async () => {
+    const { default: store } = await import('/src/store/settingsStore.ts');
+    await store.persist.rehydrate();
+    store.getState().openSettings();
+    store.getState().setError('temporary');
+    store.getState().clearError();
+    store.getState().closeSettings();
+    await store.persist.rehydrate();
+    const afterControls = Object.keys(localStorage);
+    const originalSet = Storage.prototype.setItem;
+    let attempts = 0;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'easy-notebook-settings') {
+        attempts++;
+        throw new Error('test persistence failure');
+      }
+      return originalSet.call(this, key, value);
+    };
+    try {
+      store.getState().updateLanguage('en');
+      // Reads queue behind the write, then error reporting completes before hydration.
+      await store.persist.rehydrate();
+      return { afterControls, attempts, error: store.getState().error };
+    } finally {
+      Storage.prototype.setItem = originalSet;
+    }
+  });
+  expect(result).toEqual({ afterControls: [], attempts: 1, error: 'test persistence failure' });
+});

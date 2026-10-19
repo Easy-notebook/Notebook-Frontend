@@ -1,6 +1,7 @@
 import { SettingsBackupRepository } from '@Services/settings/SettingsBackupRepository';
 // store/settingsStore.ts
-import { create } from 'zustand';
+import { create, type StoreApi, type StateCreator } from 'zustand';
+import { SettingsUpdateController } from '@Services/settings/SettingsUpdateController';
 import { persist, type PersistOptions } from 'zustand/middleware';
 import {
   SettingsPersistenceStorage,
@@ -13,7 +14,6 @@ import type {
   PlatformType,
   MarkdownPreferences,
   EditorSettings,
-  Shortcuts,
   Settings,
   SettingsWithTimestamp,
   StorageItem,
@@ -35,69 +35,6 @@ const MAX_SHORTCUT_KEYS = 3; // Maximum number of keys in a shortcut combination
 const CLEANUP_THRESHOLD = 1024 * 1024; // 1MB
 const DEFAULT_API_URL = 'https://api.example.com';
 
-/**
- * 主题类型
- */
-// Types moved to @Store/models
-
-/**
- * 平台类型
- */
-// Types moved to @Store/models
-
-/**
- * Markdown 偏好设置接口
- */
-// Types moved to @Store/models
-
-/**
- * 编辑器设置接口
- */
-// Types moved to @Store/models
-
-/**
- * 快捷键设置接口
- */
-// Types moved to @Store/models
-
-/**
- * 设置接口
- */
-// Types moved to @Store/models
-
-/**
- * 带时间戳的设置接口
- */
-// Types moved to @Store/models
-
-/**
- * 存储项接口
- */
-// Types moved to @Store/models
-
-/**
- * 存储估算接口
- */
-// Types moved to @Store/models
-
-/**
- * 平台键映射接口
- */
-// Types moved to @Store/models
-
-/**
- * 平台键映射配置
- */
-// Types moved to @Store/models
-
-/**
- * 持久化状态接口
- */
-// Types moved to @Store/models
-
-/**
- * Settings Store 状态接口
- */
 export interface SettingsStoreState {
   settings: Settings;
   settingsOpen: boolean;
@@ -306,7 +243,7 @@ const isValidUrl = (url: string): boolean => {
   }
 };
 
-const validateShortcut = (shortcut: string, existingShortcuts: Shortcuts): boolean => {
+const validateShortcut = (shortcut: string, existingShortcuts: Record<string, string>): boolean => {
   const keyPattern = /^(Ctrl|Alt|Shift|Meta)$/;
   const finalKeyPattern = /^[A-Za-z0-9]$/;
   const parts = shortcut.split('+').map((p) => p.trim());
@@ -350,172 +287,75 @@ const getPlatformInfo = (): PlatformType => {
   return 'default';
 };
 
-// Create Settings Store
-const createSettingsStore = (set: any, get: any): SettingsStore => ({
-  settings: initialSettings,
-  settingsOpen: false,
-  error: null,
-
-  // Panel Controls
-  openSettings: () => set({ settingsOpen: true }),
-  closeSettings: () => set({ settingsOpen: false }),
-
-  // Error Handling
-  setError: (error: string | null) => set({ error }),
-  clearError: () => set({ error: null }),
-
-  // API Settings
-  updateApiSettings: async ({
-    apiKey,
-    baseUrl,
-    apiTimeout,
-  }: {
-    apiKey?: string;
-    baseUrl?: string;
-    apiTimeout?: number;
-  }) => {
-    try {
-      if (baseUrl && !isValidUrl(baseUrl)) {
-        throw new Error('Invalid base URL format');
-      }
-
-      const nextApiKey = apiKey ?? get().settings.apiKey;
-
-      await set((state: SettingsStoreState) => ({
-        settings: {
-          ...state.settings,
-          apiKey: nextApiKey,
-          baseUrl: baseUrl || state.settings.baseUrl,
-          apiTimeout: apiTimeout || state.settings.apiTimeout,
-        },
-        error: null,
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-
-  // Markdown Preferences
-  updateMarkdownPreferences: (preferences: Partial<MarkdownPreferences>) => {
-    try {
-      set((state: SettingsStoreState) => ({
-        settings: {
-          ...state.settings,
-          markdownPreferences: {
-            ...state.settings.markdownPreferences,
-            ...preferences,
-          },
-        },
-        error: null,
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-
-  // Editor Settings
-  updateEditorSettings: (editorSettings: Partial<EditorSettings>) => {
-    try {
-      set((state: SettingsStoreState) => ({
-        settings: {
-          ...state.settings,
-          editorSettings: {
-            ...state.settings.editorSettings,
-            ...editorSettings,
-          },
-        },
-        error: null,
-      }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-
-  // Shortcuts
-  updateShortcut: (key: string, value: string) => {
-    try {
-      set((state: SettingsStoreState) => {
-        const currentShortcuts = { ...state.settings.shortcuts };
-        delete (currentShortcuts as any)[key];
-
-        if (validateShortcut(value, currentShortcuts)) {
-          return {
-            settings: {
-              ...state.settings,
-              shortcuts: {
-                ...state.settings.shortcuts,
-                [key]: value,
-              },
-            },
-            error: null,
-          };
-        }
-        return state;
+// Transient UI state uses the raw setter; only settings mutations enter persistence.
+const createSettingsStore = (
+  persistSettings: (settings: Settings) => unknown,
+  get: () => SettingsStore,
+  setTransient: StoreApi<SettingsStore>['setState']
+): SettingsStore => {
+  const updates = new SettingsUpdateController(
+    () => get().settings,
+    persistSettings,
+    (error) => setTransient({ error })
+  );
+  return {
+    settings: initialSettings,
+    settingsOpen: false,
+    error: null,
+    openSettings: () => setTransient({ settingsOpen: true }),
+    closeSettings: () => setTransient({ settingsOpen: false }),
+    setError: (error) => setTransient({ error }),
+    clearError: () => setTransient({ error: null }),
+    updateApiSettings: async ({ apiKey, baseUrl, apiTimeout }) => {
+      await updates.update((settings) => {
+        if (baseUrl && !isValidUrl(baseUrl)) throw new Error('Invalid base URL format');
+        return {
+          ...settings,
+          apiKey: apiKey ?? settings.apiKey,
+          baseUrl: baseUrl || settings.baseUrl,
+          apiTimeout: apiTimeout || settings.apiTimeout,
+        };
       });
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-
-  // Language
-  updateLanguage: (language: string) => {
-    try {
-      set((state: SettingsStoreState) => ({
-        settings: {
-          ...state.settings,
-          language,
-        },
-        error: null,
+    },
+    updateMarkdownPreferences: (preferences) => {
+      void updates.update((settings) => ({
+        ...settings,
+        markdownPreferences: { ...settings.markdownPreferences, ...preferences },
       }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-
-  // Reset Settings
-  resetSetting: (key: keyof Settings) => {
-    try {
-      set((state: SettingsStoreState) => ({
-        settings: {
-          ...state.settings,
-          [key]: (initialSettings as any)[key],
-        },
-        error: null,
+    },
+    updateEditorSettings: (editorSettings) => {
+      void updates.update((settings) => ({
+        ...settings,
+        editorSettings: { ...settings.editorSettings, ...editorSettings },
       }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-
-  // Batch Update
-  batchUpdateSettings: (updates: Partial<Settings>) => {
-    try {
-      set((state: SettingsStoreState) => ({
-        settings: {
-          ...state.settings,
-          ...updates,
-        },
-        error: null,
+    },
+    updateShortcut: (key, value) => {
+      void updates.update((settings) => {
+        const currentShortcuts: Record<string, string> = { ...settings.shortcuts };
+        delete currentShortcuts[key];
+        validateShortcut(value, currentShortcuts);
+        return { ...settings, shortcuts: { ...settings.shortcuts, [key]: value } };
+      });
+    },
+    updateLanguage: (language) => {
+      void updates.update((settings) => ({ ...settings, language }));
+    },
+    resetSetting: (key) => {
+      void updates.update((settings) => ({
+        ...settings,
+        [key]: structuredClone(initialSettings[key]),
       }));
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
-    }
-  },
-
-  // Platform-specific shortcuts
-  getPlatformShortcut: (shortcut: string): string => {
-    const platform = getPlatformInfo();
-    const mapping = PLATFORM_KEY_MAPPING[platform] || PLATFORM_KEY_MAPPING.default;
-    return shortcut.replace(/(Ctrl|Alt|Meta)/g, (match) => mapping[match] || match);
-  },
-});
+    },
+    batchUpdateSettings: (changes) => {
+      void updates.update((settings) => ({ ...settings, ...changes }));
+    },
+    getPlatformShortcut: (shortcut) => {
+      const platform = getPlatformInfo();
+      const mapping = PLATFORM_KEY_MAPPING[platform] || PLATFORM_KEY_MAPPING.default;
+      return shortcut.replace(/(Ctrl|Alt|Meta)/g, (match) => mapping[match] || match);
+    },
+  };
+};
 
 const settingsBackups = new SettingsBackupRepository(
   () => localStorage,
@@ -579,7 +419,17 @@ const storageConfig: PersistOptions<SettingsStore, PersistedState, Promise<void>
 };
 
 // Create and export store
-const useSettingsStore = create<SettingsStore>()(persist(createSettingsStore, storageConfig));
+const settingsInitializer: StateCreator<
+  SettingsStore,
+  [],
+  [['zustand/persist', PersistedState]]
+> = (set, get, api) =>
+  persist<SettingsStore, [], [], PersistedState>(
+    (persistedSet) => createSettingsStore((settings) => persistedSet({ settings }), get, set),
+    storageConfig
+  )(set, get, api);
+
+const useSettingsStore = create<SettingsStore>()(settingsInitializer);
 
 // Export custom hooks and selectors
 export const useSettings = () => useSettingsStore((state) => state.settings);
