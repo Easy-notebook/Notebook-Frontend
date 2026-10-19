@@ -1,3 +1,4 @@
+import { SettingsStorageMaintenance } from '@Services/settings/SettingsStorageMaintenance';
 import { ShortcutBinding } from '@Services/settings/ShortcutBinding';
 import { readSettingsState } from '@Services/settings/SettingsRecord';
 import { initialSettings } from '@Services/settings/SettingsDefaults';
@@ -18,8 +19,6 @@ import type {
   EditorSettings,
   Settings,
   SettingsWithTimestamp,
-  StorageItem,
-  StorageEstimate,
   PlatformKeyMappingConfig,
   PersistedState,
 } from '@Store/models';
@@ -31,9 +30,6 @@ const STORAGE_KEYS = {
   SETTINGS: 'easy-notebook-settings',
   BACKUP: 'easy-notebook-settings-backup',
 } as const;
-const TEST_STORAGE_KEY = '!!testQuota';
-const MIN_STORAGE_SPACE = 1024 * 50; // 50KB minimum storage requirement
-const CLEANUP_THRESHOLD = 1024 * 1024; // 1MB
 
 export interface SettingsStoreState {
   settings: Settings;
@@ -122,82 +118,15 @@ const PLATFORM_KEY_MAPPING: PlatformKeyMappingConfig = {
   },
 };
 
-// Initial settings with default values
-
-// Storage management utilities
-const storageManager = {
-  async getStorageEstimate(): Promise<StorageEstimate | null> {
-    if ('storage' in navigator && 'estimate' in navigator.storage) {
-      return await navigator.storage.estimate();
-    }
+const storageManager = new SettingsStorageMaintenance({
+  storage: () => localStorage,
+  estimate: async () => {
+    if ('storage' in navigator && 'estimate' in navigator.storage)
+      return navigator.storage.estimate();
     return null;
   },
-
-  async checkStorageSpace(): Promise<boolean> {
-    try {
-      const estimate = await this.getStorageEstimate();
-      if (estimate && estimate.quota && estimate.usage) {
-        return estimate.quota - estimate.usage > MIN_STORAGE_SPACE;
-      }
-
-      // Fallback: Use a small test string
-      const testData = 'x'.repeat(1024);
-      localStorage.setItem(TEST_STORAGE_KEY, testData);
-      localStorage.removeItem(TEST_STORAGE_KEY);
-      return true;
-    } catch (e) {
-      storeLog.error('Storage space check failed', { error: e });
-      return false;
-    }
-  },
-
-  async cleanupStorage(): Promise<boolean> {
-    try {
-      const keys = Object.keys(localStorage);
-      const oldSettingsPattern = /^easy-notebook-(?!settings)/;
-
-      // Get total size and sort by importance and age
-      const items: StorageItem[] = keys
-        .filter((key) => oldSettingsPattern.test(key))
-        .map((key) => {
-          const value = localStorage.getItem(key) || '';
-          let parsed: any = {};
-          try {
-            parsed = JSON.parse(value);
-          } catch {
-            // ignore parsing errors
-          }
-          return {
-            key,
-            size: value.length,
-            timestamp: parsed?.timestamp || 0,
-            importance: parsed?.importance || 0,
-          };
-        });
-
-      // Sort by importance (ascending) and age (oldest first)
-      items.sort((a, b) => {
-        if (a.importance !== b.importance) {
-          return a.importance - b.importance;
-        }
-        return a.timestamp - b.timestamp;
-      });
-
-      // Remove items until we free up enough space
-      let freedSpace = 0;
-      for (const item of items) {
-        localStorage.removeItem(item.key);
-        freedSpace += item.size;
-        if (freedSpace >= CLEANUP_THRESHOLD) break;
-      }
-
-      return true;
-    } catch (e) {
-      storeLog.error('Storage cleanup failed', { error: e });
-      return false;
-    }
-  },
-};
+  report: (message, error) => storeLog.error(message, { error }),
+});
 
 // Utility Functions
 const isValidUrl = (url: string): boolean => {

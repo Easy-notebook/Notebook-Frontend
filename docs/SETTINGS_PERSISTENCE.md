@@ -113,3 +113,16 @@ update action; bulk import/update currently performs structural validation only.
 Tests cover reserved combinations, modifier-order conflicts, malformed bindings, and
 all built-in bindings. Chromium verifies rejected updates do not mutate state/storage
 and the default Enter binding can be saved through the public action.
+
+## Explicit maintenance
+
+`SettingsStorageMaintenance` owns space estimation, a small storage capability probe,
+and the explicitly requested cleanup operation. Its bound public methods remain usable
+when returned and destructured by `useStorageManager`. A zero usage estimate is valid;
+when no estimate exists, the probe restores any pre-existing probe record. Cleanup retains
+the public selection policy (non-settings `easy-notebook-*` keys, least important/oldest
+first, stopping after the existing size threshold). Automatic persistence never invokes
+this broad cleanup. Metadata parsing is typed and non-numeric metadata sorts as zero.
+
+Unit tests cover detached calls, zero usage, probe preservation, failure reporting and
+cleanup ordering/isolation. Chromium exercises destructured methods from the public hook.

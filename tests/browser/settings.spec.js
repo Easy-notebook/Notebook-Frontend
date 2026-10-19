@@ -238,3 +238,14 @@ test('shortcut validation protects reserved bindings and permits existing Enter 
   expect(result.binding).toBe('Ctrl+Enter');
   expect(result.error).toBeNull();
 });
+
+test('storage maintenance hook methods remain callable after destructuring', async ({ page }) => {
+  await page.goto('/tests/browser/storage.html');
+  const result = await page.evaluate(async () => {
+    const { useStorageManager } = await import('/src/store/settingsStore.ts');
+    const { checkStorage, getStorageEstimate } = useStorageManager();
+    return { available: await checkStorage(), estimate: await getStorageEstimate() };
+  });
+  expect(result.available).toBe(true);
+  expect(result.estimate.quota).toBeGreaterThan(result.estimate.usage);
+});
