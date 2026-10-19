@@ -8,6 +8,14 @@ export interface ToastMessage {
 }
 
 export interface StreamPayload {
+  taskName?: string;
+  task?: string;
+  result?: unknown;
+  reason?: string;
+  stage?: string;
+  stageId?: string;
+  previousStage?: string;
+  details?: unknown;
   mode?: 'create' | 'step';
   phaseId?: string;
   index?: number;

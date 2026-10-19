@@ -1,3 +1,4 @@
+import { CapturedQAEvent } from '../../CapturedQAEvent';
 /**
  * Task Failed Action - Handles task_failed stream type
  * Notifies when a task fails
@@ -15,28 +16,17 @@ export class TaskFailedAction extends StreamAction {
     if (taskName) {
       console.error(`[TaskFailed] ${taskName}:`, error);
 
+      const captured = new CapturedQAEvent(
+        { type: 'task-failed', content: taskName, agent: 'task-manager', error },
+        payload.QId
+      );
+
       await showToast({
         message: `任务失败: ${taskName}`,
         type: 'error',
       });
 
-      // Record to agent memory
-      try {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        const state = useAIAgentStore.getState();
-        const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
-
-        if (runningQA) {
-          state.addToolCallToQA(runningQA.id, {
-            type: 'task-failed',
-            content: taskName,
-            agent: 'task-manager',
-            error: error,
-          });
-        }
-      } catch (err) {
-        console.error('Failed to record task failure:', err);
-      }
+      captured.record();
     }
   }
 }

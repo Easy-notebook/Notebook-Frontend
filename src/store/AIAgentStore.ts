@@ -1,7 +1,7 @@
 // src/store/AIAgentStore.ts
 import { create } from 'zustand';
 import { agentLog } from '@Utils/logger';
-import { ActionItem, QAItem } from '@Store/models/agent';
+import { ActionItem, QAItem, QAEvent } from '@Store/models/agent';
 
 // 定义事件类型
 // 定义事件类型
@@ -63,16 +63,7 @@ export interface AIAgentActions {
   addContentToAnswer: (qaId: string, content: string) => void;
   finishStreamingAnswer: (qaId: string, response?: string) => void;
   // Tool call logging for QA
-  addToolCallToQA: (
-    qaId: string,
-    toolCall: {
-      type?: string;
-      name?: string;
-      content?: string;
-      arguments?: string;
-      agent?: string;
-    }
-  ) => void;
+  addToolCallToQA: (qaId: string, toolCall: QAEvent) => void;
 }
 
 // 完整的 Store 类型
