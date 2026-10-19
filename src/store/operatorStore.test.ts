@@ -286,3 +286,63 @@ it('stops buffered events after cancellation during an asynchronous handler', as
   expect(io.handle).toHaveBeenCalledOnce();
   expect(stream.stream.locked).toBe(false);
 });
+
+it('refuses pre-cancelled admission without starting kernel or transport work', async () => {
+  const abort = new AbortController();
+  abort.abort();
+  const before = useOperatorStore.getState().operations;
+  await expect(
+    useOperatorStore.getState().submitOperation(null, operation, abort.signal)
+  ).resolves.toMatchObject({ accepted: false, reason: 'cancelled' });
+  expect(io.initialize).not.toHaveBeenCalled();
+  expect(io.send).not.toHaveBeenCalled();
+  expect(useOperatorStore.getState().operations).toBe(before);
+});
+it('cancels pending initialization from the submitter without opening a later connection', async () => {
+  let initialize!: (id: string) => void;
+  io.initialize.mockReturnValue(
+    new Promise<string>((resolve) => {
+      initialize = resolve;
+    })
+  );
+  const abort = new AbortController();
+  const pending = useOperatorStore.getState().submitOperation(null, operation, abort.signal);
+  abort.abort();
+  await expect(pending).resolves.toMatchObject({ accepted: false, reason: 'cancelled' });
+  expect(useOperatorStore.getState().isSendingOperation).toBe(false);
+  initialize('late');
+  await Promise.resolve();
+  expect(io.send).not.toHaveBeenCalled();
+});
+it('reclaims a late connection after submitter cancellation', async () => {
+  let connect!: (stream: ReadableStream<Uint8Array>) => void;
+  io.send.mockReturnValue(
+    new Promise<ReadableStream<Uint8Array>>((resolve) => {
+      connect = resolve;
+    })
+  );
+  const abort = new AbortController();
+  const pending = useOperatorStore.getState().submitOperation('notebook', operation, abort.signal);
+  abort.abort();
+  await expect(pending).resolves.toMatchObject({ accepted: false, reason: 'cancelled' });
+  const cancel = vi.fn();
+  connect(new ReadableStream<Uint8Array>({ cancel }));
+  await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce());
+});
+it('detaches submitter cancellation after acceptance while keeping the response stream active', async () => {
+  const transport = controlledStream();
+  io.send.mockResolvedValue(transport.stream);
+  const abort = new AbortController();
+  const receipt = await useOperatorStore
+    .getState()
+    .submitOperation('notebook', operation, abort.signal);
+  expect(receipt.accepted).toBe(true);
+  if (!receipt.accepted) throw new Error('Expected accepted operation');
+  abort.abort();
+  expect(useOperatorStore.getState().isSendingOperation).toBe(true);
+  transport.controller.enqueue(encoder.encode('{"type":"accepted-result"}'));
+  transport.controller.close();
+  await receipt.completion;
+  expect(io.handle).toHaveBeenCalledOnce();
+  expect(useOperatorStore.getState().isSendingOperation).toBe(false);
+});

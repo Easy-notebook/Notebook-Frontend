@@ -8,8 +8,8 @@ import {
 export type { CodeOutputPayload } from '@Services/notebook/CodeOutputSubmissionService';
 
 export class SendCodeOutputAction extends ActionBase {
-  async execute(_step: ExecutionStep): Promise<CodeOutputSubmissionResult> {
-    return CodeOutputSubmissionService.submitCurrentCell();
+  async execute(_step: ExecutionStep, signal?: AbortSignal): Promise<CodeOutputSubmissionResult> {
+    return CodeOutputSubmissionService.submitCurrentCell(signal);
   }
 }
 

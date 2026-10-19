@@ -139,3 +139,11 @@ to an unsaved notebook is accepted to support kernel initialization. Cancellatio
 notebook subscription immediately; ordinary completion releases it in finally without aborting
 already-completed work. Action implementations must still check the supplied signal around their
 own asynchronous side effects; this scope does not make non-cooperative code interruptible.
+
+Code-output submission forwards the action signal through the submission service and OperatorStore
+to OperationDispatcher as an admission signal. Pre-cancelled requests do not prepare missing code
+outputs or reserve an operation. Cancellation during kernel initialization or connection opening
+settles admission promptly and reclaims any late stream body. Once accepted, the caller's listener
+is detached: the response stream belongs to OperationDispatcher and remains governed by notebook
+identity and its own completion. Thus finishing the workflow that submitted an operation does not
+retroactively cancel an accepted operation. Backend work already started may still drain.

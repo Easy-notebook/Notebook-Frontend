@@ -44,7 +44,8 @@ export interface OperatorStoreActions {
   addOperation: (operation: Operation) => string;
   submitOperation: (
     notebookId: string | null,
-    operation: Operation
+    operation: Operation,
+    admissionSignal?: AbortSignal
   ) => Promise<OperationSubmission>;
   sendOperation: (notebookId: string | null, operation: Operation) => Promise<void>;
   getOperationHistory: () => Operation[];
@@ -115,7 +116,8 @@ const useOperatorStore = create<OperatorStore>((set, get) => {
      * @param notebookId - 笔记本ID
      * @param operation - 操作对象
      */
-    submitOperation: (notebookId, operation) => dispatcher.submit(notebookId, operation),
+    submitOperation: (notebookId, operation, admissionSignal) =>
+      dispatcher.submit(notebookId, operation, admissionSignal),
 
     sendOperation: async (notebookId: string | null, operation: Operation): Promise<void> => {
       const result = await dispatcher.submit(notebookId, operation);

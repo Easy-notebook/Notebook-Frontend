@@ -35,7 +35,7 @@ export class OperationDispatcher {
     }
     this.cancel();
   }
-  cancel(): void {
+  cancel(reason: unknown = new DOMException('Notebook operation cancelled', 'AbortError')): void {
     const attempt = this.current;
     if (!attempt) return;
     this.current = undefined;
@@ -43,7 +43,7 @@ export class OperationDispatcher {
     try {
       this.ports.busy(false);
     } finally {
-      attempt.controller.abort(new DOMException('Notebook operation cancelled', 'AbortError'));
+      attempt.controller.abort(reason);
     }
   }
   private assertCurrent(attempt: Attempt): void {
@@ -64,7 +64,19 @@ export class OperationDispatcher {
     }
   }
 
-  async submit(notebookId: string | null, operation: Operation): Promise<OperationSubmission> {
+  async submit(
+    notebookId: string | null,
+    operation: Operation,
+    admissionSignal?: AbortSignal
+  ): Promise<OperationSubmission> {
+    if (admissionSignal?.aborted) {
+      const reason = admissionSignal.reason;
+      return {
+        accepted: false,
+        reason: 'cancelled',
+        message: reason instanceof Error ? reason.message : String(reason),
+      };
+    }
     if (this.current) {
       const message = '正在处理其他操作，请稍后...';
       this.ports.refused(message);
@@ -76,6 +88,10 @@ export class OperationDispatcher {
       controller: new AbortController(),
     };
     this.current = attempt;
+    const cancelAdmission = () => {
+      if (this.current === attempt) this.cancel(admissionSignal?.reason);
+    };
+    admissionSignal?.addEventListener('abort', cancelAdmission, { once: true });
     const signal = attempt.controller.signal;
     const response: { unclaimed: ReadableStream<Uint8Array> | null } = { unclaimed: null };
     try {
@@ -124,6 +140,9 @@ export class OperationDispatcher {
         this.finish(attempt);
       }
       return { accepted: false, reason: 'failed', message };
+    } finally {
+      // Accepted response streams are owned by the dispatcher, independently of their submitter.
+      admissionSignal?.removeEventListener('abort', cancelAdmission);
     }
   }
   private async consume(

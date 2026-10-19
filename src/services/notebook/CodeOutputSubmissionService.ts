@@ -14,7 +14,8 @@ export type CodeOutputSubmissionResult = { success: true } | { success: false; e
 
 /** Shares output submission policy between workflow and public command adapters. */
 export class CodeOutputSubmissionService {
-  static async submitCurrentCell(): Promise<CodeOutputSubmissionResult> {
+  static async submitCurrentCell(signal?: AbortSignal): Promise<CodeOutputSubmissionResult> {
+    signal?.throwIfAborted();
     const state = useNotebookStore.getState();
     const cell = state.getCurrentCell();
     if (!cell) return { success: false, error: 'No current cell' };
@@ -35,12 +36,17 @@ export class CodeOutputSubmissionService {
     };
     try {
       // Dispatcher captures the payload and owns notebook changes during admission.
-      const receipt = await useOperatorStore.getState().submitOperation(state.notebookId, {
-        type: 'code_output',
-        payload,
-      });
+      const receipt = await useOperatorStore.getState().submitOperation(
+        state.notebookId,
+        {
+          type: 'code_output',
+          payload,
+        },
+        signal
+      );
       return receipt.accepted ? { success: true } : { success: false, error: receipt.message };
     } catch (error) {
+      signal?.throwIfAborted();
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
