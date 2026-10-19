@@ -27,10 +27,10 @@ export class ActionCommandHandler {
     const state = useStore.getState();
     const context: Partial<StreamActionContext> = {
       showToast,
-      notebookId: state.notebookId,
-      currentCellId: state.currentCellId,
+      notebookId: state.notebookId ?? undefined,
+      currentCellId: state.currentCellId ?? undefined,
       viewMode: state.viewMode,
-      currentPhaseId: state.currentPhaseId,
+      currentPhaseId: state.currentPhaseId ?? undefined,
       currentStepIndex: state.currentStepIndex,
     };
 
@@ -46,12 +46,12 @@ export class ActionCommandHandler {
       type: 'user',
       content: command,
       viewMode: state.viewMode,
-      cellId: state.currentCellId,
+      cellId: state.currentCellId ?? undefined,
       resolved: true,
     });
 
     // Also log to history (optional, but good for tracking)
-    aiAgentStore.addAction({
+    const actionId = aiAgentStore.addAction({
       type: 'system_event',
       content: `Command: ${command}`,
       result: '',
@@ -60,7 +60,6 @@ export class ActionCommandHandler {
       viewMode: state.viewMode,
       onProcess: true,
     });
-    const actionId = aiAgentStore.actions[0]?.id;
 
     // Execute the action command
     const result = await ActionCommandParser.executeActionCommand(command, context);
@@ -78,7 +77,7 @@ export class ActionCommandHandler {
       type: 'assistant',
       content: result.success ? result.message : `Error: ${result.message}\n${result.error || ''}`,
       viewMode: state.viewMode,
-      cellId: state.currentCellId,
+      cellId: state.currentCellId ?? undefined,
       resolved: true,
     });
 

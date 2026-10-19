@@ -30,6 +30,11 @@ export interface AIAgentState {
   qaList: QAItem[];
 }
 
+export type NewQAItem = Omit<QAItem, 'id' | 'timestamp' | 'onProcess'> & {
+  id?: string;
+  onProcess?: boolean;
+};
+
 // Store Actions 接口
 export interface AIAgentActions {
   // 设置当前视图
@@ -42,13 +47,13 @@ export interface AIAgentActions {
   // Actions CRUD
   addAction: (
     action: Omit<ActionItem, 'id' | 'timestamp' | 'onProcess'> & { onProcess?: boolean }
-  ) => void;
+  ) => string;
   removeAction: (actionId: string) => void;
   updateAction: (actionId: string, updates: Partial<ActionItem>) => void;
   setActionProcess: (actionId: string, onProcess: boolean) => void;
 
   // Q&A CRUD
-  addQA: (qa: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => void;
+  addQA: (qa: NewQAItem) => void;
   removeQA: (qaId: string) => void;
   updateQA: (qaId: string, updates: Partial<QAItem>) => void;
   setQAProcess: (qaId: string, onProcess: boolean) => void;
@@ -105,17 +110,19 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
       action.relatedQAIds = [];
     }
 
+    const id = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     set((state) => ({
       actions: [
         {
           ...action,
-          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id,
           timestamp: new Date().toTimeString().split(' ')[0],
           onProcess: action.onProcess || false,
         },
         ...state.actions,
       ],
     }));
+    return id;
   },
 
   removeAction: (actionId: string) => {
@@ -139,7 +146,7 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
   },
 
   // Q&A CRUD
-  addQA: (qa: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => {
+  addQA: (qa: NewQAItem) => {
     set((state) => ({
       qaList: [
         {
