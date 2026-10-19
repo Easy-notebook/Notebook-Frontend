@@ -16,7 +16,12 @@ export class NextStageHandler extends BaseTransitionHandler {
     return typeof apiResponse === 'object' && apiResponse._auto_trigger === 'NEXT_STAGE';
   }
 
-  async apply(state: WorkflowState, _apiResponse: any): Promise<WorkflowState> {
+  async apply(
+    state: WorkflowState,
+    _apiResponse: any,
+    signal?: AbortSignal
+  ): Promise<WorkflowState> {
+    signal?.throwIfAborted();
     const ns = this.deepCopyState(state);
     const p = ns.location.progress;
     const sp = p.stages;
@@ -95,7 +100,7 @@ export class NextStageHandler extends BaseTransitionHandler {
     console.log(`[NextStageHandler] Cleared and initialized steps for new stage: ${next.stage_id}`);
 
     this.updateFSMState(ns, WorkflowStateEnum.STAGE_RUNNING, WorkflowEvent.NEXT_STAGE);
-    if (next.title) await this.executeAction('new_section', next.title);
+    if (next.title) await this.executeAction('new_section', next.title, {}, signal);
     this.syncNotebookToState(ns);
     return ns;
   }

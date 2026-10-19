@@ -136,8 +136,10 @@ export class AsyncStateMachineAdapter {
 
       // Attempt auto-trigger for logic-only states (like STAGE_COMPLETED)
       const coordinator = getTransitionCoordinator();
-      const { state: newState, transitionName } =
-        await coordinator.autoTriggerNextTransition(workflowState);
+      const { state: newState, transitionName } = await coordinator.autoTriggerNextTransition(
+        workflowState,
+        signal
+      );
       signal?.throwIfAborted();
 
       if (transitionName) {
@@ -255,7 +257,8 @@ export class AsyncStateMachineAdapter {
         workflowState,
         parsedResponse,
         apiType,
-        true // auto-trigger enabled
+        true, // auto-trigger enabled
+        signal
       );
 
       signal?.throwIfAborted();

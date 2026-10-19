@@ -101,8 +101,7 @@ reads global notebook outputs and appends the same effects a second time. Both c
 check cancellation before post-execution indicators or debug metadata writes. Their initial
 clear-effects operation also starts from a detached snapshot. ScriptStore checks cancellation
 before action admission and before recording success, settling an existing action record through
-the error path. Other action implementations and transition-owned actions still require their
-own cancellation propagation.
+the error path. Other action implementations still require their own cancellation checks around internal awaits.
 
 ScriptCodeExecution now retains the structured ExecutionResult internally. The existing public
 execCodeCell boundary alone projects it to output/error/false; repair metadata never infers
@@ -113,3 +112,14 @@ completion callback. Metadata is merged with the live cell, preserving edits mad
 execution. Missing targets and mismatched operation notebook IDs do not clear effects or execute.
 Both entry points retain their existing return conventions. Unexpected execution exceptions
 still follow the existing false-return contract rather than manufacturing a successful result.
+
+
+Transition cancellation is invocation-scoped: adapter → coordinator (including automatic
+follow-up transitions) → handler → executeAction → ScriptStore. The signal is an optional
+argument, never mutable context on shared handler instances. Handlers that dispatch notebook
+actions check at entry and between actions; the coordinator checks before dispatch and after
+awaited results. Cancellation during a pending title action stops later description/section
+writes and rejects the transition without publishing its cloned state. Two concurrent calls
+through the same handler retain independent signals. Already-applied notebook actions are not
+rolled back. Direct Store transitions without an automatic-run signal retain their existing
+optimistic snapshot publication guard; they are not newly enrolled in automatic-run cancellation.

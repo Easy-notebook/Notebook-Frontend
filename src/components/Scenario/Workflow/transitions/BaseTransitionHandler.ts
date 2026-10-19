@@ -37,7 +37,11 @@ export abstract class BaseTransitionHandler {
   /**
    * Apply the transition to the state.
    */
-  abstract apply(state: WorkflowState, apiResponse: any): Promise<WorkflowState>;
+  abstract apply(
+    state: WorkflowState,
+    apiResponse: any,
+    signal?: AbortSignal
+  ): Promise<WorkflowState>;
 
   /**
    * Set the context (stores) for this handler.
@@ -55,14 +59,17 @@ export abstract class BaseTransitionHandler {
   async applyAndLog(
     state: WorkflowState,
     apiResponse: any,
-    _apiType?: string
+    _apiType?: string,
+    signal?: AbortSignal
   ): Promise<WorkflowState> {
+    signal?.throwIfAborted();
     const fromState = state.state.FSM.state || 'UNKNOWN';
 
     console.log(`[Transition] Applying: ${this.transitionName} (${fromState} → ${this.toState})`);
 
     // Apply the transition
-    const updatedState = await this.apply(state, apiResponse);
+    const updatedState = await this.apply(state, apiResponse, signal);
+    signal?.throwIfAborted();
 
     const toState = updatedState.state.FSM.state || 'UNKNOWN';
 
@@ -153,8 +160,10 @@ export abstract class BaseTransitionHandler {
   protected async executeAction(
     actionType: string,
     content = '',
-    kwargs: Record<string, any> = {}
+    kwargs: Record<string, any> = {},
+    signal?: AbortSignal
   ): Promise<void> {
+    signal?.throwIfAborted();
     if (!this.scriptStore) {
       console.debug(`[Action] Skipping ${actionType}: no script_store available`);
       return;
@@ -169,9 +178,11 @@ export abstract class BaseTransitionHandler {
         ...kwargs,
       };
 
-      await this.scriptStore.execAction(executionStep);
+      await this.scriptStore.execAction(executionStep, signal);
+      signal?.throwIfAborted();
       console.log(`[Action] Executed ${actionType}: ${content.slice(0, 50)}`);
     } catch (error) {
+      signal?.throwIfAborted();
       console.error(`[Action] Failed to execute ${actionType}:`, error);
       throw error;
     }

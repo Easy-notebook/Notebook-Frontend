@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createInitialStateJSON } from '@Store/models';
+import { createInitialStateJSON, WorkflowState } from '@Store/models';
 import { AsyncStateMachineAdapter } from './AsyncStateMachineAdapter';
 import { StateFactory } from '../states/StateFactory';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
@@ -79,4 +79,15 @@ it('propagates a stream failure after earlier actions without completing the tra
   await expect(adapter.step(createInitialStateJSON())).rejects.toBe(failure);
   expect(execAction).toHaveBeenCalledOnce();
   expect(transition).not.toHaveBeenCalled();
+});
+
+it('forwards the run signal when a logic-only state automatically transitions', async () => {
+  const abort = new AbortController();
+  const auto = vi
+    .spyOn(getTransitionCoordinator(), 'autoTriggerNextTransition')
+    .mockImplementation(async (state) => ({ state, transitionName: null }));
+  const snapshot = createInitialStateJSON();
+  snapshot.state.FSM.state = WorkflowState.STEP_COMPLETED;
+  await new AsyncStateMachineAdapter().step(snapshot, abort.signal);
+  expect(auto).toHaveBeenCalledExactlyOnceWith(expect.any(Object), abort.signal);
 });
