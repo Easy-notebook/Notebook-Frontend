@@ -990,3 +990,28 @@ describe('tab persistence failures versus absence', () => {
     expect(state().currentPreviewFiles).toEqual([]);
   });
 });
+
+describe('restored file path identity', () => {
+  it.each([
+    ' report.txt',
+    'report.txt ',
+    ' folder/中文 #1.txt ',
+    'folder/a::b.txt',
+    'literal%2Fname.txt',
+  ])('loads the exact stored key for %j', async (path) => {
+    io.fileRead.mockResolvedValueOnce(fileRecord('book', path));
+    const result = await state().loadFileById(`book::${path}`);
+    expect(io.fileRead).toHaveBeenCalledExactlyOnceWith('book', path);
+    expect(result?.id).toBe(`book::${path}`);
+    expect(result?.path).toBe(path);
+    expect(io.fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps surrounding spaces when a restored file needs a backend fetch', async () => {
+    const path = ' report.txt ';
+    const result = await state().loadFileById(`book::${path}`);
+    expect(io.fetch).toHaveBeenCalledExactlyOnceWith('book', path);
+    expect(io.fileSave).toHaveBeenCalledWith(expect.objectContaining({ filePath: path }));
+    expect(result?.path).toBe(path);
+  });
+});

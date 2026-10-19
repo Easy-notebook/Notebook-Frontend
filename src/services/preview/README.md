@@ -151,3 +151,15 @@ Save/clear failures also reject. Explicit callers can observe the failed commit,
 and a failed outgoing save prevents `switchToNotebook` from advancing preview
 selection. Background activation/close snapshot saves retain explicit logged
 rejection handling; they do not claim a successful persistence commit.
+
+## File identity roundtrip
+
+`storage/fileIdentity` owns the existing `notebookId::filePath` key format for
+preview loading, tab discovery, canonical file records and split-file records.
+Parsing splits only the first separator and never trims or decodes the remaining
+path. Thus `report.txt` and ` report.txt ` remain distinct stored resources.
+Incomplete IDs are rejected before file loading. The persisted key format is
+unchanged and requires no migration.
+
+Native browser coverage verifies that reads, content updates and deletes of the
+whitespace-bearing key leave the similarly named canonical and split files intact.

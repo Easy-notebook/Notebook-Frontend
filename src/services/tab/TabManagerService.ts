@@ -1,11 +1,10 @@
+import { makeFileId } from '@Storage/fileIdentity';
 import { persistenceService } from '@Services/persistence/instance';
 import { PreviewFile, FileType } from '@Store/models';
 import { storeLog } from '@Utils/logger';
 import { getFileType } from '@Storage/index';
 import { FileService } from '@Services/notebook/FileService';
 import { validateFileForTab } from '@Utils/fileValidation';
-
-const makeFileId = (notebookId: string, filePath: string) => `${notebookId}::${filePath}`;
 
 export class TabManagerService {
   private static instance: TabManagerService;

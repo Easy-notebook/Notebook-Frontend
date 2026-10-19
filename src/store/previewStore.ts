@@ -1,3 +1,4 @@
+import { makeFileId, parseFileId } from '@Storage/fileIdentity';
 // store/previewStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -111,18 +112,6 @@ export interface PreviewStoreActions {
  */
 export type PreviewStore = PreviewStoreState & PreviewStoreActions;
 
-// --- NotebookId-first small helpers (local, decoupled) ---
-const FILE_ID_SEP = '::';
-const makeFileId = (notebookId: string, filePath: string) =>
-  `${notebookId}${FILE_ID_SEP}${filePath}`;
-const parseFileId = (fileId: string): { notebookId: string; filePath: string } | null => {
-  const idx = fileId.indexOf(FILE_ID_SEP);
-  if (idx === -1) return null;
-  const notebookId = fileId.slice(0, idx);
-  const filePath = fileId.slice(idx + FILE_ID_SEP.length).trim();
-  if (!notebookId || !filePath) return null;
-  return { notebookId, filePath };
-};
 const hasNotebookId = (notebookId: string | null | undefined): notebookId is string => {
   if (!notebookId || typeof notebookId !== 'string') {
     storeLog.warn('Invalid notebook ID provided', { received: notebookId, expected: 'string' });

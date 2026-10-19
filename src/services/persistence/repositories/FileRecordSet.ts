@@ -1,3 +1,4 @@
+import { makeFileId } from '../../../storage/fileIdentity';
 import type { FileContentEntity, FileMetadataEntity } from '../../../storage/schema';
 import { DEFAULT_STORAGE_CONFIG } from '../../../storage/schema';
 import { getFileType } from '../../../storage/fileTypes';
@@ -18,7 +19,7 @@ export class FileRecordSet {
     ) {
       throw new Error('Invalid file size or storage threshold');
     }
-    const fileId = `${data.notebookId}::${data.filePath}`;
+    const fileId = makeFileId(data.notebookId, data.filePath);
     const hasRemoteReference =
       typeof data.remoteUrl === 'string' && data.remoteUrl.trim().length > 0;
     const isRemote = data.size > maxFileSize && !options.forceLocal && hasRemoteReference;

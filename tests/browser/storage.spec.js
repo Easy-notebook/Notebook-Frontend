@@ -3610,3 +3610,62 @@ test('an edit admitted after file deletion cannot recreate content or accounting
   expect(result.content).toBeUndefined();
   expect(result.notebook).toMatchObject({ fileCount: 0, totalSize: 0 });
 });
+
+test('file repositories preserve distinct whitespace-bearing keys through read update and delete', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, SplitFileRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository(provider);
+    const split = new SplitFileRepository(provider);
+    const paths = ['report.txt', ' report.txt '];
+    for (const path of paths) {
+      await files.saveFile({
+        notebookId: 'book',
+        filePath: path,
+        fileName: path,
+        content: path,
+        size: path.length,
+        lastModified: 'original',
+      });
+      await split.saveFile('book', path, {
+        name: path,
+        content: path,
+        type: 'text',
+        size: path.length,
+        lastModified: 'original',
+      });
+    }
+    const spaced = await files.getFile('book', paths[1]);
+    const splitSpaced = await split.getFile('book', paths[1]);
+    await files.updateFileContent('book', paths[1], 'edited spaced file');
+    const edited = await files.getFile('book', paths[1]);
+    const untouched = await files.getFile('book', paths[0]);
+    await files.deleteFile('book', paths[1]);
+    await split.deleteFile('book', paths[1]);
+    const deleted = await files.getFile('book', paths[1]);
+    const splitDeleted = await split.getFile('book', paths[1]);
+    const retained = await files.getFile('book', paths[0]);
+    const splitRetained = await split.getFile('book', paths[0]);
+    await provider.close();
+    return {
+      spaced,
+      splitSpaced,
+      edited,
+      untouched,
+      deleted,
+      splitDeleted,
+      retained,
+      splitRetained,
+    };
+  });
+  expect(result.spaced.metadata.id).toBe('book:: report.txt ');
+  expect(result.splitSpaced.id).toBe('book:: report.txt ');
+  expect(result.edited.content).toBe('edited spaced file');
+  expect(result.untouched.content).toBe('report.txt');
+  expect(result.deleted).toBeNull();
+  expect(result.splitDeleted).toBeNull();
+  expect(result.retained.content).toBe('report.txt');
+  expect(result.splitRetained.content).toBe('report.txt');
+});

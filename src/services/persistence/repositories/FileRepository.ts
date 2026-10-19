@@ -1,3 +1,4 @@
+import { makeFileId } from '../../../storage/fileIdentity';
 import { NotebookActivityRecord } from './NotebookActivityRecord';
 import { StorageConfiguration } from '../../../storage/StorageConfiguration';
 import {
@@ -75,7 +76,7 @@ export class FileRepository implements IFileRepository {
     content?: string;
     needsRemoteFetch?: boolean;
   } | null> {
-    const fileId = `${notebookId}::${filePath}`;
+    const fileId = makeFileId(notebookId, filePath);
     let result: Awaited<ReturnType<IFileRepository['getFile']>> = null;
     // Read the revision, update its access counters and read its content under one lock.
     // Separate transactions can overwrite a concurrent save with stale metadata.
@@ -170,7 +171,7 @@ export class FileRepository implements IFileRepository {
   }
 
   async deleteFile(notebookId: string, filePath: string): Promise<boolean> {
-    const fileId = `${notebookId}::${filePath}`;
+    const fileId = makeFileId(notebookId, filePath);
     await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
       const metadata = stores[DB_CONFIG.STORES.FILES_METADATA];
       const previous = await this.read<FileMetadataEntity | undefined>(metadata.get(fileId));
@@ -197,7 +198,7 @@ export class FileRepository implements IFileRepository {
     filePath: string,
     previous?: FileMetadataEntity
   ): Promise<void> {
-    const fileId = `${notebookId}::${filePath}`;
+    const fileId = makeFileId(notebookId, filePath);
     stores[DB_CONFIG.STORES.FILES_METADATA].delete(fileId);
     stores[DB_CONFIG.STORES.FILES_CONTENT].delete(fileId);
     if (previous) {
@@ -213,7 +214,7 @@ export class FileRepository implements IFileRepository {
   }
 
   async updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean> {
-    const fileId = `${notebookId}::${filePath}`;
+    const fileId = makeFileId(notebookId, filePath);
     let updated = false;
     await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
       const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];

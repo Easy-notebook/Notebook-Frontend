@@ -1,3 +1,4 @@
+import { makeFileId } from '../../../storage/fileIdentity';
 import { ISplitFileRepository, IStorageProvider } from '../interfaces';
 import { SplitFileEntity, DB_STORES } from '../../../storage/schema';
 
@@ -6,7 +7,7 @@ export class SplitFileRepository implements ISplitFileRepository {
 
   async saveFile(notebookId: string, filePath: string, fileData: any): Promise<void> {
     const splitFile: SplitFileEntity = {
-      id: `${notebookId}::${filePath}`,
+      id: makeFileId(notebookId, filePath),
       notebookId,
       filePath,
       fileName: fileData.name,
@@ -22,13 +23,13 @@ export class SplitFileRepository implements ISplitFileRepository {
   }
 
   async getFile(notebookId: string, filePath: string): Promise<SplitFileEntity | null> {
-    const id = `${notebookId}::${filePath}`;
+    const id = makeFileId(notebookId, filePath);
     const file = await this.storage.get<SplitFileEntity>(DB_STORES.SPLIT_FILES, id);
     return file || null;
   }
 
   async deleteFile(notebookId: string, filePath: string): Promise<void> {
-    const id = `${notebookId}::${filePath}`;
+    const id = makeFileId(notebookId, filePath);
     await this.storage.delete(DB_STORES.SPLIT_FILES, id);
   }
 
