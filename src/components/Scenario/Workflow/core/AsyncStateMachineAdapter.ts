@@ -52,17 +52,13 @@ export class AsyncStateMachineAdapter {
   constructor(apiClient?: APIClient, scriptStore?: ScriptStore) {
     console.log('[AsyncFSM] Initialized AsyncStateMachineAdapter');
 
-    // Inject dependencies into TransitionCoordinator
-    if (scriptStore || apiClient) {
-      const coordinator = getTransitionCoordinator();
-      // We need to pass notebookStore as well, but it's not in the constructor args yet.
-      // However, we can import it dynamically or assume it's available globally if needed.
-      // For now, let's just pass what we have.
-      coordinator.setContext({
-        scriptStore,
-        apiClient,
-      });
-      console.log('[AsyncFSM] Injected context into TransitionCoordinator');
+    // Omitted dependencies preserve the installed context. API injection must also
+    // reach cached and future states, which own the handlers that make requests.
+    if (scriptStore) {
+      getTransitionCoordinator().setContext({ scriptStore });
+    }
+    if (apiClient) {
+      this.setApiClient(apiClient);
     }
   }
 
