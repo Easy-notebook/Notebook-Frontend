@@ -158,3 +158,16 @@ away-and-back navigation. Workflow acquisition handles synchronous cancellation/
 while busy subscribers run. Run-all checks activity ownership before subsequent cell execution
 and avoids clearing a different notebook's phase marker during old cleanup. This aggregate is
 UI activity, not a kernel scheduler: CellExecutionSession still owns single-kernel admission.
+
+
+The public executeAction convenience helper normalizes/copies parameters before its lazy Store
+import, watches notebook ownership during that wait, and hands off to ScriptStore's common
+execution boundary. It no longer performs independent registry lookup or silently succeeds on
+unknown actions. The explicit action type selects the handler; object parameters cannot replace
+it. A supplied cancellation signal continues into execution, and helper admission releases as
+soon as ScriptStore synchronously acquires its own scope.
+
+CompleteWorkflowPlanningAction awaits its first-stage heading action before publishing
+STAGE_RUNNING. It prepares a detached snapshot, forwards cancellation, propagates heading errors,
+and discards a result if another workflow snapshot has replaced its input. This removes the
+unowned fire-and-forget action and mutation of already-published planning state.
