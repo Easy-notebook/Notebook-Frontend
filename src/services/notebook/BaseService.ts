@@ -4,8 +4,8 @@ import { HttpResponseError } from './HttpResponseError';
 
 export const API_BASE_URL = Backend_BASE_URL;
 
-/** Reads the response body once and keeps HTTP failures distinct from JSON failures. */
-export const handleResponse = async <T = any>(response: Response): Promise<T> => {
+/** Does not consume successful bodies: JSON, binary and streams share this gate. */
+async function assertSuccessfulResponse(response: Response): Promise<void> {
   if (!response.ok) {
     let message = `HTTP error! status: ${response.status}`;
     let cause: unknown;
@@ -34,7 +34,11 @@ export const handleResponse = async <T = any>(response: Response): Promise<T> =>
     apiLog.error('API error', { error });
     throw error;
   }
+}
 
+/** Reads JSON only after HTTP success has been established. */
+export const handleResponse = async <T = any>(response: Response): Promise<T> => {
+  await assertSuccessfulResponse(response);
   try {
     return await response.json();
   } catch (error) {
@@ -53,6 +57,10 @@ export const handleResponse = async <T = any>(response: Response): Promise<T> =>
 export class BaseService {
   protected static get baseUrl(): string {
     return API_BASE_URL;
+  }
+
+  protected static async assertSuccessfulResponse(response: Response): Promise<void> {
+    await assertSuccessfulResponse(response);
   }
 
   protected static async handleResponse<T>(response: Response): Promise<T> {
