@@ -63,3 +63,62 @@ it('rejects unsupported output formats before downloading a partial document', a
   expect(Packer.toBlob).not.toHaveBeenCalled();
   expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
 });
+
+async function documentText() {
+  const xml = await archive!.file('word/document.xml')!.async('string');
+  const document = new DOMParser().parseFromString(xml, 'application/xml');
+  expect(document.getElementsByTagName('parsererror')).toHaveLength(0);
+  return [...document.getElementsByTagName('w:t')].map((node) => node.textContent).join('');
+}
+it('retains hybrid prose, fenced code and outputs in the actual document', async () => {
+  await exportToDocx([
+    {
+      id: 'hybrid',
+      type: 'hybrid',
+      content: 'Before\n\n```python\nprint(7)\n```\n\nAfter',
+      outputs: [{ type: 'text', content: 'result 7' }],
+    },
+  ]);
+  const text = await documentText();
+  expect(text).toContain('Before');
+  expect(text).toContain('print(7)');
+  expect(text.indexOf('Before')).toBeLessThan(text.indexOf('print(7)'));
+  expect(text.indexOf('print(7)')).toBeLessThan(text.indexOf('After'));
+  expect(text.indexOf('After')).toBeLessThan(text.indexOf('result 7'));
+  expect(text.match(/result 7/g)).toHaveLength(1);
+  expect(text).not.toContain('```python');
+});
+it('retains output from an empty hybrid source and numeric zero', async () => {
+  await exportToDocx([
+    {
+      id: 'hybrid',
+      type: 'hybrid',
+      content: '',
+      outputs: [
+        { type: 'text', content: 0 },
+        { type: 'error', content: 'failure' },
+      ],
+    },
+  ]);
+  expect(await documentText()).toBe('0failure');
+});
+it('uses shared fence parsing for tilde fences and nested delimiters', async () => {
+  await exportToDocx([
+    {
+      id: 'md',
+      type: 'markdown',
+      content: 'Intro\n\n~~~~text\n# literal heading\n```inside```\n~~~~\n\nTail',
+    },
+  ]);
+  const text = await documentText();
+  expect(text).toBe('Intro# literal heading```inside```Tail');
+});
+
+it.each([
+  ['javascript', 'const message = `Hello ${user.name}!`;'],
+  ['jsx', 'const view = <div title="hello">{user.name}</div>;'],
+  ['python', 'message = f"Hello {user.name}!"'],
+])('preserves nested %s syntax tokens in document text', async (language, content) => {
+  await exportToDocx([{ id: 'code', type: 'code', language, content }]);
+  expect(await documentText()).toBe(content);
+});
