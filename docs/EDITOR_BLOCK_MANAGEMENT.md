@@ -26,3 +26,10 @@ publication. File-read failures are handled by the same drop error boundary as u
 Already-inserted content is not rolled back, and local File.text promises are not abortable.
 The existing upload control continues to own HTTP cancellation. This change does not replace
 the existing Markdown parser or asset insertion format.
+
+Uploaded assets are inserted as structured TipTap `markdownImage` or `fileAttachment` nodes.
+The shared node builder treats server-returned names as attribute data, preserving quotes,
+ampersands and angle brackets without interpolating them into HTML. Both kinds use one
+insertion path; insertion errors do not retry with a different HTML representation. Existing
+asset URLs, extension classification and Markdown payload conventions remain unchanged.
+Tests exercise the production node schemas and the wrapper's upload callback.

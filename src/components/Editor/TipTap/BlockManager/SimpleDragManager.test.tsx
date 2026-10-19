@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { Editor } from '@tiptap/react';
 import useStore from '@Store/notebookStore';
 import SimpleDragManager from './SimpleDragManager';
+import * as fileUtils from '@Utils/fileUtils';
 
 vi.mock('@/components/Editor/utils/markdownParser', () => ({
   parseMarkdownContent: (text: string) => text,
@@ -13,6 +14,7 @@ vi.mock('../../utils/cellConverters', () => ({
 const initial = useStore.getState();
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   useStore.setState(initial, true);
 });
 function setup() {
@@ -85,4 +87,40 @@ it('admits a new drop after an away-and-back transition invalidates the old one'
     dataTransfer: { files: [{ name: 'new.md', text: async () => 'new' }], types: ['Files'] },
   });
   await waitFor(() => expect(test.insertContent).toHaveBeenCalledExactlyOnceWith('<p>new</p>'));
+});
+
+it('inserts uploaded asset nodes once and ignores callbacks after unmount', async () => {
+  useStore.setState({ notebookId: 'a' });
+  let publish: Parameters<typeof fileUtils.handleFileUpload>[0]['onUpdate'];
+  vi.spyOn(fileUtils, 'handleFileUpload').mockImplementation(async (options) => {
+    publish = options.onUpdate;
+  });
+  const insertContent = vi.fn();
+  const chain = {
+    focus: () => chain,
+    insertContent: (node: unknown) => {
+      insertContent(node);
+      return chain;
+    },
+    run: () => true,
+  };
+  const editor = { chain: () => chain, isDestroyed: false } as unknown as Editor;
+  const view = render(
+    <SimpleDragManager editor={editor}>
+      <p>Editor</p>
+    </SimpleDragManager>
+  );
+  fireEvent.drop(view.container.firstChild!, {
+    dataTransfer: { files: [new File(['image'], 'photo.png')], types: ['Files'] },
+  });
+  await waitFor(() => expect(publish).toBeDefined());
+  act(() => publish?.('', { uploadedFiles: ['photo "quoted".png', 'notes.pdf'] }));
+  expect(insertContent.mock.calls.map(([node]) => node.type)).toEqual([
+    'markdownImage',
+    'fileAttachment',
+  ]);
+  expect(insertContent.mock.calls[0][0].attrs.alt).toBe('photo "quoted".png');
+  view.unmount();
+  publish?.('', { uploadedFiles: ['late.png'] });
+  expect(insertContent).toHaveBeenCalledTimes(2);
 });

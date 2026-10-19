@@ -5,7 +5,7 @@ import { Editor } from '@tiptap/react';
 import useStore from '@Store/notebookStore';
 import { handleFileUpload } from '@Utils/fileUtils';
 import { FileService } from '@Services/notebook/FileService';
-import { Backend_BASE_URL } from '@Config/base_url';
+import { createUploadedAssetNode } from './UploadedAssetNode';
 
 interface SimpleDragManagerProps {
   editor: Editor | null;
@@ -142,40 +142,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
             if (!ownsDrop()) return;
             (uploadedFiles || []).forEach((name) => {
               if (!ownsDrop()) return;
-              const lower = name.toLowerCase();
-              const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].some((ext) =>
-                lower.endsWith(ext)
-              );
-              const url = `${Backend_BASE_URL}/assets/${encodeURIComponent(notebookId)}/${encodeURIComponent(name)}`;
-              if (isImage) {
-                try {
-                  // 使用自定义的 markdownImage 节点，保证 TipTap 能稳定解析
-                  editor
-                    .chain()
-                    .focus()
-                    .insertContent(
-                      `<div data-type="markdown-image" data-src="${url}" data-alt="${name}" data-title="${name}" data-markdown="![${name}](${url})"></div>`
-                    )
-                    .run();
-                } catch {
-                  // 兜底为普通的 <img>，ImageExtension 也支持 parseHTML(img[src])
-                  editor
-                    .chain()
-                    .focus()
-                    .insertContent(`<img src="${url}" alt="${name}" title="${name}" />`)
-                    .run();
-                }
-              } else {
-                // 其他文件使用 file-attachment 节点，渲染为 LinkCell 卡片
-                const markdown = `[${name}](${url})`;
-                editor
-                  .chain()
-                  .focus()
-                  .insertContent(
-                    `<div data-type="file-attachment" data-markdown="${markdown}"></div>`
-                  )
-                  .run();
-              }
+              editor.chain().focus().insertContent(createUploadedAssetNode(notebookId, name)).run();
             });
           },
           cellId: '',
