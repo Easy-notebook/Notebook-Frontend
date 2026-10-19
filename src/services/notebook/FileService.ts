@@ -92,10 +92,11 @@ export class FileService extends BaseService {
   }
 
   // List files
-  static async listFiles(notebookId: string): Promise<FileListResponse> {
+  static async listFiles(notebookId: string, signal?: AbortSignal): Promise<FileListResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/list_files/${notebookId}`, {
         method: 'GET',
+        signal,
       });
       return await this.handleResponse<FileListResponse>(response);
     } catch (error) {

@@ -1,3 +1,5 @@
+import { useNotebookFileList } from '@Hooks/useNotebookFileList';
+import type { FileNode, FileNodeFile } from '@Services/notebook/FileListSession';
 import { useNotebookUploadControl } from '@Hooks/useNotebookUploadControl';
 import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 // moved to sections/LeftSideBar/Main/Workspace/FileExplorer/FileExplorer.tsx
@@ -8,12 +10,7 @@ import { Folder, FolderOpen, Download, Trash, Eye, RefreshCw, MoreHorizontal } f
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
 import { FileService } from '@Services/notebook/FileService';
-import {
-  fetchFileList,
-  handleFileUpload,
-  handleDownload,
-  handleDeleteFile,
-} from '@Utils/fileUtils';
+import { handleFileUpload, handleDownload, handleDeleteFile } from '@Utils/fileUtils';
 import usePreviewStore from '@Store/previewStore';
 import useStore from '@Store/notebookStore';
 import { FILE_PREVIEW_CONFIG } from '@LeftSidebar/shared/constants';
@@ -26,23 +23,6 @@ declare global {
     Backend_BASE_URL?: string;
   }
 }
-
-type FileNodeDirectory = {
-  name: string;
-  type: 'directory';
-  path: string;
-  children: FileNode[];
-};
-
-type FileNodeFile = {
-  name: string;
-  type: 'file';
-  path: string;
-  size?: number;
-  lastModified?: number | string;
-};
-
-type FileNode = FileNodeDirectory | FileNodeFile;
 
 /** 扩展 antd TreeDataNode，挂载原始文件数据 */
 type FileTreeDataNode = TreeDataNode & { file?: FileNode };
@@ -173,9 +153,10 @@ interface FileTreeProps {
 const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
   const tasks = useStore((s) => s.tasks);
 
-  const [files, setFiles] = useState<FileNode[] | null>(null);
-  const [treeData, setTreeData] = useState<FileTreeDataNode[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { state: fileList, refresh: fetchFileListWrapper } = useNotebookFileList(notebookId);
+  const processedTree = fileList.files;
+  const isLoading = fileList.status === 'loading';
+  const treeData = useMemo(() => toTreeData(processedTree), [processedTree]);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -252,24 +233,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   const utilsApi = useMemo(
     () => ({
-      listFiles: async (nid: string) => {
-        const resp: any = await FileService.listFiles(nid);
-        const mapNode = (f: any): any => ({
-          name: f.name,
-          size: f.size,
-          type: f.type,
-          lastModified: f.lastModified ?? 0,
-          path: f.path || f.name,
-          ...(f.type === 'directory'
-            ? { children: Array.isArray(f.children) ? f.children.map(mapNode) : [] }
-            : {}),
-        });
-        return {
-          status: resp.status,
-          message: resp.message,
-          files: Array.isArray(resp.files) ? resp.files.map(mapNode) : [],
-        } as { status: 'ok' | 'error'; message?: string; files?: any[] };
-      },
       getFilePreviewUrl: async (nid: string, filename: string) => {
         try {
           const base = window.Backend_BASE_URL ? window.Backend_BASE_URL.replace(/\/$/, '') : '';
@@ -301,32 +264,20 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     []
   );
 
-  const fetchFileListWrapper = useCallback(async () => {
-    if (!notebookId) return;
-    setIsLoading(true);
-    try {
-      await fetchFileList({
-        notebookId,
-        fileService: utilsApi as any,
-        setFileList: (list) => setFiles(list as FileNode[]),
-        toast,
-      });
-    } catch (e) {
-      console.error('Error fetching files:', e);
-      setFiles([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [notebookId, toast, utilsApi]);
-
   useEffect(() => {
-    fetchFileListWrapper();
-  }, [fetchFileListWrapper]);
+    if (fileList.status === 'error') {
+      toast({
+        title: 'Error',
+        description: `Failed to fetch file list: ${fileList.error}`,
+        variant: 'destructive',
+      });
+    }
+  }, [fileList, toast]);
 
   useEffect(() => {
     const h = () => fetchFileListWrapper();
-    window.addEventListener('refreshFileList', h as any);
-    return () => window.removeEventListener('refreshFileList', h as any);
+    window.addEventListener('refreshFileList', h);
+    return () => window.removeEventListener('refreshFileList', h);
   }, [fetchFileListWrapper]);
 
   // 监听父容器宽度 → 设置 tier
@@ -339,50 +290,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     });
     ro.observe(parent);
     return () => ro.disconnect();
-  }, []);
-
-  const processedTree: FileNode[] = useMemo(() => {
-    if (!files || files.length === 0) return [];
-    try {
-      if (Array.isArray(files) && typeof files[0] === 'object' && (files[0] as any).type) {
-        return files as FileNode[];
-      }
-      // 扁平 → 树
-      const tree: FileNode[] = [];
-      const ensureDir = (path: string[], idx: number, base: FileNode[]) => {
-        const name = path[idx];
-        const curPath = path.slice(0, idx + 1).join('/');
-        let dir = base.find((n) => n.type === 'directory' && n.name === name) as
-          | FileNodeDirectory
-          | undefined;
-        if (!dir) {
-          dir = { name, type: 'directory', path: curPath, children: [] };
-          base.push(dir);
-        }
-        return dir.children;
-      };
-      (files as any[]).forEach((item) => {
-        const pathStr = typeof item === 'string' ? item : item.path || item.name;
-        if (!pathStr) return;
-        const parts = pathStr.split('/').filter(Boolean);
-        let cur: FileNode[] = tree;
-        for (let i = 0; i < parts.length - 1; i++) cur = ensureDir(parts, i, cur);
-        const fname = parts[parts.length - 1];
-        if (!fname) return;
-        cur.push({
-          name: fname,
-          type: 'file',
-          path: pathStr,
-          size: typeof item === 'object' ? item.size : undefined,
-          lastModified: typeof item === 'object' ? item.lastModified : undefined,
-        } as FileNodeFile);
-      });
-      return tree;
-    } catch (e) {
-      console.error('process tree error', e);
-      return [];
-    }
-  }, [files]);
+  }, [notebookId]);
 
   const handlePreviewFile = useCallback(
     async (file: FileNodeFile) => {
@@ -549,10 +457,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     [notebookId, fetchFileListWrapper, toast, utilsApi]
   );
 
-  useEffect(() => {
-    setTreeData(toTreeData(processedTree));
-  }, [processedTree]);
-
   // 外层拖拽上传
   useEffect(() => {
     const el = dropZoneRef.current;
@@ -651,8 +555,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     );
   }
 
-  if (isLoading && !files) return <LoadingIndicator text="Loading files..." />;
-
   return (
     <div ref={rootRef} className="h-full flex flex-col" data-tier={widthTier}>
       <div className="relative flex-1 flex flex-col overflow-hidden">
@@ -727,6 +629,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
           )}
 
           <div className="px-2 mx-2 flex-1 overflow-y-auto">
+            {isLoading && <LoadingIndicator text="Loading files..." />}
             <Tree
               showIcon={false}
               treeData={treeData}

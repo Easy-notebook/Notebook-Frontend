@@ -43,6 +43,7 @@ export interface FileInfo {
   type: string;
   lastModified?: number;
   path?: string;
+  children?: FileInfo[];
 }
 
 export interface FileListResponse extends ApiResponse {
