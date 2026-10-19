@@ -84,8 +84,9 @@ export class WorkflowRunSession {
         if (!this.owns(run)) return;
         snapshot = next;
         this.ports.publish(snapshot);
-        if (!transition) return;
+        if (!this.owns(run) || !transition || terminal.has(snapshot.state.FSM.state)) return;
       }
+      throw new Error(`Workflow execution exceeded the step limit (${this.ports.limit})`);
     } catch (error) {
       if (this.owns(run)) this.ports.fail(error);
     } finally {

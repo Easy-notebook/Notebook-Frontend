@@ -64,3 +64,9 @@ an execution exception instead of returning success after logging it. A failed s
 insertion therefore prevents STEP_RUNNING publication; initialization stops before subsequent
 description/section actions if title update throws. Successful actions still execute once.
 The optional absence of a scriptStore retains headless transition behavior.
+
+Exhausting the configured step budget while a run still requests another transition is an
+explicit failure, with the configured limit included in error metadata. The final allowed step
+may finish normally with a terminal/paused state or no transition. Synchronous cancellation
+from a publication subscriber takes precedence over budget failure. The budget counts adapter
+step calls, including initial planning, and does not imply a limit on streamed actions per step.

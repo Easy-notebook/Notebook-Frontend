@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { createInitialStateJSON, WorkflowState, type StateJSON } from '@Store/models';
 import useNotebookStore from '@Store/notebookStore';
+import { WORKFLOW_MAX_ITERATIONS } from '@/config/workflow';
 import { useWorkflowStateMachine } from './workflowStateMachine';
 const mocks = vi.hoisted(() => ({ step: vi.fn(), navigate: vi.fn() }));
 vi.mock('../core/AsyncStateMachineAdapter', () => ({
@@ -82,4 +83,19 @@ it('publishes FAILED and releases execution when an owned step rejects', async (
   expect(useWorkflowStateMachine.getState().stateJSON.metadata?.error).toBe('planning failed');
   expect(useNotebookStore.getState().isExecuting).toBe(false);
   expect(mocks.step).toHaveBeenCalledOnce();
+});
+
+it('publishes an explicit failure when automatic execution exhausts its configured budget', async () => {
+  setup();
+  mocks.step.mockImplementation(async (snapshot: StateJSON) => {
+    snapshot.state.FSM.state = WorkflowState.STEP_RUNNING;
+    return [snapshot, 'continue'];
+  });
+  await useWorkflowStateMachine.getState().startWorkflow('planning');
+  expect(mocks.step).toHaveBeenCalledTimes(WORKFLOW_MAX_ITERATIONS);
+  expect(useWorkflowStateMachine.getState().currentState).toBe(WorkflowState.FAILED);
+  expect(useWorkflowStateMachine.getState().stateJSON.metadata?.error).toBe(
+    `Workflow execution exceeded the step limit (${WORKFLOW_MAX_ITERATIONS})`
+  );
+  expect(useNotebookStore.getState().isExecuting).toBe(false);
 });

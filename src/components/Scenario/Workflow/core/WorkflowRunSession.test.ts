@@ -104,10 +104,16 @@ it('stops after no transition and observes a bounded iteration count', async () 
   f.step.mockImplementation(async (snapshot) => [snapshot, 'continue']);
   await f.session.start(createInitialStateJSON());
   expect(f.step).toHaveBeenCalledTimes(2);
+  expect(f.ports.fail).toHaveBeenCalledExactlyOnceWith(
+    new Error('Workflow execution exceeded the step limit (2)')
+  );
+  expect(f.ports.busy).toHaveBeenLastCalledWith(false);
+  f.ports.fail.mockClear();
   f.step.mockClear();
   f.step.mockImplementation(async (snapshot) => [snapshot, null]);
   await f.session.start(createInitialStateJSON());
   expect(f.step).toHaveBeenCalledOnce();
+  expect(f.ports.fail).not.toHaveBeenCalled();
 });
 it('handles preparation failures and always releases busy state', async () => {
   const f = setup();
@@ -123,4 +129,37 @@ it('honors synchronous cancellation during publication before starting effects',
   await f.session.start(createInitialStateJSON());
   expect(f.ports.prepare).not.toHaveBeenCalled();
   expect(f.step).not.toHaveBeenCalled();
+});
+
+it.each([
+  WorkflowState.COMPLETE,
+  WorkflowState.FAILED,
+  WorkflowState.CANCELED,
+  WorkflowState.PAUSED,
+])('does not report exhaustion when the final allowed step reaches %s', async (status) => {
+  const f = setup(1);
+  f.step.mockImplementation(async (snapshot) => {
+    snapshot.state.FSM.state = status;
+    return [snapshot, 'finished'];
+  });
+  await f.session.start(createInitialStateJSON());
+  expect(f.step).toHaveBeenCalledOnce();
+  expect(f.ports.fail).not.toHaveBeenCalled();
+});
+
+it('does not report exhaustion when the final publication synchronously cancels', async () => {
+  const f = setup(1);
+  f.step.mockImplementation(async (snapshot) => [snapshot, 'continue']);
+  f.ports.publish.mockImplementationOnce(() => {}).mockImplementation(() => f.session.stop());
+  await f.session.start(createInitialStateJSON());
+  expect(f.step).toHaveBeenCalledOnce();
+  expect(f.ports.fail).not.toHaveBeenCalled();
+});
+
+it('accepts no-transition completion at the exact limit', async () => {
+  const f = setup(1);
+  f.step.mockImplementation(async (snapshot) => [snapshot, null]);
+  await f.session.start(createInitialStateJSON());
+  expect(f.step).toHaveBeenCalledOnce();
+  expect(f.ports.fail).not.toHaveBeenCalled();
 });
