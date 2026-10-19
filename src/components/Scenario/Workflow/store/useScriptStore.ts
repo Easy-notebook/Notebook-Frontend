@@ -171,12 +171,11 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   // Main Action Executor
   // ==============================================
   execAction: async (step: ExecutionStep): Promise<any> => {
-    if (!step?.action) {
-      console.error('[ScriptStore] execAction requires step with action property');
-      return;
+    if (typeof step?.action !== 'string' || !step.action.trim()) {
+      throw new Error('Action type must be a non-empty string');
     }
-
-    const actionType = step.action;
+    const request = structuredClone(step);
+    const actionType = request.action;
     console.log(`[ScriptStore] Executing action: ${actionType}`);
 
     // Record action execution to AIAgentStore
@@ -187,10 +186,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       const currentCellId = useNotebookStore.getState().getCurrentCellId();
 
       // Format action content with parameters
-      const actionContent = formatActionContent(actionType, step);
+      const actionContent = formatActionContent(actionType, request);
 
       // Add action to right sidebar
-      useAIAgentStore.getState().addAction({
+      actionId = useAIAgentStore.getState().addAction({
         type: 'system_event' as any,
         content: actionContent,
         result: '',
@@ -199,10 +198,6 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
         viewMode: viewMode,
         onProcess: true,
       });
-
-      // Get the action ID (the most recent action)
-      const actions = useAIAgentStore.getState().actions;
-      actionId = actions.length > 0 ? actions[0].id : null;
     } catch (error) {
       console.error('[ScriptStore] Failed to record action to sidebar:', error);
     }
@@ -214,25 +209,13 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
       // Get action class from registry
       const ActionClass = getActionClass(actionType);
 
-      if (!ActionClass) {
-        console.warn(`[ScriptStore] Unknown action type: ${actionType}`);
-
-        // Mark action as failed
-        if (actionId) {
-          const { useAIAgentStore } = await import('@Store/AIAgentStore');
-          useAIAgentStore.getState().updateAction(actionId, {
-            onProcess: false,
-            result: `Unknown action type: ${actionType}`,
-          });
-        }
-        return;
-      }
+      if (!ActionClass) throw new Error(`Unknown action type: ${actionType}`);
 
       // Create action instance with scriptStore reference
       const action = new ActionClass(get());
 
       // Execute action
-      const result = await action.execute(step);
+      const result = await action.execute(request);
 
       // Update action with result
       if (actionId) {

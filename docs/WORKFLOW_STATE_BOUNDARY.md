@@ -70,3 +70,12 @@ explicit failure, with the configured limit included in error metadata. The fina
 may finish normally with a terminal/paused state or no transition. Synchronous cancellation
 from a publication subscriber takes precedence over budget failure. The budget counts adapter
 step calls, including initial planning, and does not imply a limit on streamed actions per step.
+
+ScriptStore rejects missing, blank and non-string action types before creating an execution
+record. Unregistered action names reject through the same error path as action exceptions,
+settling their record as failed so the owning run cannot mistake unsupported work for success.
+Each invocation captures a detached request before its first asynchronous boundary. It updates
+the exact record ID returned by addAction, even when a synchronous subscriber inserts another
+record during publication. This protects request and record identity; it does not yet bind every
+action's internal asynchronous side effects to a notebook session or interpret structured
+failure return values.
