@@ -117,32 +117,18 @@ export class NotebookRepository implements INotebookRepository {
   async getAllNotebooks(
     options: { orderBy?: string; limit?: number; offset?: number } = {}
   ): Promise<NotebookEntity[]> {
-    // Note: IndexedDB getAll doesn't support sorting/pagination natively in a simple way without cursors.
-    // The IStorageProvider interface I defined is simple.
-    // For now, I will fetch all and sort/filter in memory, or I would need to expand IStorageProvider.
-    // Given the scale (likely < 1000 notebooks), in-memory sorting is acceptable for this refactor.
-    // Ideally, IStorageProvider should expose openCursor.
-
-    const notebooks = await this.storage.getAll<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS);
-
-    if (options.orderBy) {
-      notebooks.sort((a, b) => {
-        const valA = (a as any)[options.orderBy!];
-        const valB = (b as any)[options.orderBy!];
-        return valB - valA; // Descending
-      });
-    } else {
-      // Default sort by lastAccessedAt
-      notebooks.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt);
-    }
-
+    // Query options belong to this invocation, even while the provider is opening.
+    const { orderBy, limit, offset } = options;
+    const field = orderBy || 'lastAccessedAt';
+    const numericValue = (notebook: NotebookEntity): number => {
+      const value: unknown = Reflect.get(notebook, field);
+      return Number(value);
+    };
+    const stored = await this.storage.getAll<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS);
+    const notebooks = [...stored].sort((a, b) => numericValue(b) - numericValue(a));
     let result = notebooks;
-    if (options.offset) {
-      result = result.slice(options.offset);
-    }
-    if (options.limit) {
-      result = result.slice(0, options.limit);
-    }
+    if (offset) result = result.slice(offset);
+    if (limit) result = result.slice(0, limit);
 
     return result;
   }

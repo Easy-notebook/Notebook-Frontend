@@ -305,3 +305,42 @@ it.each(['metadata', 'snapshot', 'recalculate'])(
     expect(stores.files_content.put).not.toHaveBeenCalled();
   }
 );
+
+it('captures list ordering and pagination before awaiting the database', async () => {
+  let complete!: (records: unknown[]) => void;
+  const pending = new Promise<unknown[]>((resolve) => {
+    complete = resolve;
+  });
+  const getAll = vi.fn(() => pending);
+  const repository = new NotebookRepository({ getAll } as unknown as IStorageProvider);
+  const options = { orderBy: 'lastAccessedAt', offset: 1, limit: 1 };
+  const query = repository.getAllNotebooks(options);
+  options.orderBy = 'fileCount';
+  options.offset = 0;
+  options.limit = 3;
+  const records = [
+    { ...notebook, id: 'old', lastAccessedAt: 10, fileCount: 50 },
+    { ...notebook, id: 'recent', lastAccessedAt: 30, fileCount: 1 },
+    { ...notebook, id: 'middle', lastAccessedAt: 20, fileCount: 10 },
+  ];
+  complete(records);
+  expect((await query).map((record) => record.id)).toEqual(['middle']);
+  expect(records.map((record) => record.id)).toEqual(['old', 'recent', 'middle']);
+});
+
+it('preserves default ordering, stable ties and zero-limit behavior without mutating provider arrays', async () => {
+  const records = [
+    { ...notebook, id: 'old', lastAccessedAt: 10 },
+    { ...notebook, id: 'first', lastAccessedAt: 20 },
+    { ...notebook, id: 'second', lastAccessedAt: 20 },
+  ];
+  const repository = new NotebookRepository({
+    getAll: vi.fn().mockResolvedValue(records),
+  } as unknown as IStorageProvider);
+  expect((await repository.getAllNotebooks({ limit: 0 })).map((record) => record.id)).toEqual([
+    'first',
+    'second',
+    'old',
+  ]);
+  expect(records.map((record) => record.id)).toEqual(['old', 'first', 'second']);
+});

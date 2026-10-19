@@ -587,3 +587,10 @@ imports now apply `FileRecordOwnership.verifyAll` to their indexed file records.
 Matching a stored ID alone does not authorize replacement or import completion when
 the record's notebook/path disagrees. Corruption rejects before notebook/body writes
 or migration receipts. File-level and notebook-level operations use the same rule.
+
+## Notebook list query admission
+
+Notebook listing captures ordering, offset and limit before awaiting the provider.
+Mutating a caller-owned options object while storage opens cannot alter an admitted
+query. Sorting uses a copy of the provider's array and preserves stable ties, numeric
+ordering, the default last-access order and existing zero-limit pagination semantics.
