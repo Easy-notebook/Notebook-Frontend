@@ -5,6 +5,7 @@
 
 import { debounce } from 'lodash-es';
 import { v4 as uuid } from 'uuid';
+import { AutoSaveActivity } from './AutoSaveActivity';
 import { NotebookSnapshotDocument } from './NotebookSnapshotDocument';
 import { NotebookSaveQueue, type QueuedSnapshot } from './NotebookSaveQueue';
 import { NotebookSaveScheduler } from './NotebookSaveScheduler';
@@ -68,6 +69,7 @@ export class AutoSaveService implements IAutoSaveService {
   private readonly saveQueue = new NotebookSaveQueue();
   private readonly debouncedSave: ReturnType<typeof debounce>;
   private readonly scheduler: NotebookSaveScheduler;
+  private readonly activity = new AutoSaveActivity();
   private pauseCompletion: Promise<void> | null = null;
 
   // Event listeners
@@ -291,6 +293,7 @@ export class AutoSaveService implements IAutoSaveService {
 
     await this.processSaveQueue(notebookId);
 
+    const release = this.activity.begin(AutoSaveStatus.LOADING);
     try {
       this.publish(
         { status: AutoSaveStatus.LOADING, activeNotebookId: notebookId },
@@ -305,10 +308,12 @@ export class AutoSaveService implements IAutoSaveService {
       if (this.hasPending(notebookId)) throw new Error('Notebook changed while loading');
       this.writeBaseline.loaded(notebookId, generation, content);
 
+      release();
       this.publish({ status: AutoSaveStatus.IDLE, error: null }, 'load_completed', notebookId);
 
       return result;
     } catch (error) {
+      release();
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       this.publish({ status: AutoSaveStatus.IDLE, error: errorMsg }, 'load_failed', notebookId);
 
@@ -543,10 +548,12 @@ export class AutoSaveService implements IAutoSaveService {
   private async performSave(snapshot: QueuedSnapshot): Promise<void> {
     const { notebookId, notebookTitle, cells, tasks } = snapshot;
     let condition: NotebookSnapshotCondition | undefined;
+    let release = () => {};
     try {
       const document = new NotebookSnapshotDocument(snapshot);
       await this.initializeStorage();
       condition = await this.prepareSnapshotCondition(snapshot);
+      release = this.activity.begin(AutoSaveStatus.SYNCING);
       this.publish({ status: AutoSaveStatus.SYNCING }, 'save_started', notebookId);
 
       if (this.isDevelopment) {
@@ -602,6 +609,8 @@ export class AutoSaveService implements IAutoSaveService {
       }
       notebookLog.error('AutoSaveService: Save failed', { notebookId, error });
       throw error;
+    } finally {
+      release();
     }
   }
 
@@ -718,6 +727,7 @@ export class AutoSaveService implements IAutoSaveService {
     this.state = {
       ...this.state,
       ...updates,
+      status: this.activity.status ?? updates.status ?? this.state.status,
       isDirty: this.saveQueue.size > 0,
       pendingCount: this.saveQueue.size,
     };

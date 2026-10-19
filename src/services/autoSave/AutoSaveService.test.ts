@@ -966,3 +966,67 @@ it('preserves an active pause when a concurrent caller supplies an uncloneable e
   expect(service.isPaused()).toBe(true);
   expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledOnce();
 });
+
+it('keeps loading status until the last concurrent read finishes', async () => {
+  const firstGate = deferred();
+  const secondGate = deferred();
+  const firstStarted = deferred();
+  const secondStarted = deferred();
+  storage.files.getFile.mockImplementation(async (id) => {
+    (id === 'a' ? firstStarted : secondStarted).resolve();
+    await (id === 'a' ? firstGate : secondGate).promise;
+    return null;
+  });
+  const first = service.load('a');
+  const second = service.load('b');
+  await Promise.all([firstStarted.promise, secondStarted.promise]);
+  firstGate.resolve();
+  await first;
+  const whileSecondPending = service.getStatus();
+  secondGate.resolve();
+  await second;
+  expect(whileSecondPending).toBe(AutoSaveStatus.LOADING);
+  expect(service.getStatus()).toBe(AutoSaveStatus.IDLE);
+});
+
+it.each(['read', 'write'])(
+  'keeps the other activity visible when %s finishes first',
+  async (first) => {
+    const readGate = deferred();
+    const writeGate = deferred();
+    const readStarted = deferred();
+    const writeStarted = deferred();
+    storage.files.getFile.mockImplementationOnce(async () => {
+      readStarted.resolve();
+      await readGate.promise;
+      return null;
+    });
+    storage.notebooks.saveNotebookSnapshot.mockImplementationOnce(async () => {
+      writeStarted.resolve();
+      await writeGate.promise;
+      return { id: 'file' };
+    });
+    const loading = service.load('reader');
+    await readStarted.promise;
+    const saving = service.saveNow(snapshot('writer', 'writer'));
+    await writeStarted.promise;
+    expect(service.getStatus()).toBe(AutoSaveStatus.SYNCING);
+    let remainingStatus: AutoSaveStatus;
+    if (first === 'read') {
+      readGate.resolve();
+      await loading;
+      remainingStatus = service.getStatus();
+      writeGate.resolve();
+    } else {
+      writeGate.resolve();
+      await saving;
+      remainingStatus = service.getStatus();
+      readGate.resolve();
+    }
+    await Promise.all([loading, saving]);
+    expect(remainingStatus).toBe(
+      first === 'read' ? AutoSaveStatus.SYNCING : AutoSaveStatus.LOADING
+    );
+    expect(service.getStatus()).toBe(AutoSaveStatus.IDLE);
+  }
+);

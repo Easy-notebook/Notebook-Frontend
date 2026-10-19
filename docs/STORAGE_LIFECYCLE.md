@@ -88,3 +88,14 @@ same drain and can submit newer edits safely. Rejected input leaves scheduling a
 pending revisions unchanged; a rejected concurrent pause leaves the already-active pause intact.
 The regression reproduced a rejected pause nevertheless reaching paused before this ordering fix.
 The updated storage/autosave/session gate passes 326 tests across 20 files.
+
+## Concurrent activity projection
+
+AutoSaveActivity tracks independent read/write ownership for the public status projection.
+A pending write takes precedence over reads; otherwise status stays loading until the last read
+finishes. Each completion releases only its own token, including failure paths. save/load event
+snapshots use the aggregate status, so a load_completed event may legitimately still report syncing
+or loading. The event describes one operation; status describes current aggregate activity.
+This does not change save revisions, transaction admission, retry backoff, or the independent
+scheduling/lifecycle fields. It does not count time waiting for initialization or a scoped drain
+as a started load. Three regressions cover concurrent reads and both read/write completion orders.
