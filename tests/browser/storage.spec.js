@@ -939,6 +939,7 @@ test('local autosave and historical documents survive automatic cleanup and relo
     await provider.put(DB_CONFIG.STORES.NOTEBOOKS, {
       id: 'document',
       lastAccessedAt: 0,
+      accessCount: 0,
       retention: 'evictable',
     });
     const service = AutoSaveService.getInstance();
@@ -1412,12 +1413,16 @@ test('updating orphan content establishes parent ownership and counts every asso
       id: 'book::a',
       notebookId: 'book',
       filePath: 'a',
+      accessCount: 0,
+      lastAccessedAt: 0,
       size: 3,
     });
     await provider.put(S.FILES_METADATA, {
       id: 'book::b',
       notebookId: 'book',
       filePath: 'b',
+      accessCount: 0,
+      lastAccessedAt: 0,
       size: 7,
     });
     await new FileRepository(provider).updateFileContent('book', 'a', '你好');
@@ -4214,4 +4219,60 @@ for (const target of ['file', 'notebook']) {
       expect(result.after).toEqual(result.before);
     });
   }
+}
+
+for (const source of ['input', 'stored']) {
+  test(`snapshot and import reject corrupt ${source} access history without writing receipts`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (source) => {
+      const { IndexedDBStorageProvider, FileRepository, NotebookRepository, DB_CONFIG } =
+        window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const repository = new NotebookRepository(provider);
+      const S = DB_CONFIG.STORES;
+      const data = {
+        notebookId: 'book',
+        filePath: 'file',
+        fileName: 'file',
+        content: 'old',
+        size: 3,
+        lastModified: 'old',
+      };
+      await new FileRepository(provider).saveFile(data);
+      const saved = await provider.get(S.NOTEBOOKS, 'book');
+      if (source === 'stored') await provider.put(S.NOTEBOOKS, { ...saved, accessCount: NaN });
+      const incoming = source === 'input' ? { ...saved, lastAccessedAt: NaN } : saved;
+      const snapshot = () =>
+        Promise.all(
+          [S.NOTEBOOKS, S.FILES_METADATA, S.FILES_CONTENT, S.ACTIVITIES, S.MIGRATION_LEDGER].map(
+            (store) => provider.getAll(store)
+          )
+        );
+      const before = await snapshot();
+      const errors = [];
+      for (const action of [
+        () => repository.saveNotebook(incoming),
+        () => repository.saveNotebookSnapshot({ ...data, content: 'new' }, incoming),
+        () =>
+          repository.importNotebook(
+            incoming,
+            [{ ...data, filePath: 'imported', fileName: 'imported' }],
+            'history-test'
+          ),
+      ]) {
+        try {
+          await action();
+          errors.push(null);
+        } catch (error) {
+          errors.push(error.message);
+        }
+      }
+      const after = await snapshot();
+      await provider.close();
+      return { before, after, errors };
+    }, source);
+    expect(result.errors).toEqual(Array(3).fill('Invalid storage access history'));
+    expect(result.after).toEqual(result.before);
+  });
 }

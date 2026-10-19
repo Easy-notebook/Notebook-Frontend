@@ -1,3 +1,4 @@
+import { AccessHistory } from './AccessHistory';
 import { NotebookFileTotals } from './NotebookFileTotals';
 import type { FileSaveData, IStorageProvider, NotebookSaveData } from '../interfaces';
 import type {
@@ -21,7 +22,7 @@ export class NotebookImport {
     private readonly source?: string
   ) {
     if (source !== undefined && !source.trim()) throw new Error('Invalid migration source');
-    this.notebook = { ...notebook };
+    this.notebook = { ...notebook, ...new AccessHistory(notebook).toRecord() };
     for (const file of files) {
       if (!notebook.id || file.notebookId !== notebook.id || !file.filePath) {
         throw new Error('Invalid import notebook/file identity');
@@ -83,6 +84,7 @@ export class NotebookImport {
       });
       // Equal file bodies do not establish ownership when their parent is absent.
       if (incoming.length === 0) return;
+      const existingHistory = existing == null ? undefined : new AccessHistory(existing);
       if (missing.length === 0 && existing) {
         ledger?.complete(this.source!);
         return;
@@ -90,18 +92,13 @@ export class NotebookImport {
       const now = Date.now();
       const notebook: NotebookEntity = {
         ...(existing ?? this.notebook),
-        lastAccessedAt: existing
-          ? existing.lastAccessedAt
-          : current.reduce(
-              (latest, file) => Math.max(latest, file.lastAccessedAt),
-              this.notebook.lastAccessedAt
-            ),
-        accessCount: existing
-          ? existing.accessCount
-          : current.reduce(
-              (count, file) => Math.max(count, file.accessCount),
-              this.notebook.accessCount
-            ),
+        ...(
+          existingHistory ??
+          current.reduce(
+            (history, file) => history.merge(new AccessHistory(file)),
+            new AccessHistory(this.notebook)
+          )
+        ).toRecord(),
         retention: 'persistent',
         ...NotebookFileTotals.fromFiles([
           ...current,

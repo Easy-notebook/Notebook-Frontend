@@ -23,7 +23,7 @@ const file = {
 };
 
 function setup(
-  existing: unknown = { createdAt: 17 },
+  existing: unknown = { ...notebook, createdAt: 17 },
   files: Array<{ id: string; size: number }> = []
 ) {
   const readFiles = vi.fn(() => {
@@ -260,3 +260,18 @@ it.each([
   await expect(repository.getNotebook('book')).rejects.toThrow();
   expect(stores.notebooks.put).not.toHaveBeenCalled();
 });
+
+it.each(['input', 'stored'])(
+  'rejects corrupt %s access history before saving a snapshot',
+  async (source) => {
+    const invalid = { ...notebook, accessCount: NaN };
+    const { repository, stores } = setup(source === 'stored' ? invalid : notebook);
+    await expect(
+      repository.saveNotebookSnapshot(file, source === 'input' ? invalid : notebook)
+    ).rejects.toThrow('Invalid storage access history');
+    expect(stores.notebooks.put).not.toHaveBeenCalled();
+    expect(stores.files_metadata.put).not.toHaveBeenCalled();
+    expect(stores.files_content.put).not.toHaveBeenCalled();
+    expect(stores.activities.add).not.toHaveBeenCalled();
+  }
+);

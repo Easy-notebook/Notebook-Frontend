@@ -31,3 +31,12 @@ it('rejects counter overflow and invalid new timestamps', () => {
     'Invalid storage access history'
   );
 });
+
+it('merges independent observed maxima without incrementing or mutating either history', () => {
+  const older = new AccessHistory({ accessCount: 9, lastAccessedAt: 10 });
+  const newer = new AccessHistory({ accessCount: 2, lastAccessedAt: 20 });
+  expect(older.merge(newer).toRecord()).toEqual({ accessCount: 9, lastAccessedAt: 20 });
+  expect(newer.merge(older).toRecord()).toEqual(older.merge(newer).toRecord());
+  expect(older.observedAt(30).toRecord()).toEqual({ accessCount: 9, lastAccessedAt: 30 });
+  expect(older.toRecord()).toEqual({ accessCount: 9, lastAccessedAt: 10 });
+});

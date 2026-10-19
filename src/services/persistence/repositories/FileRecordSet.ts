@@ -1,3 +1,4 @@
+import { AccessHistory } from './AccessHistory';
 import { FileRecordOwnership } from './FileRecordOwnership';
 import { FileContentRecord } from './FileContentRecord';
 import { makeFileId } from '../../../storage/fileIdentity';
@@ -27,6 +28,9 @@ export class FileRecordSet {
       typeof data.remoteUrl === 'string' && data.remoteUrl.trim().length > 0;
     const isRemote = data.size > maxFileSize && !options.forceLocal && hasRemoteReference;
     const now = Date.now();
+    const history = previous
+      ? new AccessHistory(previous).observedAt(now)
+      : new AccessHistory({ accessCount: 1, lastAccessedAt: now });
     this.metadata = {
       ...previous,
       id: fileId,
@@ -37,8 +41,7 @@ export class FileRecordSet {
       size: data.size,
       lastModified: data.lastModified,
       cachedAt: previous?.cachedAt ?? now,
-      lastAccessedAt: now,
-      accessCount: previous?.accessCount ?? 1,
+      ...history.toRecord(),
       storageType: isRemote ? 'remote' : 'local',
       hasLocalContent: !isRemote,
       remoteUrl: data.remoteUrl,

@@ -51,6 +51,7 @@ export class NotebookRepository implements INotebookRepository {
     file?: FileRecordSet,
     condition?: NotebookSnapshotCondition
   ): Promise<NotebookEntity> {
+    const inputHistory = new AccessHistory(data);
     const names: string[] = [
       DB_CONFIG.STORES.NOTEBOOKS,
       DB_CONFIG.STORES.ACTIVITIES,
@@ -79,16 +80,14 @@ export class NotebookRepository implements INotebookRepository {
       }
       const retained = file ? files.filter((record) => record.id !== file.metadata.id) : files;
       const now = Date.now();
+      let history =
+        existing == null ? inputHistory : inputHistory.merge(new AccessHistory(existing));
+      if (file) history = history.merge(inputHistory.observedAt(now));
       notebook = {
         ...data,
         // Metadata inputs can be stale. File-derived counters belong to this transaction.
         ...NotebookFileTotals.fromFiles(file ? [...retained, file.metadata] : retained).toRecord(),
-        accessCount: Math.max(existing?.accessCount ?? 0, data.accessCount),
-        lastAccessedAt: Math.max(
-          existing?.lastAccessedAt ?? 0,
-          data.lastAccessedAt,
-          file ? now : 0
-        ),
+        ...history.toRecord(),
         retention:
           file || (existing && existing.retention !== 'evictable')
             ? 'persistent'

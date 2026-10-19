@@ -558,3 +558,15 @@ A malformed parent history therefore rolls back the file access and activity rec
 as well. Direct notebook reads and `updateAccessTime` use the same transition.
 The timestamp remains the supplied wall-clock access time, preserving existing
 behavior when the system clock changes.
+
+## Access-history admission during saves and imports
+
+`AccessHistory.merge` combines independently observed maxima without incrementing
+access count. Notebook metadata saves and snapshots validate both incoming and
+persisted history before merging; snapshot time participates in the same merge.
+`observedAt` updates time without incrementing count for content edits.
+
+Imports validate incoming history and preserve an existing target's valid history.
+When rebuilding an absent parent they merge the supplied history with existing file
+histories. Invalid histories reject before notebook/body writes or completion receipts;
+no zero defaults or numeric coercion silently repair corrupt stored history.

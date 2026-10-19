@@ -25,6 +25,17 @@ export class AccessHistory {
     });
   }
 
+  merge(other: AccessHistory): AccessHistory {
+    return new AccessHistory({
+      accessCount: Math.max(this.record.accessCount, other.record.accessCount),
+      lastAccessedAt: Math.max(this.record.lastAccessedAt, other.record.lastAccessedAt),
+    });
+  }
+
+  observedAt(timestamp: number): AccessHistory {
+    return new AccessHistory({ ...this.record, lastAccessedAt: timestamp });
+  }
+
   toRecord(): AccessHistoryRecord {
     return { ...this.record };
   }
