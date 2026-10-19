@@ -1,16 +1,10 @@
+import { readSettingsState } from './SettingsRecord';
 import type { PersistStorage, StorageValue } from 'zustand/middleware';
 import type { PersistedState, SettingsWithTimestamp } from '@Store/models/settings';
 import { encrypt, decrypt } from '@Utils/encryption';
 
 const object = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
-
-/** Validates the persistence envelope and credential boundary; migrations own settings defaults. */
-export function readSettingsState(value: unknown): PersistedState {
-  if (!object(value) || !object(value.settings) || typeof value.settings.apiKey !== 'string')
-    throw new Error('Invalid persisted settings payload');
-  return value as unknown as PersistedState;
-}
 
 export class UnsupportedSettingsVersionError extends Error {
   constructor(
@@ -58,7 +52,7 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
     state: PersistedState,
     direction: 'encrypt' | 'decrypt'
   ): Promise<PersistedState> {
-    const captured = structuredClone(readSettingsState(state));
+    const captured = structuredClone(readSettingsState(state, direction === 'decrypt'));
     const settings = captured.settings!;
     const transform =
       direction === 'encrypt'
@@ -70,7 +64,7 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
 
   private async backup(): Promise<StorageValue<PersistedState> | null> {
     const state = await this.dependencies.readBackup((candidate) =>
-      this.transform(readSettingsState(candidate), 'decrypt')
+      this.transform(readSettingsState(candidate, false), 'decrypt')
     );
     return state === null
       ? null
@@ -115,8 +109,11 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
           throw new Error('Invalid settings storage envelope');
         assertSupportedSettingsVersion(value.version, this.dependencies.version);
         return {
-          state: await this.transform(readSettingsState(value.state), 'decrypt'),
-          version: value.version as number | undefined,
+          state: await this.transform(
+            readSettingsState(value.state, value.version !== this.dependencies.version),
+            'decrypt'
+          ),
+          version: (value.version as number | undefined) ?? 0,
         };
       } catch (error) {
         if (error instanceof UnsupportedSettingsVersionError) throw error;

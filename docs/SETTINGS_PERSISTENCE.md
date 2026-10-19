@@ -79,10 +79,23 @@ Unit tests also cover version changes during encryption, backup creation and quo
 unreadable backup candidates, timestamp collisions and foreign-key retention. Chromium
 confirms recovery from an older encrypted backup when the newest ciphertext is invalid.
 
-The envelope/credential guard is not a complete settings-field schema. Cross-tab writer
-coordination, explicit save-status UI beyond the existing error field, and broader backup
-lifecycle improvements remain separate work.
+`SettingsRecord` validates all declared preference fields, nested objects, enum values
+and finite numeric fields without coercion. Current primary records, backup candidates,
+writes and runtime updates require complete settings. Historical primary records may
+omit fields for migration, but supplied fields must already have valid types; migrated
+results must pass the complete schema. Unversioned envelopes are admitted as version zero
+so they cannot bypass migration. Unknown extension fields are preserved. Shared defaults
+live in `SettingsDefaults`, independent of the Store.
+
+This is structural validation, not a new URL/shortcut/business policy: string fields
+retain their existing accepted domain. Cross-tab writer coordination, explicit save-status
+UI beyond the existing error field, and broader backup lifecycle improvements remain
+separate work.
 
 Controller tests cover async rejection, synchronous validation and superseded failures.
 Chromium verifies that transient controls cause no writes and a failed void preference
 action reports its error with exactly one primary write attempt.
+
+Schema tests cover malformed nested fields, enum values, non-finite numbers, historical
+partial records and malformed primary recovery. Chromium verifies invalid current data
+cannot hydrate and malformed runtime updates leave state and storage unchanged.

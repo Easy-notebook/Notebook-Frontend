@@ -1,3 +1,4 @@
+import { initialSettings } from './SettingsDefaults';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { SettingsBackupRepository } from './SettingsBackupRepository';
 import { SettingsPersistenceStorage } from './SettingsPersistenceStorage';
@@ -6,8 +7,8 @@ import type { SettingsWithTimestamp } from '@Store/models/settings';
 beforeEach(() => localStorage.clear());
 
 it('recovers an older decryptable candidate without deleting malformed or unreadable backups', async () => {
-  localStorage.setItem('backup-1', JSON.stringify({ apiKey: 'valid' }));
-  localStorage.setItem('backup-2', JSON.stringify({ apiKey: 'broken' }));
+  localStorage.setItem('backup-1', JSON.stringify({ ...initialSettings, apiKey: 'valid' }));
+  localStorage.setItem('backup-2', JSON.stringify({ ...initialSettings, apiKey: 'broken' }));
   localStorage.setItem('backup-3', '{broken');
   const report = vi.fn();
   const backups = new SettingsBackupRepository(() => localStorage, 'backup', report);
@@ -24,7 +25,7 @@ it('recovers an older decryptable candidate without deleting malformed or unread
   });
   expect(await storage.getItem('primary')).toEqual({
     version: 2,
-    state: { settings: { apiKey: 'plaintext' } },
+    state: { settings: { ...initialSettings, apiKey: 'plaintext' } },
   });
   expect(report).toHaveBeenCalledTimes(2);
   expect(localStorage.length).toBe(3);

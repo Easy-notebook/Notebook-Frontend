@@ -210,3 +210,23 @@ it.each(['encryption', 'backup', 'quota retry'])(
     if (stage === 'encryption') expect(writeBackup).not.toHaveBeenCalled();
   }
 );
+
+it('recovers malformed current preference fields from a validated backup without changing the primary', async () => {
+  const { storage, readBackup } = setup();
+  const raw = JSON.stringify({
+    ...envelope(),
+    state: { settings: { ...settings(), syncEnabled: 'false' } },
+  });
+  localStorage.setItem('settings', raw);
+  readBackup.mockImplementation((decode) =>
+    decode({ settings: { ...settings(), apiKey: 'encoded:test-key' } })
+  );
+  expect(await storage.getItem('settings')).toEqual(envelope());
+  expect(localStorage.getItem('settings')).toBe(raw);
+});
+
+it('treats an unversioned historical envelope as version zero for migration', async () => {
+  const { storage } = setup();
+  localStorage.setItem('settings', JSON.stringify({ state: { settings: { apiKey: '' } } }));
+  expect((await storage.getItem('settings'))?.version).toBe(0);
+});

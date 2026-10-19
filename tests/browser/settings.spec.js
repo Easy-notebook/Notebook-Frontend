@@ -43,44 +43,46 @@ test('settings preserve plaintext runtime values and encrypted storage across re
   expect(restored).toEqual(before.runtime);
 });
 
-test('version-zero settings migrate once without double-encrypting credentials', async ({
-  page,
-}) => {
-  await page.goto('/tests/browser/storage.html');
-  const result = await page.evaluate(async () => {
-    const { encrypt, decrypt } = await import('/src/utils/encryption.ts');
-    localStorage.setItem(
-      'easy-notebook-settings',
-      JSON.stringify({
-        state: {
-          settings: {
-            apiKey: await encrypt('migration-test-key'),
-            baseUrl: 'https://legacy.example.test',
-            language: 'en',
+for (const version of [0, undefined]) {
+  test(`settings version ${version ?? 'missing'} migrates once without double-encrypting credentials`, async ({
+    page,
+  }) => {
+    await page.goto('/tests/browser/storage.html');
+    const result = await page.evaluate(async (version) => {
+      const { encrypt, decrypt } = await import('/src/utils/encryption.ts');
+      localStorage.setItem(
+        'easy-notebook-settings',
+        JSON.stringify({
+          state: {
+            settings: {
+              apiKey: await encrypt('migration-test-key'),
+              baseUrl: 'https://legacy.example.test',
+              language: 'en',
+            },
           },
-        },
-        version: 0,
-      })
-    );
-    const { default: store } = await import('/src/store/settingsStore.ts');
-    await store.persist.rehydrate();
-    const saved = JSON.parse(localStorage.getItem('easy-notebook-settings'));
-    return {
-      runtime: store.getState().settings,
-      version: saved.version,
-      decoded: await decrypt(saved.state.settings.apiKey),
-    };
+          version,
+        })
+      );
+      const { default: store } = await import('/src/store/settingsStore.ts');
+      await store.persist.rehydrate();
+      const saved = JSON.parse(localStorage.getItem('easy-notebook-settings'));
+      return {
+        runtime: store.getState().settings,
+        version: saved.version,
+        decoded: await decrypt(saved.state.settings.apiKey),
+      };
+    }, version);
+    expect(result.runtime).toMatchObject({
+      apiKey: 'migration-test-key',
+      language: 'en',
+      apiTimeout: 30000,
+      theme: 'system',
+      editorSettings: { editorType: 'tiptap' },
+    });
+    expect(result.version).toBe(2);
+    expect(result.decoded).toBe('migration-test-key');
   });
-  expect(result.runtime).toMatchObject({
-    apiKey: 'migration-test-key',
-    language: 'en',
-    apiTimeout: 30000,
-    theme: 'system',
-    editorSettings: { editorType: 'tiptap' },
-  });
-  expect(result.version).toBe(2);
-  expect(result.decoded).toBe('migration-test-key');
-});
+}
 
 test('future settings survive hydration and an attempted API settings update', async ({ page }) => {
   await page.goto('/tests/browser/storage.html');
@@ -117,9 +119,10 @@ test('backup recovery skips an unreadable newest ciphertext', async ({ page }) =
   const result = await page.evaluate(async () => {
     const { encrypt } = await import('/src/utils/encryption.ts');
     const prefix = 'easy-notebook-settings-backup';
+    const { initialSettings } = await import('/src/services/settings/SettingsDefaults.ts');
     localStorage.setItem(
       `${prefix}-1`,
-      JSON.stringify({ apiKey: await encrypt('older-key'), language: 'en' })
+      JSON.stringify({ ...initialSettings, apiKey: await encrypt('older-key'), language: 'en' })
     );
     localStorage.setItem(`${prefix}-2`, JSON.stringify({ apiKey: 'invalid-ciphertext' }));
     const { default: store } = await import('/src/store/settingsStore.ts');
@@ -169,4 +172,37 @@ test('transient controls do not write settings and void preference actions repor
     }
   });
   expect(result).toEqual({ afterControls: [], attempts: 1, error: 'test persistence failure' });
+});
+
+test('malformed current settings cannot hydrate or be introduced through runtime updates', async ({
+  page,
+}) => {
+  await page.goto('/tests/browser/storage.html');
+  const result = await page.evaluate(async () => {
+    const { initialSettings } = await import('/src/services/settings/SettingsDefaults.ts');
+    const raw = JSON.stringify({
+      version: 2,
+      state: { settings: { ...initialSettings, syncEnabled: 'false' } },
+    });
+    localStorage.setItem('easy-notebook-settings', raw);
+    const { default: store } = await import('/src/store/settingsStore.ts');
+    await store.persist.rehydrate();
+    const hydrated = store.persist.hasHydrated();
+    let error;
+    try {
+      store.getState().batchUpdateSettings({ editorSettings: null });
+    } catch (caught) {
+      error = caught.message;
+    }
+    return {
+      hydrated,
+      error,
+      runtime: store.getState().settings,
+      preserved: localStorage.getItem('easy-notebook-settings') === raw,
+    };
+  });
+  expect(result.hydrated).toBe(false);
+  expect(result.error).toContain('settings.editorSettings');
+  expect(result.runtime.editorSettings.editorType).toBe('tiptap');
+  expect(result.preserved).toBe(true);
 });

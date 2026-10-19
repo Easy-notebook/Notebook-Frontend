@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest';
-import type { Settings } from '@Store/models/settings';
+import { initialSettings } from './SettingsDefaults';
 import { SettingsUpdateController } from './SettingsUpdateController';
 
-const settings = { language: 'zh' } as Settings;
+const settings = initialSettings;
 
 it('reports asynchronous persistence failure once and preserves rejection for awaiting callers', async () => {
   const failure = new Error('storage full');
@@ -42,4 +42,15 @@ it('ignores a superseded asynchronous failure and allows subsequent updates', as
   expect(report.mock.calls).toEqual([[null], [null]]);
   await updates.update((state) => state);
   expect(persist).toHaveBeenCalledTimes(3);
+});
+
+it('rejects malformed runtime updates before changing state or writing storage', () => {
+  const persist = vi.fn();
+  const report = vi.fn();
+  const updates = new SettingsUpdateController(() => settings, persist, report);
+  expect(() => updates.update((state) => ({ ...state, apiTimeout: NaN }))).toThrow(
+    'settings.apiTimeout'
+  );
+  expect(persist).not.toHaveBeenCalled();
+  expect(report).toHaveBeenCalledWith('Invalid settings field: settings.apiTimeout');
 });

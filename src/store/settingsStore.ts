@@ -1,3 +1,5 @@
+import { readSettingsState } from '@Services/settings/SettingsRecord';
+import { initialSettings } from '@Services/settings/SettingsDefaults';
 import { SettingsBackupRepository } from '@Services/settings/SettingsBackupRepository';
 // store/settingsStore.ts
 import { create, type StoreApi, type StateCreator } from 'zustand';
@@ -6,7 +8,6 @@ import { persist, type PersistOptions } from 'zustand/middleware';
 import {
   SettingsPersistenceStorage,
   assertSupportedSettingsVersion,
-  readSettingsState,
 } from '@Services/settings/SettingsPersistenceStorage';
 import { useMemo } from 'react';
 import { storeLog } from '@Utils/logger';
@@ -33,7 +34,6 @@ const TEST_STORAGE_KEY = '!!testQuota';
 const MIN_STORAGE_SPACE = 1024 * 50; // 50KB minimum storage requirement
 const MAX_SHORTCUT_KEYS = 3; // Maximum number of keys in a shortcut combination
 const CLEANUP_THRESHOLD = 1024 * 1024; // 1MB
-const DEFAULT_API_URL = 'https://api.example.com';
 
 export interface SettingsStoreState {
   settings: Settings;
@@ -126,36 +126,6 @@ const PLATFORM_KEY_MAPPING: PlatformKeyMappingConfig = {
 const RESERVED_SHORTCUTS = new Set(['Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z']);
 
 // Initial settings with default values
-const initialSettings: Settings = {
-  apiKey: '',
-  baseUrl: DEFAULT_API_URL,
-  apiTimeout: 30000,
-  markdownPreferences: {
-    autoFormat: true,
-    syntaxHighlighting: true,
-    lineNumbers: false,
-  },
-  editorSettings: {
-    editorType: 'tiptap',
-    defaultLanguage: 'python',
-    kernel: 'local',
-    autoSave: true,
-    autoComplete: true,
-    autoFormat: true,
-    showLineNumbers: true,
-  },
-  shortcuts: {
-    newCell: 'Ctrl+Enter',
-    runCell: 'Shift+Enter',
-    deleteCell: 'Ctrl+D',
-    formatCode: 'Alt+F',
-    saveFile: 'Ctrl+S',
-  },
-  theme: 'system',
-  language: 'zh',
-  syncEnabled: false,
-  lastSyncTime: null,
-};
 
 // Storage management utilities
 const storageManager = {
@@ -410,7 +380,7 @@ const storageConfig: PersistOptions<SettingsStore, PersistedState, Promise<void>
       }
     }
 
-    return migratedState;
+    return readSettingsState(migratedState, false);
   },
 
   onRehydrateStorage: () => (_state, error) => {
