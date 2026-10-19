@@ -532,3 +532,16 @@ validated stored identity rather than overwriting it with request fields.
 Notebook clearing remains one transaction: if any record has conflicting ownership,
 all earlier deletions and accounting changes roll back. This check concerns identity;
 it does not claim to validate all metadata fields or accounting values.
+
+## Notebook file accounting
+
+`NotebookFileTotals` owns file-count and byte-total validation, accumulation and
+adjustment. File mutations, notebook snapshots, imports, statistics and recalculation
+share this model. Stored values and each file size must be nonnegative safe integers;
+deltas must be signed safe integers, and both aggregate and adjustment overflow reject.
+Valid decrements retain the public zero-floor behavior.
+
+Invalid values are not coerced to zero or concatenated as strings. Validation errors
+propagate through the transaction owner, rolling back body, metadata, notebook and
+activity writes together. Explicit recalculation derives totals from valid file sizes;
+it does not trust the notebook's previous totals.

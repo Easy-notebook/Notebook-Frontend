@@ -1,3 +1,4 @@
+import { NotebookFileTotals } from './NotebookFileTotals';
 import type { FileSaveData, IStorageProvider, NotebookSaveData } from '../interfaces';
 import type {
   FileContentEntity,
@@ -102,10 +103,10 @@ export class NotebookImport {
               this.notebook.accessCount
             ),
         retention: 'persistent',
-        fileCount: current.length + missing.length,
-        totalSize:
-          current.reduce((sum, file) => sum + file.size, 0) +
-          missing.reduce((sum, file) => sum + file.metadata.size, 0),
+        ...NotebookFileTotals.fromFiles([
+          ...current,
+          ...missing.map((file) => file.metadata),
+        ]).toRecord(),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       };

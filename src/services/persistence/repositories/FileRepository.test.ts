@@ -8,6 +8,7 @@ function setup(
     id: 'book::note.json',
     notebookId: 'book',
     filePath: 'note.json',
+    size: 0,
     hasLocalContent: true,
     accessCount: 2,
   },

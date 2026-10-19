@@ -544,6 +544,7 @@ test('migrated file reads retain old plain payloads and list remote references w
       id: 'a::old',
       notebookId: 'a',
       filePath: 'old',
+      size: new Blob(['old plain payload']).size,
       hasLocalContent: true,
       accessCount: 0,
     });
@@ -4060,5 +4061,92 @@ test('corrupt file ownership rejects mutations and rolls back notebook deletion'
     return { before, after, errors };
   });
   expect(result.errors).toEqual(Array(7).fill('Invalid file metadata ownership'));
+  expect(result.after).toEqual(result.before);
+});
+
+for (const corruptTarget of ['file', 'notebook']) {
+  test(`corrupt ${corruptTarget} accounting aborts file mutations without partial commits`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (target) => {
+      const { IndexedDBStorageProvider, FileRepository, NotebookRepository, DB_CONFIG } =
+        window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      const files = new FileRepository(provider);
+      const notebooks = new NotebookRepository(provider);
+      const S = DB_CONFIG.STORES;
+      const data = {
+        notebookId: 'book',
+        filePath: 'file',
+        fileName: 'file',
+        content: 'body',
+        size: 4,
+        lastModified: 'old',
+      };
+      await files.saveFile(data);
+      if (target === 'file') {
+        const record = await provider.get(S.FILES_METADATA, 'book::file');
+        await provider.put(S.FILES_METADATA, { ...record, size: '4' });
+      } else {
+        const record = await provider.get(S.NOTEBOOKS, 'book');
+        await provider.put(S.NOTEBOOKS, { ...record, fileCount: NaN });
+      }
+      const snapshot = () =>
+        Promise.all(
+          [S.FILES_METADATA, S.FILES_CONTENT, S.NOTEBOOKS, S.ACTIVITIES].map((name) =>
+            provider.getAll(name)
+          )
+        );
+      const before = await snapshot();
+      const actions = [
+        () => files.saveFile({ ...data, content: 'new' }),
+        () => files.updateFileContent('book', 'file', 'new'),
+        () => files.deleteFile('book', 'file'),
+      ];
+      if (target === 'file')
+        actions.push(
+          () => notebooks.getNotebookStats('book'),
+          () => notebooks.recalcNotebookStats('book')
+        );
+      const errors = [];
+      for (const action of actions) {
+        try {
+          await action();
+          errors.push(null);
+        } catch (error) {
+          errors.push(error.message);
+        }
+      }
+      const after = await snapshot();
+      await provider.close();
+      return { before, after, errors };
+    }, corruptTarget);
+    expect(result.errors).toEqual(
+      Array(corruptTarget === 'file' ? 5 : 3).fill('Invalid notebook file accounting value')
+    );
+    expect(result.after).toEqual(result.before);
+  });
+}
+
+test('notebook accounting overflow rejects the adjustment and preserves counters', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, NotebookRepository, DB_CONFIG } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new NotebookRepository(provider);
+    const before = { id: 'book', fileCount: Number.MAX_SAFE_INTEGER, totalSize: 0 };
+    await provider.put(DB_CONFIG.STORES.NOTEBOOKS, before);
+    let error;
+    try {
+      await repository.adjustNotebookStats('book', 1, 0);
+    } catch (failure) {
+      error = failure.message;
+    }
+    const after = await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'book');
+    await provider.close();
+    return { before, after, error };
+  });
+  expect(result.error).toBe('Notebook file accounting overflow');
   expect(result.after).toEqual(result.before);
 });

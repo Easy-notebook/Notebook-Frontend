@@ -1,3 +1,4 @@
+import { NotebookFileTotals } from './NotebookFileTotals';
 import { NotebookActivityRecord } from './NotebookActivityRecord';
 import {
   INotebookRepository,
@@ -80,9 +81,7 @@ export class NotebookRepository implements INotebookRepository {
       notebook = {
         ...data,
         // Metadata inputs can be stale. File-derived counters belong to this transaction.
-        fileCount: retained.length + (file ? 1 : 0),
-        totalSize:
-          retained.reduce((sum, record) => sum + record.size, 0) + (file?.metadata.size ?? 0),
+        ...NotebookFileTotals.fromFiles(file ? [...retained, file.metadata] : retained).toRecord(),
         accessCount: Math.max(existing?.accessCount ?? 0, data.accessCount),
         lastAccessedAt: Math.max(
           existing?.lastAccessedAt ?? 0,
@@ -206,8 +205,7 @@ export class NotebookRepository implements INotebookRepository {
     );
     activities.sort((a, b) => b.timestamp - a.timestamp);
     return {
-      fileCount: files.length,
-      totalSize: files.reduce((sum, file) => sum + file.size, 0),
+      ...NotebookFileTotals.fromFiles(files).toRecord(),
       lastActivity: activities[0]?.timestamp ?? 0,
       activities: activities.slice(0, 50),
     };
@@ -254,8 +252,9 @@ export class NotebookRepository implements INotebookRepository {
       if (!notebook) return;
       store.put({
         ...notebook,
-        fileCount: Math.max(0, (notebook.fileCount || 0) + (deltaFileCount || 0)),
-        totalSize: Math.max(0, (notebook.totalSize || 0) + (deltaBytes || 0)),
+        ...new NotebookFileTotals(notebook.fileCount, notebook.totalSize)
+          .adjust(deltaFileCount, deltaBytes)
+          .toRecord(),
         updatedAt: Date.now(),
       });
     });
@@ -276,8 +275,7 @@ export class NotebookRepository implements INotebookRepository {
         if (!notebook) return;
         store.put({
           ...notebook,
-          fileCount: files.length,
-          totalSize: files.reduce((sum, file) => sum + (file.size || 0), 0),
+          ...NotebookFileTotals.fromFiles(files).toRecord(),
           updatedAt: Date.now(),
         });
       }

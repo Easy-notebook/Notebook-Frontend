@@ -1,3 +1,4 @@
+import { NotebookFileTotals } from './NotebookFileTotals';
 import { FileRecordOwnership } from './FileRecordOwnership';
 import { makeFileId } from '../../../storage/fileIdentity';
 import { NotebookActivityRecord } from './NotebookActivityRecord';
@@ -64,7 +65,7 @@ export class FileRepository implements IFileRepository {
           data.notebookId,
           data.filePath,
           existing ? 0 : 1,
-          records.metadata.size - (existing?.size || 0),
+          records.metadata.size - (existing == null ? 0 : NotebookFileTotals.size(existing.size)),
           'file_create'
         );
       }
@@ -162,7 +163,7 @@ export class FileRepository implements IFileRepository {
         notebookId,
         filePath,
         -1,
-        -(previous.size || 0),
+        -NotebookFileTotals.size(previous.size),
         'file_delete'
       );
     }
@@ -183,7 +184,7 @@ export class FileRepository implements IFileRepository {
         notebookId,
         filePath,
         0,
-        records.metadata.size - (metadata.size || 0),
+        records.metadata.size - NotebookFileTotals.size(metadata.size),
         'file_create'
       );
       updated = true;
@@ -241,8 +242,9 @@ export class FileRepository implements IFileRepository {
     if (notebook) {
       store.put({
         ...notebook,
-        fileCount: Math.max(0, (notebook.fileCount || 0) + deltaCount),
-        totalSize: Math.max(0, (notebook.totalSize || 0) + deltaBytes),
+        ...new NotebookFileTotals(notebook.fileCount, notebook.totalSize)
+          .adjust(deltaCount, deltaBytes)
+          .toRecord(),
         updatedAt: now,
         lastAccessedAt: now,
       });
@@ -262,8 +264,7 @@ export class FileRepository implements IFileRepository {
         updatedAt: now,
         lastAccessedAt: now,
         accessCount: 1,
-        fileCount: files.length,
-        totalSize: files.reduce((sum, file) => sum + file.size, 0),
+        ...NotebookFileTotals.fromFiles(files).toRecord(),
         cacheEnabled: true,
         retention: 'persistent',
       } satisfies NotebookEntity);
