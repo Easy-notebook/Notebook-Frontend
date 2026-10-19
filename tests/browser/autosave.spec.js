@@ -176,3 +176,126 @@ test('native transaction abort retries the same accepted body despite caller mut
   expect(result.records[0].cells[0].content).toBe('accepted');
   expect(result.fileCount).toBe(1);
 });
+
+test('a failed scoped transaction does not strand other notebooks or automatically retry blocked work', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { AutoSaveService, DB_CONFIG } = window.storageHarness;
+    const service = AutoSaveService.getInstance({ debounceMs: 10, maxRetries: 0 });
+    await service.initialize();
+    const original = IDBObjectStore.prototype.put;
+    const probe = { service, original, attempts: [], abortA: true, failed: false };
+    window.autosaveScheduling = probe;
+    IDBObjectStore.prototype.put = function (...args) {
+      const request = original.apply(this, args);
+      if (this.name === DB_CONFIG.STORES.FILES_CONTENT) {
+        const body = JSON.parse(args[0].content);
+        probe.attempts.push(body.notebook_id);
+        if (body.notebook_id === 'a' && probe.abortA)
+          request.addEventListener('success', () => this.transaction.abort(), { once: true });
+      }
+      return request;
+    };
+    const snapshot = (id) => ({
+      notebookId: id,
+      notebookTitle: id,
+      timestamp: Date.now(),
+      tasks: [],
+      cells: [{ id: 'cell', type: 'markdown', content: `accepted ${id}` }],
+    });
+    await service.queueSave(snapshot('a'));
+    await service.queueSave(snapshot('b'));
+    try {
+      await service.flush('a');
+    } catch {
+      probe.failed = true;
+    }
+  });
+  try {
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.autosaveScheduling.service.getSaveProgress('b')?.phase)
+      )
+      .toBe('clean');
+    expect(
+      await page.evaluate(() => ({
+        failed: window.autosaveScheduling.failed,
+        attempts: window.autosaveScheduling.attempts,
+        phase: window.autosaveScheduling.service.getSaveProgress('a')?.phase,
+      }))
+    ).toEqual({ failed: true, attempts: ['a', 'b'], phase: 'blocked' });
+    await page.evaluate(async () => {
+      await window.autosaveScheduling.service.queueSave({
+        notebookId: 'c',
+        notebookTitle: 'c',
+        timestamp: Date.now(),
+        tasks: [],
+        cells: [{ id: 'cell', type: 'markdown', content: 'accepted c' }],
+      });
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.autosaveScheduling.service.getSaveProgress('c')?.phase)
+      )
+      .toBe('clean');
+    const beforeRetry = await page.evaluate(async () => {
+      const { IndexedDBStorageProvider, DB_CONFIG } = window.storageHarness;
+      const provider = new IndexedDBStorageProvider();
+      try {
+        const records = await provider.getAll(DB_CONFIG.STORES.FILES_CONTENT);
+        return {
+          attempts: window.autosaveScheduling.attempts,
+          persisted: records.map((record) => JSON.parse(record.content).notebook_id).sort(),
+          failedNotebook: await provider.get(DB_CONFIG.STORES.NOTEBOOKS, 'a'),
+        };
+      } finally {
+        await provider.close();
+      }
+    });
+    expect(beforeRetry.attempts).toEqual(['a', 'b', 'c']);
+    expect(beforeRetry.persisted).toEqual(['b', 'c']);
+    expect(beforeRetry.failedNotebook).toBeUndefined();
+    await page.evaluate(async () => {
+      try {
+        await window.autosaveScheduling.service.flush('a');
+      } catch {
+        /* expected native abort */
+      }
+    });
+    expect(await page.evaluate(() => window.autosaveScheduling.attempts)).toEqual([
+      'a',
+      'b',
+      'c',
+      'a',
+    ]);
+    await page.evaluate(async () => {
+      const probe = window.autosaveScheduling;
+      probe.abortA = false;
+      await probe.service.queueSave({
+        notebookId: 'a',
+        notebookTitle: 'corrected',
+        timestamp: Date.now(),
+        tasks: [],
+        cells: [{ id: 'cell', type: 'markdown', content: 'corrected a' }],
+      });
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.autosaveScheduling.service.getSaveProgress('a')?.phase)
+      )
+      .toBe('clean');
+    const restored = await page.evaluate(async () => {
+      const service = window.autosaveScheduling.service;
+      return { pending: service.hasPending(), notebook: await service.load('a') };
+    });
+    expect(restored.pending).toBe(false);
+    expect(restored.notebook.cells[0].content).toBe('corrected a');
+  } finally {
+    await page.evaluate(async () => {
+      IDBObjectStore.prototype.put = window.autosaveScheduling.original;
+      await window.storageHarness.AutoSaveService.resetInstance();
+      delete window.autosaveScheduling;
+    });
+  }
+});

@@ -123,6 +123,7 @@ eligible for automatic saving. Retry backoff within an admitted revision remains
 
 The regression uses deterministic timers: A fails or conflicts, B still saves after A's targeted
 flush rejects, a later C edit does not retry A, an explicit A retry does attempt it, and a corrected
-new A revision returns to clean. The storage/autosave/session gate passes 331 tests; the three
-existing native Chromium autosave scenarios also pass. Those browser tests cover revision cloning,
-pause admission and transaction retries, not this new cross-notebook scheduling scenario directly.
+new A revision returns to clean. The storage/autosave/session gate passes 331 tests. All four native Chromium autosave scenarios
+also pass, including this cross-notebook case: abort A after its native content request succeeds,
+verify no partial A metadata/content, observe B and C commits without retrying blocked A, explicitly
+retry A, then admit and read back a corrected A revision.

@@ -104,6 +104,9 @@ Autosave admission regressions (`autosave.spec.js`):
   a later valid pause persists the previously accepted document.
 - A native transaction aborted after the content request succeeds retries the same accepted
   body despite caller mutation, with one committed file and consistent notebook totals.
+- A failed scoped A transaction leaves no partial metadata/content, while B and later C still
+  save automatically. Neither triggers a retry of blocked A; explicit retry does, and a new
+  corrected A revision can save and load successfully.
 
 PDF export integration (`pdf-export.spec.js`):
 
