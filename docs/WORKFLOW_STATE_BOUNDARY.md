@@ -150,3 +150,11 @@ settles admission promptly and reclaims any late stream body. Once accepted, the
 is detached: the response stream belongs to OperationDispatcher and remains governed by notebook
 identity and its own completion. Thus finishing the workflow that submitted an operation does not
 retroactively cancel an accepted operation. Backend work already started may still drain.
+
+NotebookExecutionActivity aggregates workflow and run-all ownership into the existing public
+isExecuting flag. Each invocation releases only its own activity; one completed owner cannot
+mark another active owner idle. Notebook identity changes invalidate old activities, including
+away-and-back navigation. Workflow acquisition handles synchronous cancellation/replacement
+while busy subscribers run. Run-all checks activity ownership before subsequent cell execution
+and avoids clearing a different notebook's phase marker during old cleanup. This aggregate is
+UI activity, not a kernel scheduler: CellExecutionSession still owns single-kernel admission.

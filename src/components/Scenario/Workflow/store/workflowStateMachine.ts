@@ -28,7 +28,7 @@ import { WORKFLOW_MAX_ITERATIONS } from '../../../../config/workflow';
 import { WorkflowState as WorkflowStateModel } from '../observation/WorkflowState';
 import { WorkflowRunSession } from '../core/WorkflowRunSession';
 import { WorkflowTransitionSession } from '../core/WorkflowTransitionSession';
-import useNotebookStore from '@Store/notebookStore';
+import useNotebookStore, { notebookExecutionActivity } from '@Store/notebookStore';
 
 // ==============================================
 // TYPES & INTERFACES
@@ -341,6 +341,8 @@ const directTransitions = new WorkflowTransitionSession({
     useWorkflowStateMachine.getState().fail(error instanceof Error ? error : String(error)),
 });
 
+let releaseWorkflowActivity: (() => void) | undefined;
+let workflowActivityVersion = 0;
 const automaticRun = new WorkflowRunSession({
   notebookId: () => useNotebookStore.getState().notebookId,
   watch: (check) => useNotebookStore.subscribe(check),
@@ -364,7 +366,19 @@ const automaticRun = new WorkflowRunSession({
       stateJSON: snapshot,
       currentState: snapshot.state.FSM.state,
     }),
-  busy: (value) => useNotebookStore.setState({ isExecuting: value }),
+  busy: (value) => {
+    const version = ++workflowActivityVersion;
+    if (value) {
+      if (releaseWorkflowActivity) return;
+      const activity = notebookExecutionActivity.acquire();
+      if (version === workflowActivityVersion) releaseWorkflowActivity = activity.release;
+      else activity.release();
+    } else {
+      const release = releaseWorkflowActivity;
+      releaseWorkflowActivity = undefined;
+      release?.();
+    }
+  },
   fail: (error) =>
     useWorkflowStateMachine.getState().fail(error instanceof Error ? error : String(error)),
   limit: WORKFLOW_MAX_ITERATIONS,

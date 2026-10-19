@@ -99,3 +99,81 @@ it('publishes an explicit failure when automatic execution exhausts its configur
   );
   expect(useNotebookStore.getState().isExecuting).toBe(false);
 });
+
+it.each(['workflow', 'batch'] as const)(
+  'preserves shared busy state when %s finishes first',
+  async (first) => {
+    setup();
+    const workflowStep = deferred();
+    mocks.step.mockReturnValue(workflowStep.promise);
+    let finishCell!: (result: { success: boolean }) => void;
+    useNotebookStore.setState({
+      cells: [{ id: 'code', type: 'code', content: 'pass' }],
+      clearAllOutputs: vi.fn(),
+      runSingleCell: vi.fn(
+        () =>
+          new Promise<{ success: boolean }>((resolve) => {
+            finishCell = resolve;
+          })
+      ),
+    });
+    const workflow = useWorkflowStateMachine.getState().startWorkflow('planning');
+    await vi.waitFor(() => expect(mocks.step).toHaveBeenCalledOnce());
+    const batch = useNotebookStore.getState().runAllCells();
+    if (first === 'workflow') {
+      useWorkflowStateMachine.getState().cancel();
+      await workflow;
+      expect(useNotebookStore.getState().isExecuting).toBe(true);
+      finishCell({ success: true });
+      await batch;
+    } else {
+      finishCell({ success: true });
+      await batch;
+      expect(useNotebookStore.getState().isExecuting).toBe(true);
+      useWorkflowStateMachine.getState().cancel();
+      await workflow;
+    }
+    expect(useNotebookStore.getState().isExecuting).toBe(false);
+    workflowStep.resolve([createInitialStateJSON(), null]);
+  }
+);
+
+it('releases activity when a subscriber cancels during acquisition', async () => {
+  setup();
+  const stop = useNotebookStore.subscribe((state) => {
+    if (state.isExecuting) useWorkflowStateMachine.getState().cancel();
+  });
+  try {
+    await useWorkflowStateMachine.getState().startWorkflow('planning');
+    expect(useNotebookStore.getState().isExecuting).toBe(false);
+    expect(mocks.step).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
+it('stops a batch after notebook navigation without clearing the new phase marker', async () => {
+  setup();
+  let finishCell!: (result: { success: boolean }) => void;
+  const runSingleCell = vi.fn(
+    () =>
+      new Promise<{ success: boolean }>((resolve) => {
+        finishCell = resolve;
+      })
+  );
+  useNotebookStore.setState({
+    cells: [
+      { id: 'first', type: 'code', content: 'pass' },
+      { id: 'second', type: 'code', content: 'pass' },
+    ],
+    clearAllOutputs: vi.fn(),
+    runSingleCell,
+  });
+  const pending = useNotebookStore.getState().runAllCells();
+  useNotebookStore.setState({ notebookId: 'b', currentRunningPhaseId: 'new-phase' });
+  finishCell({ success: true });
+  await pending;
+  expect(runSingleCell).toHaveBeenCalledOnce();
+  expect(useNotebookStore.getState().isExecuting).toBe(false);
+  expect(useNotebookStore.getState().currentRunningPhaseId).toBe('new-phase');
+});
