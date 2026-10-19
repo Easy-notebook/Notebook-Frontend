@@ -372,3 +372,54 @@ it('keeps the cell input mounted and focused through consecutive keystrokes', ()
     fileId: 'book::table.csv',
   });
 });
+
+it('reopening a context menu does not leave an old outside-click listener that closes the new menu', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.csv',
+    name: 'table.csv',
+    path: 'table.csv',
+    type: 'csv',
+    content: 'name\nAda',
+  };
+  render(<DataTable />);
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  fireEvent.mouseDown(document.body);
+  expect(screen.queryByRole('button', { name: 'Insert Row Above' })).toBeNull();
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  const insert = screen.getByRole('button', { name: 'Insert Row Above' });
+  fireEvent.mouseDown(insert);
+  expect(screen.getByRole('button', { name: 'Insert Row Above' })).toBe(insert);
+  fireEvent.click(insert);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\n""\nAda', {
+    surface: 'normal',
+    fileId: 'book::table.csv',
+  });
+});
+
+it('releases context-menu listeners when an open table unmounts', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::table.csv',
+    name: 'table.csv',
+    path: 'table.csv',
+    type: 'csv',
+    content: 'name\nAda',
+  };
+  const add = vi.spyOn(document, 'addEventListener');
+  const remove = vi.spyOn(document, 'removeEventListener');
+  try {
+    const view = render(<DataTable />);
+    fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+    const listeners = add.mock.calls
+      .filter(([event]) => event === 'mousedown')
+      .map(([, listener]) => listener);
+    expect(listeners).toHaveLength(1);
+    view.unmount();
+    for (const listener of listeners) expect(remove).toHaveBeenCalledWith('mousedown', listener);
+  } finally {
+    add.mockRestore();
+    remove.mockRestore();
+  }
+});

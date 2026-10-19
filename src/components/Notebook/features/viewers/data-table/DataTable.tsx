@@ -187,6 +187,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   const [editingCell, setEditingCell] = useState<{ row: number; col: number } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   // 原始 sheet 合并/样式（仅 XLSX 有意义）
@@ -233,6 +234,17 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
   // ============== Color Picker ==============
   const [showColorPicker, setShowColorPicker] = useState<'text' | 'background' | null>(null);
   const [selectedColor, setSelectedColor] = useState('#000000');
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const menu = contextMenuRef.current;
+    if (!menu) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (event.target instanceof Node && !menu.contains(event.target)) setContextMenu(null);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [contextMenu]);
 
   // ============== 解析 CSV/XLSX ==============
   useEffect(() => {
@@ -1747,15 +1759,7 @@ const DataTable: React.FC<OfficeStyleCSVPreviewProps> = ({
       {/* Context Menu */}
       {contextMenu && (
         <div
-          ref={(ref) => {
-            if (ref) {
-              const handleClickOutside = (e: MouseEvent) => {
-                if (!ref.contains(e.target as Node)) setContextMenu(null);
-              };
-              document.addEventListener('mousedown', handleClickOutside);
-              return () => document.removeEventListener('mousedown', handleClickOutside);
-            }
-          }}
+          ref={contextMenuRef}
           className="fixed bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-xl shadow-xl py-1.5 z-50 min-w-[200px]"
           style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
         >
