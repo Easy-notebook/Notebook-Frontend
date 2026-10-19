@@ -69,3 +69,17 @@ an omitted notebookId as undefined rather than inventing an empty-string owner.
 
 Tests cover append/replace, empty replacement, malformed flag rejection with unchanged
 state, cross-notebook isolation, and the public command parser's true/false/invalid modes.
+
+## Cell creation and generation tracking
+
+`addCell2EndWithContent` validates and captures metadata before calling the synchronous
+Store creation APIs. Explicit empty content remains empty; absent content uses the
+provided description. Generation identity creation stays owned by the Store rather than
+being independently implemented in the action. Both command and unique-identity mappings
+are registered from the published result, and unique identities do not require commandId.
+A top-level generation identity remains canonical even when metadata supplied a different
+one. Invalid inputs or failed creation cannot create tracker entries; removed or foreign
+notebook cells are not registered after publication callbacks.
+
+Tests exercise the real cell Store, detached metadata, empty content, generated identities,
+missing command IDs, malformed metadata, subscriber removal and creation failure.
