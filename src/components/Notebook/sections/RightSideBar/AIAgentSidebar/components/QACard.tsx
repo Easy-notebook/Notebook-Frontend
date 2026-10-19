@@ -36,15 +36,20 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (qa.thinkingStartAtMs && !qa.thinkingEndAtMs) {
+    if (
+      !isUser &&
+      qa.onProcess &&
+      qa.thinkingStartAtMs !== undefined &&
+      qa.thinkingEndAtMs === undefined
+    ) {
       const interval = setInterval(() => setNow(Date.now()), 1000);
       return () => clearInterval(interval);
     }
-  }, [qa.thinkingStartAtMs, qa.thinkingEndAtMs]);
+  }, [isUser, qa.onProcess, qa.thinkingStartAtMs, qa.thinkingEndAtMs]);
 
   const thinkingDuration = useMemo(() => {
-    if (!qa.thinkingStartAtMs) return null;
-    const end = qa.thinkingEndAtMs || now;
+    if (qa.thinkingStartAtMs === undefined) return null;
+    const end = qa.thinkingEndAtMs ?? now;
     return Math.max(0, Math.round((end - qa.thinkingStartAtMs) / 1000));
   }, [qa.thinkingStartAtMs, qa.thinkingEndAtMs, now]);
 
@@ -94,12 +99,22 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
           (!qa.toolCalls || qa.toolCalls.length === 0) &&
           xmlMatches.length === 0 ? (
             <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-              <ShinyText
-                text={`${qa.agentType || qa.agent || 'AI'} ${t('rightSideBar.thinking') || 'is thinking...'}`}
-                disabled={false}
-                speed={3}
-                className="font-medium"
-              />
+              {qa.onProcess ? (
+                <ShinyText
+                  text={`${qa.agentType || qa.agent || 'AI'} ${t('rightSideBar.thinking') || 'is thinking...'}`}
+                  disabled={false}
+                  speed={3}
+                  className="font-medium"
+                />
+              ) : (
+                <span>
+                  {t(
+                    !qa.resolved && qa.thinkingStartAtMs !== undefined
+                      ? 'rightSideBar.responseInterrupted'
+                      : 'rightSideBar.noContent'
+                  )}
+                </span>
+              )}
               {thinkingDuration !== null && (
                 <span className="text-gray-400 dark:text-gray-500">({thinkingDuration}s)</span>
               )}

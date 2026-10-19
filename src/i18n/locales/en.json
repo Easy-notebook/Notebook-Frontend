@@ -182,6 +182,7 @@
   },
   "rightSideBar": {
     "thinking": "is thinking...",
+    "responseInterrupted": "Response interrupted",
     "noWorkflowPlan": "No workflow plan available",
     "history": "History",
     "chat": "Request",

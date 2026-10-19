@@ -182,6 +182,7 @@
   },
   "rightSideBar": {
     "thinking": "正在思考...",
+    "responseInterrupted": "回答已中断",
     "noWorkflowPlan": "暂无工作流计划",
     "history": "历史记录",
     "chat": "需求",
