@@ -27,3 +27,16 @@ retains its asynchronous behavior and owns send failures; this change does not r
 the backend acknowledgement or generation-result lifecycle. Tests switch notebook/QA
 while the operator import is pending and verify all three commands retain their original
 context; additional tests cover explicit context, incomplete requests and code execution.
+
+## Incoming agent-help requests
+
+`ask_agent_for_help` creates a pending user QA through `AIAgentStore.addQA`, using
+`content`, `type`, `resolved`, `onProcess` and `agentType` from the actual shared contract.
+It no longer calls the nonexistent addNewQA method or sends a question-shaped object to
+an incompatible API. Empty/missing questions remain no-ops; malformed non-string wire
+fields reject before mutation. The existing general-agent default is preserved.
+
+QA admission precedes notification. If notification fails, the admitted QA remains and
+the failure propagates without an additional misleading creation-failure notification.
+This records the incoming request; it does not add a new backend dispatch operation or
+claim a response has been generated. Tests use the real QA store and mock notification.

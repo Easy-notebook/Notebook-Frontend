@@ -8,6 +8,8 @@ export interface ToastMessage {
 }
 
 export interface StreamPayload {
+  question?: string;
+  agentType?: string;
   sourceAgent?: string;
   targetAgent?: string;
   taskName?: string;
