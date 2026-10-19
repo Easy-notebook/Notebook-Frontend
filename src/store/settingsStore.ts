@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist, type PersistOptions } from 'zustand/middleware';
 import {
   SettingsPersistenceStorage,
+  assertSupportedSettingsVersion,
   readSettingsState,
 } from '@Services/settings/SettingsPersistenceStorage';
 import { useMemo } from 'react';
@@ -576,49 +577,39 @@ const storageConfig: PersistOptions<SettingsStore, PersistedState, Promise<void>
   storage: settingsPersistence,
 
   migrate: (persistedState: unknown, version: number): PersistedState => {
+    assertSupportedSettingsVersion(version, STORE_VERSION);
     let migratedState = { ...readSettingsState(persistedState) };
 
-    try {
-      if (version === 0) {
-        // Migration from initial version
-        migratedState = {
-          ...migratedState,
-          settings: {
-            ...initialSettings,
-            ...migratedState.settings,
+    if (version === 0) {
+      // Migration from initial version
+      migratedState = {
+        ...migratedState,
+        settings: {
+          ...initialSettings,
+          ...migratedState.settings,
+        },
+      };
+    }
+    if (version === 0 || version === 1) {
+      // Add new v2 fields with defaults
+      if (migratedState.settings) {
+        migratedState.settings = {
+          ...migratedState.settings,
+          apiTimeout: initialSettings.apiTimeout,
+          theme: initialSettings.theme,
+          markdownPreferences: {
+            ...initialSettings.markdownPreferences,
+            ...migratedState.settings.markdownPreferences,
+          },
+          editorSettings: {
+            ...initialSettings.editorSettings,
+            ...migratedState.settings.editorSettings,
           },
         };
       }
-      if (version === 0 || version === 1) {
-        // Add new v2 fields with defaults
-        if (migratedState.settings) {
-          migratedState.settings = {
-            ...migratedState.settings,
-            apiTimeout: initialSettings.apiTimeout,
-            theme: initialSettings.theme,
-            markdownPreferences: {
-              ...initialSettings.markdownPreferences,
-              ...migratedState.settings.markdownPreferences,
-            },
-            editorSettings: {
-              ...initialSettings.editorSettings,
-              ...migratedState.settings.editorSettings,
-            },
-          };
-        }
-      } else if (version > STORE_VERSION) {
-        storeLog.warn('Future version detected, resetting to initial state', {
-          currentVersion: STORE_VERSION,
-          storedVersion: version,
-        });
-        return { settings: initialSettings };
-      }
-
-      return migratedState;
-    } catch (error) {
-      console.error('Migration failed:', error);
-      return { settings: initialSettings };
     }
+
+    return migratedState;
   },
 
   onRehydrateStorage: () => (_state, error) => {

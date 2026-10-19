@@ -42,13 +42,28 @@ broad legacy cleanup that deletes other `easy-notebook-*` records. The explicit 
 hook remains available with its existing behavior. Removed duplicate retry/rehydration
 fallback logic, corrected timestamp placement, and retained v0/v1 migration defaults.
 
+## Version admission
+
+A primary record newer than the supported schema raises `UnsupportedSettingsVersionError`
+before payload decoding. This error never falls back to an older backup. Migration also
+rejects future versions instead of resetting preferences to defaults. Writes check the
+current primary record before encryption, before backup creation, and immediately before
+each primary commit, including quota retries. A newer record observed after asynchronous
+work is preserved. Rejection does not latch the queue: externally repairing or explicitly
+removing the record allows a later save.
+
+These checks do not provide an atomic cross-tab compare-and-swap; another tab can still
+write between a storage read and write. Backups already created before a version change
+are not rolled back. Explicit removal remains an intentional deletion operation.
+
 ## Validation and remaining scope
 
 Unit tests cover the real Zustand envelope, encryption isolation, deferred write order,
 removal ordering, retry, backup recovery and quota preservation of unrelated data.
 Chromium exercises credential update/reload, recovery without a primary record, and
-v0 migration without double encryption.
+v0 migration without double encryption, and future-version hydration/write rejection.
+Unit tests also cover version changes during encryption, backup creation and quota retry.
 
-The envelope/credential guard is not a complete settings-field schema. Future-version
-migration policy, cross-tab writer coordination, failure-state presentation for synchronous
+The envelope/credential guard is not a complete settings-field schema. Cross-tab writer
+coordination, failure-state presentation for synchronous
 preference actions, and broader backup lifecycle improvements remain separate work.

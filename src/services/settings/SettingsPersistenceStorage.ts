@@ -12,6 +12,21 @@ export function readSettingsState(value: unknown): PersistedState {
   return value as unknown as PersistedState;
 }
 
+export class UnsupportedSettingsVersionError extends Error {
+  constructor(
+    readonly storedVersion: number,
+    readonly supportedVersion: number
+  ) {
+    super(`Settings version ${storedVersion} exceeds supported version ${supportedVersion}`);
+    this.name = 'UnsupportedSettingsVersionError';
+  }
+}
+
+export function assertSupportedSettingsVersion(version: unknown, supported: number): void {
+  if (typeof version === 'number' && version > supported)
+    throw new UnsupportedSettingsVersionError(version, supported);
+}
+
 interface SettingsStorageDependencies {
   storage: () => Storage;
   readBackup: () => Promise<PersistedState | null>;
@@ -61,6 +76,25 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
         };
   }
 
+  private assertWritable(name: string): void {
+    const raw = this.dependencies.storage().getItem(name);
+    if (raw === null) return;
+    let value: unknown;
+    try {
+      value = JSON.parse(raw);
+    } catch (error) {
+      // Explicit saves may replace corrupt JSON after recovery.
+      if (error instanceof SyntaxError) return;
+      throw error;
+    }
+    if (object(value)) assertSupportedSettingsVersion(value.version, this.dependencies.version);
+  }
+
+  private commit(name: string, encoded: string): void {
+    this.assertWritable(name);
+    this.dependencies.storage().setItem(name, encoded);
+  }
+
   getItem(name: string): Promise<StorageValue<PersistedState> | null> {
     return this.enqueue(async () => {
       try {
@@ -75,11 +109,13 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
               value.version < 0))
         )
           throw new Error('Invalid settings storage envelope');
+        assertSupportedSettingsVersion(value.version, this.dependencies.version);
         return {
           state: await this.transform(readSettingsState(value.state), 'decrypt'),
           version: value.version as number | undefined,
         };
       } catch (error) {
+        if (error instanceof UnsupportedSettingsVersionError) throw error;
         const recovered = await this.backup();
         if (recovered) return recovered;
         throw error;
@@ -90,15 +126,17 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
   setItem(name: string, value: StorageValue<PersistedState>): Promise<void> {
     const captured = structuredClone(value);
     return this.enqueue(async () => {
+      this.assertWritable(name);
       const state = await this.transform(captured.state, 'encrypt');
+      this.assertWritable(name);
       const encoded = JSON.stringify({ ...captured, state });
       await this.dependencies.writeBackup(state.settings!);
       try {
-        this.dependencies.storage().setItem(name, encoded);
+        this.commit(name, encoded);
       } catch (error) {
         if (!(error instanceof DOMException) || error.name !== 'QuotaExceededError') throw error;
         await this.dependencies.pruneBackups();
-        this.dependencies.storage().setItem(name, encoded);
+        this.commit(name, encoded);
       }
     });
   }

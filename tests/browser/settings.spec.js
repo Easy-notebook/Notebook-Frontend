@@ -81,3 +81,33 @@ test('version-zero settings migrate once without double-encrypting credentials',
   expect(result.version).toBe(2);
   expect(result.decoded).toBe('migration-test-key');
 });
+
+test('future settings survive hydration and an attempted API settings update', async ({ page }) => {
+  await page.goto('/tests/browser/storage.html');
+  const result = await page.evaluate(async () => {
+    const name = 'easy-notebook-settings';
+    const future = JSON.stringify({ version: 3, state: { futureSchema: 'preserve' } });
+    localStorage.setItem(name, future);
+    const { default: store } = await import('/src/store/settingsStore.ts');
+    await store.persist.rehydrate();
+    let error;
+    try {
+      await store.getState().updateApiSettings({ apiKey: 'new-test-key' });
+    } catch (caught) {
+      error = caught.name;
+    }
+    await store.persist.rehydrate();
+    return {
+      error,
+      preserved: localStorage.getItem(name) === future,
+      hydrated: store.persist.hasHydrated(),
+      backups: Object.keys(localStorage).filter((key) => key.startsWith(`${name}-backup-`)),
+    };
+  });
+  expect(result).toEqual({
+    error: 'UnsupportedSettingsVersionError',
+    preserved: true,
+    hydrated: false,
+    backups: [],
+  });
+});

@@ -157,3 +157,54 @@ it('limits quota recovery to settings backups and preserves other application da
   expect(localStorage.getItem('settings')).toBe('previous');
   expect(localStorage.getItem('easy-notebook-document')).toBe('keep');
 });
+
+it('rejects future records before decryption or backup recovery and permits writes after external repair', async () => {
+  const encrypt = vi.fn(encode);
+  const decrypt = vi.fn(decode);
+  const { storage, readBackup, writeBackup } = setup({ encrypt, decrypt });
+  const future = JSON.stringify({ version: 3, state: { unknownFutureSchema: true } });
+  localStorage.setItem('settings', future);
+  await expect(storage.getItem('settings')).rejects.toMatchObject({
+    name: 'UnsupportedSettingsVersionError',
+    storedVersion: 3,
+    supportedVersion: 2,
+  });
+  await expect(storage.setItem('settings', envelope())).rejects.toThrow('Settings version 3');
+  expect(localStorage.getItem('settings')).toBe(future);
+  expect(decrypt).not.toHaveBeenCalled();
+  expect(encrypt).not.toHaveBeenCalled();
+  expect(readBackup).not.toHaveBeenCalled();
+  expect(writeBackup).not.toHaveBeenCalled();
+  localStorage.removeItem('settings');
+  await storage.setItem('settings', envelope());
+  expect(await storage.getItem('settings')).toEqual(envelope());
+});
+
+it.each(['encryption', 'backup', 'quota retry'])(
+  'preserves future data appearing during %s',
+  async (stage) => {
+    const future = JSON.stringify({ version: 3, state: { unknownFutureSchema: true } });
+    const replace = () => localStorage.setItem('settings', future);
+    const writeBackup = vi.fn(async () => {
+      if (stage === 'backup') replace();
+    });
+    const { storage } = setup({
+      encrypt: async (text: string) => {
+        if (stage === 'encryption') replace();
+        return encode(text);
+      },
+      writeBackup,
+      pruneBackups: async () => {
+        replace();
+      },
+    });
+    if (stage === 'quota retry') {
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+        throw new DOMException('full', 'QuotaExceededError');
+      });
+    }
+    await expect(storage.setItem('settings', envelope())).rejects.toThrow('Settings version 3');
+    expect(localStorage.getItem('settings')).toBe(future);
+    if (stage === 'encryption') expect(writeBackup).not.toHaveBeenCalled();
+  }
+);
