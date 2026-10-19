@@ -63,6 +63,7 @@ export interface AIAgentActions {
   initStreamingAnswer: (qaId: string) => void;
   addContentToAnswer: (qaId: string, content: string) => void;
   finishStreamingAnswer: (qaId: string, response?: string) => void;
+  cancelStreamingAnswer: (qaId: string) => void;
   // Tool call logging for QA
   addToolCallToQA: (qaId: string, toolCall: QAEvent) => void;
 }
@@ -213,6 +214,22 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
         qa.id === qaId ? { ...qa, content: qa.content + content } : qa
       ),
     }));
+  },
+
+  // Interrupted answers retain received content without claiming resolution.
+  cancelStreamingAnswer: (qaId: string) => {
+    set((state) => {
+      const answer = state.qaList.find((qa) => qa.id === qaId);
+      if (!answer?.onProcess) return state;
+      const endedAt = Date.now();
+      return {
+        qaList: state.qaList.map((qa) =>
+          qa.id === qaId || qa.id === `${qaId}-[0]`
+            ? { ...qa, onProcess: false, thinkingEndAtMs: endedAt }
+            : qa
+        ),
+      };
+    });
   },
 
   // 完成回答

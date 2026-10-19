@@ -13,6 +13,7 @@ export interface QAStreamSession {
 export class QAStreamManager {
   private static instance: QAStreamManager;
   private session: QAStreamSession | null = null;
+  private onCancel: (() => void) | undefined;
   private detachCancellation: (() => void) | undefined;
 
   private constructor() {}
@@ -27,14 +28,15 @@ export class QAStreamManager {
   /**
    * Set the currently streaming QA ID
    */
-  setStreamingQaId(qaId: string, signal?: AbortSignal): void {
+  setStreamingQaId(qaId: string, signal?: AbortSignal, onCancel?: () => void): void {
     signal?.throwIfAborted();
     this.detachCancellation?.();
     this.detachCancellation = undefined;
     const session = Object.freeze({ qaId });
     this.session = session;
+    this.onCancel = onCancel;
     if (signal) {
-      const cancel = () => this.clearStreamingQaId(session);
+      const cancel = () => this.cancelStreamingQa(session);
       signal.addEventListener('abort', cancel, { once: true });
       this.detachCancellation = () => signal.removeEventListener('abort', cancel);
     }
@@ -58,11 +60,20 @@ export class QAStreamManager {
     if (expected !== undefined && this.session !== expected) return;
     this.detachCancellation?.();
     this.detachCancellation = undefined;
+    this.onCancel = undefined;
     const previousQaId = this.session?.qaId;
     this.session = null;
     if (previousQaId) {
       agentLog.debug('QA streaming cleared', { previousQaId });
     }
+  }
+
+  /** Interrupt this occurrence, clearing ownership before notifying its answer. */
+  cancelStreamingQa(expected: QAStreamSession | null): void {
+    if (this.session !== expected) return;
+    const onCancel = this.onCancel;
+    this.clearStreamingQaId(expected);
+    onCancel?.();
   }
 
   /**

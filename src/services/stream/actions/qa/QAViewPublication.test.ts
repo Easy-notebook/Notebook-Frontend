@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const ports = vi.hoisted(() => ({
+  cancel: vi.fn(),
   init: vi.fn(),
   append: vi.fn(),
   collapse: vi.fn(),
@@ -23,7 +24,11 @@ vi.mock('@Store/notebookStore', () => ({
 }));
 vi.mock('@Store/AIAgentStore', () => ({
   useAIAgentStore: {
-    getState: () => ({ activeView: ports.activeView, setActiveView: ports.view }),
+    getState: () => ({
+      activeView: ports.activeView,
+      setActiveView: ports.view,
+      cancelStreamingAnswer: ports.cancel,
+    }),
   },
 }));
 vi.mock('@Services/agentMemoryService', () => ({

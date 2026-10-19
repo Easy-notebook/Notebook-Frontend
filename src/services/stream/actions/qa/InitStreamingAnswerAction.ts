@@ -5,6 +5,7 @@
 import { StreamAction, registerStreamAction } from '../base';
 import type { StreamActionContext } from '../../types';
 import useStore from '@Store/notebookStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
 import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 import { qaStreamManager } from '../../managers/QAStreamManager';
 import { AgentMemoryService } from '@Services/agentMemoryService';
@@ -22,11 +23,19 @@ export class InitStreamingAnswerAction extends StreamAction {
 
     if (qid !== undefined && qid !== null) {
       const qidStr = Array.isArray(qid) ? qid[0] : qid.toString();
-      await globalUpdateInterface.initStreamingAnswer(qidStr);
-      context.signal?.throwIfAborted();
-
-      // Record current streaming QA
-      qaStreamManager.setStreamingQaId(qidStr, context.signal);
+      // Own cancellation before the answer update can notify synchronous subscribers.
+      qaStreamManager.setStreamingQaId(qidStr, context.signal, () =>
+        useAIAgentStore.getState().cancelStreamingAnswer(qidStr)
+      );
+      const session = qaStreamManager.capture();
+      try {
+        await globalUpdateInterface.initStreamingAnswer(qidStr);
+        context.signal?.throwIfAborted();
+      } catch (error) {
+        qaStreamManager.cancelStreamingQa(session);
+        throw error;
+      }
+      if (qaStreamManager.capture() !== session) return;
 
       await QAViewPresenter.show(context.signal);
       context.signal?.throwIfAborted();
