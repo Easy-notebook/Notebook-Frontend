@@ -89,3 +89,20 @@ it.each([
     error: message,
   });
 });
+
+it('rejects a conflicting registration without replacing the owner or mutating the rejected class', () => {
+  class First extends StreamAction {
+    execute(): void {}
+  }
+  class Second extends StreamAction {
+    static actionType = 'unchanged';
+    execute(): void {}
+  }
+  registerStreamAction('owned', First);
+  expect(() => registerStreamAction('owned', First)).not.toThrow();
+  expect(() => registerStreamAction('owned', Second)).toThrow(
+    'Stream action already registered: owned'
+  );
+  expect(getStreamActionClass('owned')).toBe(First);
+  expect(Second.actionType).toBe('unchanged');
+});

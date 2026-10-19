@@ -13,7 +13,7 @@ export class SetRunningPhaseAction extends StreamAction {
     const phaseId = payload?.phaseId;
 
     if (phaseId) {
-      globalUpdateInterface.setRunningPhase(phaseId);
+      globalUpdateInterface.setCurrentRunningPhaseId(phaseId);
     }
   }
 }

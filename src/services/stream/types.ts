@@ -11,6 +11,7 @@ export interface StreamPayload {
   mode?: 'create' | 'step';
   phaseId?: string;
   index?: number;
+  stepIndex?: number;
   allow?: boolean;
   cellId?: string;
   content?: string;

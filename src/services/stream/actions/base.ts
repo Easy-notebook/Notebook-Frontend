@@ -53,6 +53,9 @@ export function registerStreamAction(
   actionType: string,
   actionClass: StreamActionConstructor
 ): void {
+  const existing = _streamActionRegistry.get(actionType);
+  if (existing && existing !== actionClass)
+    throw new Error(`Stream action already registered: ${actionType}`);
   actionClass.actionType = actionType;
   _streamActionRegistry.set(actionType, actionClass);
   console.log(`[StreamActions] Registered action: ${actionType}`);

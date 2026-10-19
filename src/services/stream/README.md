@@ -309,3 +309,12 @@ export const handleStreamResponse = async (data, showToast) => { ... }
 - [Workflow Actions](../../components/Scenario/Workflow/actions/README.md)
 - [Service Layer Architecture](../README.md)
 - [Agent Memory Service](../agentMemoryService.ts)
+
+## Action ownership
+
+The production catalog registers one concrete handler class per stream action name.
+Registering the same class again is idempotent; registering a different class under an
+occupied name throws without changing the existing handler. Cell selection belongs to
+`cell`, phase navigation to `phase`, and pagination to `view`. Unreferenced alternate
+handlers have been removed so imports cannot silently select a different implementation.
+`update_current_step_index` uses the existing `stepIndex` payload emitted by CLI commands.
