@@ -180,3 +180,11 @@ Stage/step planning, stage context, delegation and behavior completion now use t
 CompleteStagePlanning validates that steps exist before setting planning_complete, allowing a
 later retry instead of retaining a completion flag from a rejected transition. Asynchronous actions
 continue to use explicit captured snapshots and ownership checks rather than async recipes.
+
+Context updates (agent, progress, location and step focus) and effect clearing also use the
+synchronous recipe boundary. Clearing current effects retains the shared domain archive logic,
+serializes only the effects subtree, and does not publish when already empty. Unknown agent
+sections are rejected before creating an agent record. CompleteReflection captures workflow and
+notebook ownership before its notebook metadata write, then checks ownership and cancellation
+after synchronous subscribers run before resuming the workflow. This prevents a metadata
+subscriber's cancellation from being overwritten; it does not roll back the metadata update.

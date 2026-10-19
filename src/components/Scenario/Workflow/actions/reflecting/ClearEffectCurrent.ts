@@ -16,13 +16,12 @@ export class ClearEffectCurrentAction extends ActionBase {
    */
   execute(step: ExecutionStep): void {
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
-    const workflowState = new WorkflowState(stateJSON);
-
-    // Use the static helper to perform the logic
-    ClearEffectCurrentAction.processState(workflowState);
-
-    stateMachine.setState(workflowState.toJSON());
+    stateMachine.updateState((stateJSON) => {
+      if (stateJSON.state.effects.current.length === 0) return;
+      const workflowState = new WorkflowState(stateJSON);
+      ClearEffectCurrentAction.processState(workflowState);
+      stateJSON.state.effects = workflowState.state.effects.toJSON();
+    });
   }
 
   /**

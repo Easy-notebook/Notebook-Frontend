@@ -36,52 +36,53 @@ export class UpdateAgentAction extends ActionBase {
       return;
     }
 
+    if (!['task', 'thinking', 'conclusion'].includes(section)) return;
+
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
+    stateMachine.updateState((stateJSON) => {
+      // Ensure agents object exists
+      if (!stateJSON.agents) {
+        stateJSON.agents = {};
+      }
 
-    // Ensure agents object exists
-    if (!stateJSON.agents) {
-      stateJSON.agents = {};
-    }
+      // Ensure specific agent exists
+      if (!stateJSON.agents[agent_id]) {
+        stateJSON.agents[agent_id] = {
+          task: { current: null, history: [] },
+          thinking: { current: null, history: [] },
+          conclusion: { current: null, history: [] },
+        };
+      }
 
-    // Ensure specific agent exists
-    if (!stateJSON.agents[agent_id]) {
-      stateJSON.agents[agent_id] = {
-        task: { current: null, history: [] },
-        thinking: { current: null, history: [] },
-        conclusion: { current: null, history: [] },
-      };
-    }
+      const agent = stateJSON.agents[agent_id];
+      const targetSection = agent[section];
 
-    const agent = stateJSON.agents[agent_id];
-    const targetSection = agent[section];
+      if (!targetSection) {
+        console.warn(`[UpdateAgentAction] Invalid section: ${section}`);
+        return;
+      }
 
-    if (!targetSection) {
-      console.warn(`[UpdateAgentAction] Invalid section: ${section}`);
-      return;
-    }
+      let changed = false;
 
-    let changed = false;
+      // Handle archiving
+      if (archive && targetSection.current) {
+        targetSection.history.push(targetSection.current);
+        changed = true;
+      }
 
-    // Handle archiving
-    if (archive && targetSection.current) {
-      targetSection.history.push(targetSection.current);
-      changed = true;
-    }
+      // Update content
+      if (targetSection.current !== content) {
+        targetSection.current = content;
+        changed = true;
+      }
 
-    // Update content
-    if (targetSection.current !== content) {
-      targetSection.current = content;
-      changed = true;
-    }
-
-    if (changed) {
-      console.log(`[UpdateAgentAction] ✅ Updated agent ${agent_id} ${section}`, {
-        contentLength: content.length,
-        archived: archive,
-      });
-      stateMachine.setState(stateJSON);
-    }
+      if (changed) {
+        console.log(`[UpdateAgentAction] ✅ Updated agent ${agent_id} ${section}`, {
+          contentLength: content.length,
+          archived: archive,
+        });
+      }
+    });
   }
 }
 
