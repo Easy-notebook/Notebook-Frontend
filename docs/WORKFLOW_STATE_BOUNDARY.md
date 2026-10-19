@@ -199,3 +199,11 @@ presentation writes. Command parsing forwards the optional signal to registered 
 checks it before execution and after completion. Asynchronous stream actions must cooperate with
 that signal around their own writes; this boundary cannot roll back effects already applied or
 interrupt a non-cooperative action's pending promise.
+
+The operation-stream exec and exec_new_version aliases forward the action context signal into
+RepairedCodeExecution, preserving cancellation through output and debug-metadata publication.
+runCurrentCodeCell rejects an explicitly mismatched notebook or pre-cancelled caller before kernel
+admission. It holds the shared notebook scope while awaiting runSingleCell and records its captured
+QA execution event only while ownership survives. Navigation, including away-and-back, prevents
+late event publication. This does not interrupt backend kernel work already admitted; runSingleCell
+retains its existing execution and error-notification behavior.

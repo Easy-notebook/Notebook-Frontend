@@ -1,3 +1,4 @@
+import { NotebookActionScope } from '@/services/notebook/NotebookActionScope';
 import { CapturedQAEvent } from '../../CapturedQAEvent';
 /**
  * Run Current Code Cell Action - Handles runCurrentCodeCell stream type
@@ -10,10 +11,12 @@ import useStore from '@Store/notebookStore';
 
 export class RunCurrentCodeCellAction extends StreamAction {
   async execute(context: StreamActionContext): Promise<void> {
+    context.signal?.throwIfAborted();
     const { payload } = context;
     const cellId = payload?.cellId;
 
     const state = useStore.getState();
+    if (context.notebookId !== undefined && context.notebookId !== state.notebookId) return;
     const targetCellId = cellId || state.currentCellId;
 
     if (targetCellId) {
@@ -24,8 +27,15 @@ export class RunCurrentCodeCellAction extends StreamAction {
           { type: 'execute-code', content: targetCell.content || '', agent: 'code-executor' },
           payload.QId
         );
-        await state.runSingleCell(targetCellId);
-        event.record();
+        const scope = new NotebookActionScope(context.signal);
+        try {
+          scope.begin();
+          await state.runSingleCell(targetCellId);
+          scope.signal.throwIfAborted();
+          event.record();
+        } finally {
+          scope.dispose();
+        }
       }
     }
   }

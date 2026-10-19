@@ -6,6 +6,7 @@ import { useAIPlanningContextStore } from './aiPlanningContext';
 import { createInitialStateJSON } from '@Store/models';
 import type { ExecutionResult } from '@Store/models/code';
 import { RepairedCodeExecution } from './RepairedCodeExecution';
+import { ExecAction as StreamExec } from '@/services/stream/actions/reflecting/ExecAction';
 import { ExecNewVersionAction as StreamRepair } from '@/services/stream/actions/reflecting/ExecNewVersionAction';
 
 const notebook = useNotebookStore.getState();
@@ -125,3 +126,50 @@ it('does not clear effects when the requested code cell is missing', async () =>
   expect(execute).not.toHaveBeenCalled();
   expect(useWorkflowStateMachine.getState().stateJSON).toBe(previous);
 });
+
+it.each([StreamRepair, StreamExec])(
+  'rejects pre-cancelled %s before execution or effects reset',
+  async (Action) => {
+    const execute = vi.fn();
+    useCodeStore.setState({ executeCell: execute });
+    const previous = useWorkflowStateMachine.getState().stateJSON;
+    const controller = new AbortController();
+    controller.abort(new Error('caller cancelled'));
+    await expect(
+      new Action().execute({
+        payload: { cellId: 'code' },
+        showToast: vi.fn(),
+        signal: controller.signal,
+      })
+    ).rejects.toThrow('caller cancelled');
+    expect(execute).not.toHaveBeenCalled();
+    expect(useWorkflowStateMachine.getState().stateJSON).toBe(previous);
+  }
+);
+it.each([StreamRepair, StreamExec])(
+  'suppresses late effects and debug completion for cancelled %s',
+  async (Action) => {
+    let finish!: (result: ExecutionResult) => void;
+    useCodeStore.setState({
+      executeCell: vi.fn(
+        () =>
+          new Promise<ExecutionResult>((resolve) => {
+            finish = resolve;
+          })
+      ),
+    });
+    const controller = new AbortController();
+    const pending = new Action().execute({
+      payload: { cellId: 'code' },
+      showToast: vi.fn(),
+      signal: controller.signal,
+    });
+    const afterAdmission = useWorkflowStateMachine.getState().stateJSON;
+    controller.abort(new Error('caller cancelled'));
+    finish({ success: true, outputs: [{ type: 'text', content: 'late output' }] });
+    await expect(pending).rejects.toThrow('caller cancelled');
+    expect(useWorkflowStateMachine.getState().stateJSON).toBe(afterAdmission);
+    expect(useAIPlanningContextStore.getState().effect.current).toEqual([]);
+    expect(useNotebookStore.getState().cells[0].metadata?.debug.executedAfterFix).toBeUndefined();
+  }
+);
