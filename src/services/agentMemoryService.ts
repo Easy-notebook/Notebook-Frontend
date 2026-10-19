@@ -123,7 +123,15 @@ export class AgentMemoryService {
       return this.memories[agent_id];
     }
 
-    const memory: AgentMemory = {
+    const memory = this.createAgentMemory(notebookId, agentType);
+
+    this.memories[agent_id] = memory;
+    this.saveToStorage();
+    return memory;
+  }
+
+  private static createAgentMemory(notebookId: string, agentType: AgentType): AgentMemory {
+    return {
       agent_type: agentType,
       notebook_id: notebookId,
       created_at: Date.now(),
@@ -190,10 +198,34 @@ export class AgentMemoryService {
         warning_signs: [],
       },
     };
+  }
 
-    this.memories[agent_id] = memory;
-    this.saveToStorage();
-    return memory;
+  /** Commit a remembered fact to the existing context history before acknowledging it. */
+  static rememberInformation(
+    notebookId: string,
+    agentType: AgentType,
+    information: string,
+    category: string
+  ): void {
+    const id = this.generateAgentId(notebookId, agentType);
+    const previous = this.memories[id] ?? this.createAgentMemory(notebookId, agentType);
+    const memory = this.withContext(previous, { information, category });
+    this.commitToStorage({ ...this.memories, [id]: memory });
+  }
+
+  private static withContext(memory: AgentMemory, context: Record<string, unknown>): AgentMemory {
+    const timestamp = Date.now();
+    return {
+      ...memory,
+      last_updated: timestamp,
+      situation_tracking: {
+        ...memory.situation_tracking,
+        current_context: [
+          { context_update: context, timestamp, agent_type: memory.agent_type },
+          ...(memory.situation_tracking.current_context ?? []),
+        ].slice(0, 10),
+      },
+    };
   }
 
   // 获取Agent记忆
@@ -465,29 +497,7 @@ export class AgentMemoryService {
       memory = this.initializeAgentMemory(notebookId, agentType);
     }
 
-    // 将上下文数据添加到最近的交互记录中，或创建新的上下文记录
-    const contextRecord = {
-      context_update: contextData,
-      timestamp: Date.now(),
-      agent_type: agentType,
-    };
-
-    // 如果没有专门的上下文存储字段，我们可以将其添加到situation_tracking中
-    if (!memory.situation_tracking.current_context) {
-      memory.situation_tracking.current_context = [];
-    }
-
-    memory.situation_tracking.current_context.unshift(contextRecord);
-
-    // 只保留最近10个上下文记录
-    if (memory.situation_tracking.current_context.length > 10) {
-      memory.situation_tracking.current_context = memory.situation_tracking.current_context.slice(
-        0,
-        10
-      );
-    }
-
-    this.updateAgentMemory(notebookId, agentType, memory);
+    this.updateAgentMemory(notebookId, agentType, this.withContext(memory, contextData));
   }
 
   // 为后端准备记忆上下文
@@ -571,14 +581,19 @@ export class AgentMemoryService {
   }
 
   // 存储管理
+  private static commitToStorage(memories: AgentMemoryStore): void {
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(memories));
+    this.memories = memories;
+    window.dispatchEvent(
+      new CustomEvent('agentMemoryUpdated', {
+        detail: { timestamp: Date.now() },
+      })
+    );
+  }
+
   private static saveToStorage(): void {
     try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.memories));
-      // 触发自定义事件通知组件更新
-      const event = new CustomEvent('agentMemoryUpdated', {
-        detail: { timestamp: Date.now() },
-      });
-      window.dispatchEvent(event);
+      this.commitToStorage(this.memories);
     } catch (error) {
       console.error('Failed to save agent memories:', error);
     }

@@ -40,3 +40,21 @@ QA admission precedes notification. If notification fails, the admitted QA remai
 the failure propagates without an additional misleading creation-failure notification.
 This records the incoming request; it does not add a new backend dispatch operation or
 claim a response has been generated. Tests use the real QA store and mock notification.
+
+## Remembered information
+
+`remember_information` uses `AgentMemoryService`, not the QA store. Explicit notebook
+context takes precedence over current selection; missing ownership and unsupported agent
+types reject before mutation. Information/category are stored in the existing
+`situation_tracking.current_context` history, so backend memory preparation and existing
+storage reload include them without a second memory schema. The default agent/category
+remain general, and existing ten-record retention applies.
+
+The service constructs the next memory snapshot, writes `agent_memories_v2`, then publishes
+it in memory and emits the update event. Quota failure leaves both prior snapshots intact
+and prevents the success toast. A shared immutable context append is also used by ordinary
+context updates. The new acknowledged write path does not change other memory methods'
+existing best-effort error behavior; cross-tab memory coordination is not implemented.
+
+Tests cover new/existing memory quota failures, isolation, retention, shared context updates,
+and a real Chromium reload through backend context preparation.
