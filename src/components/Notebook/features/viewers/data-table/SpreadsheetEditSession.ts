@@ -18,14 +18,19 @@ export class SpreadsheetEditSession {
   private state: SaveState = { phase: 'ready' };
   private committedEcho: string | null = null;
 
+  /** Pure admission check shared by the React lifetime boundary and source loading. */
+  retainsDraft(key: string | null, content: string): boolean {
+    if (key === null || this.source?.key !== key) return false;
+    const savingContent = this.state.phase === 'saving' ? this.state.ticket.content : null;
+    return (
+      this.source.content === content || content === savingContent || content === this.committedEcho
+    );
+  }
+
   receiveSource(key: string | null, content: string): boolean {
-    if (key !== null && this.source?.key === key) {
-      if (this.source.content === content) return false;
-      const savingContent = this.state.phase === 'saving' ? this.state.ticket.content : null;
-      if (content === savingContent || content === this.committedEcho) {
-        this.source = { key, content };
-        return false;
-      }
+    if (key !== null && this.retainsDraft(key, content)) {
+      this.source = { key, content };
+      return false;
     }
     this.close();
     this.source = key === null ? null : { key, content };

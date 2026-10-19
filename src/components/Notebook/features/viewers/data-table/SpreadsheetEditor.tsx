@@ -15,7 +15,7 @@ import * as XLSX from 'xlsx-js-style';
 import { parseTableCsv, serializeTableCsv } from './CsvCodec';
 import { XlsxDocument } from './XlsxDocument';
 import { SpreadsheetRowOrder } from './SpreadsheetRowOrder';
-import { SpreadsheetEditSession } from './SpreadsheetEditSession';
+import type { SpreadsheetEditSession } from './SpreadsheetEditSession';
 import { SpreadsheetHistory } from './SpreadsheetHistory';
 import { VirtualSpreadsheetRow, type SpreadsheetRowRenderer } from './VirtualSpreadsheetRow';
 import {
@@ -139,9 +139,10 @@ export interface SpreadsheetPreviewProps {
   showFormulaBar?: boolean;
 }
 
-interface SpreadsheetEditorProps extends SpreadsheetPreviewProps {
+export interface SpreadsheetEditorProps extends SpreadsheetPreviewProps {
   currentFile: FileObject | null;
   isInSplitView: boolean;
+  editSession: SpreadsheetEditSession;
 }
 
 /** A mounted editor owns one file in one preview surface; all local state shares that lifetime. */
@@ -150,10 +151,10 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   showFormulaBar = true,
   currentFile,
   isInSplitView,
+  editSession,
 }) => {
   const setTabDirty = usePreviewStore((state) => state.setTabDirty);
 
-  const [editSession] = useState(() => new SpreadsheetEditSession());
   const [draftHistory] = useState(
     () =>
       new SpreadsheetHistory<SpreadsheetSnapshot>({ data: [], columns: [], cellFormats: {} }, () =>

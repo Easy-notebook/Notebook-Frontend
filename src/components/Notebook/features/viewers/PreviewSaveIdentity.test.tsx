@@ -515,7 +515,7 @@ it('pastes consecutive rows in visible sorted order without changing unrelated s
   }
 });
 
-it.each(['navigation', 'newer edit', 'unmount'])(
+it.each(['navigation', 'external replacement', 'newer edit', 'unmount'])(
   'ignores late clipboard text after %s',
   async (change) => {
     model.state.activeFile = {
@@ -551,6 +551,9 @@ it.each(['navigation', 'newer edit', 'unmount'])(
           path: 'other.csv',
           content: 'newer',
         };
+        view.rerender(<DataTable showFormulaBar={false} />);
+      } else if (change === 'external replacement') {
+        model.state.activeFile = { ...model.state.activeFile, content: 'newer' };
         view.rerender(<DataTable showFormulaBar={false} />);
       } else if (change === 'newer edit') {
         fireEvent.doubleClick(screen.getByText('original', { exact: true }));
@@ -719,4 +722,62 @@ it('persists toolbar formatting when saving an XLSX preview', async () => {
   expect(model.state.updatePreviewFileContent).toHaveBeenCalledOnce();
   const saved = model.state.updatePreviewFileContent.mock.calls[0][0] as string;
   expect(writtenCellStyle(saved, 'A1').font.getElementsByTagName('b')).toHaveLength(1);
+});
+
+it('replaces the whole editor session when external content replaces the same file', () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::external.csv',
+    name: 'external.csv',
+    path: 'external.csv',
+    type: 'csv',
+    content: 'name\nAda',
+  };
+  const view = render(<DataTable showFormulaBar={false} />);
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  fireEvent.contextMenu(screen.getByText('Ada', { exact: true }));
+  model.state.activeFile = { ...model.state.activeFile, content: 'Grace' };
+  view.rerender(<DataTable showFormulaBar={false} />);
+  expect(screen.getByText('Grace', { exact: true })).toBeDefined();
+  expect(screen.queryByRole('button', { name: 'Insert Row Above' })).toBeNull();
+  expect(
+    (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+  ).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('Grace', {
+    surface: 'normal',
+    fileId: 'book::external.csv',
+  });
+});
+
+it('revokes an old save acknowledgement after external replacement of the same file', async () => {
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::external.csv',
+    name: 'external.csv',
+    path: 'external.csv',
+    type: 'csv',
+    content: 'original',
+  };
+  const view = render(<DataTable showFormulaBar={false} />);
+  const savedFile = { ...model.state.activeFile };
+  let finish!: (file: typeof savedFile) => void;
+  model.state.updatePreviewFileContent.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    })
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  model.state.activeFile = { ...model.state.activeFile, content: 'replacement' };
+  view.rerender(<DataTable showFormulaBar={false} />);
+  fireEvent.doubleClick(screen.getByText('replacement', { exact: true }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'new draft' } });
+  fireEvent.blur(screen.getByRole('textbox'));
+  model.state.setTabDirty.mockClear();
+  await act(async () => {
+    finish(savedFile);
+  });
+  expect(model.state.setTabDirty).not.toHaveBeenCalled();
+  expect(screen.getByText('new draft', { exact: true })).toBeDefined();
 });

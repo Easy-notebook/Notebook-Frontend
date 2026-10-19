@@ -322,8 +322,13 @@ file ID and effective format. The editor owns its draft, save/deferred-edit
 session, history, selection, input state, menus, filters and formatting. Switching
 identity unmounts that complete owner instead of manually resetting a subset of
 its state. The boundary is inside the exported spreadsheet component, so it does
-not depend on a caller's file-only React key. Content updates for the same identity
-keep the mounted owner and its existing save-echo protection.
+not depend on a caller's file-only React key. `SpreadsheetSourceBoundary` also owns the edit session for each source generation.
+For same-identity content updates, the session's pure `retainsDraft` admission check
+preserves the mounted editor for unchanged content and owned save echoes. External
+replacement creates a new session and remounts the complete editor. Its old session
+closes on unmount, revoking pending saves and clipboard edits as well as clearing
+menus, selections, inputs, history and view-local projections. This avoids manually
+resetting a growing list of React states when the backing document is replaced.
 
 ## Spreadsheet history
 
