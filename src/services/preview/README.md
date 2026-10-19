@@ -422,3 +422,11 @@ Obsolete failures do not publish. Source replacement installs the new source bef
 notification, and save completion rechecks ownership after notifying subscribers;
 a synchronous edit, close or new save cannot be followed by a stale clean marker.
 The editor also checks admission after the saving notification before starting I/O.
+
+The save button and editor-scoped Ctrl+S / Command+S share `handleSave`. Before
+serialization, `commitEditingCell` commits any in-progress input to the history
+owner and returns the resulting snapshot. Blur uses the same operation; an already
+committed or unchanged value adds no history frame. Saving serializes that current
+snapshot rather than a React render captured before the input commit. Cell elements
+are focusable by mouse, and the editor handles save keys only within its subtree;
+composition and repeated keydown events cannot accidentally submit another save.

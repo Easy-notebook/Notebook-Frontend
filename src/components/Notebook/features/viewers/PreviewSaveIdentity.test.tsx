@@ -1033,3 +1033,58 @@ it('shows unconfirmed save results instead of displaying Saved', async () => {
   expect(screen.getByRole('alert').textContent).toContain('Save was not confirmed');
   expect(screen.queryByRole('status')).toBeNull();
 });
+
+it.each(['button', 'control', 'command'])(
+  'saves the in-progress cell edit through the %s entry point',
+  async (entry) => {
+    model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'original' };
+    model.state.updatePreviewFileContent.mockResolvedValueOnce({
+      ...model.state.activeFile,
+      content: 'typed draft',
+    });
+    render(<DataTable showFormulaBar={false} />);
+    fireEvent.doubleClick(screen.getByText('original', { exact: true }));
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'typed draft' } });
+    await act(async () => {
+      if (entry === 'button') fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+      else
+        expect(
+          fireEvent.keyDown(input, {
+            key: 's',
+            ctrlKey: entry === 'control',
+            metaKey: entry === 'command',
+          })
+        ).toBe(false);
+    });
+    expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith('typed draft', {
+      surface: 'normal',
+      fileId: model.state.activeFile.id,
+    });
+    expect(screen.getByRole('status').textContent).toBe('Saved');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+    });
+    expect(screen.getByText('original', { exact: true })).toBeDefined();
+    expect(
+      (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+  }
+);
+
+it('does not save a spreadsheet for a keyboard event outside its editor', async () => {
+  model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'original' };
+  render(
+    <>
+      <input aria-label="Other editor" />
+      <DataTable />
+    </>
+  );
+  await act(async () => {
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Other editor' }), {
+      key: 's',
+      ctrlKey: true,
+    });
+  });
+  expect(model.state.updatePreviewFileContent).not.toHaveBeenCalled();
+});

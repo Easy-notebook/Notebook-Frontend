@@ -1071,6 +1071,20 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     URL.revokeObjectURL(url);
   }, [data, columns, currentFile]);
 
+  const commitEditingCell = useCallback((): SpreadsheetSnapshot => {
+    const snapshot = draftHistory.getSnapshot().value;
+    if (!editingCell) return snapshot;
+    const column = snapshot.columns[editingCell.col];
+    const row = snapshot.data[editingCell.row];
+    setEditingCell(null);
+    if (!column || !row || String(row[column.key] ?? '') === editValue) return snapshot;
+    const next = { ...snapshot, data: snapshot.data.map((row) => ({ ...row })) };
+    next.data[editingCell.row][column.key] = editValue;
+    draftHistory.commit(next);
+    if (currentFile) setTabDirty(currentFile.id, true);
+    return draftHistory.getSnapshot().value;
+  }, [draftHistory, editingCell, editValue, currentFile, setTabDirty]);
+
   const handleSave = useCallback(async () => {
     if (!currentFile) return;
     let ticket: ReturnType<SpreadsheetEditSession['beginSave']> | null = null;
@@ -1085,9 +1099,10 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       ) {
         throw new Error('Spreadsheet is not ready for saving');
       }
+      const draft = commitEditingCell();
       const content = isWorkbook
-        ? source.workbook!.serialize(data, columns, cellFormats, workbookState)
-        : serializeTableCsv(data, columns);
+        ? source.workbook!.serialize(draft.data, draft.columns, draft.cellFormats, draft.workbook)
+        : serializeTableCsv(draft.data, draft.columns);
       ticket = editSession.beginSave(content);
       if (!editSession.ownsSave(ticket)) return;
       const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
@@ -1105,17 +1120,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       );
       console.error('Failed to save:', err);
     }
-  }, [
-    currentFile,
-    data,
-    columns,
-    cellFormats,
-    workbookState,
-    setTabDirty,
-    isInSplitView,
-    typeOverride,
-    editSession,
-  ]);
+  }, [currentFile, commitEditingCell, setTabDirty, isInSplitView, typeOverride, editSession]);
 
   if (
     !currentFile ||
@@ -1134,7 +1139,17 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
   }
 
   return (
-    <div className="h-full flex flex-col bg-gradient-to-br from-gray-50/80 to-gray-100/80 dark:from-gray-900/80 dark:to-gray-800/80">
+    <div
+      className="h-full flex flex-col bg-gradient-to-br from-gray-50/80 to-gray-100/80 dark:from-gray-900/80 dark:to-gray-800/80"
+      onKeyDown={(event) => {
+        if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey) return;
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!event.repeat) void handleSave();
+        }
+      }}
+    >
       {/* Toolbar */}
       <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50">
         <div className="px-3 py-2 flex items-center gap-2 flex-wrap">
@@ -1159,7 +1174,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
               onClick={handleSave}
               aria-busy={saveStatus.phase === 'saving'}
               className="px-2.5 py-1.5 text-sm bg-gradient-to-r from-theme-500 to-theme-600 text-white rounded-lg hover:from-theme-600 hover:to-theme-700 flex items-center gap-1.5 shadow-sm transition-all duration-200 hover:shadow-md"
-              title="Save (Ctrl+S)"
+              title="Save (Ctrl+S / ⌘S)"
             >
               <Save className="w-4 h-4" />
               Save
@@ -1606,6 +1621,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                             return (
                               <div
                                 key={cell.id}
+                                tabIndex={-1}
                                 className={`border-r border-b border-gray-200/60 dark:border-gray-700/60 p-0 align-middle ${selectionBgClass} ${isActive ? 'ring-2 ring-theme-500/70 ring-inset shadow-sm' : ''} text-gray-900 dark:text-gray-100 flex-shrink-0 transition-all duration-150 hover:bg-gray-50/50 dark:hover:bg-gray-800/50`}
                                 style={{
                                   width: cell.column.getSize(),
@@ -1648,14 +1664,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
                                       type="text"
                                       value={editValue}
                                       onChange={(e) => setEditValue(e.target.value)}
-                                      onBlur={() => {
-                                        const newData = data.map((row) => ({ ...row }));
-                                        newData[sourceRow][columns[colIndex].key] = editValue;
-                                        commitDraft({ data: newData });
-                                        setEditingCell(null);
-                                        if (setTabDirty && currentFile)
-                                          setTabDirty(currentFile.id, true);
-                                      }}
+                                      onBlur={commitEditingCell}
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter')
                                           (e.currentTarget as HTMLInputElement).blur();
