@@ -163,3 +163,18 @@ unchanged and requires no migration.
 
 Native browser coverage verifies that reads, content updates and deletes of the
 whitespace-bearing key leave the similarly named canonical and split files intact.
+
+## Independent default-tab discovery
+
+When no saved tab state exists, local and backend catalogs are read independently.
+`TabCatalog` validates each complete source, applies common tab exclusions, and
+projects file identities. It preserves explicit remote paths and derives absent
+child paths from their parent directory. Malformed source parsing contributes no
+partial entries. Cached metadata wins duplicate paths regardless of completion
+order, and foreign cached notebook ownership is excluded.
+
+A nonempty catalog from either source remains usable when the other source fails;
+that source's failure is logged. An empty result is returned only when both sources
+succeed. Failures with no usable entries reject with `TabDiscoveryError`, retaining
+source-specific causes, so the store can preserve current tabs and show the error.
+`FileReadRecord` now types both single-file and notebook-list repository results.

@@ -6,6 +6,7 @@ import {
   IStorageProvider,
   type FileSaveData,
   type FileSaveOptions,
+  type FileReadRecord,
 } from '../interfaces';
 import {
   FileMetadataEntity,
@@ -68,14 +69,7 @@ export class FileRepository implements IFileRepository {
     return records.metadata;
   }
 
-  async getFile(
-    notebookId: string,
-    filePath: string
-  ): Promise<{
-    metadata: FileMetadataEntity;
-    content?: string;
-    needsRemoteFetch?: boolean;
-  } | null> {
+  async getFile(notebookId: string, filePath: string): Promise<FileReadRecord | null> {
     const fileId = makeFileId(notebookId, filePath);
     let result: Awaited<ReturnType<IFileRepository['getFile']>> = null;
     // Read the revision, update its access counters and read its content under one lock.
@@ -120,7 +114,7 @@ export class FileRepository implements IFileRepository {
     return result;
   }
 
-  async getFilesForNotebook(notebookId: string, includeContent = false): Promise<any[]> {
+  async getFilesForNotebook(notebookId: string, includeContent = false): Promise<FileReadRecord[]> {
     let results: Array<{
       metadata: FileMetadataEntity;
       content?: string;

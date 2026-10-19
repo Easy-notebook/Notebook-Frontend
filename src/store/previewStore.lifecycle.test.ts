@@ -1015,3 +1015,13 @@ describe('restored file path identity', () => {
     expect(result?.path).toBe(path);
   });
 });
+
+it('keeps displayed tabs when default discovery cannot confirm an empty catalog', async () => {
+  usePreviewStore.setState({ currentNotebookId: 'book', currentPreviewFiles: [tab('book')] });
+  io.defaults.mockRejectedValueOnce(new Error('Unable to discover notebook files'));
+  await state().loadNotebookTabs('book');
+  expect(state().currentPreviewFiles).toEqual([tab('book')]);
+  expect(state().error).toContain('Unable to discover notebook files');
+  expect(state().isLoading).toBe(false);
+  expect(io.tabSave).not.toHaveBeenCalled();
+});

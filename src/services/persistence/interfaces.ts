@@ -103,17 +103,20 @@ export interface INotebookRepository {
   }>;
 }
 
+export interface FileReadRecord {
+  metadata: FileMetadataEntity;
+  content?: string;
+  needsRemoteFetch?: boolean;
+}
+
 export interface IFileRepository {
   saveFile<T extends FileSaveData>(
     fileData: T,
     options?: FileSaveOptions
   ): Promise<FileMetadataEntity>;
   getLargeFiles(notebookId?: string): Promise<FileMetadataEntity[]>;
-  getFile(
-    notebookId: string,
-    filePath: string
-  ): Promise<{ metadata: FileMetadataEntity; content?: string; needsRemoteFetch?: boolean } | null>;
-  getFilesForNotebook(notebookId: string, includeContent?: boolean): Promise<any[]>;
+  getFile(notebookId: string, filePath: string): Promise<FileReadRecord | null>;
+  getFilesForNotebook(notebookId: string, includeContent?: boolean): Promise<FileReadRecord[]>;
   deleteFile(notebookId: string, filePath: string): Promise<boolean>;
   clearNotebook(notebookId: string): Promise<void>;
   updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean>;
