@@ -109,3 +109,10 @@ navigates synchronously through the route Store, then awaits the existing notebo
 lifecycle with error handling; it does not schedule navigation after a module import.
 Component tests cover ordinary selection, unsupported types, immediate notebook navigation,
 and rejected notebook switching alongside the preview Store's lifecycle suite.
+
+The file list UI uses `useNotebookFileList` / `FileListSession`; the former unowned
+`fileUtils.fetchFileList` helper has been removed after checking that no caller remains.
+The `fetchFileList` callbacks accepted by upload/delete utilities remain caller-supplied
+refresh operations. Upload responses use the shared service `ApiResponse` type rather than
+a second local response/file-list schema. The unreferenced generic `useErrorHandler` hook
+was also removed; existing lifecycle owners retain their own error and retry policies.

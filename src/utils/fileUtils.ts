@@ -3,25 +3,9 @@ import type {
   FileUploadClient,
   FileUploadConfig as UploadConfig,
 } from '@Services/notebook/FileUploadClient';
-// fileUtils.ts
-
-// Type definitions for file utilities
-interface FileItem {
-  name: string;
-  size: number;
-  type: string;
-  lastModified: number;
-  [key: string]: any;
-}
-
-interface ApiResponse {
-  status: 'ok' | 'error';
-  message?: string;
-  files?: FileItem[];
-}
+import type { ApiResponse } from '@Services/types';
 
 interface FileServiceInterface extends Pick<FileUploadClient, 'uploadFiles'> {
-  listFiles: (notebookId: string) => Promise<ApiResponse>;
   getFilePreviewUrl: (notebookId: string, filename: string) => Promise<string>;
   getFileContent: (notebookId: string, filename: string) => Promise<string>;
   downloadFile: (notebookId: string, filename: string) => Promise<void>;
@@ -35,13 +19,6 @@ interface ToastOptions {
 }
 
 type ToastFunction = (options: ToastOptions) => void;
-
-interface FetchFileListParams {
-  notebookId: string;
-  fileService: Pick<FileServiceInterface, 'listFiles'>;
-  setFileList: (files: FileItem[]) => void;
-  toast: ToastFunction;
-}
 
 interface HandleFileUploadParams {
   notebookId: string;
@@ -87,36 +64,6 @@ interface HandleDeleteFileParams {
   fetchFileList: () => Promise<void>;
   toast: ToastFunction;
 }
-
-/**
- * 获取文件列表
- * @param params - 参数对象
- */
-export const fetchFileList = async ({
-  notebookId,
-  fileService,
-  setFileList,
-  toast,
-}: FetchFileListParams): Promise<void> => {
-  if (!notebookId) return;
-
-  try {
-    const data: ApiResponse = await fileService.listFiles(notebookId);
-    if (data.status === 'ok') {
-      setFileList(data.files);
-    } else {
-      throw new Error(data.message || 'Failed to fetch file list');
-    }
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    toast({
-      title: 'Error',
-      description: `Failed to fetch file list: ${errorMessage}`,
-      variant: 'destructive',
-    });
-    setFileList([]);
-  }
-};
 
 /**
  * 验证文件是否符合上传配置
