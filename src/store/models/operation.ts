@@ -14,4 +14,4 @@ export interface OperationResponseData {
 /** Accepted means an HTTP response stream was established, not that execution succeeded. */
 export type OperationSubmission =
   | { accepted: true; operationId: string; completion: Promise<void> }
-  | { accepted: false; reason: 'busy' | 'failed'; message: string };
+  | { accepted: false; reason: 'busy' | 'failed' | 'cancelled'; message: string };

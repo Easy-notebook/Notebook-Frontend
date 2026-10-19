@@ -93,3 +93,15 @@ it('propagates failures from a later read and releases the lock', async () => {
   await assertion;
   expect(input.locked).toBe(false);
 });
+
+it('aborts a blocked reader and releases the lock', async () => {
+  const abort = new AbortController();
+  const cancel = vi.fn();
+  const stream = new ReadableStream<Uint8Array>({ cancel });
+  const pending = new OperationStreamReader().consume(stream, vi.fn(), abort.signal);
+  const assertion = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  abort.abort();
+  await assertion;
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(stream.locked).toBe(false);
+});

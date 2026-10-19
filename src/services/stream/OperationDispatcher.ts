@@ -3,65 +3,157 @@ import { OperationStreamReader } from './OperationStreamReader';
 
 interface OperationPorts {
   initialize(): Promise<string | false>;
-  open(notebookId: string, operation: Operation): Promise<ReadableStream<Uint8Array> | null>;
+  open(
+    notebookId: string,
+    operation: Operation,
+    signal: AbortSignal
+  ): Promise<ReadableStream<Uint8Array> | null>;
   record(operation: Operation): string;
-  receive(operationId: string, data: Record<string, unknown>): Promise<void>;
+  receive(operationId: string, data: Record<string, unknown>, signal: AbortSignal): Promise<void>;
   busy(value: boolean): void;
   error(message: string): void;
   refused(message: string): void;
 }
+interface Attempt {
+  phase: 'initializing' | 'connecting' | 'streaming' | 'complete' | 'failed' | 'cancelled';
+  notebookId: string | null;
+  controller: AbortController;
+}
 
-/** Owns admission separately from stream completion; both Store APIs use this lifecycle. */
+/** Owns notebook-bound admission and stream completion, including superseded cleanup. */
 export class OperationDispatcher {
-  private phase: 'idle' | 'initializing' | 'connecting' | 'streaming' = 'idle';
+  private current: Attempt | undefined;
   constructor(private readonly ports: OperationPorts) {}
 
+  notebookChanged(previous: string | null, next: string | null): void {
+    const attempt = this.current;
+    if (!attempt || previous === next) return;
+    if (attempt.phase === 'initializing' && attempt.notebookId === null && previous === null) {
+      // Kernel initialization may create the first notebook; validate its returned ID afterward.
+      attempt.notebookId = next;
+      return;
+    }
+    this.cancel();
+  }
+  cancel(): void {
+    const attempt = this.current;
+    if (!attempt) return;
+    this.current = undefined;
+    attempt.phase = 'cancelled';
+    try {
+      this.ports.busy(false);
+    } finally {
+      attempt.controller.abort(new DOMException('Notebook operation cancelled', 'AbortError'));
+    }
+  }
+  private assertCurrent(attempt: Attempt): void {
+    attempt.controller.signal.throwIfAborted();
+    if (this.current !== attempt) throw new DOMException('Operation superseded', 'AbortError');
+  }
+  private async wait<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+    let abort!: () => void;
+    const cancelled = new Promise<never>((_, reject) => {
+      abort = () => reject(signal.reason);
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+    });
+    try {
+      return await Promise.race([promise, cancelled]);
+    } finally {
+      signal.removeEventListener('abort', abort);
+    }
+  }
+
   async submit(notebookId: string | null, operation: Operation): Promise<OperationSubmission> {
-    if (this.phase !== 'idle') {
+    if (this.current) {
       const message = '正在处理其他操作，请稍后...';
       this.ports.refused(message);
       return { accepted: false, reason: 'busy', message };
     }
-    this.phase = notebookId ? 'connecting' : 'initializing';
+    const attempt: Attempt = {
+      phase: notebookId ? 'connecting' : 'initializing',
+      notebookId,
+      controller: new AbortController(),
+    };
+    this.current = attempt;
+    const signal = attempt.controller.signal;
+    const response: { unclaimed: ReadableStream<Uint8Array> | null } = { unclaimed: null };
     try {
-      // Capture before any asynchronous initialization or external Store subscriber runs.
       const captured = structuredClone(operation);
       this.ports.busy(true);
+      this.assertCurrent(attempt);
       if (!notebookId) {
-        const kernelId = await this.ports.initialize();
+        const kernelId = await this.wait(this.ports.initialize(), signal);
+        this.assertCurrent(attempt);
         if (!kernelId) throw new Error('无法初始化内核');
+        if (attempt.notebookId !== null && attempt.notebookId !== kernelId) {
+          this.cancel();
+          this.assertCurrent(attempt);
+        }
         notebookId = kernelId;
+        attempt.notebookId = kernelId;
       }
-      this.phase = 'connecting';
+      attempt.phase = 'connecting';
       const operationId = this.ports.record(captured);
-      const stream = await this.ports.open(notebookId, captured);
+      this.assertCurrent(attempt);
+      const connection = this.ports.open(notebookId, captured, signal);
+      // Some transports cannot abort opening; reclaim a response that arrives after cancellation.
+      void connection
+        .then((stream) => {
+          response.unclaimed = stream;
+          if (signal.aborted && stream) return stream.cancel(signal.reason);
+        })
+        .catch(() => {});
+      const stream = await this.wait(connection, signal);
+      this.assertCurrent(attempt);
       if (!stream) throw new Error('Operation response has no stream body');
-      this.phase = 'streaming';
-      const completion = this.consume(operationId, stream);
+      attempt.phase = 'streaming';
+      const completion = this.consume(attempt, operationId, stream);
+      response.unclaimed = null;
       return { accepted: true, operationId, completion };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (signal.aborted || this.current !== attempt) {
+        if (response.unclaimed) void response.unclaimed.cancel(signal.reason).catch(() => {});
+        return { accepted: false, reason: 'cancelled', message };
+      }
+      attempt.phase = 'failed';
       try {
         this.ports.error(message);
       } finally {
-        this.finish();
+        this.finish(attempt);
       }
       return { accepted: false, reason: 'failed', message };
     }
   }
-  private async consume(operationId: string, stream: ReadableStream<Uint8Array>): Promise<void> {
+  private async consume(
+    attempt: Attempt,
+    operationId: string,
+    stream: ReadableStream<Uint8Array>
+  ): Promise<void> {
+    const signal = attempt.controller.signal;
     try {
-      await new OperationStreamReader().consume(stream, (data) =>
-        this.ports.receive(operationId, data)
+      await new OperationStreamReader().consume(
+        stream,
+        (data) => {
+          this.assertCurrent(attempt);
+          return this.ports.receive(operationId, data, signal);
+        },
+        signal
       );
+      attempt.phase = 'complete';
     } catch (error) {
-      this.ports.error(error instanceof Error ? error.message : String(error));
+      if (!signal.aborted && this.current === attempt) {
+        attempt.phase = 'failed';
+        this.ports.error(error instanceof Error ? error.message : String(error));
+      }
     } finally {
-      this.finish();
+      this.finish(attempt);
     }
   }
-  private finish(): void {
-    this.phase = 'idle';
+  private finish(attempt: Attempt): void {
+    if (this.current !== attempt) return;
+    this.current = undefined;
     this.ports.busy(false);
   }
 }

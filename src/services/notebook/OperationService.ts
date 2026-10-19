@@ -6,12 +6,14 @@ export class OperationService extends BaseService {
   // Send operation to backend (Unified Interface)
   static async sendOperation(
     notebookId: string,
-    operation: Operation
+    operation: Operation,
+    signal?: AbortSignal
   ): Promise<ReadableStream<Uint8Array> | null> {
     try {
       const response = await fetch(`${this.baseUrl}/send_operation`, {
         // Unified endpoint
         method: 'POST',
+        signal,
         headers: {
           'Content-Type': 'application/json',
         },

@@ -2,9 +2,16 @@
 export class OperationStreamReader {
   async consume(
     stream: ReadableStream<Uint8Array>,
-    receive: (data: Record<string, unknown>) => Promise<void>
+    receive: (data: Record<string, unknown>) => Promise<void>,
+    signal?: AbortSignal
   ): Promise<void> {
     const reader = stream.getReader();
+    let cancellation: Promise<void> | undefined;
+    const cancel = () => {
+      cancellation ??= reader.cancel(signal?.reason);
+      void cancellation.catch(() => {});
+    };
+    signal?.addEventListener('abort', cancel, { once: true });
     const decoder = new TextDecoder('utf-8', { fatal: true });
     let buffer = '';
     let ended = false;
@@ -34,7 +41,9 @@ export class OperationStreamReader {
           depth--;
           if (depth === 0) {
             const data: Record<string, unknown> = JSON.parse(buffer.slice(start, index + 1));
+            signal?.throwIfAborted();
             await receive(data);
+            signal?.throwIfAborted();
             start = index + 1;
           }
         }
@@ -43,7 +52,9 @@ export class OperationStreamReader {
     };
     try {
       while (true) {
+        signal?.throwIfAborted();
         const { done, value } = await reader.read();
+        signal?.throwIfAborted();
         if (done) {
           ended = true;
           buffer += decoder.decode();
@@ -55,8 +66,12 @@ export class OperationStreamReader {
         await drain();
       }
     } finally {
+      signal?.removeEventListener('abort', cancel);
       try {
-        if (!ended) await reader.cancel();
+        if (!ended) {
+          cancel();
+          await cancellation;
+        }
       } finally {
         reader.releaseLock();
       }

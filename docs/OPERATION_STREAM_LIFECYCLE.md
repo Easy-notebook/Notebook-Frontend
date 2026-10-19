@@ -24,7 +24,7 @@ The Store adapts history, responses and error notifications to the dispatcher.
 
 Two public entry points share this one lifecycle:
 
-- `submitOperation` resolves to a discriminated receipt: refusal (`busy` or `failed` plus a
+- `submitOperation` resolves to a discriminated receipt: refusal (`busy`, `failed` or `cancelled` plus a
   message), or acceptance with an operation ID and a separately awaitable completion Promise.
 - `sendOperation(...): Promise<void>` preserves the existing public interface by waiting for
   that same dispatcher's completion when accepted. Errors continue through Store/toast reporting.
@@ -36,5 +36,22 @@ admission, retain drafts on refusal, and remove their provisional QA/action reco
 attempt history remains available for failed connection attempts. Existing memory interaction
 logs still record attempted starts and are not rolled back.
 
-There is no request cancellation/epoch binding to notebook switches yet. The parser expects
-the existing JSON-object protocol; it does not add SSE or array-root framing.
+The Store subscribes synchronously to notebook identity transitions. Each dispatch attempt owns
+an AbortController and request identity. A switch cancels the old attempt and releases its
+admission slot; its eventual completion cannot release a newer attempt's slot. This detects
+away-and-back transitions. Initialization may adopt the first null-to-created notebook transition,
+but its returned kernel ID must match the observed notebook identity.
+
+The signal reaches fetch and the stream reader. Cancellation unblocks pending admission even
+when initialization/transport promises ignore abort. Late response bodies are cancelled before
+acceptance; blocked reads are cancelled and release their locks. Cancellation is a separate
+receipt outcome and does not produce an error toast. Buffered events are checked before and
+after each handler so later events cannot run after cancellation. History publication checks
+the signal again before dispatching a handler, covering synchronous Store subscribers.
+
+An already-running handler cannot be forcibly interrupted by this boundary and may finish its
+own work; async action effects still require captured ownership individually. Kernel initialization
+also has no abort API here, so cancellation suppresses this operation's continuation but cannot
+undo notebook mutations or server-side creation performed internally by initialization. Cancellation
+does not roll back events already applied. The parser expects the existing JSON-object protocol;
+it does not add SSE or array-root framing.

@@ -4,6 +4,7 @@ import { OperationService } from '@Services/notebook/OperationService';
 import { handleStreamResponse } from '@Services/stream';
 import { showToast } from '@/components/UI/Toast';
 import useCodeStore from '@Store/codeStore';
+import useNotebookStore from '@Store/notebookStore';
 import { storeLog } from '@Utils/logger';
 import { OperationDispatcher } from '@Services/stream/OperationDispatcher';
 import type { StreamData } from '@Services/stream';
@@ -60,15 +61,18 @@ export type OperatorStore = OperatorStoreState & OperatorStoreActions;
 const useOperatorStore = create<OperatorStore>((set, get) => {
   const dispatcher = new OperationDispatcher({
     initialize: () => useCodeStore.getState().initializeKernel(),
-    open: (notebookId, operation) => OperationService.sendOperation(notebookId, operation),
+    open: (notebookId, operation, signal) =>
+      OperationService.sendOperation(notebookId, operation, signal),
     record: (operation) => get().addOperation(operation),
-    receive: async (operationId, data) => {
+    receive: async (operationId, data, signal) => {
+      if (signal.aborted) return;
       set((state) => ({
         operationResponses: {
           ...state.operationResponses,
           [operationId]: [...(state.operationResponses[operationId] || []), data],
         },
       }));
+      if (signal.aborted) return;
       await handleStreamResponse(data as unknown as StreamData, async (toast) => {
         showToast({
           description: toast.message,
@@ -85,6 +89,9 @@ const useOperatorStore = create<OperatorStore>((set, get) => {
     },
     refused: (message) => showToast({ description: message, variant: 'default' }),
   });
+  useNotebookStore.subscribe((state, previous) =>
+    dispatcher.notebookChanged(previous.notebookId, state.notebookId)
+  );
   return {
     operations: [],
     operationResponses: {},
