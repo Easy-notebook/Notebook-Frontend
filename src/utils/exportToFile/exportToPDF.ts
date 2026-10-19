@@ -1,6 +1,7 @@
 import pdfMake from 'pdfmake/build/pdfmake';
 import Prism from 'prismjs';
 import { marked } from 'marked';
+import type { Cell, OutputItem as CellOutput } from '@Store/models';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-java';
@@ -11,21 +12,6 @@ import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/components/prism-sql';
-
-// Type definitions for PDF export
-interface CellOutput {
-  type: 'image' | 'error' | 'text';
-  content: string;
-}
-
-interface Cell {
-  id: string;
-  type: 'markdown' | 'code' | 'hybrid';
-  content: string;
-  outputs?: CellOutput[];
-  language?: string;
-  [key: string]: any;
-}
 
 interface PDFStyle {
   font?: string;
@@ -515,16 +501,22 @@ const createCodeBlock = (
     margin: [0, 5, 0, 5],
   };
 
-  const result: PDFContent[] = [mainContainer];
+  return [mainContainer, ...createOutputBlocks(outputs)];
+};
+
+/** Shared output projection for code and hybrid source cells. */
+const createOutputBlocks = (outputs: CellOutput[] = []): PDFContent[] => {
+  const result: PDFContent[] = [];
 
   if (outputs && outputs.length > 0) {
     outputs.forEach((output: CellOutput) => {
-      if (!output.content) return;
+      if (output.content === undefined || output.content === null || output.content === '') return;
+      const text = String(output.content);
 
       if (output.type === 'image') {
         // Handle base64 images
         // Ensure content is a valid base64 data URI or raw base64
-        let imageContent = output.content;
+        let imageContent = text;
         // If it doesn't start with data:image, assume it's raw base64 and prepend prefix (guess png)
         // But usually output.content from backend might be just base64 or data uri.
         // Let's assume standard data URI or try to detect.
@@ -538,7 +530,7 @@ const createCodeBlock = (
           margin: [0, 5, 0, 5],
         });
       } else {
-        const outputLines: string[] = output.content.split('\n');
+        const outputLines: string[] = text.split('\n');
         outputLines.forEach((line: string) => {
           result.push({
             text: line,
@@ -555,15 +547,17 @@ const createCodeBlock = (
 
 export const exportToPdf = async (cells: Cell[]): Promise<void> => {
   try {
+    const snapshot = structuredClone(cells);
     await loadFonts();
 
     const content: PDFContent[] = [];
 
-    for (const cell of cells) {
-      if (!cell || !cell.type || !cell.content) continue;
+    for (const cell of snapshot) {
+      if (!cell || !cell.type) continue;
 
-      if (cell.type === 'markdown') {
+      if (cell.type === 'markdown' || cell.type === 'hybrid') {
         content.push(...convertMarkdownToPdf(cell.content));
+        if (cell.type === 'hybrid') content.push(...createOutputBlocks(cell.outputs));
       } else if (cell.type === 'code') {
         const language: string = typeof cell.language === 'string' ? cell.language : 'python';
         content.push(...createCodeBlock(cell.content, cell.outputs, language));
