@@ -21,7 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 // External dependencies
 import useNotebookStore from '@Store/notebookStore';
 import { ScriptCodeExecution, scriptCodeResultValue } from './ScriptCodeExecution';
-import { NotebookActionScope } from './NotebookActionScope';
+import { NotebookActionScope } from '@/services/notebook/NotebookActionScope';
 
 // ==============================================
 // Types

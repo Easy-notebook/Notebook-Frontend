@@ -612,6 +612,7 @@ Examples:
       // Create full context
       const fullContext: StreamActionContext = {
         payload,
+        signal: context.signal,
         showToast: context.showToast || (async () => {}),
         notebookId: context.notebookId,
         currentCellId: context.currentCellId,
@@ -621,8 +622,10 @@ Examples:
       };
 
       // Execute the action
+      context.signal?.throwIfAborted();
       const actionInstance = new ActionClass();
       await actionInstance.execute(fullContext);
+      context.signal?.throwIfAborted();
 
       return {
         success: true,

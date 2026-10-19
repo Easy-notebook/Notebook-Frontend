@@ -6,7 +6,7 @@
  */
 
 import type { ExecutionStep } from '@Store/models';
-import { NotebookActionScope } from '../store/NotebookActionScope';
+import { NotebookActionScope } from '@/services/notebook/NotebookActionScope';
 
 /**
  * Base class for all action handlers.

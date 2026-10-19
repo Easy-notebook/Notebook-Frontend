@@ -16,6 +16,7 @@ vi.mock('@Store/codeStore', () => ({ default: { getState: vi.fn() } }));
 vi.mock('@Services/agentMemoryService', () => ({ AgentMemoryService: memory }));
 vi.mock('@Store/notebookStore', () => ({
   default: {
+    subscribe: () => () => {},
     getState: () => ({
       notebookId: 'book',
       currentCellId: null,

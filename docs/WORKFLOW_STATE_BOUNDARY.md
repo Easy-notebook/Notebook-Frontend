@@ -188,3 +188,14 @@ sections are rejected before creating an agent record. CompleteReflection captur
 notebook ownership before its notebook metadata write, then checks ownership and cancellation
 after synchronous subscribers run before resuming the workflow. This prevents a metadata
 subscriber's cancellation from being overwritten; it does not roll back the metadata update.
+
+NotebookActionScope lives in services/notebook so both workflow and terminal commands share
+notebook lifetime semantics without stream code depending on workflow UI modules. Terminal
+commands acquire ownership before sidebar publication, enter execution only after admission,
+and release the scope in finally. Navigation permanently cancels the scope, including away-and-back
+navigation. An admitted history record still settles when execution returns, but cancelled commands
+cannot publish assistant answers or action/result toasts. Synchronous subscribers are checked between
+presentation writes. Command parsing forwards the optional signal to registered stream actions and
+checks it before execution and after completion. Asynchronous stream actions must cooperate with
+that signal around their own writes; this boundary cannot roll back effects already applied or
+interrupt a non-cooperative action's pending promise.

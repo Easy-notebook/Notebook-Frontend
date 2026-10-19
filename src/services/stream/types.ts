@@ -82,6 +82,8 @@ export type ShowToastFunction = (toast: ToastMessage) => Promise<void>;
  * Context passed to stream actions
  */
 export interface StreamActionContext {
+  /** Optional caller lifetime; asynchronous actions should check around their own effects. */
+  signal?: AbortSignal;
   data?: StreamData;
   payload: StreamPayload;
   showToast: ShowToastFunction;

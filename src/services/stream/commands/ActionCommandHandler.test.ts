@@ -1,24 +1,22 @@
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useAIAgentStore } from '@Store/AIAgentStore';
+import useNotebookStore from '@Store/notebookStore';
 import { ActionCommandHandler } from './ActionCommandHandler';
 
 const parser = vi.hoisted(() => ({ isActionCommand: vi.fn(), executeActionCommand: vi.fn() }));
 vi.mock('./ActionCommandParser', () => ({ ActionCommandParser: parser }));
-vi.mock('@Store/notebookStore', () => ({
-  default: {
-    getState: () => ({
-      notebookId: null,
-      currentCellId: null,
-      viewMode: 'script',
-      currentPhaseId: null,
-      currentStepIndex: 0,
-      setIsRightSidebarCollapsed: vi.fn(),
-    }),
-  },
-}));
+const originalNotebook = useNotebookStore.getState();
+afterEach(() => useNotebookStore.setState(originalNotebook, true));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  useNotebookStore.setState({
+    notebookId: null,
+    currentCellId: null,
+    currentPhaseId: null,
+    currentStepIndex: 0,
+    viewMode: originalNotebook.viewMode,
+  });
   useAIAgentStore.setState({ actions: [], qaList: [] });
   parser.isActionCommand.mockReturnValue(true);
 });
@@ -154,4 +152,68 @@ it('preserves warning severity for action notifications', async () => {
   const showToast = vi.fn().mockResolvedValue(undefined);
   await ActionCommandHandler.handleCommand('/warning', showToast);
   expect(showToast).toHaveBeenNthCalledWith(1, { type: 'warning', message: 'review this action' });
+});
+
+it.each([false, true])(
+  'suppresses late command results after navigation (return=%s)',
+  async (returnToOwner) => {
+    useNotebookStore.setState({ notebookId: 'a' });
+    let finish!: (value: { success: boolean; message: string }) => void;
+    parser.executeActionCommand.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const toast = vi.fn();
+    const pending = ActionCommandHandler.handleCommand('/pending', toast);
+    const context = parser.executeActionCommand.mock.calls[0][1];
+    useNotebookStore.setState({ notebookId: 'b' });
+    if (returnToOwner) useNotebookStore.setState({ notebookId: 'a' });
+    expect(context.signal.aborted).toBe(true);
+    await context.showToast({ type: 'success', message: 'late action toast' });
+    finish({ success: true, message: 'late result' });
+    await pending;
+    expect(toast).not.toHaveBeenCalled();
+    expect(useAIAgentStore.getState().qaList).toHaveLength(1);
+    expect(useAIAgentStore.getState().actions[0]).toMatchObject({ onProcess: false });
+    expect(useAIAgentStore.getState().actions[0].result).toContain(
+      'Action notebook context changed'
+    );
+  }
+);
+
+it('rejects command admission if sidebar publication navigates', async () => {
+  useNotebookStore.setState({ notebookId: 'a', isRightSidebarCollapsed: true });
+  const stop = useNotebookStore.subscribe((state) => {
+    if (state.notebookId === 'a' && !state.isRightSidebarCollapsed)
+      useNotebookStore.setState({ notebookId: 'b' });
+  });
+  try {
+    await ActionCommandHandler.handleCommand('/pending', vi.fn());
+    expect(parser.executeActionCommand).not.toHaveBeenCalled();
+    expect(useAIAgentStore.getState().actions).toHaveLength(0);
+  } finally {
+    stop();
+  }
+});
+
+it('suppresses presentation if settling history navigates synchronously', async () => {
+  useNotebookStore.setState({ notebookId: 'a' });
+  parser.executeActionCommand.mockResolvedValue({ success: true, message: 'done' });
+  const stop = useAIAgentStore.subscribe((state) => {
+    if (state.actions[0]?.onProcess === false) useNotebookStore.setState({ notebookId: 'b' });
+  });
+  const toast = vi.fn();
+  try {
+    await ActionCommandHandler.handleCommand('/done', toast);
+    expect(useAIAgentStore.getState().actions[0]).toMatchObject({
+      onProcess: false,
+      result: 'done',
+    });
+    expect(useAIAgentStore.getState().qaList).toHaveLength(1);
+    expect(toast).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
 });

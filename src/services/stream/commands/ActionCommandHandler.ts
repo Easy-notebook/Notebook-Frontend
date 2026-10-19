@@ -4,6 +4,7 @@
  */
 
 import { ActionCommandParser, type ActionCommandResult } from './ActionCommandParser';
+import { NotebookActionScope } from '@/services/notebook/NotebookActionScope';
 import { describeError } from '@Utils/errors';
 import type { StreamActionContext, ShowToastFunction } from '../types';
 import useStore from '@Store/notebookStore';
@@ -21,90 +22,107 @@ export class ActionCommandHandler {
       return false;
     }
 
-    // Get notebook context
-    const state = useStore.getState();
-    const context: Partial<StreamActionContext> = {
-      showToast,
-      notebookId: state.notebookId ?? undefined,
-      currentCellId: state.currentCellId ?? undefined,
-      viewMode: state.viewMode,
-      currentPhaseId: state.currentPhaseId ?? undefined,
-      currentStepIndex: state.currentStepIndex,
-    };
-
-    // Log command to sidebar
-    const aiAgentStore = useAIAgentStore.getState();
-
-    // Open sidebar and switch to QA view
-    useStore.getState().setIsRightSidebarCollapsed(false);
-    aiAgentStore.setActiveView('qa');
-
-    // Add User Question (Command)
-    aiAgentStore.addQA({
-      type: 'user',
-      content: command,
-      viewMode: state.viewMode,
-      cellId: state.currentCellId ?? undefined,
-      resolved: true,
-    });
-
-    // Also log to history (optional, but good for tracking)
-    const actionId = aiAgentStore.addAction({
-      type: 'system_event',
-      content: `Command: ${command}`,
-      result: '',
-      relatedQAIds: [],
-      cellId: state.currentCellId,
-      viewMode: state.viewMode,
-      onProcess: true,
-    });
-
-    let result: ActionCommandResult;
+    const scope = new NotebookActionScope();
     try {
-      result = await ActionCommandParser.executeActionCommand(command, context);
-    } catch (error) {
-      result = {
-        success: false,
-        message: 'Failed to execute command',
-        error: describeError(error),
+      // Get notebook context
+      const state = useStore.getState();
+      const context: Partial<StreamActionContext> = {
+        signal: scope.signal,
+        showToast: async (toast) => {
+          if (!scope.signal.aborted) await showToast(toast);
+        },
+        notebookId: state.notebookId ?? undefined,
+        currentCellId: state.currentCellId ?? undefined,
+        viewMode: state.viewMode,
+        currentPhaseId: state.currentPhaseId ?? undefined,
+        currentStepIndex: state.currentStepIndex,
       };
-    }
-    const outcome = result.success
-      ? result.message
-      : `Error: ${result.message}\n${result.error || ''}`;
 
-    // Settle the admitted record before notification or other presentation work.
-    aiAgentStore.updateAction(actionId, { onProcess: false, result: outcome });
+      // Log command to sidebar
+      const aiAgentStore = useAIAgentStore.getState();
 
-    // Add Assistant Answer (Result)
-    aiAgentStore.addQA({
-      type: 'assistant',
-      content: outcome,
-      viewMode: state.viewMode,
-      cellId: state.currentCellId ?? undefined,
-      resolved: true,
-    });
+      // Open sidebar and switch to QA view
+      useStore.getState().setIsRightSidebarCollapsed(false);
+      if (scope.signal.aborted) return true;
+      aiAgentStore.setActiveView('qa');
+      if (scope.signal.aborted) return true;
 
-    // Show result to user via toast as well
-    if (result.success) {
-      // For help/list commands, show info toast
-      const isInfoCommand =
-        command.includes('--help') || command.trim() === '/help' || command.trim() === '/list';
-
-      await showToast({
-        message: result.message,
-        type: isInfoCommand ? 'info' : 'success',
+      // Add User Question (Command)
+      aiAgentStore.addQA({
+        type: 'user',
+        content: command,
+        viewMode: state.viewMode,
+        cellId: state.currentCellId ?? undefined,
+        resolved: true,
       });
-      console.log('[ActionCommand] Success:', result);
-    } else {
-      await showToast({
-        message: `${result.message}${result.error ? `\n${result.error}` : ''}`,
-        type: 'error',
-      });
-      console.error('[ActionCommand] Error:', result);
-    }
 
-    return true;
+      if (scope.signal.aborted) return true;
+
+      // Also log to history (optional, but good for tracking)
+      const actionId = aiAgentStore.addAction({
+        type: 'system_event',
+        content: `Command: ${command}`,
+        result: '',
+        relatedQAIds: [],
+        cellId: state.currentCellId,
+        viewMode: state.viewMode,
+        onProcess: true,
+      });
+
+      let result: ActionCommandResult;
+      try {
+        scope.begin();
+        result = await ActionCommandParser.executeActionCommand(command, context);
+        scope.signal.throwIfAborted();
+      } catch (error) {
+        result = {
+          success: false,
+          message: 'Failed to execute command',
+          error: describeError(error),
+        };
+      }
+      const outcome = result.success
+        ? result.message
+        : `Error: ${result.message}\n${result.error || ''}`;
+
+      // Settle the admitted record before notification or other presentation work.
+      aiAgentStore.updateAction(actionId, { onProcess: false, result: outcome });
+      if (scope.signal.aborted) return true;
+
+      // Add Assistant Answer (Result)
+      aiAgentStore.addQA({
+        type: 'assistant',
+        content: outcome,
+        viewMode: state.viewMode,
+        cellId: state.currentCellId ?? undefined,
+        resolved: true,
+      });
+
+      if (scope.signal.aborted) return true;
+
+      // Show result to user via toast as well
+      if (result.success) {
+        // For help/list commands, show info toast
+        const isInfoCommand =
+          command.includes('--help') || command.trim() === '/help' || command.trim() === '/list';
+
+        await showToast({
+          message: result.message,
+          type: isInfoCommand ? 'info' : 'success',
+        });
+        console.log('[ActionCommand] Success:', result);
+      } else {
+        await showToast({
+          message: `${result.message}${result.error ? `\n${result.error}` : ''}`,
+          type: 'error',
+        });
+        console.error('[ActionCommand] Error:', result);
+      }
+
+      return true;
+    } finally {
+      scope.dispose();
+    }
   }
 
   /**
