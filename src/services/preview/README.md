@@ -137,3 +137,17 @@ content-edit accounting; storage-budget usage remains independently measured by
 Normal network previews use `saveFile`'s committed metadata through
 `fileFromCache`, including cache/access timestamps and access count, rather than
 synthesizing another metadata snapshot after the write.
+
+## Saved-tab persistence outcomes
+
+`TabManagerService.loadTabs` returns `null` only for an absent saved record.
+Storage failures reject; the store reports a current restoration error without
+running default discovery or writing a replacement state. A saved empty list is
+valid and remains empty. Obsolete restoration failures cannot affect a new view.
+
+Saved tabs and their active selection share one scoping rule on read and write:
+only this notebook's tabs remain, and the active ID must be a member of that list.
+Save/clear failures also reject. Explicit callers can observe the failed commit,
+and a failed outgoing save prevents `switchToNotebook` from advancing preview
+selection. Background activation/close snapshot saves retain explicit logged
+rejection handling; they do not claim a successful persistence commit.

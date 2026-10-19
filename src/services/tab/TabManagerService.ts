@@ -31,24 +31,14 @@ export class TabManagerService {
         return null;
       }
 
-      // Filter tabs to ensure they belong to the current notebook
-      const validTabs = tabState.tabList
-        .filter((t) => t.id.startsWith(`${notebookId}::`))
-        .map((t) => ({
-          ...t,
-          type: t.type as FileType,
-        }));
-
-      // Validate active tab ID
-      let activeTabId = tabState.activeTabId;
-      if (activeTabId && !activeTabId.startsWith(`${notebookId}::`)) {
-        activeTabId = null;
-      }
-
-      return { tabs: validTabs, activeTabId };
+      return this.scopeState(
+        notebookId,
+        tabState.tabList.map((tab) => ({ ...tab, type: tab.type as FileType })),
+        tabState.activeTabId
+      );
     } catch (error) {
       storeLog.error('TabManagerService: Failed to load tabs', { notebookId, error });
-      return null;
+      throw error;
     }
   }
 
@@ -62,7 +52,11 @@ export class TabManagerService {
   ): Promise<void> {
     try {
       // Ensure we only save tabs for this notebook
-      const scopedTabs = tabs.filter((t) => t.id.startsWith(`${notebookId}::`));
+      const { tabs: scopedTabs, activeTabId: scopedActiveTabId } = this.scopeState(
+        notebookId,
+        tabs,
+        activeTabId
+      );
 
       storeLog.debug('TabManagerService.saveTabs', {
         notebookId,
@@ -71,10 +65,11 @@ export class TabManagerService {
         activeTabId,
       });
 
-      await persistenceService.tabs.saveTabState(notebookId, scopedTabs, activeTabId);
+      await persistenceService.tabs.saveTabState(notebookId, scopedTabs, scopedActiveTabId);
       storeLog.debug('TabManagerService: Saved tabs', { notebookId, count: scopedTabs.length });
     } catch (error) {
       storeLog.error('TabManagerService: Failed to save tabs', { notebookId, error });
+      throw error;
     }
   }
 
@@ -102,11 +97,15 @@ export class TabManagerService {
    * Clear all tabs for a notebook (persistence only)
    */
   public async clearTabs(notebookId: string): Promise<void> {
-    try {
-      await persistenceService.tabs.saveTabState(notebookId, [], null);
-    } catch (error) {
-      storeLog.error('TabManagerService: Failed to clear tabs', { notebookId, error });
-    }
+    await this.saveTabs(notebookId, [], null);
+  }
+
+  private scopeState(notebookId: string, tabs: PreviewFile[], activeTabId: string | null) {
+    const scopedTabs = tabs.filter((tab) => tab.id.startsWith(`${notebookId}::`));
+    return {
+      tabs: scopedTabs,
+      activeTabId: scopedTabs.some((tab) => tab.id === activeTabId) ? activeTabId : null,
+    };
   }
 
   /**

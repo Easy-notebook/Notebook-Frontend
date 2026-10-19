@@ -505,9 +505,11 @@ const usePreviewStore = create<PreviewStore>()(
         } catch (error) {
           check();
           storeLog.error('Failed to load tab state', { error });
+          publish({ error: `Failed to restore notebook tabs: ${describeError(error)}` });
+          return;
         }
 
-        // Fallback to regular tab loading if no saved state or error
+        // Discover defaults only when persistence confirms no saved state exists.
         await loadNotebookTabs(request, notebookId);
         check();
       };
@@ -602,7 +604,13 @@ const usePreviewStore = create<PreviewStore>()(
                 : {}),
             });
             // Capture the closed-tab snapshot before any asynchronous neighbor load.
-            if (currentNotebookId) void get().saveTabState(currentNotebookId);
+            if (currentNotebookId) {
+              void get()
+                .saveTabState(currentNotebookId)
+                .catch((error) => {
+                  storeLog.error('Failed to persist closed tab', { fileId, error });
+                });
+            }
             if (nextFile) {
               await loadFileById(request, nextFile.id);
               check();
@@ -906,6 +914,7 @@ const usePreviewStore = create<PreviewStore>()(
             );
           } catch (error) {
             storeLog.error('Failed to save tab state', { error });
+            throw error;
           }
         },
 

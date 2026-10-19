@@ -930,3 +930,63 @@ describe('new preview cache record accounting', () => {
     expect(state().activeFile).toBe(result);
   });
 });
+
+describe('tab persistence failures versus absence', () => {
+  it('keeps current tabs and reports a read failure without default discovery', async () => {
+    usePreviewStore.setState({ currentNotebookId: 'book', currentPreviewFiles: [tab('book')] });
+    io.loadTabs.mockRejectedValueOnce(new Error('storage unavailable'));
+    await state().loadTabState('book');
+    expect(state().currentPreviewFiles).toEqual([tab('book')]);
+    expect(state().error).toContain('storage unavailable');
+    expect(state().isLoading).toBe(false);
+    expect(io.defaults).not.toHaveBeenCalled();
+    expect(io.tabSave).not.toHaveBeenCalled();
+  });
+
+  it.each([null, { tabs: [], activeTabId: null }])(
+    'discovers defaults only for absent saved state: %j',
+    async (saved) => {
+      io.loadTabs.mockResolvedValueOnce(saved);
+      await state().loadTabState('book');
+      expect(io.defaults).toHaveBeenCalledTimes(saved === null ? 1 : 0);
+      expect(state().error).toBeNull();
+    }
+  );
+
+  it('ignores obsolete read failures after a new notebook load', async () => {
+    const read = deferred<null>();
+    io.loadTabs.mockReturnValueOnce(read.promise);
+    const old = state().loadTabState('old');
+    await state().loadTabState('new');
+    read.reject(new Error('old read failed'));
+    await old;
+    expect(state().currentNotebookId).toBe('new');
+    expect(state().error).toBeNull();
+    expect(io.defaults).not.toHaveBeenCalled();
+  });
+
+  it('does not advance the preview notebook if saving outgoing tabs fails', async () => {
+    usePreviewStore.setState({ currentNotebookId: 'old', currentPreviewFiles: [tab('old')] });
+    io.tabSave.mockRejectedValueOnce(new Error('outgoing commit failed'));
+    await state().switchToNotebook('new');
+    expect(state().currentNotebookId).toBe('old');
+    expect(state().currentPreviewFiles).toEqual([tab('old')]);
+    expect(state().error).toContain('outgoing commit failed');
+    expect(io.loadTabs).not.toHaveBeenCalled();
+    expect(state().isLoading).toBe(false);
+  });
+
+  it('preserves the rejected save contract for explicit callers', async () => {
+    const failure = new Error('commit failed');
+    io.tabSave.mockRejectedValueOnce(failure);
+    await expect(state().saveTabState('book')).rejects.toBe(failure);
+  });
+
+  it('handles the failure of a best-effort closed-tab snapshot', async () => {
+    usePreviewStore.setState({ currentNotebookId: 'book', currentPreviewFiles: [tab('book')] });
+    io.tabSave.mockRejectedValueOnce(new Error('close snapshot failed'));
+    state().closePreviewFile('book::file.txt');
+    await vi.waitFor(() => expect(io.tabSave).toHaveBeenCalledOnce());
+    expect(state().currentPreviewFiles).toEqual([]);
+  });
+});
