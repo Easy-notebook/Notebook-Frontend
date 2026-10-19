@@ -11,6 +11,7 @@ import {
 import { HttpResponseError } from '@Services/notebook/HttpResponseError';
 import { previewFileSource } from '@Services/preview/PreviewFileSource';
 import { describeError } from '@Utils/errors';
+import { tabManagerService } from '@Services/tab/TabManagerService';
 import { fileLog, storeLog } from '@Utils/logger';
 import { persistenceService } from '@Services/persistence/instance';
 import { getFileType, getActivePreviewMode, getMimeType } from '@Storage/index';
@@ -198,6 +199,29 @@ const usePreviewStore = create<PreviewStore>()(
         }
       };
 
+      const activatePreviewFile = (request: symbol, file: FileObject): FileObject => {
+        const { publish } = requestScope(request);
+        const tabs = tabManagerService.addTab(get().currentPreviewFiles, {
+          id: file.id,
+          path: file.path,
+          name: file.name,
+          type: getFileType(file.path),
+        });
+        publish({
+          activeFile: file,
+          activePreviewMode: getActivePreviewMode(file.type as FileType),
+          currentPreviewFiles: tabs,
+          isLoading: false,
+        });
+        // publish verifies ownership after synchronous subscribers before persistence starts.
+        void get()
+          .saveTabState(file.notebookId)
+          .catch((error) => {
+            storeLog.error('Failed to save activated preview tab', { fileId: file.id, error });
+          });
+        return file;
+      };
+
       const previewFile = async (
         request: symbol,
         notebookId: string,
@@ -287,55 +311,7 @@ const usePreviewStore = create<PreviewStore>()(
               lastAccessed: Date.now(),
             };
 
-            // Set as active file and renderer mode
-            const activeMode = getActivePreviewMode(fileType);
-            publish({
-              activeFile: fileObject,
-              activePreviewMode: activeMode,
-              isLoading: false,
-            });
-
-            // Update current preview files list - better management
-            const { currentPreviewFiles } = get();
-            const existingFileIndex = currentPreviewFiles.findIndex((f) => f.id === fileId);
-
-            let updatedFiles: PreviewFile[];
-            if (existingFileIndex >= 0) {
-              // Update existing file in the list
-              updatedFiles = [...currentPreviewFiles];
-              updatedFiles[existingFileIndex] = {
-                id: fileId,
-                path: filePath,
-                name: file.name,
-                type: fileType,
-              };
-            } else {
-              // Add new file to the list
-              updatedFiles = [
-                ...currentPreviewFiles,
-                {
-                  id: fileId,
-                  path: filePath,
-                  name: file.name,
-                  type: fileType,
-                },
-              ];
-            }
-
-            publish({ currentPreviewFiles: updatedFiles });
-
-            // Save updated tab state to storage
-            get()
-              .saveTabState(notebookId)
-              .catch((error) => {
-                storeLog.error('Failed to save tab state after adding new file', {
-                  error,
-                  notebookId,
-                  filePath,
-                });
-              });
-
-            return fileObject;
+            return activatePreviewFile(request, fileObject);
           } catch (error) {
             check();
             const missing = error instanceof HttpResponseError && error.status === 404;
@@ -348,59 +324,7 @@ const usePreviewStore = create<PreviewStore>()(
             return undefined;
           }
         } else {
-          // File found in cache
-          const cachedMetadata = cachedFile.metadata;
-          const cachedMode = getActivePreviewMode(cachedMetadata.fileType as FileType);
-
-          const fileObject = fileFromCache(cachedFile);
-
-          publish({
-            activeFile: fileObject,
-            activePreviewMode: cachedMode,
-            isLoading: false,
-          });
-
-          // Update current preview files list - better management for cached files
-          const { currentPreviewFiles } = get();
-          const existingFileIndex = currentPreviewFiles.findIndex((f) => f.id === fileId);
-
-          let updatedFiles: PreviewFile[];
-          if (existingFileIndex >= 0) {
-            // Update existing file in the list
-            updatedFiles = [...currentPreviewFiles];
-            updatedFiles[existingFileIndex] = {
-              id: fileId,
-              path: filePath,
-              name: file.name,
-              type: getFileType(filePath),
-            };
-          } else {
-            // Add new file to the list
-            updatedFiles = [
-              ...currentPreviewFiles,
-              {
-                id: fileId,
-                path: filePath,
-                name: file.name,
-                type: getFileType(filePath),
-              },
-            ];
-          }
-
-          publish({ currentPreviewFiles: updatedFiles });
-
-          // Save updated tab state to storage
-          get()
-            .saveTabState(notebookId)
-            .catch((error) => {
-              storeLog.error('Failed to save tab state after loading cached file', {
-                error,
-                notebookId,
-                filePath,
-              });
-            });
-
-          return fileObject;
+          return activatePreviewFile(request, fileFromCache(cachedFile));
         }
       };
       const loadFileById = async (request: symbol, fileId: string): Promise<FileObject | null> => {
@@ -480,8 +404,6 @@ const usePreviewStore = create<PreviewStore>()(
           }
 
           // 📂 Delegate file loading to TabManagerService
-          const { tabManagerService } = await import('@Services/tab/TabManagerService');
-          check();
           const previewFiles = await tabManagerService.loadDefaultTabs(notebookId);
           check();
 
@@ -555,8 +477,6 @@ const usePreviewStore = create<PreviewStore>()(
         if (get().currentNotebookId !== notebookId) get().closeSplitPreview();
         check();
         try {
-          const { tabManagerService } = await import('@Services/tab/TabManagerService');
-          check();
           const loadedState = await tabManagerService.loadTabs(notebookId);
           check();
 
@@ -1000,7 +920,6 @@ const usePreviewStore = create<PreviewStore>()(
           }
 
           try {
-            const { tabManagerService } = await import('@Services/tab/TabManagerService');
             const activeTabId = state.activeFile?.id?.startsWith(`${targetNotebookId}::`)
               ? state.activeFile.id
               : null;
@@ -1058,38 +977,5 @@ const usePreviewStore = create<PreviewStore>()(
     }
   )
 );
-
-// Clean up any stale localStorage data containing invalid file references
-// This is a one-time cleanup for existing users
-try {
-  const storedData = localStorage.getItem('preview-store');
-  if (storedData) {
-    const parsed = JSON.parse(storedData);
-    if (parsed?.state?.currentPreviewFiles) {
-      // Check if there are any suspicious file references
-      const suspiciousFiles = parsed.state.currentPreviewFiles.filter(
-        (file: any) =>
-          file.path &&
-          (file.path.includes('sa_balance_exp.xlsx') ||
-            file.path.includes('balance_exp') ||
-            // Add other problematic patterns as needed
-            (!file.path.includes('assets/') && file.path.match(/\.(xlsx?|csv|pdf)$/i)))
-      );
-
-      if (suspiciousFiles.length > 0) {
-        storeLog.info('Cleaning up suspicious file references from localStorage', {
-          count: suspiciousFiles.length,
-          files: suspiciousFiles,
-        });
-        // Remove currentPreviewFiles from stored state
-        delete parsed.state.currentPreviewFiles;
-        localStorage.setItem('preview-store', JSON.stringify(parsed));
-        storeLog.info('Cleaned up localStorage preview-store data');
-      }
-    }
-  }
-} catch (error) {
-  storeLog.warn('Failed to clean up localStorage', { error });
-}
 
 export default usePreviewStore;

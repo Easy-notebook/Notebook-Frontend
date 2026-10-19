@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const io = vi.hoisted(() => ({
   read: vi.fn(),
@@ -11,6 +11,7 @@ const io = vi.hoisted(() => ({
   fileClear: vi.fn(),
   loadTabs: vi.fn(),
   defaults: vi.fn(),
+  tabSave: vi.fn(),
 }));
 vi.mock('@Services/persistence/instance', () => ({
   persistenceService: {
@@ -25,13 +26,17 @@ vi.mock('@Services/persistence/instance', () => ({
   },
 }));
 vi.mock('@Services/notebook/FileService', () => ({ FileService: { getFile: io.fetch } }));
-vi.mock('@Services/tab/TabManagerService', () => ({
-  tabManagerService: {
-    loadDefaultTabs: io.defaults,
-    loadTabs: io.loadTabs,
-    saveTabs: vi.fn(async () => undefined),
-  },
-}));
+vi.mock('@Services/tab/TabManagerService', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@Services/tab/TabManagerService')>();
+  return {
+    tabManagerService: {
+      addTab: original.tabManagerService.addTab.bind(original.tabManagerService),
+      loadDefaultTabs: io.defaults,
+      loadTabs: io.loadTabs,
+      saveTabs: io.tabSave,
+    },
+  };
+});
 import usePreviewStore from './previewStore';
 import { HttpResponseError } from '@Services/notebook/HttpResponseError';
 
@@ -69,14 +74,9 @@ beforeEach(() => {
   io.fileRead.mockResolvedValue(undefined);
   io.fileSave.mockResolvedValue(undefined);
   io.fileUpdate.mockResolvedValue(true);
+  io.tabSave.mockResolvedValue(undefined);
   io.fileDelete.mockResolvedValue(true);
   io.fileClear.mockResolvedValue(undefined);
-});
-
-// Store actions may schedule tab persistence through a dynamic import.
-// Drain that work while this test's repository mocks are still installed.
-afterEach(async () => {
-  await vi.dynamicImportSettled();
 });
 
 describe('split preview request ownership', () => {
@@ -809,3 +809,70 @@ describe.each(['previewFile', 'loadFileById', 'previewFileInSplit'] as const)(
     });
   }
 );
+
+describe.each(['cached', 'fetched'] as const)('%s preview activation', (source) => {
+  beforeEach(() => {
+    if (source === 'cached') io.fileRead.mockResolvedValue(fileRecord('book', 'new.txt'));
+  });
+
+  it('publishes the active file, renderer and matching tab in the same state', async () => {
+    usePreviewStore.setState({ currentPreviewFiles: [tab('book', 'existing.txt')] });
+    const observed: Array<{ id: string; tabIds: string[]; mode: string | null; loading: boolean }> =
+      [];
+    const unsubscribe = usePreviewStore.subscribe((next) => {
+      if (next.activeFile)
+        observed.push({
+          id: next.activeFile.id,
+          tabIds: next.currentPreviewFiles.map((file) => file.id),
+          mode: next.activePreviewMode,
+          loading: next.isLoading,
+        });
+    });
+    try {
+      await state().previewFile('book', 'new.txt');
+      expect(observed.length).toBeGreaterThan(0);
+      for (const snapshot of observed) {
+        expect(snapshot.tabIds).toEqual(['book::existing.txt', snapshot.id]);
+        expect(snapshot.mode).toBe('text');
+        expect(snapshot.loading).toBe(false);
+      }
+      expect(io.tabSave).toHaveBeenCalledExactlyOnceWith(
+        'book',
+        [tab('book', 'existing.txt'), tab('book', 'new.txt')],
+        'book::new.txt'
+      );
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('updates an existing tab without moving it or duplicating it', async () => {
+    usePreviewStore.setState({
+      currentPreviewFiles: [
+        tab('book', 'first.txt'),
+        { ...tab('book', 'new.txt'), name: 'outdated' },
+        tab('book', 'last.txt'),
+      ],
+    });
+    const result = await state().previewFile('book', 'new.txt');
+    expect(state().currentPreviewFiles).toEqual([
+      tab('book', 'first.txt'),
+      { ...tab('book', 'new.txt'), name: result?.name },
+      tab('book', 'last.txt'),
+    ]);
+  });
+
+  it('does not persist a replaced activation after a synchronous observer resets it', async () => {
+    const unsubscribe = usePreviewStore.subscribe((next) => {
+      if (next.activeFile) next.clearNotebookState();
+    });
+    try {
+      expect(await state().previewFile('book', 'new.txt')).toBeUndefined();
+      expect(io.tabSave).not.toHaveBeenCalled();
+      expect(state().activeFile).toBeNull();
+      expect(state().currentPreviewFiles).toEqual([]);
+    } finally {
+      unsubscribe();
+    }
+  });
+});

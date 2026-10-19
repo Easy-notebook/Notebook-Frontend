@@ -111,3 +111,16 @@ failures through its error state. Split preview continues reporting all failures
 Application-level errors are reported without guessing a status from message
 text. Error handling never creates a cache record or a new tab for the failed
 request, and obsolete requests still cannot publish errors.
+
+## Atomic normal-preview activation
+
+Cached and fetched preview activation share one store operation. It uses
+`TabManagerService.addTab` to preserve tab order and update existing entries,
+then publishes active file, renderer mode, tab list and loading state together.
+Subscribers therefore cannot observe a newly activated file before its tab exists.
+The request guard runs again after notification; a synchronous reset prevents
+follow-up tab persistence from the obsolete activation.
+
+Tab-manager operations are a static dependency (the service does not depend on
+the store). The obsolete filename-specific localStorage cleanup is removed:
+persisted state already restores only `dirtyMap`, ignoring historical tab fields.
