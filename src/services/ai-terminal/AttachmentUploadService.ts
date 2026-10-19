@@ -2,7 +2,7 @@ import useStore from '@Store/notebookStore';
 import useCodeStore from '@Store/codeStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { FileService } from '@Services/notebook/FileService';
-import { v4 as uuidv4 } from 'uuid';
+import { createAttachmentFiles } from './AttachmentFiles';
 import type { UploadFile } from './types';
 
 export class AttachmentUploadService {
@@ -76,23 +76,7 @@ export class AttachmentUploadService {
     this.assertOwner(notebookId);
     if (response.status !== 'ok') throw new Error(response.message || 'Attachment upload failed');
 
-    const attachments: UploadFile[] = [];
-    try {
-      for (const file of files) {
-        attachments.push({
-          id: `file-${uuidv4()}`,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          url: URL.createObjectURL(file),
-          file,
-        });
-      }
-      return attachments;
-    } catch (error) {
-      attachments.forEach((attachment) => URL.revokeObjectURL(attachment.url));
-      throw error;
-    }
+    return createAttachmentFiles(files);
   }
 }
 

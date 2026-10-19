@@ -19,14 +19,12 @@ import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
-import useCodeStore from '@Store/codeStore';
-import { FileService } from '@Services/notebook/FileService';
+import { emptyStateAttachmentUploadService } from '@Services/ai-terminal/EmptyStateAttachmentUploadService';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 
-import type { UploadFile, AICommandInputProps, VDSQuestion } from './types';
+import type { AICommandInputProps, VDSQuestion } from './types';
 import { FilePreviewList } from './FilePreviewList';
 
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPT = '.csv,.xlsx,.xls,.pdf,.txt,.md,.jpg,.png,.jpeg,.doc,.docx,.ppt,.pptx';
 
 const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
@@ -74,7 +72,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const { addAction, setIsLoading, setActiveView, actions, qaList, addQA } = useAIAgentStore();
 
   const {
-    notebookId,
     viewMode,
     currentPhaseId,
     currentStepIndex,
@@ -135,207 +132,97 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   // ---------- 上传逻辑 ----------
   const processFiles = useCallback(
     async (selectedFiles: File[]) => {
-      console.log('[DEBUG] AICommandInput - Processing files count:', selectedFiles.length);
-
-      if (!selectedFiles.length) {
-        console.log('[DEBUG] AICommandInput - No files selected, returning');
-        return;
-      }
-
-      // Check file sizes
-      const oversizedFile = selectedFiles.find((f) => f.size > MAX_SIZE);
-      if (oversizedFile) {
-        console.log(
-          '[DEBUG] AICommandInput - File too large:',
-          oversizedFile.name,
-          oversizedFile.size
-        );
-        alert(
-          `File ${oversizedFile.name} is too large. Maximum size allowed is ${MAX_SIZE / 1024 / 1024}MB`
-        );
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
-      }
-
-      const uploadConfig = {
-        mode: 'unrestricted',
-        allowedTypes: [
-          '.csv',
-          '.xlsx',
-          '.xls',
-          '.jpg',
-          '.png',
-          '.jpeg',
-          '.gif',
-          '.pdf',
-          '.doc',
-          '.docx',
-          '.ppt',
-          '.pptx',
-          '.txt',
-          '.md',
-        ],
-        maxFileSize: MAX_SIZE,
-        targetDir: 'assets',
-      };
-      console.log('[DEBUG] AICommandInput - Upload config created:', uploadConfig);
-
-      // 确保有 notebookId
-      let currentNotebookId = notebookId;
-      console.log('[DEBUG] AICommandInput - Current notebookId from store:', currentNotebookId);
-
-      console.log('[DEBUG] AICommandInput - Setting upload state to true');
+      if (!selectedFiles.length) return;
       setIsUploading(true);
-
       try {
-        console.log('[DEBUG] AICommandInput - Starting file upload with:', {
-          notebookId: currentNotebookId || 'NEW',
-          fileCount: selectedFiles.length,
-          config: uploadConfig,
-        });
+        const newFiles = await emptyStateAttachmentUploadService.uploadFiles(selectedFiles);
+        setFiles(newFiles);
 
-        let result;
-        if (currentNotebookId) {
-          // Existing notebook: use upload_file
-          result = await FileService.uploadFile(currentNotebookId, selectedFiles, uploadConfig);
-        } else {
-          // No notebook: use create_notebook_with_files
-          result = await FileService.createNotebookWithFiles(selectedFiles, uploadConfig.targetDir);
-        }
+        // Check for CSV/Excel for VDS mode
+        const csv = selectedFiles.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
 
-        console.log('[DEBUG] AICommandInput - Upload result:', result);
+        // Enable VDS mode for ANY file
+        console.log('[DEBUG] AICommandInput - Enabling VDS mode for uploaded files');
+        setIsVDSMode(true);
 
-        if (result && (result as any).status === 'ok') {
-          // Extract notebook_id from response (support both top-level and data-level)
-          const newNotebookId =
-            (result as any).notebook_id || (result.data && (result.data as any).notebook_id);
+        if (csv) {
+          console.log('[DEBUG] AICommandInput - CSV/Excel found, initializing VDS mode:', csv.name);
+          console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
+          await usePreStageStore.getState().setCurrentFile(csv);
+          const csvFilePath = `assets/${csv.name}`;
+          console.log('[DEBUG] AICommandInput - Setting CSV file path:', csvFilePath);
+          await usePreStageStore.getState().setCsvFilePath(csvFilePath);
 
-          console.log(
-            '[DEBUG] AICommandInput - File upload successful, received notebookId:',
-            newNotebookId
-          );
+          // 生成 VDS 预设问题（异步延时保持原逻辑）
+          console.log('[DEBUG] AICommandInput - Starting question generation timer');
+          setTimeout(async () => {
+            try {
+              console.log('[DEBUG] AICommandInput - Getting file columns and dataset info');
+              const cols = usePreStageStore.getState().getFileColumns();
+              const info = usePreStageStore.getState().getDatasetInfo();
+              console.log('[DEBUG] AICommandInput - File columns:', cols);
+              console.log('[DEBUG] AICommandInput - Dataset info:', info);
 
-          if (newNotebookId) {
-            currentNotebookId = newNotebookId;
-            useStore.getState().setNotebookId(currentNotebookId!);
-            // Assume kernel is ready or will be initialized by backend during creation
-            useCodeStore.getState().setKernelReady(true);
-            console.log('[DEBUG] AICommandInput - NotebookId updated in store:', currentNotebookId);
-          } else if (currentNotebookId) {
-            console.log('[DEBUG] AICommandInput - Using existing notebookId:', currentNotebookId);
-          } else {
-            console.warn(
-              '[DEBUG] AICommandInput - No notebookId returned from upload and no existing ID'
-            );
-          }
+              console.log(
+                '[DEBUG] AICommandInput - Calling generalResponse for question generation'
+              );
+              const map = await generalResponse(
+                'generate_question_choice_map',
+                { column_info: cols, dataset_info: info },
+                i18n.language
+              );
+              console.log('[DEBUG] AICommandInput - Question generation result:', map);
 
-          const newFiles: UploadFile[] = selectedFiles.map((file) => ({
-            id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            url: URL.createObjectURL(file),
-            file: file,
-          }));
-
-          console.log('[DEBUG] AICommandInput - Setting files state:', newFiles);
-          setFiles(newFiles);
-
-          // Check for CSV/Excel for VDS mode
-          const csv = selectedFiles.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
-
-          // Enable VDS mode for ANY file
-          console.log('[DEBUG] AICommandInput - Enabling VDS mode for uploaded files');
-          setIsVDSMode(true);
-
-          if (csv) {
-            console.log(
-              '[DEBUG] AICommandInput - CSV/Excel found, initializing VDS mode:',
-              csv.name
-            );
-            console.log('[DEBUG] AICommandInput - Setting current file in preStageStore');
-            await usePreStageStore.getState().setCurrentFile(csv);
-            const csvFilePath = `assets/${csv.name}`;
-            console.log('[DEBUG] AICommandInput - Setting CSV file path:', csvFilePath);
-            await usePreStageStore.getState().setCsvFilePath(csvFilePath);
-
-            // 生成 VDS 预设问题（异步延时保持原逻辑）
-            console.log('[DEBUG] AICommandInput - Starting question generation timer');
-            setTimeout(async () => {
-              try {
-                console.log('[DEBUG] AICommandInput - Getting file columns and dataset info');
-                const cols = usePreStageStore.getState().getFileColumns();
-                const info = usePreStageStore.getState().getDatasetInfo();
-                console.log('[DEBUG] AICommandInput - File columns:', cols);
-                console.log('[DEBUG] AICommandInput - Dataset info:', info);
-
-                console.log(
-                  '[DEBUG] AICommandInput - Calling generalResponse for question generation'
-                );
-                const map = await generalResponse(
-                  'generate_question_choice_map',
-                  { column_info: cols, dataset_info: info },
-                  i18n.language
-                );
-                console.log('[DEBUG] AICommandInput - Question generation result:', map);
-
-                if (map?.message) {
-                  console.log('[DEBUG] AICommandInput - Updating choice map and preset questions');
-                  usePreStageStore.getState().updateChoiceMap(map.message);
-                  setPresetQuestions(map.message as VDSQuestion[]);
-                  if (
-                    (map.message as VDSQuestion[]).length &&
-                    (map.message as VDSQuestion[])[0].problem_description
-                  ) {
-                    const firstQuestion = (map.message as VDSQuestion[])[0].problem_description;
-                    console.log(
-                      '[DEBUG] AICommandInput - Setting input to first question:',
-                      firstQuestion
-                    );
-                    setInput((prev) => (prev.trim() ? prev : firstQuestion));
-                  }
-
-                  // 生成预设问题后，自动跳转到 ProblemDefine 页面
+              if (map?.message) {
+                console.log('[DEBUG] AICommandInput - Updating choice map and preset questions');
+                usePreStageStore.getState().updateChoiceMap(map.message);
+                setPresetQuestions(map.message as VDSQuestion[]);
+                if (
+                  (map.message as VDSQuestion[]).length &&
+                  (map.message as VDSQuestion[])[0].problem_description
+                ) {
+                  const firstQuestion = (map.message as VDSQuestion[])[0].problem_description;
                   console.log(
-                    '[DEBUG] AICommandInput - File uploaded and questions generated, navigating to ProblemDefine'
+                    '[DEBUG] AICommandInput - Setting input to first question:',
+                    firstQuestion
                   );
-                  setTimeout(async () => {
-                    setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
-                    console.log(
-                      '[DEBUG] AICommandInput - Questions generated, waiting for user input'
-                    );
-                  }, 500);
-                } else {
-                  console.log('[DEBUG] AICommandInput - No questions generated from response');
+                  setInput((prev) => (prev.trim() ? prev : firstQuestion));
                 }
-              } catch (genErr) {
-                console.error(
-                  '[DEBUG] AICommandInput - Error generating preset questions:',
-                  genErr
+
+                // 生成预设问题后，自动跳转到 ProblemDefine 页面
+                console.log(
+                  '[DEBUG] AICommandInput - File uploaded and questions generated, navigating to ProblemDefine'
                 );
+                setTimeout(async () => {
+                  setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+                  console.log(
+                    '[DEBUG] AICommandInput - Questions generated, waiting for user input'
+                  );
+                }, 500);
+              } else {
+                console.log('[DEBUG] AICommandInput - No questions generated from response');
               }
-            }, 1000);
-          } else {
-            console.log(
-              '[DEBUG] AICommandInput - No CSV/Excel found, using first file for VDS context'
-            );
-            const firstFile = selectedFiles[0];
-            await usePreStageStore.getState().setCurrentFile(firstFile);
-            const filePath = `assets/${firstFile.name}`;
-            await usePreStageStore.getState().setCsvFilePath(filePath);
-
-            // Set default suggestion for non-CSV files
-            const defaultQuestion = 'Analyze this file';
-            setInput((prev) => (prev.trim() ? prev : defaultQuestion));
-
-            // Navigate to ProblemDefine
-            setTimeout(async () => {
-              setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
-            }, 500);
-          }
+            } catch (genErr) {
+              console.error('[DEBUG] AICommandInput - Error generating preset questions:', genErr);
+            }
+          }, 1000);
         } else {
-          console.error('[DEBUG] AICommandInput - Upload failed with result:', result);
-          alert('Upload failed: ' + ((result as any)?.message || 'Unknown error'));
+          console.log(
+            '[DEBUG] AICommandInput - No CSV/Excel found, using first file for VDS context'
+          );
+          const firstFile = selectedFiles[0];
+          await usePreStageStore.getState().setCurrentFile(firstFile);
+          const filePath = `assets/${firstFile.name}`;
+          await usePreStageStore.getState().setCsvFilePath(filePath);
+
+          // Set default suggestion for non-CSV files
+          const defaultQuestion = 'Analyze this file';
+          setInput((prev) => (prev.trim() ? prev : defaultQuestion));
+
+          // Navigate to ProblemDefine
+          setTimeout(async () => {
+            setPreStage(PIPELINE_STAGES.PROBLEM_DEFINE);
+          }, 500);
         }
       } catch (err: any) {
         console.error('[DEBUG] AICommandInput - Upload error:', err);
@@ -348,7 +235,7 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         console.log('[DEBUG] AICommandInput - File input cleared');
       }
     },
-    [notebookId, i18n.language, t, setFiles, setPreStage]
+    [i18n.language, t, setFiles, setPreStage]
   );
 
   const handleFileChange = useCallback(

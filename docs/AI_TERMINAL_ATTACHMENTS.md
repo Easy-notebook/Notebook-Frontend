@@ -60,3 +60,19 @@ the submission settles. Tests exercise both directions of shared draft/record ow
 Remote URLs and blob URLs created outside this registry are not adopted or revoked. The separate
 empty-state command input's unmanaged attachments are outside this resource scope. Text-input
 submission and the global terminal loading indicator retain their existing lifecycle.
+
+## Empty-state notebook admission
+
+`EmptyStateAttachmentUploadService` preserves the combined `create_notebook_with_files`
+endpoint for the first batch. Concurrent batches share that creation and upload their own
+files once to the resulting notebook. Creation awaits Store activation before publishing
+kernel readiness or preview URLs. Existing-notebook uploads never adopt IDs returned by an
+upload response. Ownership checks reject a changed current notebook before publishing results.
+The existing top-level and nested creation response shapes are accepted and validated.
+
+Both admission services use `createAttachmentFiles` for unique IDs and complete rollback of
+partial browser URL allocation. The empty-state component still owns its controlled file list,
+VDS preparation timers, and workflow transition; draft leasing and cancellation of those UI
+continuations remain separate pending work. Notebook checks currently compare IDs, so an
+away-and-back switch to the same ID is not detected. Failed or superseded requests do not roll
+back server-side notebook/file creation.
