@@ -8,10 +8,14 @@ import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 import { qaStreamManager } from '../../managers/QAStreamManager';
 import { AgentMemoryService } from '@Services/agentMemoryService';
 import { useAIAgentStore } from '@Store/AIAgentStore';
+import useNotebookStore from '@Store/notebookStore';
 
 export class FinishStreamingAnswerAction extends StreamAction {
   async execute(context: StreamActionContext): Promise<void> {
+    context.signal?.throwIfAborted();
     const { payload, data } = context;
+    const notebookId = context.notebookId ?? useNotebookStore.getState().notebookId;
+    const session = qaStreamManager.capture();
 
     console.log('结束流式响应:', data);
     const finishQid = payload.QId;
@@ -37,15 +41,13 @@ export class FinishStreamingAnswerAction extends StreamAction {
 
     if (qidStr) {
       await globalUpdateInterface.finishStreamingAnswer(qidStr, finalResponse);
-      qaStreamManager.clearStreamingQaId();
+      context.signal?.throwIfAborted();
+      if (session?.qaId === qidStr) qaStreamManager.clearStreamingQaId(session);
 
       // Record agent interaction completion
       try {
         const response = finalResponse;
         if (response) {
-          const notebookState = (window as any).__notebookStore?.getState?.();
-          const notebookId = notebookState?.notebookId;
-
           if (notebookId) {
             console.log('记录QA交互完成 - notebookId:', notebookId, '响应长度:', response.length);
 
@@ -57,6 +59,7 @@ export class FinishStreamingAnswerAction extends StreamAction {
               response_quality: response.length > 100 ? 'detailed' : 'brief',
             });
 
+            context.signal?.throwIfAborted();
             // Record successful QA interaction
             AgentMemoryService.recordOperationInteraction(
               notebookId,
@@ -74,6 +77,7 @@ export class FinishStreamingAnswerAction extends StreamAction {
           }
         }
       } catch (error) {
+        context.signal?.throwIfAborted();
         console.error('记录QA交互时出错:', error);
       }
     } else {
