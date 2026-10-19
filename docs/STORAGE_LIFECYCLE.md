@@ -127,3 +127,14 @@ new A revision returns to clean. The storage/autosave/session gate passes 331 te
 also pass, including this cross-notebook case: abort A after its native content request succeeds,
 verify no partial A metadata/content, observe B and C commits without retrying blocked A, explicitly
 retry A, then admit and read back a corrected A revision.
+
+## Edits accepted during conflict recovery
+
+Recovery persistence checks the queue again after each recovery write. If a newer revision was
+accepted while that write was pending, it writes the newer recovery copy before returning the
+conflict. This does not retry the canonical notebook write or acknowledge any pending revision.
+A later recovery failure is reported with the original conflict while the newest edit stays queued.
+Continuous editing can extend this catch-up phase; copies remain coalesced to the latest revision
+observed after each write. Edits accepted after recovery completes still follow normal admission.
+Two deterministic regressions cover catch-up and a failure of the subsequent recovery write;
+the storage/autosave/session gate passes 333 tests. Native coverage of this specific race is pending.

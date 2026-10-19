@@ -1076,3 +1076,50 @@ it.each(['failure', 'conflict'] as const)(
     }
   }
 );
+
+it('retains edits admitted while a conflict recovery copy is being persisted', async () => {
+  const recovery = deferred();
+  const conflict = new NotebookConflictError('notebook', 'body');
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(conflict);
+  storage.recovery.saveDraft.mockImplementationOnce(() => recovery.promise);
+  const rejected = expect(service.saveNow(snapshot('first conflict'))).rejects.toBe(conflict);
+  await vi.waitFor(() => expect(storage.recovery.saveDraft).toHaveBeenCalledOnce());
+  await service.queueSave(snapshot('edited during recovery'));
+  const newest = service.getSaveProgress('notebook')!.currentRevision;
+  recovery.resolve();
+  await rejected;
+  expect(storage.recovery.saveDraft).toHaveBeenCalledTimes(2);
+  const latest = storage.recovery.saveDraft.mock.calls[1][0];
+  expect(latest.revision).toBe(newest);
+  expect(JSON.parse(latest.content).cells[0].content).toBe('# edited during recovery');
+  expect(service.getSaveProgress('notebook')).toMatchObject({
+    phase: 'blocked',
+    committedRevision: 0,
+  });
+  expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledOnce();
+});
+
+it('reports a later recovery write failure while keeping the newest pending edit', async () => {
+  const recovery = deferred();
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(
+    new NotebookConflictError('notebook', 'body')
+  );
+  storage.recovery.saveDraft
+    .mockImplementationOnce(() => recovery.promise)
+    .mockRejectedValueOnce(new Error('recovery disk full'));
+  const rejected = expect(service.saveNow(snapshot('first conflict'))).rejects.toThrow(
+    'recovery disk full'
+  );
+  await vi.waitFor(() => expect(storage.recovery.saveDraft).toHaveBeenCalledOnce());
+  await service.queueSave(snapshot('latest pending edit'));
+  const newest = service.getSaveProgress('notebook')!.currentRevision;
+  recovery.resolve();
+  await rejected;
+  expect(service.hasPending('notebook')).toBe(true);
+  expect(service.getSaveProgress('notebook')).toMatchObject({
+    phase: 'blocked',
+    currentRevision: newest,
+    committedRevision: 0,
+  });
+  expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledOnce();
+});

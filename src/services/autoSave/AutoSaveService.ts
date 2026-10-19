@@ -596,17 +596,24 @@ export class AutoSaveService implements IAutoSaveService {
       });
     } catch (error) {
       if (error instanceof NotebookConflictError) {
-        const retained = this.saveQueue.get(notebookId) ?? snapshot;
+        let retained = this.saveQueue.get(notebookId) ?? snapshot;
         try {
-          await this.persistence.recovery.saveDraft({
-            notebookId,
-            writerId: this.writerId,
-            revision: retained.revision,
-            content: new NotebookSnapshotDocument(retained).content,
-            expectedContent: (condition ?? this.writeBaseline.condition(notebookId))
-              .expectedContent,
-            reason: error.reason,
-          });
+          for (;;) {
+            await this.persistence.recovery.saveDraft({
+              notebookId,
+              writerId: this.writerId,
+              revision: retained.revision,
+              content: new NotebookSnapshotDocument(retained).content,
+              expectedContent: (condition ?? this.writeBaseline.condition(notebookId))
+                .expectedContent,
+              reason: error.reason,
+            });
+            // Recovery I/O may outlive more accepted edits. Persist their revision too,
+            // without attempting the conflicting canonical write again.
+            const latest = this.saveQueue.get(notebookId);
+            if (!latest || latest.revision === retained.revision) break;
+            retained = latest;
+          }
         } catch (recoveryError) {
           throw new NotebookConflictError(
             error.notebookId,
