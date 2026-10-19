@@ -209,8 +209,7 @@ export class FileRepository implements IFileRepository {
         );
       }
     );
-    const ownership = new FileRecordOwnership(notebookId);
-    for (const file of files) ownership.verify(file);
+    new FileRecordOwnership(notebookId).verifyAll(files);
     return files.filter((file) => file.isLargeFile);
   }
 
@@ -258,8 +257,7 @@ export class FileRepository implements IFileRepository {
       const files = await this.read<FileMetadataEntity[]>(
         stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(notebookId)
       );
-      const ownership = new FileRecordOwnership(notebookId);
-      for (const file of files) ownership.verify(file);
+      new FileRecordOwnership(notebookId).verifyAll(files);
       store.put({
         id: notebookId,
         name: `Notebook ${notebookId.slice(0, 8)}`,

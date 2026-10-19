@@ -579,3 +579,11 @@ catalogs and conditional snapshot writes share this boundary. Truthy strings suc
 as `"false"` cannot authorize a cache hit or satisfy snapshot compare-and-save.
 Invalid flags reject without coercion or repair; valid local/remote behavior and
 existing remote-to-local editing remain unchanged.
+
+## Notebook operations share file ownership admission
+
+Notebook metadata/snapshot saves, file statistics, recalculation and historical
+imports now apply `FileRecordOwnership.verifyAll` to their indexed file records.
+Matching a stored ID alone does not authorize replacement or import completion when
+the record's notebook/path disagrees. Corruption rejects before notebook/body writes
+or migration receipts. File-level and notebook-level operations use the same rule.

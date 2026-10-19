@@ -1,3 +1,4 @@
+import { FileRecordOwnership } from './FileRecordOwnership';
 import { AccessHistory } from './AccessHistory';
 import { NotebookFileTotals } from './NotebookFileTotals';
 import type { FileSaveData, IStorageProvider, NotebookSaveData } from '../interfaces';
@@ -64,6 +65,7 @@ export class NotebookImport {
           )
         ),
       ]);
+      new FileRecordOwnership(this.notebook.id).verifyAll(current);
       const currentById = new Map(current.map((file) => [file.id, file]));
       const missing: FileRecordSet[] = [];
       incoming.forEach((file, index) => {

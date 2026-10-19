@@ -1331,7 +1331,12 @@ test('failed snapshot commit rolls back content, notebook counters and retention
       cacheEnabled: true,
     };
     await provider.put(S.NOTEBOOKS, notebook);
-    await provider.put(S.FILES_METADATA, { id: 'cache::snapshot', notebookId: 'cache', size: 3 });
+    await provider.put(S.FILES_METADATA, {
+      id: 'cache::snapshot',
+      notebookId: 'cache',
+      filePath: 'snapshot',
+      size: 3,
+    });
     await provider.put(S.FILES_CONTENT, { fileId: 'cache::snapshot', content: 'old' });
     const failing = new NotebookRepository({
       transaction: (names, mode, schedule) =>
@@ -4328,5 +4333,57 @@ test('ambiguous local-content flags cannot admit reads or conditional snapshot w
     return { before, after, errors };
   });
   expect(result.errors).toEqual(Array(4).fill('Invalid file content availability'));
+  expect(result.after).toEqual(result.before);
+});
+
+test('notebook operations cannot bypass file ownership validation or publish import receipts', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, FileRepository, NotebookRepository, DB_CONFIG } =
+      window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const files = new FileRepository(provider);
+    const notebooks = new NotebookRepository(provider);
+    const S = DB_CONFIG.STORES;
+    const data = {
+      notebookId: 'book',
+      filePath: 'file',
+      fileName: 'file',
+      content: 'old',
+      size: 3,
+      lastModified: 'old',
+    };
+    await files.saveFile(data);
+    const notebook = await provider.get(S.NOTEBOOKS, 'book');
+    const record = await provider.get(S.FILES_METADATA, 'book::file');
+    await provider.put(S.FILES_METADATA, { ...record, filePath: 'wrong' });
+    const snapshot = () =>
+      Promise.all(
+        [S.NOTEBOOKS, S.FILES_METADATA, S.FILES_CONTENT, S.ACTIVITIES, S.MIGRATION_LEDGER].map(
+          (store) => provider.getAll(store)
+        )
+      );
+    const before = await snapshot();
+    const errors = [];
+    for (const action of [
+      () => notebooks.saveNotebook(notebook),
+      () => notebooks.saveNotebookSnapshot({ ...data, content: 'replacement' }, notebook),
+      () => notebooks.getNotebookStats('book'),
+      () => notebooks.recalcNotebookStats('book'),
+      () => notebooks.importNotebook(notebook, [data], 'ownership-import'),
+    ]) {
+      try {
+        await action();
+        errors.push(null);
+      } catch (error) {
+        errors.push(error.message);
+      }
+    }
+    const after = await snapshot();
+    await provider.close();
+    return { before, after, errors };
+  });
+  expect(result.errors).toEqual(Array(5).fill('Invalid file metadata ownership'));
   expect(result.after).toEqual(result.before);
 });

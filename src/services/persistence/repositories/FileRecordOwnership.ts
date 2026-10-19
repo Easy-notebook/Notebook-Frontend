@@ -8,6 +8,10 @@ export class FileRecordOwnership {
     private readonly filePath?: string
   ) {}
 
+  verifyAll(records: readonly FileMetadataEntity[]): void {
+    for (const record of records) this.verify(record);
+  }
+
   verify(record: FileMetadataEntity): void {
     if (
       !record ||

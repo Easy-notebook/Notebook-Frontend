@@ -1,3 +1,4 @@
+import { FileRecordOwnership } from './FileRecordOwnership';
 import { FileContentRecord } from './FileContentRecord';
 import { AccessHistory } from './AccessHistory';
 import { NotebookFileTotals } from './NotebookFileTotals';
@@ -68,6 +69,7 @@ export class NotebookRepository implements INotebookRepository {
           stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(data.id)
         ),
       ]);
+      new FileRecordOwnership(data.id).verifyAll(files);
       if (file && condition) {
         const current = await this.read<FileContentEntity | undefined>(
           stores[DB_CONFIG.STORES.FILES_CONTENT].get(file.metadata.id)
@@ -190,6 +192,7 @@ export class NotebookRepository implements INotebookRepository {
         ]);
       }
     );
+    new FileRecordOwnership(id).verifyAll(files);
     activities.sort((a, b) => b.timestamp - a.timestamp);
     return {
       ...NotebookFileTotals.fromFiles(files).toRecord(),
@@ -260,6 +263,7 @@ export class NotebookRepository implements INotebookRepository {
           ),
         ]);
         if (!notebook) return;
+        new FileRecordOwnership(notebookId).verifyAll(files);
         store.put({
           ...notebook,
           ...NotebookFileTotals.fromFiles(files).toRecord(),

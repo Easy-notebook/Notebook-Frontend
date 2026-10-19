@@ -24,7 +24,7 @@ const file = {
 
 function setup(
   existing: unknown = { ...notebook, createdAt: 17 },
-  files: Array<{ id: string; size: number }> = []
+  files: Array<{ id: string; notebookId: string; filePath: string; size: number }> = []
 ) {
   const readFiles = vi.fn(() => {
     const request = { result: files, onsuccess: undefined as undefined | (() => void) };
@@ -226,8 +226,13 @@ it('allows explicit cache ownership only when creating a new cache record', asyn
 
 it('counts a replacement snapshot once while retaining other file sizes', async () => {
   const { repository, stores } = setup({ ...notebook, accessCount: 12 }, [
-    { id: 'book::notebook_book.json', size: 500 },
-    { id: 'book::attachment', size: 20 },
+    {
+      id: 'book::notebook_book.json',
+      notebookId: 'book',
+      filePath: 'notebook_book.json',
+      size: 500,
+    },
+    { id: 'book::attachment', notebookId: 'book', filePath: 'attachment', size: 20 },
   ]);
   await repository.saveNotebookSnapshot(
     { ...file, size: 30 },
@@ -240,8 +245,8 @@ it('counts a replacement snapshot once while retaining other file sizes', async 
 
 it('metadata refresh derives totals from current files and retains newer access state', async () => {
   const { repository, stores } = setup({ ...notebook, lastAccessedAt: 1000, accessCount: 10 }, [
-    { id: 'book::one', size: 7 },
-    { id: 'book::two', size: 8 },
+    { id: 'book::one', notebookId: 'book', filePath: 'one', size: 7 },
+    { id: 'book::two', notebookId: 'book', filePath: 'two', size: 8 },
   ]);
   await repository.saveNotebook({ ...notebook, fileCount: 999, totalSize: 999 });
   expect(stores.notebooks.put).toHaveBeenCalledWith(
@@ -273,5 +278,30 @@ it.each(['input', 'stored'])(
     expect(stores.files_metadata.put).not.toHaveBeenCalled();
     expect(stores.files_content.put).not.toHaveBeenCalled();
     expect(stores.activities.add).not.toHaveBeenCalled();
+  }
+);
+
+it.each(['metadata', 'snapshot', 'recalculate'])(
+  'rejects corrupt file ownership during %s',
+  async (operation) => {
+    const { repository, stores } = setup(notebook, [
+      {
+        id: 'book::notebook_book.json',
+        notebookId: 'book',
+        filePath: 'wrong',
+        size: 3,
+      },
+    ]);
+    const actions = {
+      metadata: () => repository.saveNotebook(notebook),
+      snapshot: () => repository.saveNotebookSnapshot(file, notebook),
+      recalculate: () => repository.recalcNotebookStats('book'),
+    };
+    await expect(actions[operation as keyof typeof actions]()).rejects.toThrow(
+      'Invalid file metadata ownership'
+    );
+    expect(stores.notebooks.put).not.toHaveBeenCalled();
+    expect(stores.files_metadata.put).not.toHaveBeenCalled();
+    expect(stores.files_content.put).not.toHaveBeenCalled();
   }
 );
