@@ -7,8 +7,10 @@ import { TriggerWebpageGenerationAction } from './TriggerWebpageGenerationAction
 import { TriggerVideoGenerationAction } from './TriggerVideoGenerationAction';
 import { RunCurrentCodeCellAction } from '../code/RunCurrentCodeCellAction';
 import { CommunicateAgentAction } from '../agent/CommunicateAgentAction';
-const { send } = vi.hoisted(() => ({ send: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@Store/operatorStore', () => ({ default: { getState: () => ({ sendOperation: send }) } }));
+const { send } = vi.hoisted(() => ({ send: vi.fn() }));
+vi.mock('@Store/operatorStore', () => ({
+  default: { getState: () => ({ submitOperation: send }) },
+}));
 const qa = (id: string, onProcess = false): QAItem => ({
   id,
   onProcess,
@@ -18,7 +20,9 @@ const qa = (id: string, onProcess = false): QAItem => ({
   resolved: false,
 });
 beforeEach(() => {
-  send.mockClear();
+  send
+    .mockReset()
+    .mockResolvedValue({ accepted: true, operationId: 'op', completion: Promise.resolve() });
   useStore.setState({ notebookId: 'original', currentPhaseId: 'phase-a', currentStepIndex: 3 });
   useAIAgentStore.setState({ qaList: [qa('first', true), qa('second')] });
 });
@@ -39,17 +43,21 @@ it.each([
     useStore.setState({ notebookId: 'changed', currentPhaseId: 'phase-b', currentStepIndex: 7 });
     useAIAgentStore.setState({ qaList: [qa('second', true), qa('first')] });
     await execution;
-    expect(send).toHaveBeenCalledExactlyOnceWith('original', {
-      type: 'user_command',
-      payload: {
-        content: `/${command} original prompt`,
-        commandId: 'command-a',
-        current_view_mode: useStore.getState().viewMode,
-        current_phase_id: 'phase-a',
-        current_step_index: 3,
-        notebook_id: 'original',
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      'original',
+      {
+        type: 'user_command',
+        payload: {
+          content: `/${command} original prompt`,
+          commandId: 'command-a',
+          current_view_mode: useStore.getState().viewMode,
+          current_phase_id: 'phase-a',
+          current_step_index: 3,
+          notebook_id: 'original',
+        },
       },
-    });
+      undefined
+    );
     expect(useAIAgentStore.getState().qaList[1].toolCalls).toEqual([
       { type: eventType, content: 'original prompt', agent: `${command}-generator` },
     ]);
@@ -80,7 +88,8 @@ it('honors explicit stream context and skips incomplete generation requests', as
         current_step_index: 0,
         current_view_mode: 'explicit-view',
       }),
-    })
+    }),
+    undefined
   );
   expect(useAIAgentStore.getState().qaList[1].toolCalls).toHaveLength(1);
 });
@@ -122,4 +131,84 @@ it('records agent communication against an explicit QA without redirecting to th
   expect(useAIAgentStore.getState().qaList[1].toolCalls).toEqual([
     { type: 'agent-communication', content: 'message', agent: 'a', targetAgent: 'b' },
   ]);
+});
+
+it.each(['busy', 'failed', 'cancelled'] as const)(
+  'does not publish generation success after %s admission',
+  async (reason) => {
+    send.mockResolvedValue({ accepted: false, reason, message: reason });
+    const showToast = vi.fn();
+    await new TriggerImageGenerationAction().execute({
+      payload: { prompt: 'draw', commandId: 'id' },
+      showToast,
+    });
+    expect(showToast).not.toHaveBeenCalled();
+    expect(useAIAgentStore.getState().qaList[0].toolCalls).toBeUndefined();
+  }
+);
+it('does not submit an already cancelled generation', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const showToast = vi.fn();
+  await expect(
+    new TriggerImageGenerationAction().execute({
+      payload: { prompt: 'draw', commandId: 'id' },
+      showToast,
+      signal: controller.signal,
+    })
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(send).not.toHaveBeenCalled();
+  expect(showToast).not.toHaveBeenCalled();
+});
+it('forwards cancellation to admission and suppresses late event publication', async () => {
+  const controller = new AbortController();
+  const showToast = vi.fn(async () => {
+    controller.abort();
+  });
+  await expect(
+    new TriggerImageGenerationAction().execute({
+      payload: { prompt: 'draw', commandId: 'id' },
+      showToast,
+      signal: controller.signal,
+    })
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(send).toHaveBeenCalledWith('original', expect.any(Object), controller.signal);
+  expect(useAIAgentStore.getState().qaList[0].toolCalls).toBeUndefined();
+});
+
+it('cancels during lazy operator loading before submitting', async () => {
+  const controller = new AbortController();
+  const showToast = vi.fn();
+  const pending = new TriggerImageGenerationAction().execute({
+    payload: { prompt: 'draw', commandId: 'id' },
+    showToast,
+    signal: controller.signal,
+  });
+  controller.abort();
+  await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  expect(send).not.toHaveBeenCalled();
+  expect(showToast).not.toHaveBeenCalled();
+});
+
+it('waits for admission but leaves stream completion with the dispatcher', async () => {
+  let accept!: () => void;
+  const completion = new Promise<void>(() => {});
+  send.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        accept = () => resolve({ accepted: true, operationId: 'op', completion });
+      })
+  );
+  const showToast = vi.fn();
+  const pending = new TriggerImageGenerationAction().execute({
+    payload: { prompt: 'draw', commandId: 'id' },
+    showToast,
+  });
+  await vi.dynamicImportSettled();
+  const notificationsBeforeAdmission = showToast.mock.calls.length;
+  accept();
+  await pending;
+  expect(notificationsBeforeAdmission).toBe(0);
+  expect(showToast).toHaveBeenCalledOnce();
+  expect(useAIAgentStore.getState().qaList[0].toolCalls).toHaveLength(1);
 });

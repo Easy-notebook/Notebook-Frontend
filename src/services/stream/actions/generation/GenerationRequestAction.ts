@@ -15,6 +15,7 @@ export abstract class GenerationRequestAction extends StreamAction {
   protected abstract readonly kind: GenerationKind;
 
   async execute(context: StreamActionContext): Promise<void> {
+    context.signal?.throwIfAborted();
     const { prompt, commandId, QId } = context.payload;
     if (!prompt || !commandId) return;
     const state = useStore.getState();
@@ -36,11 +37,19 @@ export abstract class GenerationRequestAction extends StreamAction {
     );
     // Operator loading remains lazy to avoid the stream-dispatch/operator import cycle.
     const { default: useOperatorStore } = await import('@Store/operatorStore');
-    void useOperatorStore.getState().sendOperation(notebookId, command);
+    context.signal?.throwIfAborted();
+    const receipt = await useOperatorStore
+      .getState()
+      .submitOperation(notebookId, command, context.signal);
+    context.signal?.throwIfAborted();
+    if (!receipt.accepted) return;
+    // The dispatcher owns the accepted stream; this action only publishes admission.
+
     await context.showToast({
       message: `开始生成${this.kind.label}: ${prompt.substring(0, 30)}...`,
       type: 'info',
     });
+    context.signal?.throwIfAborted();
     event.record();
   }
 }
