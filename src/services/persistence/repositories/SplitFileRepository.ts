@@ -1,11 +1,32 @@
 import { makeFileId } from '../../../storage/fileIdentity';
-import { ISplitFileRepository, IStorageProvider } from '../interfaces';
+import { ISplitFileRepository, IStorageProvider, type SplitFileSaveData } from '../interfaces';
 import { SplitFileEntity, DB_STORES } from '../../../storage/schema';
 
 export class SplitFileRepository implements ISplitFileRepository {
   constructor(private storage: IStorageProvider) {}
 
-  async saveFile(notebookId: string, filePath: string, fileData: any): Promise<void> {
+  async saveFile(notebookId: string, filePath: string, fileData: SplitFileSaveData): Promise<void> {
+    if (
+      typeof notebookId !== 'string' ||
+      !notebookId ||
+      typeof filePath !== 'string' ||
+      !filePath ||
+      !fileData ||
+      typeof fileData.name !== 'string' ||
+      !fileData.name ||
+      typeof fileData.content !== 'string' ||
+      typeof fileData.type !== 'string' ||
+      !fileData.type ||
+      typeof fileData.lastModified !== 'string' ||
+      !fileData.lastModified
+    ) {
+      throw new Error(
+        'Invalid split file: identity, name, content, type and modification time are required'
+      );
+    }
+    if (!Number.isSafeInteger(fileData.size) || fileData.size < 0) {
+      throw new Error('Invalid split file size');
+    }
     const splitFile: SplitFileEntity = {
       id: makeFileId(notebookId, filePath),
       notebookId,

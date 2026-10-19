@@ -129,8 +129,17 @@ export interface ITabRepository {
   getAllTabStates(): Promise<TabStateEntity[]>;
 }
 
+export interface SplitFileSaveData {
+  name: string;
+  content: string;
+  type: string;
+  size: number;
+  lastModified: string;
+  metadata?: unknown;
+}
+
 export interface ISplitFileRepository {
-  saveFile(notebookId: string, filePath: string, fileData: any): Promise<void>;
+  saveFile(notebookId: string, filePath: string, fileData: SplitFileSaveData): Promise<void>;
   getFile(notebookId: string, filePath: string): Promise<SplitFileEntity | null>;
   deleteFile(notebookId: string, filePath: string): Promise<void>;
   clearNotebook(notebookId: string): Promise<void>;

@@ -100,7 +100,7 @@ export interface SplitFileEntity {
   size: number;
   lastModified: string;
   cachedAt: number;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 /**

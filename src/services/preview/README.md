@@ -188,3 +188,15 @@ of missing content and remain eligible for tabs. The former filename-based
 missing-image heuristic and content-dependent discovery validator are removed.
 Actual availability is resolved only when the file is opened, through the complete
 cache-hit and exact remote-read contracts above.
+
+## Split-cache write boundary
+
+`SplitFileSaveData` defines the split-cache write shape. The repository rejects
+missing identity/name/type/modification fields, non-string content, and negative,
+fractional or unsafe numeric sizes before writing. Empty content with zero size
+is valid. Optional metadata is opaque (`unknown`) and remains subject to the
+provider's existing structured-clone snapshot at admission; no second cloning
+layer is added. The persisted record shape is unchanged.
+
+Native browser coverage verifies that malformed replacement writes and
+uncloneable metadata leave the prior committed record and statistics intact.

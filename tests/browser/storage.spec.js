@@ -3669,3 +3669,48 @@ test('file repositories preserve distinct whitespace-bearing keys through read u
   expect(result.retained.content).toBe('report.txt');
   expect(result.splitRetained.content).toBe('report.txt');
 });
+
+test('invalid split-cache writes leave the committed record and statistics intact', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, SplitFileRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new SplitFileRepository(provider);
+    const data = {
+      name: 'file.txt',
+      content: '中文',
+      type: 'text',
+      size: 6,
+      lastModified: 'original',
+      metadata: { label: 'admitted' },
+    };
+    const writing = repository.saveFile('book', 'file.txt', data);
+    data.metadata.label = 'mutated after admission';
+    await writing;
+    const original = await repository.getFile('book', 'file.txt');
+    const failures = [];
+    for (const invalid of [
+      { ...data, content: {} },
+      { ...data, size: -1 },
+      { ...data, size: Infinity },
+      { ...data, name: '' },
+      { ...data, metadata: { unsupported: () => undefined } },
+    ]) {
+      try {
+        await repository.saveFile('book', 'file.txt', invalid);
+      } catch (error) {
+        failures.push(error.name);
+      }
+    }
+    const after = await repository.getFile('book', 'file.txt');
+    const stats = await repository.getStats();
+    await provider.close();
+    return { original, after, failures, stats };
+  });
+  expect(result.original.metadata).toEqual({ label: 'admitted' });
+  expect(result.failures).toHaveLength(5);
+  expect(result.failures[4]).toBe('DataCloneError');
+  expect(result.after).toEqual(result.original);
+  expect(result.stats).toEqual({ totalFiles: 1, totalSize: 6 });
+});
