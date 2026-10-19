@@ -3714,3 +3714,71 @@ test('invalid split-cache writes leave the committed record and statistics intac
   expect(result.after).toEqual(result.original);
   expect(result.stats).toEqual({ totalFiles: 1, totalSize: 6 });
 });
+
+test('invalid tab replacements cannot overwrite a committed notebook selection', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, TabRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new TabRepository(provider);
+    const first = { id: 'book:: first.txt ', path: ' first.txt ', name: 'first', type: 'text' };
+    const second = { id: 'book::second.txt', path: 'second.txt', name: 'second', type: 'text' };
+    const list = [first, second];
+    const saving = repository.saveTabState('book', list, second.id);
+    first.name = 'changed after admission';
+    list.reverse();
+    await saving;
+    const original = await repository.getTabState('book');
+    let rejected = 0;
+    for (const [tabs, active] of [
+      [[{ ...second, path: 'wrong.txt' }], second.id],
+      [[{ ...second, id: 'other::second.txt' }], null],
+      [[second, second], second.id],
+      [[second], 'book::missing.txt'],
+      [[], second.id],
+    ]) {
+      try {
+        await repository.saveTabState('book', tabs, active);
+      } catch {
+        rejected++;
+      }
+    }
+    const after = await repository.getTabState('book');
+    await provider.close();
+    return { original, after, rejected };
+  });
+  expect(result.original.tabList.map((tab) => tab.name)).toEqual(['first', 'second']);
+  expect(result.original.activeTabId).toBe('book::second.txt');
+  expect(result.rejected).toBe(5);
+  expect(result.after).toEqual(result.original);
+});
+
+test('tab-state commit failure retains the previous complete selection', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, TabRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new TabRepository(provider);
+    const tab = { id: 'book::file.txt', path: 'file.txt', name: 'file', type: 'text' };
+    await repository.saveTabState('book', [tab], tab.id);
+    const original = await repository.getTabState('book');
+    const failing = new TabRepository({
+      put: (store, value) =>
+        provider.transaction([store], 'readwrite', async (stores) => {
+          stores[store].put(value);
+          throw new Error('tab commit aborted');
+        }),
+    });
+    let message;
+    try {
+      await failing.saveTabState('book', [], null);
+    } catch (error) {
+      message = error.message;
+    }
+    const after = await repository.getTabState('book');
+    await provider.close();
+    return { original, after, message };
+  });
+  expect(result.message).toBe('tab commit aborted');
+  expect(result.after).toEqual(result.original);
+});

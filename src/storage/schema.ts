@@ -75,14 +75,16 @@ export interface NotebookActivityEntity {
 /**
  * Tab state entity - tracks open tabs and active tab per notebook
  */
+export interface TabEntry {
+  id: string;
+  path: string;
+  name: string;
+  type: string;
+}
+
 export interface TabStateEntity {
   notebookId: string; // Primary key
-  tabList: Array<{
-    id: string;
-    path: string;
-    name: string;
-    type: string;
-  }>;
+  tabList: TabEntry[];
   activeTabId: string | null;
   lastUpdated: number;
 }

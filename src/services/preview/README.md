@@ -200,3 +200,16 @@ layer is added. The persisted record shape is unchanged.
 
 Native browser coverage verifies that malformed replacement writes and
 uncloneable metadata leave the prior committed record and statistics intact.
+
+## Tab snapshot write boundary
+
+`TabEntry` names the persisted entry shape, and `TabRepository.saveTabState`
+accepts a readonly list. Before any write it checks notebook identity, required
+entry fields, exact ID/path agreement, duplicate IDs and active-tab membership.
+An empty list with null active selection remains valid. The repository copies
+entry fields synchronously so later caller mutations cannot change the snapshot.
+
+This integrity check complements `TabManagerService`'s UI scoping policy: the
+service filters foreign UI tabs, while the repository rejects inconsistent raw
+snapshots. Browser tests verify invalid replacement and native commit failure
+both retain the prior complete saved selection. The stored shape is unchanged.

@@ -1,22 +1,39 @@
+import { makeFileId } from '../../../storage/fileIdentity';
 import { ITabRepository, IStorageProvider } from '../interfaces';
-import { TabStateEntity, DB_STORES } from '../../../storage/schema';
+import { TabStateEntity, type TabEntry, DB_STORES } from '../../../storage/schema';
 
 export class TabRepository implements ITabRepository {
   constructor(private storage: IStorageProvider) {}
 
   async saveTabState(
     notebookId: string,
-    tabList: any[],
+    tabList: readonly TabEntry[],
     activeTabId: string | null
   ): Promise<void> {
+    if (typeof notebookId !== 'string' || !notebookId || !Array.isArray(tabList)) {
+      throw new Error('Invalid notebook identity or tab list');
+    }
+    const identities = new Set<string>();
+    const entries = tabList.map((tab: TabEntry): TabEntry => {
+      if (
+        !tab ||
+        [tab.id, tab.path, tab.name, tab.type].some(
+          (value) => typeof value !== 'string' || !value
+        ) ||
+        tab.id !== makeFileId(notebookId, tab.path) ||
+        identities.has(tab.id)
+      ) {
+        throw new Error('Invalid tab entry: identity, path and unique membership are required');
+      }
+      identities.add(tab.id);
+      return { id: tab.id, path: tab.path, name: tab.name, type: tab.type };
+    });
+    if (activeTabId !== null && !identities.has(activeTabId)) {
+      throw new Error('Invalid active tab: selection must belong to the saved list');
+    }
     const tabState: TabStateEntity = {
       notebookId,
-      tabList: tabList.map((tab) => ({
-        id: tab.id,
-        path: tab.path,
-        name: tab.name,
-        type: tab.type,
-      })),
+      tabList: entries,
       activeTabId,
       lastUpdated: Date.now(),
     };

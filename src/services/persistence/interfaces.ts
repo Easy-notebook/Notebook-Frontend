@@ -9,6 +9,7 @@ import type {
   FileMetadataEntity,
   NotebookActivityEntity,
   TabStateEntity,
+  TabEntry,
   SplitFileEntity,
   StorageConfigEntity,
 } from '../../storage/schema';
@@ -17,6 +18,7 @@ export type {
   FileMetadataEntity,
   NotebookActivityEntity,
   TabStateEntity,
+  TabEntry,
   SplitFileEntity,
   StorageConfigEntity,
 };
@@ -123,7 +125,11 @@ export interface IFileRepository {
 }
 
 export interface ITabRepository {
-  saveTabState(notebookId: string, tabList: any[], activeTabId: string | null): Promise<void>;
+  saveTabState(
+    notebookId: string,
+    tabList: readonly TabEntry[],
+    activeTabId: string | null
+  ): Promise<void>;
   getTabState(notebookId: string): Promise<TabStateEntity | null>;
   deleteTabState(notebookId: string): Promise<void>;
   getAllTabStates(): Promise<TabStateEntity[]>;
