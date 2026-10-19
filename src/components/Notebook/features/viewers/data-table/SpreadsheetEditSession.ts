@@ -8,15 +8,41 @@ interface SaveTicket {
   readonly content: string;
 }
 
-type SaveState = { phase: 'ready' | 'failed' } | { phase: 'saving'; ticket: SaveTicket };
+export type SpreadsheetSaveStatus =
+  | { readonly phase: 'ready' | 'saving' | 'saved' }
+  | { readonly phase: 'failed'; readonly message: string };
+
+type SaveState =
+  | { phase: 'ready' | 'saved' }
+  | { phase: 'failed'; message: string }
+  | { phase: 'saving'; ticket: SaveTicket };
 
 /** Owns revision-scoped deferred edits, save acknowledgements and committed source echoes. */
 export class SpreadsheetEditSession {
   private deferredEdit: DeferredEditTicket | null = null;
   private source: { key: string; content: string } | null = null;
   private revision = 0;
-  private state: SaveState = { phase: 'ready' };
+  private state: SaveState = Object.freeze({ phase: 'ready' });
+  private readonly listeners = new Set<() => void>();
   private committedEcho: string | null = null;
+
+  getSnapshot = (): SpreadsheetSaveStatus => this.state;
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  private publish(state: SaveState): void {
+    this.state = Object.freeze(state);
+    for (const listener of [...this.listeners]) listener();
+  }
+
+  ownsSave(ticket: SaveTicket): boolean {
+    return this.state.phase === 'saving' && this.state.ticket === ticket;
+  }
 
   /** Pure admission check shared by the React lifetime boundary and source loading. */
   retainsDraft(key: string | null, content: string): boolean {
@@ -32,14 +58,14 @@ export class SpreadsheetEditSession {
       this.source = { key, content };
       return false;
     }
-    this.close();
-    this.source = key === null ? null : { key, content };
+    this.resetSource(key, content);
     return true;
   }
 
   changed(): void {
     this.revision++;
     this.deferredEdit = null;
+    if (this.state.phase === 'saved') this.publish({ phase: 'ready' });
   }
 
   beginSave(content: string): SaveTicket {
@@ -49,16 +75,28 @@ export class SpreadsheetEditSession {
       revision: this.revision,
       content,
     });
-    this.state = { phase: 'saving', ticket };
+    this.publish({ phase: 'saving', ticket });
     return ticket;
   }
 
   completeSave(ticket: SaveTicket, committedContent: string | null): boolean {
-    if (this.state.phase !== 'saving' || this.state.ticket !== ticket) return false;
+    if (!this.ownsSave(ticket)) return false;
     const accepted = committedContent !== null && committedContent === ticket.content;
-    this.state = { phase: accepted ? 'ready' : 'failed' };
     if (accepted) this.committedEcho = committedContent;
-    return accepted && this.revision === ticket.revision;
+    const state: SaveState = accepted
+      ? { phase: this.revision === ticket.revision ? 'saved' : 'ready' }
+      : {
+          phase: 'failed',
+          message: 'Save was not confirmed. Your edits are still here. Use Save to retry.',
+        };
+    this.publish(state);
+    // Subscribers may edit, close the source, or start another save synchronously.
+    return accepted && this.revision === ticket.revision && this.state === state;
+  }
+
+  failSave(ticket: SaveTicket | null, message: string): void {
+    if (ticket && !this.ownsSave(ticket)) return;
+    this.publish({ phase: 'failed', message });
   }
 
   beginDeferredEdit(): DeferredEditTicket | null {
@@ -75,10 +113,14 @@ export class SpreadsheetEditSession {
   }
 
   close(): void {
+    this.resetSource(null, '');
+  }
+
+  private resetSource(key: string | null, content: string): void {
     this.deferredEdit = null;
-    this.source = null;
-    this.state = { phase: 'ready' };
+    this.source = key === null ? null : { key, content };
     this.committedEcho = null;
     this.revision++;
+    this.publish({ phase: 'ready' });
   }
 }

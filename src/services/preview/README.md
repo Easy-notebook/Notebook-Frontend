@@ -406,3 +406,19 @@ External workbook and 3D references are left unchanged. Array formula regions,
 advanced structured-reference syntax and full Excel calculation semantics remain
 incomplete. Source presentation metadata outside the supported draft formats and
 full merged-cell layout also remain incomplete.
+
+## Observable spreadsheet save state
+
+`SpreadsheetEditSession` publishes immutable `ready`, `saving`, `saved` and `failed`
+snapshots through `useSyncExternalStore`. The editor renders progress and failure
+feedback directly from that owner; there is no duplicate React saving/error state.
+A failed write retains the draft and can be retried with Save. Missing or mismatched
+readback is reported as unconfirmed, rather than successful. Preparation failures
+also appear in the view, before storage is called.
+
+Only a current save of the current revision publishes `saved`. A draft change clears
+that indication, and accepted saves with newer local edits return to `ready`.
+Obsolete failures do not publish. Source replacement installs the new source before
+notification, and save completion rechecks ownership after notifying subscribers;
+a synchronous edit, close or new save cannot be followed by a stale clean marker.
+The editor also checks admission after the saving notification before starting I/O.

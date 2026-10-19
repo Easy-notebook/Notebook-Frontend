@@ -160,6 +160,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 }) => {
   const setTabDirty = usePreviewStore((state) => state.setTabDirty);
 
+  const saveStatus = useSyncExternalStore(editSession.subscribe, editSession.getSnapshot);
   const [draftHistory] = useState(
     () =>
       new SpreadsheetHistory<SpreadsheetSnapshot>({ data: [], columns: [], cellFormats: {} }, () =>
@@ -1072,6 +1073,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
 
   const handleSave = useCallback(async () => {
     if (!currentFile) return;
+    let ticket: ReturnType<SpreadsheetEditSession['beginSave']> | null = null;
     try {
       const isWorkbook = (typeOverride || currentFile.type) === 'xlsx';
       const source = sourceRef.current;
@@ -1086,19 +1088,21 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       const content = isWorkbook
         ? source.workbook!.serialize(data, columns, cellFormats, workbookState)
         : serializeTableCsv(data, columns);
-      const ticket = editSession.beginSave(content);
-      try {
-        const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
-          surface: isInSplitView ? 'split' : 'normal',
-          fileId: currentFile.id,
-        });
-        if (editSession.completeSave(ticket, saved?.content ?? null))
-          setTabDirty(currentFile.id, false);
-      } catch (error) {
-        editSession.completeSave(ticket, null);
-        throw error;
-      }
+      ticket = editSession.beginSave(content);
+      if (!editSession.ownsSave(ticket)) return;
+      const saved = await usePreviewStore.getState().updatePreviewFileContent(content, {
+        surface: isInSplitView ? 'split' : 'normal',
+        fileId: currentFile.id,
+      });
+      if (editSession.completeSave(ticket, saved?.content ?? null))
+        setTabDirty(currentFile.id, false);
     } catch (err) {
+      editSession.failSave(
+        ticket,
+        ticket
+          ? 'Could not save your changes. Your edits are still here. Use Save to retry.'
+          : 'The spreadsheet could not be prepared for saving. Your edits are still here.'
+      );
       console.error('Failed to save:', err);
     }
   }, [
@@ -1134,10 +1138,26 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
       {/* Toolbar */}
       <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50">
         <div className="px-3 py-2 flex items-center gap-2 flex-wrap">
+          {saveStatus.phase === 'failed' && (
+            <p role="alert" className="w-full text-sm text-red-700 dark:text-red-300">
+              {saveStatus.message}
+            </p>
+          )}
+          {saveStatus.phase === 'saving' && (
+            <span role="status" className="text-sm text-gray-600 dark:text-gray-300">
+              Saving changes…
+            </span>
+          )}
+          {saveStatus.phase === 'saved' && (
+            <span role="status" className="text-sm text-gray-600 dark:text-gray-300">
+              Saved
+            </span>
+          )}
           {/* File Operations */}
           <div className="flex items-center gap-1">
             <button
               onClick={handleSave}
+              aria-busy={saveStatus.phase === 'saving'}
               className="px-2.5 py-1.5 text-sm bg-gradient-to-r from-theme-500 to-theme-600 text-white rounded-lg hover:from-theme-600 hover:to-theme-700 flex items-center gap-1.5 shadow-sm transition-all duration-200 hover:shadow-md"
               title="Save (Ctrl+S)"
             >

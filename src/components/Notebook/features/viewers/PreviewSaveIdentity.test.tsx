@@ -123,7 +123,9 @@ it.each([false, true])(
       success ? model.state.activeFile : null
     );
     render(<DataTable />);
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
     await waitFor(() =>
       expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith(expect.any(String), {
         surface: 'normal',
@@ -156,7 +158,9 @@ it('saving CSV preserves source cells and adds no spreadsheet column-label row',
     content,
   };
   render(<DataTable />);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   await waitFor(() =>
     expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith(content, {
       surface: 'normal',
@@ -188,7 +192,9 @@ it('exports the same CSV bytes as the save action', async () => {
   );
   try {
     render(<DataTable />);
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
     expect(createObjectURL).toHaveBeenCalledOnce();
     const blob = createObjectURL.mock.calls[0][0];
@@ -229,7 +235,9 @@ it('saves XLSX as a readable workbook and retains undisplayed sheets', async () 
     content,
   };
   render(<DataTable />);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   await waitFor(() => expect(model.state.updatePreviewFileContent).toHaveBeenCalledOnce());
   const [savedContent, target] = model.state.updatePreviewFileContent.mock.calls[0];
   const saved = XLSX.read(savedContent, { type: 'base64' });
@@ -276,7 +284,9 @@ it('preserves empty rows when the CSV grid is saved', async () => {
     content: 'first\n\nlast\n\n',
   };
   render(<DataTable />);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith('first\n""\nlast\n""', {
     surface: 'normal',
     fileId: 'book::rows.csv',
@@ -326,7 +336,9 @@ it('keeps edits made during a save when the store publishes that save result', a
       finish = resolve;
     })
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\n""\nAda', {
     surface: 'normal',
     fileId: 'book::table.csv',
@@ -344,7 +356,9 @@ it('keeps edits made during a save when the store publishes that save result', a
     ...model.state.activeFile,
     content: 'name\n""\nAda\n""',
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   await waitFor(() =>
     expect(model.state.setTabDirty).toHaveBeenCalledWith('book::table.csv', false)
   );
@@ -354,7 +368,7 @@ it('keeps edits made during a save when the store publishes that save result', a
   });
 });
 
-it('keeps the cell input mounted and focused through consecutive keystrokes', () => {
+it('keeps the cell input mounted and focused through consecutive keystrokes', async () => {
   model.state.activeFile = {
     ...model.state.activeFile,
     id: 'book::table.csv',
@@ -373,14 +387,16 @@ it('keeps the cell input mounted and focused through consecutive keystrokes', ()
   fireEvent.change(input, { target: { value: 'Bobby' } });
   expect(screen.getByRole('textbox')).toBe(input);
   fireEvent.blur(input);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\nBobby', {
     surface: 'normal',
     fileId: 'book::table.csv',
   });
 });
 
-it('reopening a context menu does not leave an old outside-click listener that closes the new menu', () => {
+it('reopening a context menu does not leave an old outside-click listener that closes the new menu', async () => {
   model.state.activeFile = {
     ...model.state.activeFile,
     id: 'book::table.csv',
@@ -398,7 +414,9 @@ it('reopening a context menu does not leave an old outside-click listener that c
   fireEvent.mouseDown(insert);
   expect(screen.getByRole('button', { name: 'Insert Row Above' })).toBe(insert);
   fireEvent.click(insert);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\n""\nAda', {
     surface: 'normal',
     fileId: 'book::table.csv',
@@ -431,7 +449,7 @@ it('releases context-menu listeners when an open table unmounts', () => {
   }
 });
 
-it('edits the selected source row after sorting instead of the row at its display position', () => {
+it('edits the selected source row after sorting instead of the row at its display position', async () => {
   model.state.activeFile = {
     ...model.state.activeFile,
     id: 'book::sorted.csv',
@@ -447,7 +465,9 @@ it('edits the selected source row after sorting instead of the row at its displa
   expect(input.value).toBe('Alpha');
   fireEvent.change(input, { target: { value: 'Bravo' } });
   fireEvent.blur(input);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith(
     'Zulu,first\nBravo,second',
     { surface: 'normal', fileId: 'book::sorted.csv' }
@@ -504,7 +524,9 @@ it('pastes consecutive rows in visible sorted order without changing unrelated s
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /^Paste/ }));
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
     expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('Zulu\nB1\nA1', {
       surface: 'normal',
       fileId: 'book::sorted.csv',
@@ -568,7 +590,9 @@ it.each(['navigation', 'external replacement', 'newer edit', 'unmount'])(
       expect(model.state.setTabDirty).not.toHaveBeenCalled();
       if (change !== 'unmount') {
         expect(screen.getByText('newer', { exact: true })).toBeDefined();
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        });
         expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('newer', {
           surface: 'normal',
           fileId: model.state.activeFile.id,
@@ -581,7 +605,7 @@ it.each(['navigation', 'external replacement', 'newer edit', 'unmount'])(
   }
 );
 
-it('isolates editor history and open menus when the same file identity moves between preview surfaces', () => {
+it('isolates editor history and open menus when the same file identity moves between preview surfaces', async () => {
   model.state.activeFile = {
     ...model.state.activeFile,
     id: 'book::table.csv',
@@ -605,14 +629,16 @@ it('isolates editor history and open menus when the same file identity moves bet
   expect(
     (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
   ).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('name\nGrace', {
     surface: 'split',
     fileId: 'book::table.csv',
   });
 });
 
-it('undoes and redoes cell edits, then discards redo when a new edit branches from history', () => {
+it('undoes and redoes cell edits, then discards redo when a new edit branches from history', async () => {
   model.state.activeFile = {
     ...model.state.activeFile,
     id: 'book::history.csv',
@@ -638,14 +664,16 @@ it('undoes and redoes cell edits, then discards redo when a new edit branches fr
   expect(
     (screen.getByRole('button', { name: 'Redo (Ctrl+Y)' }) as HTMLButtonElement).disabled
   ).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('Carol', {
     surface: 'normal',
     fileId: 'book::history.csv',
   });
 });
 
-it('undoes column insertion as one atomic change of both columns and cell values', () => {
+it('undoes column insertion as one atomic change of both columns and cell values', async () => {
   model.state.activeFile = {
     ...model.state.activeFile,
     id: 'book::columns.csv',
@@ -657,19 +685,25 @@ it('undoes column insertion as one atomic change of both columns and cell values
   render(<DataTable showFormulaBar={false} />);
   fireEvent.contextMenu(screen.getByText('left', { exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Insert Column Right' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('left,"",right', {
     surface: 'normal',
     fileId: 'book::columns.csv',
   });
   fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('left,right', {
     surface: 'normal',
     fileId: 'book::columns.csv',
   });
   fireEvent.click(screen.getByRole('button', { name: 'Redo (Ctrl+Y)' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('left,"",right', {
     surface: 'normal',
     fileId: 'book::columns.csv',
@@ -718,13 +752,15 @@ it('persists toolbar formatting when saving an XLSX preview', async () => {
   render(<DataTable showFormulaBar={false} />);
   fireEvent.click(screen.getByText('Ada', { exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Bold (Ctrl+B)' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenCalledOnce();
   const saved = model.state.updatePreviewFileContent.mock.calls[0][0] as string;
   expect(writtenCellStyle(saved, 'A1').font.getElementsByTagName('b')).toHaveLength(1);
 });
 
-it('replaces the whole editor session when external content replaces the same file', () => {
+it('replaces the whole editor session when external content replaces the same file', async () => {
   model.state.activeFile = {
     ...model.state.activeFile,
     id: 'book::external.csv',
@@ -744,7 +780,9 @@ it('replaces the whole editor session when external content replaces the same fi
   expect(
     (screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }) as HTMLButtonElement).disabled
   ).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(model.state.updatePreviewFileContent).toHaveBeenLastCalledWith('Grace', {
     surface: 'normal',
     fileId: 'book::external.csv',
@@ -768,7 +806,9 @@ it('revokes an old save acknowledgement after external replacement of the same f
       finish = resolve;
     })
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   model.state.activeFile = { ...model.state.activeFile, content: 'replacement' };
   view.rerender(<DataTable showFormulaBar={false} />);
   fireEvent.doubleClick(screen.getByText('replacement', { exact: true }));
@@ -845,7 +885,9 @@ it('restores saved formatting and lets the first toolbar click remove imported b
   fireEvent.click(text);
   fireEvent.click(screen.getByRole('button', { name: 'Bold (Ctrl+B)' }));
   expect(screen.getByText('Styled', { exact: true }).closest('div')?.style.fontWeight).toBe('400');
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   const calls = model.state.updatePreviewFileContent.mock.calls;
   const content = calls[calls.length - 1][0] as string;
   expect(XlsxDocument.fromBase64(content).worksheet.A1.s.font).toMatchObject({
@@ -880,7 +922,9 @@ it.each(['Row Above', 'Column Left'])(
     render(<DataTable showFormulaBar={false} />);
     fireEvent.contextMenu(screen.getAllByText('4', { exact: true })[0]);
     fireEvent.click(screen.getByRole('button', { name: `Insert ${command}` }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
     const calls = model.state.updatePreviewFileContent.mock.calls;
     const moved = XLSX.read(calls[calls.length - 1][0], {
       type: 'base64',
@@ -895,7 +939,9 @@ it.each(['Row Above', 'Column Left'])(
     expect(moved[command === 'Row Above' ? 'D4' : 'E3'].f).toBeUndefined();
     expect(moved.C3.f).toBeUndefined();
     fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
     const restored = XLSX.read(calls[calls.length - 1][0], { type: 'base64' }).Sheets.Main;
     expect(restored.C3.f).toBe('2+2');
     expect(restored.D3.f).toBeUndefined();
@@ -925,12 +971,65 @@ it('updates formula references on structural save and restores original referenc
   render(<DataTable showFormulaBar={false} />);
   fireEvent.contextMenu(screen.getByText('2', { exact: true, selector: 'span.truncate' }));
   fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   const calls = model.state.updatePreviewFileContent.mock.calls;
   expect(
     XLSX.read(calls[calls.length - 1][0], { type: 'base64', sheetStubs: true }).Sheets.Main.D4.f
   ).toBe('C4*2');
   fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
   expect(XLSX.read(calls[calls.length - 1][0], { type: 'base64' }).Sheets.Main.D3.f).toBe('C3*2');
+});
+
+it('shows saving, reports a failed write, and retries without discarding the draft', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'draft' };
+    let reject!: (error: Error) => void;
+    model.state.updatePreviewFileContent.mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail;
+      })
+    );
+    render(<DataTable showFormulaBar={false} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+    expect(screen.getByRole('status').textContent).toBe('Saving changes…');
+    await act(async () => {
+      reject(new Error('disk write failed'));
+    });
+    expect(screen.getByRole('alert').textContent).toContain('Could not save your changes');
+    expect(screen.getByText('draft', { exact: true })).toBeDefined();
+    expect(model.state.setTabDirty).not.toHaveBeenCalledWith(model.state.activeFile.id, false);
+    model.state.updatePreviewFileContent.mockResolvedValueOnce({ ...model.state.activeFile });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('Saved');
+    fireEvent.doubleClick(screen.getByText('draft', { exact: true }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'new edit' } });
+    await act(async () => {
+      fireEvent.blur(screen.getByRole('textbox'));
+    });
+    expect(screen.queryByRole('status')).toBeNull();
+  } finally {
+    log.mockRestore();
+  }
+});
+
+it('shows unconfirmed save results instead of displaying Saved', async () => {
+  model.state.activeFile = { ...model.state.activeFile, type: 'csv', content: 'draft' };
+  model.state.updatePreviewFileContent.mockResolvedValueOnce(null);
+  render(<DataTable showFormulaBar={false} />);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  });
+  expect(screen.getByRole('alert').textContent).toContain('Save was not confirmed');
+  expect(screen.queryByRole('status')).toBeNull();
 });
