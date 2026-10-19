@@ -1,3 +1,4 @@
+import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Editor } from '@tiptap/react';
 import { Node as ProseMirrorNode } from 'prosemirror-model';
@@ -242,7 +243,7 @@ const SimpleDragManager: React.FC<SimpleDragManagerProps> = ({ editor, children 
         await handleFileUpload({
           notebookId,
           files: filesToUpload,
-          FileService,
+          fileService: fileUploadClient,
           uploadConfig,
           setUploading: () => {},
           setUploadProgress: () => {},

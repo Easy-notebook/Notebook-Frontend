@@ -1,3 +1,7 @@
+import type {
+  FileUploadClient,
+  FileUploadConfig as UploadConfig,
+} from '@Services/notebook/FileUploadClient';
 // fileUtils.ts
 
 // Type definitions for file utilities
@@ -15,26 +19,12 @@ interface ApiResponse {
   files?: FileItem[];
 }
 
-interface FileServiceInterface {
+interface FileServiceInterface extends Pick<FileUploadClient, 'uploadFiles'> {
   listFiles: (notebookId: string) => Promise<ApiResponse>;
-  uploadFiles: (
-    notebookId: string,
-    files: File[],
-    config: UploadConfig,
-    onProgress: (event: ProgressEvent) => void,
-    signal: AbortSignal
-  ) => Promise<ApiResponse>;
   getFilePreviewUrl: (notebookId: string, filename: string) => Promise<string>;
   getFileContent: (notebookId: string, filename: string) => Promise<string>;
   downloadFile: (notebookId: string, filename: string) => Promise<void>;
   deleteFile: (notebookId: string, filename: string) => Promise<void>;
-}
-
-interface UploadConfig {
-  maxFileSize: number;
-  mode: 'restricted' | 'open';
-  allowedTypes: string[];
-  maxFiles?: number;
 }
 
 interface ToastOptions {
@@ -55,7 +45,7 @@ interface FetchFileListParams {
 interface HandleFileUploadParams {
   notebookId: string;
   files: File[];
-  fileService: FileServiceInterface;
+  fileService: Pick<FileUploadClient, 'uploadFiles'>;
   uploadConfig: UploadConfig;
   setUploading: (uploading: boolean) => void;
   setUploadProgress: (progress: number) => void;

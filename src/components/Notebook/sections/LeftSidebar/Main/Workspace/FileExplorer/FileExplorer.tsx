@@ -1,3 +1,4 @@
+import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 // moved to sections/LeftSideBar/Main/Workspace/FileExplorer/FileExplorer.tsx
 import { useState, useEffect, useCallback, memo, useRef, useMemo } from 'react';
 import { Tree, Dropdown, type MenuProps } from 'antd';
@@ -264,26 +265,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
           files: Array.isArray(resp.files) ? resp.files.map(mapNode) : [],
         } as { status: 'ok' | 'error'; message?: string; files?: any[] };
       },
-      uploadFiles: async (
-        nid: string,
-        files: File[],
-        config: { mode: 'restricted' | 'open'; allowedTypes: string[]; maxFiles?: number },
-        onProgress?: (e: ProgressEvent) => void,
-        signal?: AbortSignal
-      ) => {
-        return await FileService.uploadFile(
-          nid,
-          files,
-          {
-            mode: config.mode,
-            allowedTypes: config.allowedTypes,
-            maxFiles: config.maxFiles,
-            targetDir: uploadConfig.targetDir,
-          } as any,
-          onProgress,
-          signal
-        );
-      },
       getFilePreviewUrl: async (nid: string, filename: string) => {
         try {
           const base = window.Backend_BASE_URL ? window.Backend_BASE_URL.replace(/\/$/, '') : '';
@@ -312,7 +293,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         return await FileService.deleteFile(nid, filename);
       },
     }),
-    [uploadConfig.targetDir]
+    []
   );
 
   const fetchFileListWrapper = useCallback(async () => {
@@ -592,7 +573,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          fileService: utilsApi as any,
+          fileService: fileUploadClient,
           uploadConfig,
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),
@@ -622,7 +603,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
       el.removeEventListener('dragleave', onDragLeave);
       el.removeEventListener('drop', onDrop);
     };
-  }, [notebookId, uploadConfig, fetchFileListWrapper, toast, utilsApi]);
+  }, [notebookId, uploadConfig, fetchFileListWrapper, toast]);
 
   const handleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -631,7 +612,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          fileService: utilsApi as any,
+          fileService: fileUploadClient,
           uploadConfig,
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),
@@ -646,7 +627,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         });
       }
     },
-    [notebookId, uploadConfig, fetchFileListWrapper, toast, utilsApi]
+    [notebookId, uploadConfig, fetchFileListWrapper, toast]
   );
 
   const handleCancelUpload = useCallback(() => {

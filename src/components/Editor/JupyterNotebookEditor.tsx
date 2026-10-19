@@ -1,3 +1,4 @@
+import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 import React, {
   forwardRef,
   useImperativeHandle,
@@ -508,36 +509,10 @@ const JupyterNotebookEditor = forwardRef<JupyterNotebookEditorHandle, JupyterNot
             targetDir: 'assets',
           };
 
-          // Adapter to satisfy fileUtils NotebookApiIntegration typing
-          const filesApi = {
-            listFiles: (id: string) => FileService.listFiles(id) as Promise<unknown>,
-            uploadFiles: (
-              id: string,
-              f: File[],
-              cfg: unknown,
-              _onProgress: (e: ProgressEvent) => void,
-              signal: AbortSignal
-            ) => FileService.uploadFile(id, f, cfg as any, _onProgress, signal) as Promise<unknown>,
-            getFilePreviewUrl: async (id: string, filename: string) =>
-              `${Backend_BASE_URL}/assets/${encodeURIComponent(id)}/${encodeURIComponent(filename)}`,
-            getFileContent: async (id: string, filename: string) => {
-              const res = await FileService.getFile(id, filename);
-              if ((res as any).status === 'ok' && (res as any).content)
-                return (res as any).content as string;
-              throw new Error((res as any).message || 'Failed to get file content');
-            },
-            downloadFile: async (id: string, filename: string) => {
-              await FileService.downloadFile(id, filename);
-            },
-            deleteFile: async () => {
-              throw new Error('deleteFile not implemented');
-            },
-          } as const;
-
           await handleFileUpload({
             notebookId,
             files,
-            fileService: filesApi as any,
+            fileService: fileUploadClient,
             uploadConfig,
             setUploading,
             setUploadProgress,

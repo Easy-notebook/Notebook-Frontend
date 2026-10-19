@@ -1,3 +1,4 @@
+import { fileUploadClient } from '@Services/notebook/FileUploadClient';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import useStore from '@Store/notebookStore';
@@ -84,7 +85,7 @@ export const UploadDropExtension = Extension.create({
               handleFileUpload({
                 notebookId,
                 files,
-                FileService,
+                fileService: fileUploadClient,
                 uploadConfig,
                 setUploading,
                 setUploadProgress,
@@ -218,7 +219,7 @@ export const UploadDropExtension = Extension.create({
               handleFileUpload({
                 notebookId,
                 files,
-                FileService,
+                fileService: fileUploadClient,
                 uploadConfig,
                 setUploading,
                 setUploadProgress,
