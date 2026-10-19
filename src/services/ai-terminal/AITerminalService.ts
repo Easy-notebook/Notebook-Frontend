@@ -27,6 +27,7 @@ class AITerminalService {
     callbacks: {
       showToast: ShowToastFunction;
       setActiveView: (view: 'script' | 'qa') => void;
+      onAttachmentsCommitted?: () => void;
     }
   ): Promise<boolean> {
     const {
@@ -69,6 +70,7 @@ class AITerminalService {
       };
 
       const commandId = useAIAgentStore.getState().addAction(actionData);
+      callbacks.onAttachmentsCommitted?.();
 
       // Prepare Command Agent memory context
       const commandMemoryContext = AgentMemoryService.prepareMemoryContextForBackend(
@@ -141,6 +143,7 @@ class AITerminalService {
       };
 
       useAIAgentStore.getState().addQA(qaData);
+      callbacks.onAttachmentsCommitted?.();
       const action = createUserAskQuestionAction(command, [qaId], currentCellId);
       useAIAgentStore.getState().addAction(action);
 
