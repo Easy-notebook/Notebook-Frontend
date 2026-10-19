@@ -9,7 +9,7 @@ import type { TreeDataNode, TreeProps } from 'antd';
 import { Folder, FolderOpen, Download, Trash, Eye, RefreshCw, MoreHorizontal } from 'lucide-react';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
-import { FileService } from '@Services/notebook/FileService';
+import { fileActionClient } from '@Services/notebook/FileActionClient';
 import { handleFileUpload, handleDownload, handleDeleteFile } from '@Utils/fileUtils';
 import usePreviewStore from '@Store/previewStore';
 import useStore from '@Store/notebookStore';
@@ -17,12 +17,6 @@ import { FILE_PREVIEW_CONFIG } from '@LeftSidebar/shared/constants';
 import { LoadingIndicator } from '@LeftSidebar/shared/components';
 
 /* ----------------------------- Types ------------------------------ */
-
-declare global {
-  interface Window {
-    Backend_BASE_URL?: string;
-  }
-}
 
 /** 扩展 antd TreeDataNode，挂载原始文件数据 */
 type FileTreeDataNode = TreeDataNode & { file?: FileNode };
@@ -49,25 +43,6 @@ const NB_ICON_CLASS = 'text-theme-600 dark:text-theme-400';
 const NB_TRANSITION = 'transition-all duration-300';
 
 /* -------------------------- Helpers ------------------------------- */
-
-const getMimeTypeForFileName = (name: string): string => {
-  const ext = name.split('.').pop()?.toLowerCase() || '';
-  if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext))
-    return ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
-  if (ext === 'svg') return 'image/svg+xml';
-  if (ext === 'pdf') return 'application/pdf';
-  if (['html', 'htm'].includes(ext)) return 'text/html';
-  if (ext === 'csv') return 'text/csv';
-  if (['txt', 'md', 'json', 'js', 'ts', 'tsx', 'jsx', 'py', 'css'].includes(ext))
-    return 'text/plain';
-  return 'application/octet-stream';
-};
-
-const createPlaceholderFile = (name: string, lastModified?: number | string): File => {
-  const mime = getMimeTypeForFileName(name);
-  const lm = typeof lastModified === 'number' ? lastModified : Date.now();
-  return new File([''], name, { type: mime, lastModified: lm });
-};
 
 initializeFileTypeIcons();
 
@@ -231,39 +206,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     []
   );
 
-  const utilsApi = useMemo(
-    () => ({
-      getFilePreviewUrl: async (nid: string, filename: string) => {
-        try {
-          const base = window.Backend_BASE_URL ? window.Backend_BASE_URL.replace(/\/$/, '') : '';
-          const name = filename.split('/').pop() || filename;
-          return `${base}/assets/${encodeURIComponent(nid)}/${encodeURIComponent(name)}`;
-        } catch {
-          return '';
-        }
-      },
-      getFileContent: async (nid: string, filename: string) => {
-        const resp: any = await FileService.getFile(nid, filename);
-        return resp.content || '';
-      },
-      downloadFile: async (_nid: string, filename: string) => {
-        const blob = await FileService.downloadFile(_nid, filename);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename.split('/').pop() || filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      },
-      deleteFile: async (nid: string, filename: string) => {
-        return await FileService.deleteFile(nid, filename);
-      },
-    }),
-    []
-  );
-
   useEffect(() => {
     if (fileList.status === 'error') {
       toast({
@@ -304,8 +246,9 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
           return;
         }
         await usePreviewStore.getState().previewFile(notebookId, file.path, {
-          file: createPlaceholderFile(file.name, file.lastModified),
-        } as any);
+          file: { name: file.name, path: file.path },
+          lastModified: file.lastModified,
+        });
       } catch (e) {
         console.error('Error previewing file:', e);
         toast({
@@ -435,11 +378,11 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
       handleDownload({
         notebookId,
         filename: file.path,
-        fileService: utilsApi as any,
+        fileService: fileActionClient,
         toast,
       });
     },
-    [notebookId, toast, utilsApi]
+    [notebookId, toast]
   );
 
   const handleDeleteFileAction = useCallback(
@@ -448,13 +391,13 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleDeleteFile({
           notebookId,
           filename: file.path,
-          fileService: utilsApi as any,
+          fileService: fileActionClient,
           fetchFileList: fetchFileListWrapper,
           toast,
         });
       }
     },
-    [notebookId, fetchFileListWrapper, toast, utilsApi]
+    [notebookId, fetchFileListWrapper, toast]
   );
 
   // 外层拖拽上传

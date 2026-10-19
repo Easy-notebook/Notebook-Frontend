@@ -4,6 +4,10 @@
 type Timeout = ReturnType<typeof setTimeout>;
 type Interval = ReturnType<typeof setInterval>;
 
+interface Window {
+  Backend_BASE_URL?: string;
+}
+
 // Vite import.meta env typing
 interface ImportMetaEnv {
   readonly DEV?: boolean;

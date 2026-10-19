@@ -79,3 +79,25 @@ retry, directory normalization, actual transport signal forwarding, notebook swi
 and StrictMode. HTTP cancellation is best effort; identity checks also reject responses
 from transports that ignore abort. This session governs file lists, not preview/download
 requests or server-side mutation ordering.
+
+## File actions and preview metadata
+
+`FileActionClient` adapts transport responses to the utility's completion contract.
+Deletion resolves only for an acknowledged `status: 'ok'`; backend rejection prevents
+both refresh and success notification. Downloads own their temporary object URL and
+anchor in nested cleanup blocks, so click/DOM failures also release resources. Requested
+notebook/path values are captured in the invocation. These user-initiated operations
+continue independently of later list selection; the captured list-session refresh
+already rejects publication after that session detaches.
+
+The file utility parameters require only the individual operation they invoke. The
+explorer's local multi-operation adapter and unused preview methods have been removed.
+Preview selection passes a typed name/path descriptor and the modification marker
+directly to the existing preview lifecycle, without fabricating an empty browser File.
+The optional browser backend URL declaration now belongs to global types, rather than
+depending on a UI component being included by TypeScript.
+
+Tests exercise actual download/delete utilities against mocked transport outcomes,
+temporary-resource cleanup on successful/failed clicks, and file selection through the
+explorer component with the browser File constructor unavailable. Download completion
+means browser handoff, not confirmation that the user saved the file to disk.

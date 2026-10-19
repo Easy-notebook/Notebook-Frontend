@@ -38,7 +38,7 @@ type ToastFunction = (options: ToastOptions) => void;
 
 interface FetchFileListParams {
   notebookId: string;
-  fileService: FileServiceInterface;
+  fileService: Pick<FileServiceInterface, 'listFiles'>;
   setFileList: (files: FileItem[]) => void;
   toast: ToastFunction;
 }
@@ -63,7 +63,7 @@ interface HandleFileUploadParams {
 interface HandlePreviewParams {
   notebookId: string;
   filename: string;
-  fileService: FileServiceInterface;
+  fileService: Pick<FileServiceInterface, 'getFilePreviewUrl' | 'getFileContent'>;
   setSelectedFile: (filename: string) => void;
   setPreviewContent: (content: string) => void;
   setPreviewType: (type: 'image' | 'text') => void;
@@ -76,14 +76,14 @@ interface HandlePreviewParams {
 interface HandleDownloadParams {
   notebookId: string;
   filename: string;
-  fileService: FileServiceInterface;
+  fileService: Pick<FileServiceInterface, 'downloadFile'>;
   toast: ToastFunction;
 }
 
 interface HandleDeleteFileParams {
   notebookId: string;
   filename: string;
-  fileService: FileServiceInterface;
+  fileService: Pick<FileServiceInterface, 'deleteFile'>;
   fetchFileList: () => Promise<void>;
   toast: ToastFunction;
 }
