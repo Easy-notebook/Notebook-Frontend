@@ -606,3 +606,16 @@ loading-state notifications and asynchronous reads. Normal and split requests sh
 this admission rule; later caller mutations cannot rename the admitted resource or
 change its cache revision decision. Omitted descriptors derive the name from the
 selected path. Content and byte counts still come from the fetched/cache payload.
+
+Modification markers use one representation for both preview surfaces: strings are
+retained verbatim and finite numeric markers are converted to strings, including zero.
+They are cache revision tokens; split preview no longer converts them through `Date`.
+`matchesCachedVersion` and `modificationMarkerForSave` own comparison and persistence
+formatting. Missing/empty markers preserve existing cache eligibility and use a local
+ISO timestamp only when fetched content needs a storage timestamp. NaN and infinities
+are rejected before cache/network I/O.
+
+Previously date-converted split records may require one refresh when the incoming marker
+differs; the refreshed record then uses the same stable token as ordinary preview. Tests
+cover matching and changed numeric/string markers, zero, non-date revision strings,
+missing markers, and invalid numeric input across both surfaces.

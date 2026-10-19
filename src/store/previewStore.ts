@@ -281,11 +281,10 @@ const usePreviewStore = create<PreviewStore>()(
             ? await persistenceService.files.getFile(notebookId, filePath)
             : admittedCacheRecord;
         check();
-        const lastModifiedBackend = fileMetadata.lastModified;
         // Determine if we need to fetch from backend
         const needsFetch =
           !hasCachedContent(cachedFile) ||
-          (lastModifiedBackend && cachedFile.metadata.lastModified !== lastModifiedBackend);
+          !fileMetadata.matchesCachedVersion(cachedFile.metadata.lastModified);
 
         if (needsFetch) {
           try {
@@ -305,7 +304,7 @@ const usePreviewStore = create<PreviewStore>()(
               fileName: fileMetadata.fileName,
               content,
               fileType,
-              lastModified: String(lastModifiedBackend || new Date().toISOString()),
+              lastModified: fileMetadata.modificationMarkerForSave(),
               size: new Blob([content]).size,
             });
             check();
@@ -763,12 +762,10 @@ const usePreviewStore = create<PreviewStore>()(
             // Check if file exists in split preview cache (independent from tabs)
             const cachedFile = await persistenceService.splitFiles.getFile(notebookId, filePath);
             if (!splitRequests.isCurrent(request)) return undefined;
-            const lastModifiedBackend = metadata.lastModified;
 
             // Determine if we need to fetch from backend
             const needsFetch =
-              !cachedFile ||
-              (lastModifiedBackend && cachedFile.lastModified !== lastModifiedBackend);
+              !cachedFile || !metadata.matchesCachedVersion(cachedFile.lastModified);
 
             let fileObject: FileObject;
 
@@ -795,7 +792,7 @@ const usePreviewStore = create<PreviewStore>()(
                 content,
                 type: fileType,
                 size: new Blob([content]).size,
-                lastModified: new Date(lastModifiedBackend || Date.now()).toISOString(),
+                lastModified: metadata.modificationMarkerForSave(),
                 cachedAt: Date.now(),
                 accessCount: 1,
                 lastAccessed: Date.now(),

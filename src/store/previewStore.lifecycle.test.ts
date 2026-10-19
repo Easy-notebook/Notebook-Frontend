@@ -1174,3 +1174,70 @@ describe('preview metadata admission', () => {
     }
   });
 });
+
+describe.each(['normal', 'split'] as const)('%s preview modification markers', (surface) => {
+  const open = (lastModified?: string | number) =>
+    surface === 'normal'
+      ? state().previewFile('book', 'file.txt', { lastModified })
+      : state().previewFileInSplit('book', 'file.txt', { lastModified });
+  const cache = (marker: string) => {
+    const record = fileRecord('book');
+    io.fileRead.mockResolvedValue({
+      ...record,
+      metadata: { ...record.metadata, lastModified: marker },
+      needsRemoteFetch: false,
+    });
+    io.read.mockResolvedValue({ ...cached('file.txt'), lastModified: marker });
+  };
+
+  it.each([0, 1234, 'revision-7', '2026-01-02T00:00:00.000Z'])(
+    'reuses the persisted marker for %s',
+    async (marker) => {
+      cache(String(marker));
+      await open(marker);
+      expect(io.fetch).not.toHaveBeenCalled();
+      expect(io.fileSave).not.toHaveBeenCalled();
+      expect(io.save).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([0, 1234, 'revision-7'])(
+    'refreshes a changed marker once and saves %s without date conversion',
+    async (marker) => {
+      cache('old');
+      const first = await open(marker);
+      expect(first?.lastModified).toBe(String(marker));
+      if (surface === 'normal')
+        expect(io.fileSave).toHaveBeenCalledWith(
+          expect.objectContaining({ lastModified: String(marker) })
+        );
+      else
+        expect(io.save).toHaveBeenCalledWith(
+          'book',
+          'file.txt',
+          expect.objectContaining({ lastModified: String(marker) })
+        );
+      cache(String(marker));
+      await open(marker);
+      expect(io.fetch).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('keeps cache eligibility when no backend modification marker is available', async () => {
+    cache('existing');
+    await open();
+    expect(io.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([NaN, Infinity])(
+    'rejects non-finite modification markers before cache or backend I/O: %s',
+    async (marker) => {
+      await expect(async () => {
+        await open(marker);
+      }).rejects.toThrow('finite number');
+      expect(io.read).not.toHaveBeenCalled();
+      expect(io.fileRead).not.toHaveBeenCalled();
+      expect(io.fetch).not.toHaveBeenCalled();
+    }
+  );
+});
