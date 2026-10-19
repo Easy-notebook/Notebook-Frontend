@@ -104,3 +104,13 @@ Autosave admission regressions (`autosave.spec.js`):
   a later valid pause persists the previously accepted document.
 - A native transaction aborted after the content request succeeds retries the same accepted
   body despite caller mutation, with one committed file and consistent notebook totals.
+
+PDF export integration (`pdf-export.spec.js`):
+
+- The production exporter loads bundled regular/bold Noto Sans SC fonts, generates a real PDF
+  containing Chinese Markdown, hybrid code and empty-source outputs, and downloads it.
+- A missing font rejects without a download; the next export retries and succeeds.
+- Downloads are saved in ignored Playwright output directories. The font assets and upstream
+  license/provenance are documented in public/fonts/README.md. Unit tests separately inspect
+  source projection and stream failures; manual Poppler extraction/rendering checks verify Chinese
+  glyphs and layout. Browser header checks alone are not a text-fidelity assertion.

@@ -1,17 +1,20 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { Cell } from '@Store/models';
 const pdf = vi.hoisted(() => ({
-  vfs: {} as Record<string, string> | undefined,
-  fonts: {} as Record<string, unknown> | undefined,
   createPdf: vi.fn(),
   download: vi.fn(),
+  load: vi.fn(),
+  render: vi.fn(),
 }));
 vi.mock('pdfmake/build/pdfmake', () => ({ default: pdf }));
+vi.mock('file-saver', () => ({ saveAs: pdf.download }));
+vi.mock('./PdfFontResources', () => ({ pdfFontResources: { load: pdf.load } }));
+vi.mock('./PdfDocumentRenderer', () => ({ renderPdfDocument: pdf.render }));
 import { exportToPdf } from './exportToPDF';
 beforeEach(() => {
   vi.clearAllMocks();
-  pdf.vfs = {};
-  pdf.fonts = {};
+  pdf.load.mockResolvedValue({ fonts: {}, vfs: {} });
+  pdf.render.mockResolvedValue(new Blob());
   pdf.createPdf.mockReturnValue({ download: pdf.download });
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -53,20 +56,15 @@ it('retains output for empty code and hybrid sources, including numeric zero', a
       expect.objectContaining({ text: 'failure', style: 'error' }),
     ])
   );
-  expect(pdf.download).toHaveBeenCalledExactlyOnceWith('notebook.pdf');
+  expect(pdf.download).toHaveBeenCalledExactlyOnceWith(expect.any(Blob), 'notebook.pdf');
 });
 it('uses the accepted source and output while font loading is pending', async () => {
-  pdf.vfs = undefined;
-  pdf.fonts = undefined;
-  let release!: (response: Response) => void;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(
-      () =>
-        new Promise<Response>((resolve) => {
-          release = resolve;
-        })
-    )
+  let release!: (resources: { fonts: object; vfs: object }) => void;
+  pdf.load.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        release = resolve;
+      })
   );
   const cells: Cell[] = [
     {
@@ -79,10 +77,19 @@ it('uses the accepted source and output while font loading is pending', async ()
   const pending = exportToPdf(cells);
   cells[0].content = 'late edit';
   cells[0].outputs![0].content = 'late output';
-  release({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) } as Response);
+  release({ fonts: {}, vfs: {} });
   await pending;
   const text = textOf(definition().content);
   expect(text).toContain('accepted');
   expect(text).toContain('accepted output');
   expect(text).not.toContain('late');
+});
+
+it('propagates font and rendering failures without downloading', async () => {
+  pdf.load.mockRejectedValueOnce(new Error('font unavailable'));
+  await expect(exportToPdf([])).rejects.toThrow('font unavailable');
+  expect(pdf.createPdf).not.toHaveBeenCalled();
+  pdf.render.mockRejectedValueOnce(new Error('render failed'));
+  await expect(exportToPdf([])).rejects.toThrow('render failed');
+  expect(pdf.download).not.toHaveBeenCalled();
 });

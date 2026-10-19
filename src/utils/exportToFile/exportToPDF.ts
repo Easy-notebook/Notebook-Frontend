@@ -1,4 +1,7 @@
 import pdfMake from 'pdfmake/build/pdfmake';
+import { saveAs } from 'file-saver';
+import { pdfFontResources } from './PdfFontResources';
+import { renderPdfDocument } from './PdfDocumentRenderer';
 import Prism from 'prismjs';
 import { marked } from 'marked';
 import type { Cell, OutputItem as CellOutput } from '@Store/models';
@@ -54,47 +57,6 @@ const mainColor = '#9F1239';
 const paragraphColor = '#1f2937';
 const codeBlockBg = '#fef2f2';
 const inlineCodeBg = '#fff7ed';
-
-// Font loading
-const loadFonts = async (): Promise<void> => {
-  if (pdfMake.vfs && pdfMake.fonts) return;
-
-  try {
-    const fontResponse: Response = await fetch('/fonts/NotoSansSC-VariableFont_wght.ttf');
-    if (!fontResponse.ok) {
-      throw new Error('Font file not found');
-    }
-    const fontArrayBuffer: ArrayBuffer = await fontResponse.arrayBuffer();
-    const fontBase64: string = arrayBufferToBase64(fontArrayBuffer);
-
-    const fontFileName = 'NotoSansSC.ttf';
-    const boldFontFileName = 'NotoSansSC-Bold.ttf';
-
-    pdfMake.vfs = {
-      [fontFileName]: fontBase64,
-      [boldFontFileName]: fontBase64,
-    };
-
-    pdfMake.fonts = {
-      NotoSansSC: {
-        normal: fontFileName,
-        bold: boldFontFileName,
-        italics: fontFileName,
-        bolditalics: boldFontFileName,
-      },
-    };
-  } catch (error: unknown) {
-    console.warn('Failed to load NotoSansSC font, falling back to Helvetica', error);
-    pdfMake.fonts = {
-      NotoSansSC: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique',
-      },
-    };
-  }
-};
 
 const getStyles = (): Record<string, PDFStyle> => ({
   h1: {
@@ -203,15 +165,6 @@ const getStyles = (): Record<string, PDFStyle> => ({
     decoration: 'underline',
   },
 });
-
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  let binary = '';
-  const bytes: Uint8Array = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
-};
 
 // --- Markdown Processing with Marked ---
 
@@ -548,7 +501,7 @@ const createOutputBlocks = (outputs: CellOutput[] = []): PDFContent[] => {
 export const exportToPdf = async (cells: Cell[]): Promise<void> => {
   try {
     const snapshot = structuredClone(cells);
-    await loadFonts();
+    const resources = await pdfFontResources.load();
 
     const content: PDFContent[] = [];
 
@@ -574,7 +527,9 @@ export const exportToPdf = async (cells: Cell[]): Promise<void> => {
       pageMargins: [40, 40, 40, 40],
     };
 
-    pdfMake.createPdf(docDefinition).download('notebook.pdf');
+    const document = pdfMake.createPdf(docDefinition, undefined, resources.fonts, resources.vfs);
+    const blob = await renderPdfDocument(document);
+    saveAs(blob, 'notebook.pdf');
   } catch (error: unknown) {
     console.error('Error exporting to PDF:', error);
     throw error;
