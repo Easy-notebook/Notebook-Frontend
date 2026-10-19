@@ -18,7 +18,8 @@ export abstract class BaseAPIHandler {
     state: any, // Using any to avoid circular dependency, but should be WorkflowState
     stageId: string,
     stepId: string,
-    kwargs?: Record<string, any>
+    kwargs?: Record<string, any>,
+    signal?: AbortSignal
   ): Promise<any> | AsyncIterableIterator<any>;
 
   protected extractLocationInfo(state: any): [string, string] {

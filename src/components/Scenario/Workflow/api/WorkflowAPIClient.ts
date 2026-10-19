@@ -5,9 +5,9 @@
  * Client for communicating with VDSAgents backend (port 28600)
  *
  * Backend provides three APIs:
- * - POST /planning   - PCS-guided planning (returns XML)
+ * - POST /planning   - PCS-guided planning (streams action JSON)
  * - POST /generating - Generate actions for behavior execution (returns JSON/stream)
- * - POST /reflecting - Behavior feedback and reflection (returns XML)
+ * - POST /reflecting - Behavior feedback and reflection (streams action JSON)
  *
  * All APIs expect complete StateJSON as request body.
  */
@@ -57,389 +57,93 @@ export class WorkflowAPIClient {
     return settings.language || 'en';
   }
 
-  /**
-   * Call Planning API (Streaming)
-   *
-   * Sends complete StateJSON to /planning endpoint.
-   * Returns async generator yielding action objects (same format as generating/reflecting).
-   *
-   * @param stateJSON - Complete state JSON
-   * @returns Async generator of action objects
-   */
-  async *callPlanningAPI(stateJSON: StateJSON): AsyncGenerator<any> {
-    const fsmState = stateJSON.state.FSM.state;
-    console.log(`[WorkflowAPIClient] ========================================`);
-    console.log(`[WorkflowAPIClient] CALLING PLANNING API`);
-    console.log(`[WorkflowAPIClient] ========================================`);
-    console.log(`[WorkflowAPIClient] FSM State: ${fsmState}`);
-
-    // Log the COMPLETE payload for debugging
-    const payload = JSON.stringify(stateJSON, null, 2);
-    console.log(`[WorkflowAPIClient] ========== REQUEST PAYLOAD ==========`);
-    console.log(`[WorkflowAPIClient] Payload size: ${payload.length} characters`);
-    console.log(`[WorkflowAPIClient] Current Location:`, {
-      stage_id: stateJSON.observation?.location?.current?.stage_id,
-      step_id: stateJSON.observation?.location?.current?.step_id,
-      behavior_id: stateJSON.observation?.location?.current?.behavior_id,
-    });
-    const nb = (stateJSON as any).state?.notebook;
-    console.log(`[WorkflowAPIClient] Notebook summary:`, {
-      notebook_id: nb?.notebook_id ?? null,
-      cell_count: nb?.cell_count ?? 0,
-      cells_len: Array.isArray(nb?.cells) ? nb.cells.length : 0,
-      last_cell_type: nb?.last_cell_type ?? null,
-    });
-    console.log(`[WorkflowAPIClient] Variables:`, stateJSON.state?.variables);
-    console.log(`[WorkflowAPIClient] FULL PAYLOAD:`);
-    console.log(payload);
-
-    try {
-      const lang = this.getLanguage();
-      const url = `${this.baseURL}/planning?lang=${encodeURIComponent(lang)}`;
-      console.log(`[WorkflowAPIClient] Sending request to: ${url}`);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-        signal: AbortSignal.timeout(this.timeout),
-      });
-
-      console.log(`[WorkflowAPIClient] ========== RESPONSE RECEIVED ==========`);
-      console.log(`[WorkflowAPIClient] Response status: ${response.status} ${response.statusText}`);
-      console.log(
-        `[WorkflowAPIClient] Response headers:`,
-        Object.fromEntries(response.headers.entries())
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[WorkflowAPIClient] ERROR RESPONSE:`, errorText);
-        throw new Error(`Planning API failed: ${response.status} - ${errorText}`);
-      }
-
-      console.log(`[WorkflowAPIClient] ========== PLANNING API STREAMING RESPONSE ==========`);
-
-      // Response is SSE (Server-Sent Events) stream, same format as generating/reflecting
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            console.log('[WorkflowAPIClient] Planning API stream completed');
-            console.log(`[WorkflowAPIClient] ========================================`);
-            break;
-          }
-
-          // Decode chunk
-          const chunk = decoder.decode(value, { stream: true });
-          console.log(`[WorkflowAPIClient] RAW STREAM CHUNK (${chunk.length} bytes):`, chunk);
-          buffer += chunk;
-
-          // Process complete lines
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith(':')) {
-              // Skip empty lines and comments
-              continue;
-            }
-
-            // Try to parse as JSON directly first (backend may send raw JSON without "data:" prefix)
-            let jsonStr = trimmed;
-
-            // If it's SSE format "data: {...json...}", extract the JSON part
-            if (trimmed.startsWith('data:')) {
-              jsonStr = trimmed.substring(5).trim();
-            }
-
-            // Try to parse JSON
-            try {
-              const actionData = JSON.parse(jsonStr);
-              console.log(
-                `[WorkflowAPIClient] PARSED PLANNING ACTION:`,
-                JSON.stringify(actionData, null, 2)
-              );
-              yield actionData;
-            } catch (parseError) {
-              console.error('[WorkflowAPIClient] Failed to parse planning action JSON:', jsonStr);
-              console.error('[WorkflowAPIClient] Parse error:', parseError);
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-    } catch (error) {
-      console.error('[WorkflowAPIClient] Planning API error:', error);
-      throw error;
-    }
+  callPlanningAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<any> {
+    return this.callActions('planning', stateJSON, signal);
   }
 
-  /**
-   * Call Generating API (Streaming)
-   *
-   * Sends complete StateJSON to /generating endpoint.
-   * Returns async generator yielding action objects.
-   *
-   * @param stateJSON - Complete state JSON
-   * @returns Async generator of action objects
-   */
-  async *callGeneratingAPI(stateJSON: StateJSON): AsyncGenerator<any> {
-    const fsmState = stateJSON.state.FSM.state;
-    console.log(`[WorkflowAPIClient] ========================================`);
-    console.log(`[WorkflowAPIClient] CALLING GENERATING API`);
-    console.log(`[WorkflowAPIClient] ========================================`);
-    console.log(`[WorkflowAPIClient] FSM State: ${fsmState}`);
-
-    const payload = JSON.stringify(stateJSON, null, 2);
-    console.log(`[WorkflowAPIClient] ========== REQUEST PAYLOAD ==========`);
-    console.log(`[WorkflowAPIClient] Payload size: ${payload.length} characters`);
-    console.log(`[WorkflowAPIClient] Current Location:`, {
-      stage_id: stateJSON.observation?.location?.current?.stage_id,
-      step_id: stateJSON.observation?.location?.current?.step_id,
-      behavior_id: stateJSON.observation?.location?.current?.behavior_id,
-    });
-    const nb = (stateJSON as any).state?.notebook;
-    console.log(`[WorkflowAPIClient] Notebook summary:`, {
-      notebook_id: nb?.notebook_id ?? null,
-      cell_count: nb?.cell_count ?? 0,
-      cells_len: Array.isArray(nb?.cells) ? nb.cells.length : 0,
-      last_cell_type: nb?.last_cell_type ?? null,
-    });
-    console.log(`[WorkflowAPIClient] FULL PAYLOAD:`);
-    console.log(payload);
-
-    try {
-      const lang = this.getLanguage();
-      const url = `${this.baseURL}/generating?lang=${encodeURIComponent(lang)}`;
-      console.log(`[WorkflowAPIClient] Sending request to: ${url}`);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-        signal: AbortSignal.timeout(this.timeout),
-      });
-
-      console.log(`[WorkflowAPIClient] ========== GENERATING API RESPONSE ==========`);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[WorkflowAPIClient] ERROR RESPONSE:`, errorText);
-        throw new Error(`Generating API failed: ${response.status} - ${errorText}`);
-      }
-
-      console.log(`[WorkflowAPIClient] ========== GENERATING API STREAMING RESPONSE ==========`);
-
-      // Response is SSE (Server-Sent Events) stream
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            console.log('[WorkflowAPIClient] Generating API stream completed');
-            console.log(`[WorkflowAPIClient] ========================================`);
-            break;
-          }
-
-          // Decode chunk
-          const chunk = decoder.decode(value, { stream: true });
-          console.log(`[WorkflowAPIClient] RAW STREAM CHUNK (${chunk.length} bytes):`, chunk);
-          buffer += chunk;
-
-          // Process complete lines
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith(':')) {
-              // Skip empty lines and comments
-              continue;
-            }
-
-            // Try to parse as JSON directly first (backend may send raw JSON without "data:" prefix)
-            let jsonStr = trimmed;
-
-            // If it's SSE format "data: {...json...}", extract the JSON part
-            if (trimmed.startsWith('data:')) {
-              jsonStr = trimmed.substring(5).trim();
-            }
-
-            // Try to parse JSON
-            try {
-              const actionData = JSON.parse(jsonStr);
-              console.log(
-                `[WorkflowAPIClient] PARSED ACTION:`,
-                JSON.stringify(actionData, null, 2)
-              );
-              yield actionData;
-            } catch (parseError) {
-              console.error('[WorkflowAPIClient] Failed to parse action JSON:', jsonStr);
-              console.error('[WorkflowAPIClient] Parse error:', parseError);
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
-      }
-    } catch (error) {
-      console.error('[WorkflowAPIClient] Generating API error:', error);
-      throw error;
-    }
+  callGeneratingAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<any> {
+    return this.callActions('generating', stateJSON, signal);
   }
 
-  /**
-   * Call Reflecting API (Streaming)
-   *
-   * Sends complete StateJSON to /reflecting endpoint.
-   * Returns async generator yielding action objects (same as generating API).
-   *
-   * @param stateJSON - Complete state JSON
-   * @returns Async generator of action objects
-   */
-  async *callReflectingAPI(stateJSON: StateJSON): AsyncGenerator<any> {
-    const fsmState = stateJSON.state.FSM.state;
-    console.log(`[WorkflowAPIClient] ========================================`);
-    console.log(`[WorkflowAPIClient] CALLING REFLECTING API`);
-    console.log(`[WorkflowAPIClient] ========================================`);
-    console.log(`[WorkflowAPIClient] FSM State: ${fsmState}`);
+  callReflectingAPI(stateJSON: StateJSON, signal?: AbortSignal): AsyncGenerator<any> {
+    return this.callActions('reflecting', stateJSON, signal);
+  }
 
-    // Log the COMPLETE payload for debugging
-    const payload = JSON.stringify(stateJSON, null, 2);
-    console.log(`[WorkflowAPIClient] ========== REQUEST PAYLOAD ==========`);
-    console.log(`[WorkflowAPIClient] Payload size: ${payload.length} characters`);
-    console.log(`[WorkflowAPIClient] Current Location:`, {
-      stage_id: stateJSON.observation?.location?.current?.stage_id,
-      step_id: stateJSON.observation?.location?.current?.step_id,
-      behavior_id: stateJSON.observation?.location?.current?.behavior_id,
-    });
-    const nb = (stateJSON as any).state?.notebook;
-    console.log(`[WorkflowAPIClient] Notebook summary:`, {
-      notebook_id: nb?.notebook_id ?? null,
-      cell_count: nb?.cell_count ?? 0,
-      cells_len: Array.isArray(nb?.cells) ? nb.cells.length : 0,
-      last_cell_type: nb?.last_cell_type ?? null,
-    });
-    console.log(`[WorkflowAPIClient] Variables:`, stateJSON.state?.variables);
-    console.log(`[WorkflowAPIClient] FULL PAYLOAD:`);
-    console.log(payload);
-
-    try {
-      const lang = this.getLanguage();
-      const url = `${this.baseURL}/reflecting?lang=${encodeURIComponent(lang)}`;
-      console.log(`[WorkflowAPIClient] Sending request to: ${url}`);
-
-      const response = await fetch(url, {
+  /** The three endpoints share transport ownership and the same line-based action protocol. */
+  private async *callActions(
+    endpoint: 'planning' | 'generating' | 'reflecting',
+    stateJSON: StateJSON,
+    cancellation?: AbortSignal
+  ): AsyncGenerator<unknown> {
+    const timeout = AbortSignal.timeout(this.timeout);
+    const signal = cancellation ? AbortSignal.any([cancellation, timeout]) : timeout;
+    signal.throwIfAborted();
+    const response = await fetch(
+      `${this.baseURL}/${endpoint}?lang=${encodeURIComponent(this.getLanguage())}`,
+      {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: payload,
-        signal: AbortSignal.timeout(this.timeout),
-      });
-
-      console.log(`[WorkflowAPIClient] ========== RESPONSE RECEIVED ==========`);
-      console.log(`[WorkflowAPIClient] Response status: ${response.status} ${response.statusText}`);
-      console.log(
-        `[WorkflowAPIClient] Response headers:`,
-        Object.fromEntries(response.headers.entries())
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[WorkflowAPIClient] ERROR RESPONSE:`, errorText);
-        throw new Error(`Reflecting API failed: ${response.status} - ${errorText}`);
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stateJSON),
+        signal,
       }
-
-      console.log(`[WorkflowAPIClient] ========== REFLECTING API STREAMING RESPONSE ==========`);
-
-      // Response is SSE (Server-Sent Events) stream, same format as generating API
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('Response body is not readable');
+    );
+    if (signal.aborted) {
+      await response.body?.cancel();
+      signal.throwIfAborted();
+    }
+    if (!response.ok) {
+      const message = await response.text();
+      signal.throwIfAborted();
+      throw new Error(`${endpoint} API failed: ${response.status} - ${message}`);
+    }
+    if (!response.body) throw new Error('Response body is not readable');
+    const reader = response.body.getReader();
+    let cancellationTask: Promise<void> | undefined;
+    const cancel = () => {
+      cancellationTask ??= reader.cancel(signal.reason);
+      void cancellationTask.catch(() => {});
+    };
+    signal.addEventListener('abort', cancel, { once: true });
+    let ended = false;
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      while (true) {
+        signal.throwIfAborted();
+        const { done, value } = await reader.read();
+        signal.throwIfAborted();
+        ended = done;
+        buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = done ? '' : lines.pop() || '';
+        for (const line of lines) {
+          signal.throwIfAborted();
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith(':')) continue;
+          const json = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed;
+          let action: unknown;
+          try {
+            action = JSON.parse(json);
+          } catch (error) {
+            // Preserve the existing line protocol's treatment of non-JSON metadata lines.
+            console.error('[WorkflowAPIClient] Failed to parse action JSON:', json, error);
+            continue;
+          }
+          yield action;
+          signal.throwIfAborted();
+        }
+        if (done) return;
       }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
+    } finally {
+      signal.removeEventListener('abort', cancel);
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-
-          if (done) {
-            console.log('[WorkflowAPIClient] Reflecting API stream completed');
-            console.log(`[WorkflowAPIClient] ========================================`);
-            break;
-          }
-
-          // Decode chunk
-          const chunk = decoder.decode(value, { stream: true });
-          console.log(`[WorkflowAPIClient] RAW STREAM CHUNK (${chunk.length} bytes):`, chunk);
-          buffer += chunk;
-
-          // Process complete lines
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith(':')) {
-              // Skip empty lines and comments
-              continue;
-            }
-
-            // Try to parse as JSON directly first (backend may send raw JSON without "data:" prefix)
-            let jsonStr = trimmed;
-
-            // If it's SSE format "data: {...json...}", extract the JSON part
-            if (trimmed.startsWith('data:')) {
-              jsonStr = trimmed.substring(5).trim();
-            }
-
-            // Try to parse JSON
-            try {
-              const actionData = JSON.parse(jsonStr);
-              console.log(
-                `[WorkflowAPIClient] PARSED ACTION:`,
-                JSON.stringify(actionData, null, 2)
-              );
-              yield actionData;
-            } catch (parseError) {
-              console.error('[WorkflowAPIClient] Failed to parse reflection action JSON:', jsonStr);
-              console.error('[WorkflowAPIClient] Parse error:', parseError);
-            }
-          }
+        if (!ended) {
+          cancel();
+          await cancellationTask;
         }
       } finally {
         reader.releaseLock();
       }
-    } catch (error) {
-      console.error('[WorkflowAPIClient] Reflecting API error:', error);
-      throw error;
     }
   }
 

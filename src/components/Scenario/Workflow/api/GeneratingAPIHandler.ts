@@ -8,8 +8,10 @@ export class GeneratingAPIHandler extends BaseAPIHandler {
     state: WorkflowState,
     stageId?: string,
     stepId?: string,
-    kwargs?: Record<string, any>
+    kwargs?: Record<string, any>,
+    signal?: AbortSignal
   ): AsyncIterableIterator<any> {
+    signal?.throwIfAborted();
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(state);
     }
@@ -33,9 +35,10 @@ export class GeneratingAPIHandler extends BaseAPIHandler {
       let actionCount = 0;
 
       // Call WorkflowAPIClient's callGeneratingAPI method
-      const iterator = this.apiClient.callGeneratingAPI(state.toJSON());
+      const iterator = this.apiClient.callGeneratingAPI(state.toJSON(), signal);
 
       for await (const action of iterator) {
+        signal?.throwIfAborted();
         actionCount++;
         console.log(`[GeneratingAPI] Action ${actionCount}: ${action.type || 'unknown'}`);
         yield action;

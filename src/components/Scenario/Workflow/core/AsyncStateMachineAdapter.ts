@@ -160,7 +160,7 @@ export class AsyncStateMachineAdapter {
 
       // Call the API via the State object
       // The State object uses its internal handlers which are initialized with apiClient
-      let apiResponse = await state.callAPI(workflowState, predictedTransitionName);
+      let apiResponse = await state.callAPI(workflowState, predictedTransitionName, signal);
       signal?.throwIfAborted();
 
       // Get TransitionCoordinator

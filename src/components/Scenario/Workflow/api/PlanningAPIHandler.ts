@@ -15,8 +15,10 @@ export class PlanningAPIHandler extends BaseAPIHandler {
     state: WorkflowState,
     stageId?: string,
     stepId?: string,
-    _kwargs?: Record<string, any>
+    _kwargs?: Record<string, any>,
+    signal?: AbortSignal
   ): AsyncGenerator<any> {
+    signal?.throwIfAborted();
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(state);
     }
@@ -37,11 +39,12 @@ export class PlanningAPIHandler extends BaseAPIHandler {
       let actionCount = 0;
 
       // Call WorkflowAPIClient's streaming callPlanningAPI method
-      const actionStream = this.apiClient.callPlanningAPI(state.toJSON());
+      const actionStream = this.apiClient.callPlanningAPI(state.toJSON(), signal);
 
       // Stream actions without executing them
       // Execution will be handled by AsyncStateMachineAdapter for consistency
       for await (const actionData of actionStream) {
+        signal?.throwIfAborted();
         // Extract action object (format: {"action": {...}})
         const action = actionData.action;
         if (!action || !action.type) {

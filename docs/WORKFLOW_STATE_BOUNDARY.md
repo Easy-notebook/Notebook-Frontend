@@ -36,6 +36,16 @@ paused state, no transition, or the configured iteration limit.
 The adapter checks the signal before work, after asynchronous boundaries and between streamed
 actions. A cancelled stream cannot start its next action or apply its final transition after
 returning from pending work. Existing callers may omit the optional signal. Already-running
-API calls, actions and transition handlers are not forcibly interrupted or rolled back; the
-run can settle while that work drains. Backend transport cancellation still needs support
-through the state/API client layers. This does not serialize separate direct transition calls.
+server work, actions and transition handlers are not forcibly interrupted or rolled back; the
+run can settle while that work drains. Backend transport cancellation is now forwarded through the state/API client layers. This does not serialize separate direct transition calls.
+
+
+All three workflow endpoints share one line-stream transport. Optional cancellation flows
+from adapter → BaseState → API handler → WorkflowAPIClient and is combined with the existing
+request timeout. The reader owns abort handling, early-return cancellation and lock release.
+Blocked body reads are cancelled; buffered successor lines are checked before yielding. The
+protocol continues to accept JSON lines, `data:` JSON lines and comment/blank lines, logging
+and skipping non-JSON lines as before. EOF flushes the decoder and processes a final line
+without a newline. This is the existing line protocol, not a general multiline SSE parser.
+Browser fetch abort does not guarantee server-side rollback, and already-started action code
+still requires its own lifecycle/ownership checks.
