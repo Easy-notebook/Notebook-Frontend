@@ -68,3 +68,35 @@ it('retains the other sheet when the edited grid is emptied', () => {
   expect(saved.Sheets.Main.C3).toBeUndefined();
   expect(saved.Sheets.Other.A1.v).toBe('keep');
 });
+
+it('writes user formatting into the actual cell style references, including unchanged formula cells', async () => {
+  const { writtenCellStyle } = await import('./testing/writtenCellStyle');
+  const document = XlsxDocument.fromBase64(source());
+  const saved = document.serialize(
+    [
+      { A: 'original', B: '42.00' },
+      { A: '84', B: 'TRUE' },
+    ],
+    [{ key: 'A' }, { key: 'B' }],
+    {
+      '0:0': {
+        bold: true,
+        italic: true,
+        underline: true,
+        color: '#ab12cd',
+        backgroundColor: '#12ab34',
+        textAlign: 'center',
+      },
+      '1:0': { italic: true },
+    }
+  );
+  const style = writtenCellStyle(saved, 'C3');
+  expect(style.font.getElementsByTagName('b')).toHaveLength(1);
+  expect(style.font.getElementsByTagName('i')).toHaveLength(1);
+  expect(style.font.getElementsByTagName('u')).toHaveLength(1);
+  expect(style.font.getElementsByTagName('color')[0].getAttribute('rgb')).toBe('AB12CD');
+  expect(style.fill.getElementsByTagName('fgColor')[0].getAttribute('rgb')).toBe('FF12AB34');
+  expect(style.alignment.getAttribute('horizontal')).toBe('center');
+  expect(writtenCellStyle(saved, 'C4').font.getElementsByTagName('i')).toHaveLength(1);
+  expect(XLSX.read(saved, { type: 'base64' }).Sheets.Main.C4.f).toBe('D3*2');
+});

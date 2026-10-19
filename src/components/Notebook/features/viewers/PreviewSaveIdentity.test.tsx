@@ -698,3 +698,25 @@ it.each(['Row Above', 'Column Left'])(
     expect(screen.getByText('Ada', { exact: true }).closest('div')?.style.fontWeight).toBe('700');
   }
 );
+
+it('persists toolbar formatting when saving an XLSX preview', async () => {
+  const XLSX = await import('xlsx-js-style');
+  const { writtenCellStyle } = await import('./data-table/testing/writtenCellStyle');
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([['Ada']]), 'Main');
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::format.xlsx',
+    name: 'format.xlsx',
+    path: 'format.xlsx',
+    type: 'xlsx',
+    content: XLSX.write(book, { type: 'base64', bookType: 'xlsx' }) as string,
+  };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.click(screen.getByText('Ada', { exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Bold (Ctrl+B)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(model.state.updatePreviewFileContent).toHaveBeenCalledOnce();
+  const saved = model.state.updatePreviewFileContent.mock.calls[0][0] as string;
+  expect(writtenCellStyle(saved, 'A1').font.getElementsByTagName('b')).toHaveLength(1);
+});

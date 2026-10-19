@@ -1,5 +1,7 @@
 import * as XLSX from 'xlsx-js-style';
 import type { TableCellValue } from './CsvCodec';
+import type { CellFormat } from './SpreadsheetSnapshot';
+import { xlsxCellFormat } from './XlsxCellFormat';
 
 /** Owns the original workbook so grid edits do not discard undisplayed worksheets. */
 export class XlsxDocument {
@@ -23,7 +25,8 @@ export class XlsxDocument {
 
   serialize(
     rows: readonly Readonly<Record<string, TableCellValue>>[],
-    columns: readonly { readonly key: string }[]
+    columns: readonly { readonly key: string }[],
+    formats: Readonly<Record<string, CellFormat>> = {}
   ): string {
     const workbook = structuredClone(this.workbook);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -39,23 +42,26 @@ export class XlsxDocument {
         const value = row[key] ?? '';
         const previous = original[address] as XLSX.CellObject | undefined;
         const displayed = previous?.w ?? String(previous?.v ?? '');
+        let cell: XLSX.CellObject;
         if (previous && String(value) === displayed) {
-          sheet[address] = structuredClone(previous);
-          return;
+          cell = structuredClone(previous);
+        } else {
+          cell = { ...previous, t: 's', v: String(value) };
+          delete cell.f;
+          delete cell.F;
+          delete cell.w;
+          delete cell.h;
+          delete cell.r;
+          if (typeof value === 'boolean') {
+            cell.t = 'b';
+            cell.v = value;
+          } else if (typeof value === 'number') {
+            cell.t = 'n';
+            cell.v = value;
+          }
         }
-        const cell: XLSX.CellObject = { ...previous, t: 's', v: String(value) };
-        delete cell.f;
-        delete cell.F;
-        delete cell.w;
-        delete cell.h;
-        delete cell.r;
-        if (typeof value === 'boolean') {
-          cell.t = 'b';
-          cell.v = value;
-        } else if (typeof value === 'number') {
-          cell.t = 'n';
-          cell.v = value;
-        }
+        const format = formats[`${r}:${c}`];
+        if (format) cell.s = xlsxCellFormat(cell.s, format);
         sheet[address] = cell;
       })
     );

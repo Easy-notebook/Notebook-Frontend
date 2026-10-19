@@ -254,10 +254,18 @@ cells and merges outside the resulting range. Serialization clones the source
 so failed or repeated saves do not mutate the read model. A failed source load
 cannot save an empty replacement workbook.
 
+User-applied bold, italic, underline, foreground/background colors and horizontal
+alignment are passed from the current draft to `XlsxDocument.serialize`.
+`xlsxCellFormat` translates these overrides into writer styles, preserves unrelated
+available style fields and respects explicit false flags. Formatting unchanged
+formula cells retains their formula. Tests inspect emitted OOXML style references,
+including non-A1 source ranges, and exercise the toolbar-to-save integration.
+
 This is not a full Excel editing engine: structural edits do not translate formula
-references, UI-only formatting changes are not yet projected into workbook styles,
-and features unsupported by the installed workbook codec are not guaranteed to
-round-trip. Those remain explicit follow-ups.
+references. The installed reader exposes only part of the source style information,
+so complete style restoration on reopening and preservation across subsequent
+sessions remain incomplete. Features unsupported by the workbook codec are not
+guaranteed to round-trip. Those remain explicit follow-ups.
 
 CSV parsing retains blank records and whitespace-only cells. It removes only the
 synthetic final record produced by the parser for a trailing line terminator.

@@ -1075,7 +1075,7 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
         throw new Error('Spreadsheet is not ready for saving');
       }
       const content = isWorkbook
-        ? source.workbook!.serialize(data, columns)
+        ? source.workbook!.serialize(data, columns, cellFormats)
         : serializeTableCsv(data, columns);
       const ticket = editSession.beginSave(content);
       try {
@@ -1092,7 +1092,16 @@ const SpreadsheetEditor: React.FC<SpreadsheetEditorProps> = ({
     } catch (err) {
       console.error('Failed to save:', err);
     }
-  }, [currentFile, data, columns, setTabDirty, isInSplitView, typeOverride, editSession]);
+  }, [
+    currentFile,
+    data,
+    columns,
+    cellFormats,
+    setTabDirty,
+    isInSplitView,
+    typeOverride,
+    editSession,
+  ]);
 
   if (
     !currentFile ||
