@@ -27,8 +27,8 @@ interface ParsedWorkbook extends WorkBook {
 
 const elements = (xml: Document, name: string) => Array.from(xml.getElementsByTagNameNS('*', name));
 
-/** Reconnect parsed styles using package relationships, never worksheet-order filename guesses. */
-export function restoreWorkbookStyles(workbook: WorkBook): void {
+/** Restore cell metadata using package relationships, never worksheet-order filename guesses. */
+export function restoreWorkbookCellMetadata(workbook: WorkBook): void {
   const parsed = workbook as ParsedWorkbook;
   const { files, Styles: styles } = parsed;
   if (!files || !styles) throw new Error('Workbook style tables are unavailable');
@@ -74,6 +74,13 @@ export function restoreWorkbookStyles(workbook: WorkBook): void {
         const address = node.getAttribute('r');
         const cell = address ? workbook.Sheets[name][address] : undefined;
         if (!cell) continue;
+        // The codec synthesizes zero for formula cells with no cached result.
+        // Preserve absence so reopening cannot present an uncomputed result as zero.
+        if (cell.f && !node.getElementsByTagNameNS('*', 'v')[0]?.textContent) {
+          delete cell.v;
+          delete cell.w;
+          if (cell.t === 'z') cell.t = 'n';
+        }
         const index = Number(node.getAttribute('s') ?? 0);
         const xf = Number.isInteger(index) && index >= 0 ? styles.CellXf[index] : undefined;
         if (!xf) throw new Error(`Invalid cell style index: ${node.getAttribute('s')}`);

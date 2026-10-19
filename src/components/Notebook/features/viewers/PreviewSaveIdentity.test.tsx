@@ -882,11 +882,12 @@ it.each(['Row Above', 'Column Left'])(
     fireEvent.click(screen.getByRole('button', { name: `Insert ${command}` }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     const calls = model.state.updatePreviewFileContent.mock.calls;
-    const moved = XLSX.read(calls[calls.length - 1][0], { type: 'base64', cellNF: true }).Sheets
-      .Main;
+    const moved = XLSX.read(calls[calls.length - 1][0], {
+      type: 'base64',
+      cellNF: true,
+      sheetStubs: true,
+    }).Sheets.Main;
     expect(moved[command === 'Row Above' ? 'C4' : 'D3']).toMatchObject({
-      t: 'n',
-      v: 4,
       f: '2+2',
       z: '0.00',
     });
@@ -900,3 +901,36 @@ it.each(['Row Above', 'Column Left'])(
     expect(restored.D3.f).toBeUndefined();
   }
 );
+
+it('updates formula references on structural save and restores original references with undo', async () => {
+  const XLSX = await import('xlsx-js-style');
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      C3: { t: 'n', v: 2 },
+      D3: { t: 'n', v: 4, f: 'C3*2' },
+      '!ref': 'C3:D3',
+    },
+    'Main'
+  );
+  model.state.activeFile = {
+    ...model.state.activeFile,
+    id: 'book::references.xlsx',
+    name: 'references.xlsx',
+    path: 'references.xlsx',
+    type: 'xlsx',
+    content: XLSX.write(book, { type: 'base64', bookType: 'xlsx' }),
+  };
+  render(<DataTable showFormulaBar={false} />);
+  fireEvent.contextMenu(screen.getByText('2', { exact: true, selector: 'span.truncate' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Insert Row Above' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const calls = model.state.updatePreviewFileContent.mock.calls;
+  expect(
+    XLSX.read(calls[calls.length - 1][0], { type: 'base64', sheetStubs: true }).Sheets.Main.D4.f
+  ).toBe('C4*2');
+  fireEvent.click(screen.getByRole('button', { name: 'Undo (Ctrl+Z)' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  expect(XLSX.read(calls[calls.length - 1][0], { type: 'base64' }).Sheets.Main.D3.f).toBe('C3*2');
+});

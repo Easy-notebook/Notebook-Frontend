@@ -75,7 +75,7 @@ it.each(['row', 'column'] as const)(
         ? [{ s: { r: 1, c: 0 }, e: { r: 2, c: 1 } }]
         : [{ s: { r: 0, c: 1 }, e: { r: 1, c: 2 } }]
     );
-    expect(new SpreadsheetStructureChange(axis, 'delete', 0).apply(changed)).toEqual(initial);
+    expect(new SpreadsheetStructureChange(axis, 'delete', 0).apply(changed)).toMatchObject(initial);
     history.undo();
     expect(history.getSnapshot().value).toEqual(initial);
   }
@@ -89,10 +89,12 @@ it('expands merges on interior insertion and shrinks or removes them on deletion
   };
   const inserted = new SpreadsheetStructureChange('row', 'insert', 1).apply(initial);
   expect(inserted.workbook?.merges).toEqual([{ s: { r: 0, c: 0 }, e: { r: 2, c: 0 } }]);
-  expect(new SpreadsheetStructureChange('row', 'delete', 1).apply(inserted)).toEqual(initial);
+  expect(new SpreadsheetStructureChange('row', 'delete', 1).apply(inserted)).toMatchObject(initial);
   const deleted = new SpreadsheetStructureChange('row', 'delete', 0).apply(initial);
-  expect(deleted.workbook).toEqual({ sources: { '0:0': { r: 3, c: 2 } }, merges: [] });
-  expect(new SpreadsheetStructureChange('column', 'delete', 0).apply(initial).workbook).toEqual({
+  expect(deleted.workbook).toMatchObject({ sources: { '0:0': { r: 3, c: 2 } }, merges: [] });
+  expect(
+    new SpreadsheetStructureChange('column', 'delete', 0).apply(initial).workbook
+  ).toMatchObject({
     sources: {},
     merges: [],
   });

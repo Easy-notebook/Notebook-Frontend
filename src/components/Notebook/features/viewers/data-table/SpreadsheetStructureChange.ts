@@ -25,6 +25,10 @@ export class SpreadsheetStructureChange {
       ? {
           workbook: {
             sources: this.mapCells(source.workbook.sources),
+            changes: [
+              ...(source.workbook.changes ?? []),
+              { axis: this.axis, kind: this.kind, index: this.index },
+            ],
             merges: source.workbook.merges.flatMap((range) => {
               const mapped = this.mapRange(range);
               return mapped ? [mapped] : [];

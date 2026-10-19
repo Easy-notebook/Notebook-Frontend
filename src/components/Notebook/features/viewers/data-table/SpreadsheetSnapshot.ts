@@ -28,9 +28,16 @@ export interface GridRange {
   e: GridAddress;
 }
 
+export interface GridStructureEdit {
+  axis: 'row' | 'column';
+  kind: 'insert' | 'delete';
+  index: number;
+}
+
 /** Original cell identities and current merge geometry travel with the editable grid. */
 export interface SpreadsheetWorkbookState {
   sources: Record<string, GridAddress>;
+  changes?: GridStructureEdit[];
   merges: GridRange[];
 }
 

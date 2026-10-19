@@ -2,7 +2,8 @@ import * as XLSX from 'xlsx-js-style';
 import type { TableCellValue } from './CsvCodec';
 import type { CellFormat, SpreadsheetWorkbookState } from './SpreadsheetSnapshot';
 import { xlsxCellFormat } from './XlsxCellFormat';
-import { restoreWorkbookStyles } from './XlsxStyleReader';
+import { restoreWorkbookCellMetadata } from './XlsxCellMetadataReader';
+import { transformSpreadsheetFormula } from './SpreadsheetFormula';
 
 /** Owns the original workbook so grid edits do not discard undisplayed worksheets. */
 export class XlsxDocument {
@@ -18,7 +19,7 @@ export class XlsxDocument {
       sheetStubs: true,
     });
     if (!workbook.SheetNames.length) throw new Error('Workbook has no worksheets');
-    restoreWorkbookStyles(workbook);
+    restoreWorkbookCellMetadata(workbook);
     return new XlsxDocument(workbook);
   }
 
@@ -119,6 +120,41 @@ export class XlsxDocument {
     } else {
       delete sheet['!ref'];
       delete sheet['!merges'];
+    }
+    for (const change of state?.changes ?? []) {
+      const edit = {
+        ...change,
+        index: change.index + (change.axis === 'row' ? range.s.r : range.s.c),
+      };
+      for (const name of workbook.SheetNames) {
+        for (const [key, cell] of Object.entries(workbook.Sheets[name])) {
+          if (key.startsWith('!') || !cell.f) continue;
+          const formula = transformSpreadsheetFormula(cell.f, name, workbook.SheetNames[0], edit);
+          if (formula !== cell.f) {
+            cell.f = formula;
+          }
+        }
+      }
+      for (const name of workbook.Workbook?.Names ?? []) {
+        const scope = name.Sheet === undefined ? '' : workbook.SheetNames[name.Sheet];
+        const reference = transformSpreadsheetFormula(
+          name.Ref,
+          scope,
+          workbook.SheetNames[0],
+          edit
+        );
+        name.Ref = reference;
+      }
+    }
+    // Position-sensitive functions and indirect dependents also require recalculation.
+    if (state?.changes?.length) {
+      for (const sheet of Object.values(workbook.Sheets)) {
+        for (const [key, cell] of Object.entries(sheet)) {
+          if (key.startsWith('!') || !cell.f) continue;
+          delete cell.v;
+          delete cell.w;
+        }
+      }
     }
     return XLSX.write(workbook, { bookType: 'xlsx', type: 'base64', cellStyles: true });
   }

@@ -1,6 +1,6 @@
 import type { CellObject } from 'xlsx-js-style';
 import { expect, it } from 'vitest';
-import { restoreWorkbookStyles } from './XlsxStyleReader';
+import { restoreWorkbookCellMetadata } from './XlsxCellMetadataReader';
 
 function fixture(styleIndex = '1') {
   const file = (xml: string) => ({ content: new TextEncoder().encode(xml) });
@@ -33,7 +33,7 @@ function fixture(styleIndex = '1') {
 
 it('resolves actual worksheet relationships and normalizes parsed flags into independent cell styles', () => {
   const workbook = fixture();
-  restoreWorkbookStyles(workbook);
+  restoreWorkbookCellMetadata(workbook);
   expect(workbook.Sheets['Main & More'].C3.s).toMatchObject({
     font: { bold: true, italic: false, underline: true },
     alignment: { horizontal: 'center' },
@@ -45,7 +45,7 @@ it('resolves actual worksheet relationships and normalizes parsed flags into ind
 
 it('rejects an invalid explicit cell style instead of silently replacing its formatting', () => {
   const workbook = fixture('999');
-  expect(() => restoreWorkbookStyles(workbook)).toThrow('Invalid cell style index');
+  expect(() => restoreWorkbookCellMetadata(workbook)).toThrow('Invalid cell style index');
   expect(workbook).not.toHaveProperty('files');
 });
 
@@ -54,5 +54,5 @@ it('rejects external worksheet relationships without resolving a remote part', (
   workbook.files['xl/_rels/workbook.xml.rels'].content = new TextEncoder().encode(
     '<Relationships><Relationship Id="customId" Type="type/worksheet" Target="https://example.test/sheet.xml" TargetMode="External" /></Relationships>'
   );
-  expect(() => restoreWorkbookStyles(workbook)).toThrow('Invalid worksheet relationship');
+  expect(() => restoreWorkbookCellMetadata(workbook)).toThrow('Invalid worksheet relationship');
 });

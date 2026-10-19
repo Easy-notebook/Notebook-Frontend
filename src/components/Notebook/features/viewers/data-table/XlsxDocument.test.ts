@@ -210,3 +210,57 @@ it('serializes current merge geometry at the worksheet origin and removes delete
   );
   expect(unmerged.Sheets.Main['!merges'] ?? []).toEqual([]);
 });
+
+it('rewrites local, cross-sheet and named-range references from structural history exactly once per save', () => {
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      C3: { t: 'n', v: 2 },
+      D3: { t: 'n', v: 4, f: '$C$3*2' },
+      '!ref': 'C3:D3',
+    },
+    'Main'
+  );
+  XLSX.utils.book_append_sheet(
+    book,
+    {
+      A1: { t: 'n', v: 6, f: 'Main!C3+4' },
+      B1: { t: 'n', v: 6, f: 'A1' },
+      '!ref': 'A1:B1',
+    },
+    'Other'
+  );
+  book.Workbook = { Names: [{ Name: 'input', Ref: 'Main!$C$3' }] };
+  const document = XlsxDocument.fromBase64(XLSX.write(book, { type: 'base64', bookType: 'xlsx' }));
+  const state = {
+    sources: { '1:0': { r: 2, c: 2 }, '1:1': { r: 2, c: 3 } },
+    merges: [],
+    changes: [{ axis: 'row' as const, kind: 'insert' as const, index: 0 }],
+  };
+  for (let save = 0; save < 2; save++) {
+    const output = document.serialize(
+      [
+        { A: '', B: '' },
+        { A: '2', B: '4' },
+      ],
+      [{ key: 'A' }, { key: 'B' }],
+      {},
+      state
+    );
+    const result = XLSX.read(output, { type: 'base64', sheetStubs: true });
+    expect(result.Sheets.Main.D4.f).toBe('$C$4*2');
+    expect(result.Sheets.Other.A1.f).toBe('Main!C4+4');
+    expect(result.Sheets.Other.B1.f).toBe('A1');
+    expect(result.Workbook?.Names?.[0].Ref).toBe('Main!$C$4');
+    const reopened = XlsxDocument.fromBase64(output);
+    expect(reopened.worksheet.D4.v).toBeUndefined();
+    expect(reopened.worksheet.D4.f).toBe('$C$4*2');
+    const archive = XLSX.CFB.read(output, { type: 'base64' });
+    const xml = new TextDecoder().decode(
+      XLSX.CFB.find(archive, '/xl/worksheets/sheet2.xml').content
+    );
+    expect(xml).not.toContain('<v>6</v>');
+  }
+  expect(document.worksheet.D3.f).toBe('$C$3*2');
+});

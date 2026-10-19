@@ -269,7 +269,7 @@ available style fields and respects explicit false flags. Formatting unchanged
 formula cells retains their formula. Tests inspect emitted OOXML style references,
 including non-A1 source ranges, and exercise the toolbar-to-save integration.
 
-`restoreWorkbookStyles` reconnects the codec's parsed font/fill/alignment tables
+`restoreWorkbookCellMetadata` reconnects the codec's parsed font/fill/alignment tables
 with cell style indices from worksheet XML. Package relationships resolve worksheet
 paths; sheet order is not used to guess filenames. Parsed numeric font flags become
 booleans, and each cell receives its own style object. Package file buffers are
@@ -281,8 +281,8 @@ imported bold, and explicit false overrides the source presentation. Tests cover
 three save/reopen cycles, retained worksheet styles, formulas, RGB fills, alignment,
 and toolbar removal followed by saving and reopening.
 
-This is not a full Excel editing engine: structural edits do not translate formula
-references. Rich Excel features, custom theme rendering, borders and advanced style
+This is not a full Excel editing engine; supported structural reference updates are
+described below. Rich Excel features, custom theme rendering, borders and advanced style
 inheritance are not fully covered by this adapter or the installed codec. Complete
 Excel fidelity remains outside the verified behavior described above.
 
@@ -386,6 +386,23 @@ numeric types, number formats and formula records even when adjacent displayed
 values are equal. New cells cannot inherit destination formulas. Current merges
 are translated back through the source worksheet origin when saving.
 
-Formula reference translation within moved formulas and references from other
-sheets still require implementation. Source presentation metadata outside the
-supported draft formats and full merged-cell layout remain incomplete.
+Snapshots retain an ordered structural change log. `transformSpreadsheetFormula`
+rewrites ordinary A1 cells, rectangular ranges, whole rows/columns and absolute
+references. Quoted strings, function/name tokens and structured-reference tokens
+are kept opaque. Each save applies the log to the original workbook's formulas,
+including qualified references from other worksheets and defined names; repeated
+saves do not accumulate shifts. Undo restores the log with the rest of the snapshot.
+Deleted single references become `#REF!`; ranges shrink to surviving coordinates.
+The tokenizer's reference syntax is informed by the
+[Microsoft XLSX formula grammar](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-xlsx/3d025add-118d-4413-9856-ab65712ec1b0).
+
+Structural saves clear formula cached values throughout the workbook, including
+indirect dependents and position-sensitive functions. The cell-metadata reader
+preserves missing results instead of exposing the codec's synthetic zero. The
+editor does not calculate formulas: reopened results remain empty until a
+spreadsheet calculation engine computes them.
+
+External workbook and 3D references are left unchanged. Array formula regions,
+advanced structured-reference syntax and full Excel calculation semantics remain
+incomplete. Source presentation metadata outside the supported draft formats and
+full merged-cell layout also remain incomplete.
