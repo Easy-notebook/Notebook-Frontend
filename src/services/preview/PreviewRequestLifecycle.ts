@@ -20,7 +20,9 @@ export class PreviewRequestLifecycle {
     return true;
   }
 
-  cancel(): void {
+  cancel(ticket?: symbol): boolean {
+    if (ticket !== undefined && !this.isCurrent(ticket)) return false;
     this.state = { phase: 'idle' };
+    return true;
   }
 }

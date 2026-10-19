@@ -105,7 +105,8 @@ export interface PreviewStoreActions {
   previewFileInSplit: (
     notebookId: string,
     filePath: string,
-    fileMetadata?: FileMetadata
+    fileMetadata?: FileMetadata,
+    signal?: AbortSignal
   ) => Promise<FileObject | undefined>;
   closeSplitPreview: () => void;
   getActiveSplitFile: () => FileObject | null;
@@ -746,10 +747,16 @@ const usePreviewStore = create<PreviewStore>()(
         previewFileInSplit: async (
           notebookId: string,
           filePath: string,
-          fileMetadata: FileMetadata = {}
+          fileMetadata: FileMetadata = {},
+          signal?: AbortSignal
         ): Promise<FileObject | undefined> => {
+          signal?.throwIfAborted();
           const metadata = new PreviewFileMetadata(filePath, fileMetadata);
           const request = splitRequests.begin();
+          const cancel = () => {
+            if (splitRequests.cancel(request)) set({ isSplitLoading: false });
+          };
+          signal?.addEventListener('abort', cancel, { once: true });
           set({ isSplitLoading: true, error: null });
 
           fileLog.info('Split preview: Loading file', { filePath, notebookId });
@@ -833,6 +840,8 @@ const usePreviewStore = create<PreviewStore>()(
               activeSplitMode: null,
             });
             return undefined;
+          } finally {
+            signal?.removeEventListener('abort', cancel);
           }
         },
 

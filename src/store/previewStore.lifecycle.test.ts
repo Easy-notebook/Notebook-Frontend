@@ -1241,3 +1241,107 @@ describe.each(['normal', 'split'] as const)('%s preview modification markers', (
     }
   );
 });
+
+describe('split preview caller cancellation', () => {
+  it('rejects pre-cancelled requests without replacing an active preview', async () => {
+    const current = await preview('current.txt');
+    const controller = new AbortController();
+    controller.abort();
+    io.read.mockClear();
+    await expect(
+      state().previewFileInSplit('book', 'cancelled.txt', undefined, controller.signal)
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(io.read).not.toHaveBeenCalled();
+    expect(state().activeSplitFile).toBe(current);
+  });
+
+  it('revokes a pending cache read immediately and retains the displayed file', async () => {
+    const current = await preview('current.txt');
+    const read = deferred<undefined>();
+    io.read.mockReturnValueOnce(read.promise);
+    const controller = new AbortController();
+    const pending = state().previewFileInSplit(
+      'book',
+      'cancelled.txt',
+      undefined,
+      controller.signal
+    );
+    controller.abort();
+    const loadingAfterAbort = state().isSplitLoading;
+    read.resolve(undefined);
+    expect(await pending).toBeUndefined();
+    expect(loadingAfterAbort).toBe(false);
+    expect(state().activeSplitFile).toBe(current);
+    expect(io.fetch).not.toHaveBeenCalled();
+    expect(state().error).toBeNull();
+  });
+
+  it.each(['resolve', 'reject'] as const)('ignores cancelled network %s', async (outcome) => {
+    const response = deferred<{ status: string; content: string }>();
+    io.read.mockResolvedValueOnce(undefined);
+    io.fetch.mockReturnValueOnce(response.promise);
+    const controller = new AbortController();
+    const pending = state().previewFileInSplit(
+      'book',
+      'cancelled.txt',
+      undefined,
+      controller.signal
+    );
+    await vi.waitFor(() => expect(io.fetch).toHaveBeenCalledOnce());
+    controller.abort();
+    if (outcome === 'resolve') response.resolve({ status: 'ok', content: 'stale' });
+    else response.reject(new Error('late failure'));
+    expect(await pending).toBeUndefined();
+    expect(io.save).not.toHaveBeenCalled();
+    expect(state().error).toBeNull();
+    expect(state().activeSplitFile).toBeNull();
+  });
+
+  it('does not cancel a replacement request when an older caller aborts', async () => {
+    const old = deferred<undefined>();
+    const replacement = deferred<ReturnType<typeof cached>>();
+    io.read.mockReturnValueOnce(old.promise).mockReturnValueOnce(replacement.promise);
+    const controller = new AbortController();
+    const first = state().previewFileInSplit('book', 'old.txt', undefined, controller.signal);
+    const second = preview('new.txt');
+    controller.abort();
+    const replacementStillLoading = state().isSplitLoading;
+    old.resolve(undefined);
+    replacement.resolve(cached('new.txt'));
+    await first;
+    const current = await second;
+    expect(replacementStillLoading).toBe(true);
+    expect(state().activeSplitFile).toBe(current);
+    expect(current?.path).toBe('new.txt');
+  });
+});
+
+it('does not admit I/O when a loading subscriber cancels the split request', async () => {
+  const controller = new AbortController();
+  const unsubscribe = usePreviewStore.subscribe((value) => {
+    if (value.isSplitLoading) controller.abort();
+  });
+  try {
+    expect(
+      await state().previewFileInSplit('book', 'file.txt', undefined, controller.signal)
+    ).toBeUndefined();
+    expect(state().isSplitLoading).toBe(false);
+    expect(io.read).not.toHaveBeenCalled();
+  } finally {
+    unsubscribe();
+  }
+});
+
+it('does not publish cancelled content when an admitted cache write finishes', async () => {
+  io.read.mockResolvedValueOnce(undefined);
+  const write = deferred<void>();
+  io.save.mockReturnValueOnce(write.promise);
+  const controller = new AbortController();
+  const pending = state().previewFileInSplit('book', 'file.txt', undefined, controller.signal);
+  await vi.waitFor(() => expect(io.save).toHaveBeenCalledOnce());
+  controller.abort();
+  write.resolve();
+  expect(await pending).toBeUndefined();
+  expect(state().activeSplitFile).toBeNull();
+  expect(state().isSplitLoading).toBe(false);
+});
