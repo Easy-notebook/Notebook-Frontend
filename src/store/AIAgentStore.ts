@@ -175,15 +175,16 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
       const targetIndex = state.qaList.findIndex((qa) => qa.id === qaId);
       if (targetIndex === -1) {
         agentLog.warn('QA not found for streaming answer initialization', { qaId });
-        return {};
+        return state;
       }
       const targetQA = state.qaList[targetIndex];
 
-      // 2. 创建一个新的 QA，除了 id 之外其他信息都复制原 QA
-      const newQA: QAItem = {
-        ...targetQA,
-        id: `${targetQA.id}-[0]`,
-      };
+      // Preserve the original question once; a restarted answer is not a new question.
+      const questionId = `${qaId}-[0]`;
+      const questionSnapshot: QAItem[] =
+        targetQA.type === 'user' && !state.qaList.some((qa) => qa.id === questionId)
+          ? [{ ...targetQA, id: questionId }]
+          : [];
 
       // 3. 更新目标 QA：清空 content、设为未解决、设为正在处理
       const updatedTargetQA: QAItem = {
@@ -193,13 +194,14 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
         resolved: false,
         onProcess: true,
         thinkingStartAtMs: Date.now(),
+        thinkingEndAtMs: undefined,
       };
 
       // 4. 组装新的 qaList
       const newQaList = [
         ...state.qaList.slice(0, targetIndex),
         updatedTargetQA, // 更新后的原 QA
-        newQA, // 插入的新 QA
+        ...questionSnapshot,
         ...state.qaList.slice(targetIndex + 1),
       ];
 
