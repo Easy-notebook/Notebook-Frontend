@@ -2,6 +2,7 @@ import { makeFileId, parseFileId } from '@Storage/fileIdentity';
 // store/previewStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { PreviewFileMetadata } from '@Services/preview/PreviewFileMetadata';
 import { PreviewRequestLifecycle } from '@Services/preview/PreviewRequestLifecycle';
 import { formatPreviewContent } from '@Services/preview/formatPreviewContent';
 import {
@@ -16,7 +17,7 @@ import { describeError } from '@Utils/errors';
 import { tabManagerService } from '@Services/tab/TabManagerService';
 import { fileLog, storeLog } from '@Utils/logger';
 import { persistenceService } from '@Services/persistence/instance';
-import { getFileType, getActivePreviewMode, getMimeType } from '@Storage/index';
+import { getFileType, getActivePreviewMode } from '@Storage/index';
 import type {
   PreviewMode,
   FileObject,
@@ -267,7 +268,7 @@ const usePreviewStore = create<PreviewStore>()(
         request: symbol,
         notebookId: string,
         filePath: string,
-        fileMetadata: FileMetadata = {} as FileMetadata,
+        fileMetadata = new PreviewFileMetadata(filePath),
         admittedCacheRecord?: CachedFileRecord | null
       ): Promise<FileObject | undefined> => {
         const { check, publish } = requestScope(request);
@@ -280,26 +281,7 @@ const usePreviewStore = create<PreviewStore>()(
             ? await persistenceService.files.getFile(notebookId, filePath)
             : admittedCacheRecord;
         check();
-        const lastModifiedBackend = fileMetadata.lastModified || null;
-        let file = fileMetadata.file;
-        if (!file) {
-          // Create a safe placeholder File when not provided (derive name from path)
-          let baseName = '';
-          let mime = '';
-          try {
-            baseName = filePath.split('/').pop() || filePath;
-            mime = getMimeType(filePath);
-            file = new File([''], baseName, { type: mime, lastModified: Date.now() });
-          } catch (e) {
-            check();
-            fileLog.warn('Failed to create placeholder File', { error: e, baseName, mime });
-          }
-        }
-        if (!file) {
-          publish({ error: 'File not found', isLoading: false });
-          return;
-        }
-
+        const lastModifiedBackend = fileMetadata.lastModified;
         // Determine if we need to fetch from backend
         const needsFetch =
           !hasCachedContent(cachedFile) ||
@@ -320,7 +302,7 @@ const usePreviewStore = create<PreviewStore>()(
             const metadata = await persistenceService.files.saveFile({
               notebookId,
               filePath,
-              fileName: file.name,
+              fileName: fileMetadata.fileName,
               content,
               fileType,
               lastModified: String(lastModifiedBackend || new Date().toISOString()),
@@ -610,8 +592,12 @@ const usePreviewStore = create<PreviewStore>()(
         getCurrentPreviewFiles: () => get().currentPreviewFiles,
 
         // Fetch and preview a file
-        previewFile: (notebookId, filePath, fileMetadata) =>
-          runPreviewRequest((request) => previewFile(request, notebookId, filePath, fileMetadata)),
+        previewFile: (notebookId, filePath, fileMetadata) => {
+          const metadata = new PreviewFileMetadata(filePath, fileMetadata);
+          return runPreviewRequest((request) =>
+            previewFile(request, notebookId, filePath, metadata)
+          );
+        },
 
         getActiveFile: () => get().activeFile,
 
@@ -761,8 +747,9 @@ const usePreviewStore = create<PreviewStore>()(
         previewFileInSplit: async (
           notebookId: string,
           filePath: string,
-          fileMetadata: FileMetadata = {} as FileMetadata
+          fileMetadata: FileMetadata = {}
         ): Promise<FileObject | undefined> => {
+          const metadata = new PreviewFileMetadata(filePath, fileMetadata);
           const request = splitRequests.begin();
           set({ isSplitLoading: true, error: null });
 
@@ -776,26 +763,7 @@ const usePreviewStore = create<PreviewStore>()(
             // Check if file exists in split preview cache (independent from tabs)
             const cachedFile = await persistenceService.splitFiles.getFile(notebookId, filePath);
             if (!splitRequests.isCurrent(request)) return undefined;
-            const lastModifiedBackend = fileMetadata.lastModified || null;
-
-            let file = fileMetadata.file;
-            if (!file) {
-              // Create a safe placeholder File when not provided
-              try {
-                const baseName = filePath.split('/').pop() || filePath;
-                const mime = getMimeType(filePath);
-                file = new File([''], baseName, { type: mime, lastModified: Date.now() });
-              } catch (e) {
-                fileLog.warn('Failed to create placeholder File for split preview', { error: e });
-              }
-            }
-
-            if (!file) {
-              if (splitRequests.settle(request, 'failed')) {
-                set({ error: 'File not found for split preview', isSplitLoading: false });
-              }
-              return;
-            }
+            const lastModifiedBackend = metadata.lastModified;
 
             // Determine if we need to fetch from backend
             const needsFetch =
@@ -822,7 +790,7 @@ const usePreviewStore = create<PreviewStore>()(
               fileObject = {
                 id: fileId,
                 notebookId,
-                name: file.name,
+                name: metadata.fileName,
                 path: filePath,
                 content,
                 type: fileType,

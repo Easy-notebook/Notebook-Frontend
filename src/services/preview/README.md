@@ -594,3 +594,15 @@ Notebook listing captures ordering, offset and limit before awaiting the provide
 Mutating a caller-owned options object while storage opens cannot alter an admitted
 query. Sorting uses a copy of the provider's array and preserves stable ties, numeric
 ordering, the default last-access order and existing zero-limit pagination semantics.
+
+## Preview descriptors and metadata admission
+
+Preview options accept a `PreviewFileDescriptor` (name with optional path/type),
+including structurally compatible browser `File` objects. Preview does not require
+blob methods or synthesize empty browser files to obtain display names.
+
+`PreviewFileMetadata` captures the name and backend modification marker before
+loading-state notifications and asynchronous reads. Normal and split requests share
+this admission rule; later caller mutations cannot rename the admitted resource or
+change its cache revision decision. Omitted descriptors derive the name from the
+selected path. Content and byte counts still come from the fetched/cache payload.

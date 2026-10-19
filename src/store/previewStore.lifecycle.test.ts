@@ -1132,3 +1132,45 @@ describe('split edit commit ownership', () => {
     expect(state().activeSplitFile).toBe(original);
   });
 });
+
+describe('preview metadata admission', () => {
+  it.each(['normal', 'split'] as const)(
+    'accepts file-tree descriptors and captures metadata before %s I/O',
+    async (surface) => {
+      const read = deferred<undefined>();
+      if (surface === 'normal') io.fileRead.mockReturnValueOnce(read.promise);
+      else io.read.mockReturnValueOnce(read.promise);
+      const metadata = {
+        file: { name: 'Selected.txt', path: 'folder/file.txt', type: 'file' },
+        lastModified: '2026-01-02T00:00:00.000Z',
+      };
+      const open = surface === 'normal' ? state().previewFile : state().previewFileInSplit;
+      const pending = open('book', 'folder/file.txt', metadata);
+      metadata.file.name = 'Changed.txt';
+      metadata.lastModified = '2026-02-02T00:00:00.000Z';
+      read.resolve(undefined);
+      const result = await pending;
+      expect(result).toMatchObject({
+        name: 'Selected.txt',
+        path: 'folder/file.txt',
+        lastModified: '2026-01-02T00:00:00.000Z',
+      });
+      expect(io.fetch).toHaveBeenCalledExactlyOnceWith('book', 'folder/file.txt');
+    }
+  );
+
+  it('derives display names without constructing browser File objects', async () => {
+    io.read.mockResolvedValue(undefined);
+    vi.stubGlobal('File', undefined);
+    try {
+      expect(await state().previewFile('book', 'folder/file.txt')).toMatchObject({
+        name: 'file.txt',
+      });
+      expect(await state().previewFileInSplit('book', 'folder/other.txt')).toMatchObject({
+        name: 'other.txt',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
