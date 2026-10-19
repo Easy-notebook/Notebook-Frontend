@@ -6,6 +6,7 @@ import { PreviewRequestLifecycle } from '@Services/preview/PreviewRequestLifecyc
 import { formatPreviewContent } from '@Services/preview/formatPreviewContent';
 import {
   fileFromCache,
+  fileFromSplitCache,
   hasCachedContent,
   type CachedFileRecord,
 } from '@Services/preview/fileFromCache';
@@ -61,6 +62,11 @@ export interface PreviewStoreState {
 /**
  * Preview Store Actions 接口
  */
+export interface PreviewEditTarget {
+  surface: 'normal' | 'split';
+  fileId: string;
+}
+
 export interface PreviewStoreActions {
   changePreviewMode: () => void;
   resetToNotebookMode: () => void;
@@ -80,6 +86,10 @@ export interface PreviewStoreActions {
   deleteFileFromCache: (notebookId: string, filePath: string) => Promise<boolean>;
   clearCacheForNotebook: (notebookId: string) => Promise<boolean>;
   getCSVData: () => string | null;
+  updatePreviewFileContent: (
+    content: string,
+    target: PreviewEditTarget
+  ) => Promise<FileObject | null>;
   updateActiveFileContent: (content: string, expectedFileId?: string) => Promise<FileObject | null>;
   setTabDirty: (fileId: string, value: boolean) => void;
   isTabDirty: (fileId: string) => boolean;
@@ -131,6 +141,48 @@ const usePreviewStore = create<PreviewStore>()(
       };
 
       const normalRequests = new PreviewRequestLifecycle();
+      const commitPreviewEdit = async (
+        content: string,
+        surface: PreviewEditTarget['surface'],
+        expectedFileId?: string
+      ): Promise<FileObject | null> => {
+        const file = surface === 'split' ? get().activeSplitFile : get().activeFile;
+        if (!file || !hasNotebookId(file.notebookId)) return null;
+        if (expectedFileId !== undefined && file.id !== expectedFileId) return null;
+        const lifecycle = surface === 'split' ? splitRequests : normalRequests;
+        const repository =
+          surface === 'split' ? persistenceService.splitFiles : persistenceService.files;
+        const request = lifecycle.begin();
+        set(surface === 'split' ? { isSplitLoading: false } : { isLoading: false });
+        try {
+          // Navigation revokes publication, while an admitted write retains its captured target.
+          const saved = await repository.updateFileContent(file.notebookId, file.path, content);
+          if (!lifecycle.isCurrent(request)) return null;
+          if (!saved) {
+            lifecycle.settle(request, 'failed');
+            return null;
+          }
+          let updated: FileObject | null;
+          if (surface === 'split') {
+            const record = await persistenceService.splitFiles.getFile(file.notebookId, file.path);
+            updated = record ? fileFromSplitCache(record) : null;
+          } else {
+            const record = await persistenceService.files.getFile(file.notebookId, file.path);
+            updated = hasCachedContent(record) ? fileFromCache(record) : null;
+          }
+          if (!lifecycle.isCurrent(request)) return null;
+          if (!updated) {
+            lifecycle.settle(request, 'failed');
+            return null;
+          }
+          lifecycle.settle(request, 'ready');
+          set(surface === 'split' ? { activeSplitFile: updated } : { activeFile: updated });
+          return updated;
+        } catch (error) {
+          lifecycle.settle(request, 'failed');
+          throw error;
+        }
+      };
       const obsoleteRequest = Symbol('obsolete-preview-request');
       const assertCurrent = (request: symbol) => {
         if (!normalRequests.isCurrent(request)) throw obsoleteRequest;
@@ -669,45 +721,10 @@ const usePreviewStore = create<PreviewStore>()(
           }
         },
 
-        // Edits target the captured file; navigation only revokes UI publication.
-        updateActiveFileContent: async (
-          content: string,
-          expectedFileId?: string
-        ): Promise<FileObject | null> => {
-          const file = get().activeFile;
-          if (!file || !hasNotebookId(file.notebookId)) return null;
-          // Reject callbacks from a previously rendered editor before admitting any work.
-          if (expectedFileId !== undefined && file.id !== expectedFileId) return null;
-          const request = normalRequests.begin();
-          set({ isLoading: false });
-          try {
-            // Updating an existing record preserves its metadata and cannot recreate a deleted file.
-            const saved = await persistenceService.files.updateFileContent(
-              file.notebookId,
-              file.path,
-              content
-            );
-            if (!normalRequests.isCurrent(request)) return null;
-            if (!saved) {
-              normalRequests.settle(request, 'failed');
-              return null;
-            }
-            // Read the committed record, including UTF-8 size and repository-assigned timestamps.
-            const record = await persistenceService.files.getFile(file.notebookId, file.path);
-            if (!normalRequests.isCurrent(request)) return null;
-            if (!hasCachedContent(record)) {
-              normalRequests.settle(request, 'failed');
-              return null;
-            }
-            const updated = fileFromCache(record);
-            normalRequests.settle(request, 'ready');
-            set({ activeFile: updated });
-            return updated;
-          } catch (error) {
-            normalRequests.settle(request, 'failed');
-            throw error;
-          }
-        },
+        updatePreviewFileContent: (content, target) =>
+          commitPreviewEdit(content, target.surface, target.fileId),
+        updateActiveFileContent: (content, expectedFileId) =>
+          commitPreviewEdit(content, 'normal', expectedFileId),
 
         setTabDirty: (fileId: string, value: boolean) => {
           set((s) => ({ dirtyMap: { ...s.dirtyMap, [fileId]: value } }));
@@ -826,20 +843,7 @@ const usePreviewStore = create<PreviewStore>()(
               });
             } else {
               fileLog.info('Split preview: Using cached file', { filePath });
-              // Convert SplitFileData to FileObject format (fill required fields)
-              fileObject = {
-                id: cachedFile.id,
-                notebookId: cachedFile.notebookId,
-                name: cachedFile.fileName,
-                path: cachedFile.filePath,
-                content: cachedFile.content,
-                type: cachedFile.type as FileType,
-                size: cachedFile.size,
-                lastModified: cachedFile.lastModified,
-                cachedAt: cachedFile.cachedAt,
-                accessCount: 1,
-                lastAccessed: Date.now(),
-              };
+              fileObject = fileFromSplitCache(cachedFile);
             }
 
             // Set split preview state

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const io = vi.hoisted(() => ({
   read: vi.fn(),
+  splitUpdate: vi.fn(),
   save: vi.fn(),
   fetch: vi.fn(),
   fileRead: vi.fn(),
@@ -15,7 +16,7 @@ const io = vi.hoisted(() => ({
 }));
 vi.mock('@Services/persistence/instance', () => ({
   persistenceService: {
-    splitFiles: { getFile: io.read, saveFile: io.save },
+    splitFiles: { getFile: io.read, saveFile: io.save, updateFileContent: io.splitUpdate },
     files: {
       getFile: io.fileRead,
       saveFile: io.fileSave,
@@ -87,6 +88,7 @@ beforeEach(() => {
     hasLocalContent: true,
   }));
   io.fileUpdate.mockResolvedValue(true);
+  io.splitUpdate.mockResolvedValue(true);
   io.tabSave.mockResolvedValue(undefined);
   io.fileDelete.mockResolvedValue(true);
   io.fileClear.mockResolvedValue(undefined);
@@ -1048,4 +1050,85 @@ it('keeps displayed tabs when default discovery cannot confirm an empty catalog'
   expect(state().error).toContain('Unable to discover notebook files');
   expect(state().isLoading).toBe(false);
   expect(io.tabSave).not.toHaveBeenCalled();
+});
+
+describe('split edit commit ownership', () => {
+  const edit = (content: string, path = 'file.txt') =>
+    state().updatePreviewFileContent(content, { surface: 'split', fileId: `book::${path}` });
+
+  it('updates only the split cache and publishes committed metadata', async () => {
+    io.fileRead.mockResolvedValueOnce(fileRecord('book'));
+    const normal = await state().loadFileById('book::file.txt');
+    await preview('file.txt');
+    io.read.mockResolvedValueOnce({
+      ...cached('file.txt'),
+      content: '中文',
+      size: 6,
+      lastModified: 'committed',
+    });
+    expect(await edit('中文')).toMatchObject({
+      content: '中文',
+      size: 6,
+      lastModified: 'committed',
+    });
+    expect(io.splitUpdate).toHaveBeenCalledWith('book', 'file.txt', '中文');
+    expect(io.fileUpdate).not.toHaveBeenCalled();
+    expect(io.save).not.toHaveBeenCalled();
+    expect(state().activeFile).toBe(normal);
+  });
+
+  it('rejects stale file identity before admitting a split write', async () => {
+    await preview('other.txt');
+    expect(await edit('obsolete')).toBeNull();
+    expect(io.splitUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not recreate deleted split files', async () => {
+    await preview('file.txt');
+    io.splitUpdate.mockResolvedValueOnce(false);
+    expect(await edit('deleted')).toBeNull();
+    expect(io.save).not.toHaveBeenCalled();
+  });
+
+  it('cannot reopen the split after it closes during an admitted write', async () => {
+    await preview('file.txt');
+    const write = deferred<boolean>();
+    io.splitUpdate.mockReturnValueOnce(write.promise);
+    const pending = edit('late');
+    state().closeSplitPreview();
+    write.resolve(true);
+    expect(await pending).toBeNull();
+    expect(state().activeSplitFile).toBeNull();
+  });
+
+  it('cannot publish old readback over a newly selected split file', async () => {
+    await preview('file.txt');
+    const read = deferred<ReturnType<typeof cached>>();
+    io.read.mockReturnValueOnce(read.promise);
+    const pending = edit('late');
+    await vi.waitFor(() => expect(io.splitUpdate).toHaveBeenCalledOnce());
+    const next = await preview('other.txt');
+    read.resolve({ ...cached('file.txt'), content: 'late' });
+    expect(await pending).toBeNull();
+    expect(state().activeSplitFile).toBe(next);
+  });
+
+  it('normal navigation does not revoke a split save', async () => {
+    await preview('file.txt');
+    const write = deferred<boolean>();
+    io.splitUpdate.mockReturnValueOnce(write.promise);
+    const pending = edit('split edit');
+    io.fileRead.mockResolvedValueOnce(fileRecord('book'));
+    await state().loadFileById('book::file.txt');
+    io.read.mockResolvedValueOnce({ ...cached('file.txt'), content: 'split edit' });
+    write.resolve(true);
+    expect((await pending)?.content).toBe('split edit');
+  });
+
+  it('propagates failed commits without changing the displayed split content', async () => {
+    const original = await preview('file.txt');
+    io.splitUpdate.mockRejectedValueOnce(new Error('aborted'));
+    await expect(edit('failed')).rejects.toThrow('aborted');
+    expect(state().activeSplitFile).toBe(original);
+  });
 });

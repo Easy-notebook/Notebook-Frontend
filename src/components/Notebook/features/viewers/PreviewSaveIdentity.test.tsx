@@ -12,12 +12,20 @@ const model = vi.hoisted(() => ({
       type: 'javascript',
       content: 'original',
     },
-    activeSplitFile: null,
+    activeSplitFile: {
+      id: 'book::split.js',
+      name: 'split.js',
+      path: 'split.js',
+      notebookId: 'book',
+      type: 'javascript',
+      content: 'split',
+    },
     previewMode: 'file',
     currentPreviewFiles: [],
     setTabDirty: vi.fn(),
-    updateActiveFileContent: vi.fn(),
+    updatePreviewFileContent: vi.fn(),
   },
+  notebook: { detachedCellId: null as string | null },
   callbacks: [] as Array<(content: string) => Promise<void>>,
 }));
 vi.mock('@Store/previewStore', () => ({
@@ -28,8 +36,8 @@ vi.mock('@Store/previewStore', () => ({
   ),
 }));
 vi.mock('@Store/notebookStore', () => ({
-  default: (select?: (state: { detachedCellId: null }) => unknown) => {
-    const state = { detachedCellId: null };
+  default: (select?: (state: typeof model.notebook) => unknown) => {
+    const state = model.notebook;
     return select ? select(state) : state;
   },
 }));
@@ -52,6 +60,7 @@ import DataTable from './data-table/DataTable';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  model.notebook.detachedCellId = null;
   model.callbacks.length = 0;
   model.state.activeFile = {
     id: 'book::first.js',
@@ -76,7 +85,10 @@ describe.each([PreviewApp, TabbedPreviewApp])('preview editor identity', (View) 
     };
     view.rerender(<View />);
     await act(async () => previousCallback('late edit'));
-    expect(model.state.updateActiveFileContent).toHaveBeenCalledWith('late edit', 'book::first.js');
+    expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith('late edit', {
+      surface: 'normal',
+      fileId: 'book::first.js',
+    });
   });
 });
 
@@ -97,18 +109,28 @@ it.each([false, true])(
       type: 'csv',
       content: 'name\nAda',
     };
-    model.state.updateActiveFileContent.mockResolvedValueOnce(
+    model.state.updatePreviewFileContent.mockResolvedValueOnce(
       success ? model.state.activeFile : null
     );
     render(<DataTable />);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
-      expect(model.state.updateActiveFileContent).toHaveBeenCalledWith(
-        expect.any(String),
-        'book::table.csv'
-      )
+      expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith(expect.any(String), {
+        surface: 'normal',
+        fileId: 'book::table.csv',
+      })
     );
     if (success) expect(model.state.setTabDirty).toHaveBeenCalledWith('book::table.csv', false);
     else expect(model.state.setTabDirty).not.toHaveBeenCalledWith('book::table.csv', false);
   }
 );
+
+it('split editor callbacks carry split identity even while a normal file is selected', async () => {
+  model.notebook.detachedCellId = 'cell';
+  render(<PreviewApp />);
+  await act(async () => model.callbacks[0]('split edit'));
+  expect(model.state.updatePreviewFileContent).toHaveBeenCalledWith('split edit', {
+    surface: 'split',
+    fileId: 'book::split.js',
+  });
+});

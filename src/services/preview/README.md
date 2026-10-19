@@ -216,15 +216,22 @@ both retain the prior complete saved selection. The stored shape is unchanged.
 
 ## Editor callback identity
 
-Editors pass their rendered file ID to `updateActiveFileContent`. The store checks
-this identity before admitting a request or writing, so a delayed callback from
-another file cannot modify the active file or revoke its pending save. The public
-one-argument call still targets the active file at invocation. Navigation after
-admission retains the existing rule: the captured write finishes, but stale UI
-publication returns null.
+Editors pass an explicit `PreviewEditTarget` (surface and rendered file ID) to
+`updatePreviewFileContent`. The store checks identity before admitting a request
+or writing. The public `updateActiveFileContent` API delegates to the same commit
+flow for normal previews and preserves its existing call signatures.
+
+Both surfaces use the same save lifecycle, with independent request owners and
+repositories. Split writes use an atomic read/update transaction against the
+split cache, preserving record metadata and refusing to recreate deleted records.
+Content size and modification time are assigned by the repository. Normal-tab
+navigation does not revoke a split edit. Closing or replacing the target surface
+revokes publication of an admitted write, but the captured transaction finishes.
+Errors propagate, and missing records or obsolete results return null.
 
 A null result is not a save acknowledgement. The spreadsheet retains its dirty
 marker for rejected or obsolete results, and the tab wrapper no longer clears
-markers merely on Ctrl/Cmd+S. Split-view editing still needs its own write target
-and acknowledgement lifecycle; this identity guard prevents it from writing into
-a different normal-preview file but does not implement split-cache editing.
+markers merely on Ctrl/Cmd+S. These edits commit to local preview storage; no
+backend file-upload operation is implied. Native browser tests cover split write
+ordering, UTF-8 sizes, metadata preservation, deletion ordering and transaction
+rollback. Store and UI tests cover target routing and late completion ownership.

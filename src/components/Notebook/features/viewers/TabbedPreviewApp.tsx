@@ -83,7 +83,9 @@ const TabbedPreviewApp: React.FC = () => {
             fileContent={activeFile.content}
             onContentChange={async (newContent: string) => {
               setTabDirty(activeFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newContent, activeFile.id);
+              await usePreviewStore
+                .getState()
+                .updatePreviewFileContent(newContent, { surface: 'normal', fileId: activeFile.id });
             }}
             showControls
           />
@@ -102,7 +104,9 @@ const TabbedPreviewApp: React.FC = () => {
             fileName={activeFile.name}
             onContentChange={async (newContent: string) => {
               setTabDirty(activeFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newContent, activeFile.id);
+              await usePreviewStore
+                .getState()
+                .updatePreviewFileContent(newContent, { surface: 'normal', fileId: activeFile.id });
             }}
             showControls
           />
@@ -117,7 +121,9 @@ const TabbedPreviewApp: React.FC = () => {
             language="jsx"
             onCodeChange={async (newCode: string) => {
               setTabDirty(activeFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newCode, activeFile.id);
+              await usePreviewStore
+                .getState()
+                .updatePreviewFileContent(newCode, { surface: 'normal', fileId: activeFile.id });
             }}
           />
         );

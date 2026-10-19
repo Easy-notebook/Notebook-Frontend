@@ -43,6 +43,29 @@ export class SplitFileRepository implements ISplitFileRepository {
     await this.storage.put(DB_STORES.SPLIT_FILES, splitFile);
   }
 
+  async updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean> {
+    if (typeof content !== 'string') throw new Error('Invalid split file content');
+    const id = makeFileId(notebookId, filePath);
+    let updated = false;
+    await this.storage.transaction([DB_STORES.SPLIT_FILES], 'readwrite', async (stores) => {
+      const store = stores[DB_STORES.SPLIT_FILES];
+      const record = await new Promise<SplitFileEntity | undefined>((resolve, reject) => {
+        const request = store.get(id);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      if (!record) return;
+      store.put({
+        ...record,
+        content,
+        size: new Blob([content]).size,
+        lastModified: new Date().toISOString(),
+      });
+      updated = true;
+    });
+    return updated;
+  }
+
   async getFile(notebookId: string, filePath: string): Promise<SplitFileEntity | null> {
     const id = makeFileId(notebookId, filePath);
     const file = await this.storage.get<SplitFileEntity>(DB_STORES.SPLIT_FILES, id);

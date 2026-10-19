@@ -3782,3 +3782,80 @@ test('tab-state commit failure retains the previous complete selection', async (
   expect(result.message).toBe('tab commit aborted');
   expect(result.after).toEqual(result.original);
 });
+
+test('split edits preserve metadata, serialize updates and never resurrect deleted files', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, SplitFileRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new SplitFileRepository(provider);
+    await repository.saveFile('book', 'file.txt', {
+      name: 'file.txt',
+      content: 'original',
+      type: 'text',
+      size: 8,
+      lastModified: 'old',
+      metadata: { label: 'keep' },
+    });
+    const original = await repository.getFile('book', 'file.txt');
+    const writes = await Promise.all([
+      repository.updateFileContent('book', 'file.txt', 'first'),
+      repository.updateFileContent('book', 'file.txt', '中文'),
+    ]);
+    const committed = await repository.getFile('book', 'file.txt');
+    const stats = await repository.getStats();
+    const deleting = repository.deleteFile('book', 'file.txt');
+    const lateEdit = repository.updateFileContent('book', 'file.txt', 'obsolete');
+    await deleting;
+    const updated = await lateEdit;
+    const after = await repository.getFile('book', 'file.txt');
+    await provider.close();
+    return { original, committed, writes, stats, updated, after };
+  });
+  expect(result.writes).toEqual([true, true]);
+  expect(result.committed).toMatchObject({
+    ...result.original,
+    content: '中文',
+    size: 6,
+    lastModified: expect.any(String),
+  });
+  expect(result.committed.lastModified).not.toBe('old');
+  expect(result.stats).toEqual({ totalFiles: 1, totalSize: 6 });
+  expect(result.updated).toBe(false);
+  expect(result.after).toBeNull();
+});
+
+test('aborted split edits reject and preserve the committed record', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { IndexedDBStorageProvider, SplitFileRepository } = window.storageHarness;
+    const provider = new IndexedDBStorageProvider();
+    const repository = new SplitFileRepository(provider);
+    await repository.saveFile('book', 'file.txt', {
+      name: 'file.txt',
+      content: 'original',
+      type: 'text',
+      size: 8,
+      lastModified: 'old',
+    });
+    const original = await repository.getFile('book', 'file.txt');
+    const failing = new SplitFileRepository({
+      transaction: (names, mode, work) =>
+        provider.transaction(names, mode, async (stores) => {
+          await work(stores);
+          throw new Error('split edit aborted');
+        }),
+    });
+    let message;
+    try {
+      await failing.updateFileContent('book', 'file.txt', 'lost');
+    } catch (error) {
+      message = error.message;
+    }
+    const after = await repository.getFile('book', 'file.txt');
+    await provider.close();
+    return { original, after, message };
+  });
+  expect(result.message).toBe('split edit aborted');
+  expect(result.after).toEqual(result.original);
+});

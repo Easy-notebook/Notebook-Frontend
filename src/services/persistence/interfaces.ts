@@ -145,6 +145,7 @@ export interface SplitFileSaveData {
 }
 
 export interface ISplitFileRepository {
+  updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean>;
   saveFile(notebookId: string, filePath: string, fileData: SplitFileSaveData): Promise<void>;
   getFile(notebookId: string, filePath: string): Promise<SplitFileEntity | null>;
   deleteFile(notebookId: string, filePath: string): Promise<void>;
