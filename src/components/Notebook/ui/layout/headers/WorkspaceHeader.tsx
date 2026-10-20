@@ -2,8 +2,9 @@
 // Header component for Workspace view - supports notebook editing and execution
 
 import { useTranslation } from 'react-i18next';
-import { Play, Upload, BarChartHorizontalBig } from 'lucide-react';
+import { Upload, BarChartHorizontalBig } from 'lucide-react';
 import ModeToggle from './ModeToggle';
+import { RunAllButton } from './RunAllButton';
 import ExportToFile from '../../../features/function-bar/ExportToFile';
 import NotificationCenter from './NotificationCenter';
 import type { Cell } from '@Store/models';
@@ -56,16 +57,11 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         <HousingStudyButton />
         {!(cells.length === 0 || viewMode === 'dslc') && (
           <>
-            <button
-              onClick={onRunAll}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed bg-primary/10 text-primary hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20"
-              disabled={cells.length === 0 || isExecuting}
-            >
-              <Play size={16} />
-              <span className="hidden sm:inline">
-                {isExecuting ? t('fileOperations.running') : t('fileOperations.runAll')}
-              </span>
-            </button>
+            <RunAllButton
+              onRunAll={onRunAll}
+              isExecuting={isExecuting}
+              empty={cells.length === 0}
+            />
 
             <ExportToFile
               disabled={cells.length === 0}

@@ -7,13 +7,14 @@ import { useTranslation } from 'react-i18next';
 import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
 import { findCellsByStep } from '@Utils/markdownParser';
-import { useToast } from '../../UI/Toast';
+import { toast } from 'sonner';
 import { notebookLog, uiLog } from '@Utils/logger';
 import ImportNotebook4JsonOrJupyter from '@Utils/importFile/import4JsonOrJupyterNotebook';
+import { NotebookActionScope } from '@Services/notebook/NotebookActionScope';
+import { BatchExecutionError } from '@Services/notebook/CellExecutionSession';
 
 export const useNotebookHandlers = () => {
   const { t } = useTranslation();
-  const { toast } = useToast();
 
   const {
     notebookId,
@@ -22,7 +23,6 @@ export const useNotebookHandlers = () => {
     currentPhaseId,
     currentStepIndex,
     currentRunningPhaseId,
-    viewMode,
     addCell,
     deleteCell,
     updateCell,
@@ -58,17 +58,11 @@ export const useNotebookHandlers = () => {
         addCell(newCell, index);
         setLastAddedCellId(newCell.id);
 
-        toast({
-          message: t('toast.cellAdded', { type: t(`cellTypes.${type}`) }),
-          type: 'success',
-        } as any);
+        toast.success(t('toast.cellAdded', { type: t(`cellTypes.${type}`) }));
       } catch (err) {
         notebookLog.error('Error adding cell', { error: err });
         setError('Failed to add cell. Please try again.');
-        toast({
-          message: (err as Error).message || t('toast.error'),
-          type: 'error',
-        } as any);
+        toast.error((err as Error).message || t('toast.error'));
       }
     },
     [
@@ -78,28 +72,38 @@ export const useNotebookHandlers = () => {
       addCell,
       setLastAddedCellId,
       setError,
-      toast,
       t,
     ]
   );
 
   // Run all cells handler
   const handleRunAll = useCallback(async () => {
+    const scope = new NotebookActionScope();
     try {
+      scope.begin();
       await runAllCells();
-      toast({
-        message: t('toast.allCellsExecuted'),
-        type: 'success',
-      } as any);
+      if (scope.signal.aborted) return;
+      toast.success(t('toast.allCellsExecuted'));
     } catch (err) {
+      if (scope.signal.aborted) return;
+      if (
+        err instanceof BatchExecutionError &&
+        ['batch_stopped', 'batch_source_changed'].includes(err.result.error || '')
+      ) {
+        toast.info(
+          t(
+            err.result.error === 'batch_stopped' ? 'toast.batchStopped' : 'toast.batchSourceChanged'
+          )
+        );
+        return;
+      }
       notebookLog.error('Error running all cells', { error: err });
       setError('Failed to run all cells. Please try again.');
-      toast({
-        message: (err as Error).message || t('toast.error'),
-        type: 'error',
-      } as any);
+      toast.error((err as Error).message || t('toast.error'));
+    } finally {
+      scope.dispose();
     }
-  }, [runAllCells, setError, toast, t]);
+  }, [runAllCells, setError, t]);
 
   // Phase selection handler
   const handlePhaseSelect = useCallback(
@@ -193,17 +197,11 @@ export const useNotebookHandlers = () => {
           uiLog.error('Failed to get notebook ID after initialization');
         }
 
-        toast({
-          message: t('toast.cellAdded', { type: t(`cellTypes.${type}`) }),
-          type: 'success',
-        } as any);
+        toast.success(t('toast.cellAdded', { type: t(`cellTypes.${type}`) }));
       } catch (err) {
         uiLog.error('Error adding cell', { error: err });
         setError('Failed to add cell. Please try again.');
-        toast({
-          message: (err as Error).message || t('toast.error'),
-          type: 'error',
-        } as any);
+        toast.error((err as Error).message || t('toast.error'));
       }
     },
     [
@@ -213,7 +211,6 @@ export const useNotebookHandlers = () => {
       addCell,
       setLastAddedCellId,
       setError,
-      toast,
       t,
     ]
   );

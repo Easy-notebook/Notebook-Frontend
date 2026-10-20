@@ -23,6 +23,9 @@
   },
   "fileOperations": {
     "runAll": "全部运行",
+    "stopRunAll": "停止批量运行",
+    "stoppingRunAll": "等待当前单元格完成…",
+    "stopRunAllHint": "当前单元格完成后停止，不再执行后续单元格",
     "running": "正在运行...",
     "import": "导入",
     "export": "导出"
@@ -38,6 +41,8 @@
     "error": "错误",
     "cellAdded": "已添加新的 {type} 单元格",
     "allCellsExecuted": "所有单元格已成功执行",
+    "batchStopped": "已在当前单元格完成后停止，后续单元格的输出已保留",
+    "batchSourceChanged": "选中的源码已变更，批量执行已停止；再次运行可使用新源码",
     "exportSuccess": "笔记本已成功导出",
     "exportFailed": "导出笔记本失败"
   },

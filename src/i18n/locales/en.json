@@ -23,6 +23,9 @@
   },
   "fileOperations": {
     "runAll": "Run All",
+    "stopRunAll": "Stop Run All",
+    "stoppingRunAll": "Finishing current cell…",
+    "stopRunAllHint": "Finish the current cell, then stop before the next one",
     "running": "Running...",
     "import": "Import",
     "export": "Export"
@@ -38,6 +41,8 @@
     "error": "Error",
     "cellAdded": "New {type} cell added",
     "allCellsExecuted": "All cells executed successfully",
+    "batchStopped": "Run All stopped after the current cell; remaining outputs were preserved",
+    "batchSourceChanged": "Run All stopped because selected source changed; run again to use the updated code",
     "exportSuccess": "Notebook exported successfully",
     "exportFailed": "Failed to export notebook"
   },
