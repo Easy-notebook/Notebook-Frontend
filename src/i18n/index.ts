@@ -6,24 +6,14 @@ import type { Resource } from 'i18next';
 import enTranslation from './locales/en.json';
 import zhTranslation from './locales/zh.json';
 
-// Type definitions for translation resources
-interface TranslationResource {
-  translation: Record<string, any>;
-}
-
-interface Resources {
-  en: TranslationResource;
-  zh: TranslationResource;
-}
-
-const resources: Resources = {
+const resources = {
   en: {
-    translation: enTranslation
+    translation: enTranslation,
   },
   zh: {
-    translation: zhTranslation
-  }
-};
+    translation: zhTranslation,
+  },
+} satisfies Resource;
 
 i18n
   .use(LanguageDetector)
@@ -34,7 +24,7 @@ i18n
     debug: process.env.NODE_ENV === 'development',
     interpolation: {
       escapeValue: false,
-    }
+    },
   });
 
-export default i18n; 
+export default i18n;

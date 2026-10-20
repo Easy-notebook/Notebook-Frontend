@@ -5,8 +5,8 @@ const VUE_SECONDARY = '#35495E';
 
 const LanguageSwitcher = () => {
   const { i18n } = useTranslation();
-  
-  const changeLanguage = (lng) => {
+
+  const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
     localStorage.setItem('language', lng);
   };
