@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { NativeStudySession, type StudySnapshot } from '@Services/native-study/NativeStudySession';
 import { publishStudy } from '@Services/native-study/publishStudy';
+import { publishComparisonCell } from '@Services/native-study/publishComparisonCell';
 import { StudyEvidence } from './StudyEvidence';
 import { NativeDatasetPicker } from './NativeDatasetPicker';
 
@@ -9,6 +10,9 @@ const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm'
 const buttonClass = 'rounded border px-3 py-2 text-sm disabled:opacity-50';
 export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
   const session = useRef<NativeStudySession | null>(null);
+  const publication = useRef<AbortController | null>(null);
+  const renderedOwner = useRef(notebookId);
+  renderedOwner.current = notebookId;
   const [state, setState] = useState<StudySnapshot>({
     status: 'disconnected',
     view: null,
@@ -46,6 +50,8 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     });
     return () => {
       unsubscribe();
+      publication.current?.abort();
+      publication.current = null;
       runtime.dispose();
       if (session.current === runtime) session.current = null;
     };
@@ -86,17 +92,53 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     ability: Parameters<NativeStudySession['execute']>[0],
     args: Record<string, unknown>
   ) => void session.current?.execute(ability, args);
-  const insert = async () => {
-    if (!view || publishing) return;
+  const insert = async (kind: 'snapshot' | 'comparison') => {
+    if (
+      !view ||
+      view.frontend_notebook_id !== notebookId ||
+      busy ||
+      datasetBusy ||
+      publication.current
+    )
+      return;
+    if (kind === 'comparison' && (closed || inputChanged || !view.study.current || !savedInput))
+      return;
     const owner = session.current;
+    const attempt = new AbortController();
+    publication.current = attempt;
+    const active = () =>
+      owner === session.current && renderedOwner.current === notebookId && !attempt.signal.aborted;
     setPublishing(true);
+    setNotice('');
     try {
-      await publishStudy(view, notebookId);
-      if (owner === session.current) setNotice('已写入并保存当前笔记，作为本次研究快照。');
+      if (kind === 'comparison') {
+        await publishComparisonCell(
+          notebookId,
+          {
+            referenceCsv: savedInput!.configuration.csv,
+            queryCsv: query,
+            columns: selectedColumns,
+            clusters,
+            neighbors,
+          },
+          attempt.signal
+        );
+      } else {
+        await publishStudy(view, notebookId, attempt.signal);
+      }
+      if (active())
+        setNotice(
+          kind === 'comparison'
+            ? '已保存 AAL 相似样本单元格。关闭研究面板后运行，可查看近邻及各特征的距离贡献。'
+            : '已写入并保存当前笔记，作为本次研究快照。'
+        );
     } catch (error) {
-      if (owner === session.current) setNotice(String(error));
+      if (active()) setNotice(String(error));
     } finally {
-      if (owner === session.current) setPublishing(false);
+      if (publication.current === attempt) {
+        publication.current = null;
+        if (active()) setPublishing(false);
+      }
     }
   };
   return (
@@ -120,7 +162,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
         <button
           className={buttonClass}
           type="button"
-          disabled={state.status === 'running' || state.status === 'loading'}
+          disabled={publishing || state.status === 'running' || state.status === 'loading'}
           onClick={() => void session.current?.refresh()}
         >
           刷新研究
@@ -131,19 +173,20 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           {state.error}
         </p>
       )}
+      {publishing && <p role="status">正在保存研究单元格…</p>}
       {notice && <p role="status">{notice}</p>}
       {state.pending && (
         <div className="flex flex-wrap gap-2">
           <button
             className={buttonClass}
-            disabled={state.status === 'running' || state.status === 'loading'}
+            disabled={publishing || state.status === 'running' || state.status === 'loading'}
             onClick={() => void session.current?.retry()}
           >
             重试原操作
           </button>
           <button
             className={buttonClass}
-            disabled={state.status === 'running' || state.status === 'loading'}
+            disabled={publishing || state.status === 'running' || state.status === 'loading'}
             onClick={() => void session.current?.discardRetry()}
           >
             放弃重试并刷新
@@ -164,11 +207,11 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           });
         }}
       >
-        <fieldset disabled={busy || closed || datasetBusy} className="space-y-3">
+        <fieldset disabled={busy || closed || datasetBusy || publishing} className="space-y-3">
           <legend className="font-semibold">1. 房屋研究输入</legend>
           <NativeDatasetPicker
             notebookId={notebookId}
-            disabled={busy || closed}
+            disabled={busy || closed || publishing}
             onBusyChange={setDatasetBusy}
             columns={selectedColumns}
             clusters={clusters}
@@ -238,7 +281,9 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
         }}
       >
         <fieldset
-          disabled={busy || closed || datasetBusy || inputChanged || !view?.study.current}
+          disabled={
+            busy || closed || datasetBusy || publishing || inputChanged || !view?.study.current
+          }
           className="space-y-3"
         >
           <legend className="font-semibold">2. 比较新房屋样本</legend>
@@ -268,6 +313,18 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           <button className={buttonClass} type="submit">
             比较并解释相似样本
           </button>
+          <button
+            className={buttonClass}
+            type="button"
+            disabled={!query.trim()}
+            onClick={() => void insert('comparison')}
+          >
+            插入 AAL 相似样本单元格
+          </button>
+          <p className="text-xs text-muted-foreground">
+            将已保存的参考输入、当前新样本 CSV
+            和近邻数量固定为文件版本，运行单元格时重新计算解释。重复插入同一配置不会新增单元格。
+          </p>
         </fieldset>
       </form>
       {view?.generated_selection_enabled && (
@@ -279,7 +336,11 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
         >
           <fieldset
             disabled={
-              busy || closed || !view.study.comparison || view.study.comparison.rows.length > 8
+              busy ||
+              closed ||
+              publishing ||
+              !view.study.comparison ||
+              view.study.comparison.rows.length > 8
             }
             className="space-y-3"
           >
@@ -316,15 +377,15 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
       {view && (
         <StudyEvidence
           view={view}
-          busy={busy || closed}
+          busy={busy || closed || publishing}
           explain={(row) => run('explain_study_sample', { query_row: row })}
         />
       )}
       <button
         type="button"
         className={buttonClass}
-        disabled={busy || publishing || !view?.study.current}
-        onClick={() => void insert()}
+        disabled={busy || publishing || datasetBusy || !view?.study.current}
+        onClick={() => void insert('snapshot')}
       >
         写入当前笔记
       </button>

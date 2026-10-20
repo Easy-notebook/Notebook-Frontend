@@ -26,10 +26,11 @@ function literal(value: string): string {
   return `"${escaped}"`;
 }
 
-export function datasetCellSource(
+function groupingSource(
   version: string,
   columns: readonly string[],
-  clusters: number
+  clusters: number,
+  additionalSkill = ''
 ): string {
   if (!/^[a-f0-9]{64}$/.test(version)) throw new Error('无效的 CSV 文件版本');
   if (!Number.isInteger(clusters) || clusters < 2 || clusters > 16)
@@ -47,11 +48,49 @@ export function datasetCellSource(
       "Read an immutable CSV version owned by this notebook"
     skill numeric_segments
       "Group explicit housing features with native Rust numerical code"
-  public
+${additionalSkill}  public
     ability run() -> Any effects(skill)
       version = "${version}"
       csv = self.skill("notebook_csv", version)
       report = self.skill("numeric_segments", csv, [${columns.map(literal).join(', ')}], ${clusters})
-      return {dataset_version: version, features: report.model.features, groups: report.clusters, silhouette: report.mean_silhouette}
 `;
+}
+
+export function datasetCellSource(
+  version: string,
+  columns: readonly string[],
+  clusters: number
+): string {
+  return (
+    groupingSource(version, columns, clusters) +
+    `      return {dataset_version: version, features: report.model.features, groups: report.clusters, silhouette: report.mean_silhouette}
+`
+  );
+}
+
+export function comparisonCellSource(
+  referenceVersion: string,
+  queryVersion: string,
+  columns: readonly string[],
+  clusters: number,
+  neighbors: number
+): string {
+  if (!/^[a-f0-9]{64}$/.test(queryVersion)) throw new Error('无效的查询 CSV 文件版本');
+  if (!Number.isInteger(neighbors) || neighbors < 1 || neighbors > 8)
+    throw new Error('每行近邻数量必须为 1 至 8');
+  return (
+    groupingSource(
+      referenceVersion,
+      columns,
+      clusters,
+      `    skill segment_compare
+      "Explain measured neighbors against the frozen reference model"
+`
+    ) +
+    `      query_version = "${queryVersion}"
+      query = self.skill("notebook_csv", query_version)
+      comparison = self.skill("segment_compare", report.model, csv, query, ${neighbors}, report.reference_id)
+      return {reference_version: version, query_version: query_version, comparison: comparison}
+`
+  );
 }

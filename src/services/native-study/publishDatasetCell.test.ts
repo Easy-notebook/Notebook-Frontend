@@ -1,6 +1,8 @@
 import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { publishDatasetCell } from './publishDatasetCell';
+import { publishComparisonCell } from './publishComparisonCell';
+import { NativeDatasetClient } from './NativeDatasetClient';
 
 const io = vi.hoisted(() => ({
   state: {
@@ -33,6 +35,7 @@ vi.mock('@Store/notebookStore', () => ({
 vi.mock('@Services/autoSave', () => ({ AutoSaveService: { getInstance: () => io } }));
 const dataset = { name: '房屋.csv', version: 'a'.repeat(64), sha256: 'b'.repeat(64), size: 12 };
 beforeEach(() => {
+  vi.restoreAllMocks();
   vi.resetAllMocks();
   vi.stubGlobal('crypto', webcrypto);
   io.state.notebookId = 'a';
@@ -98,4 +101,92 @@ it('retains the old notebook save but does not acknowledge success after navigat
   await expect(publishDatasetCell('a', dataset, ['area'], 2)).rejects.toThrow('笔记已切换');
   expect(io.queueSave).toHaveBeenCalledWith(expect.objectContaining({ notebookId: 'a' }));
   expect(io.state.cells).toHaveLength(1);
+});
+
+const comparisonInput = {
+  referenceCsv: 'area,rooms\n40,2',
+  queryCsv: 'area,rooms\n41,2',
+  columns: ['area', 'rooms'],
+  clusters: 3,
+  neighbors: 2,
+};
+function mockArchive() {
+  return vi
+    .spyOn(NativeDatasetClient.prototype, 'upload')
+    .mockImplementation(async (name, csv) => ({
+      name,
+      csv,
+      version: (name.includes('reference') ? 'a' : 'c').repeat(64),
+      sha256: 'b'.repeat(64),
+      size: csv.length,
+    }));
+}
+it('archives both frozen inputs before publishing, retries partial uploads, and protects edits', async () => {
+  const upload = mockArchive();
+  upload.mockImplementationOnce(async (name, csv) => ({ ...dataset, name, csv }));
+  upload.mockRejectedValueOnce(new Error('query upload failed'));
+  await expect(publishComparisonCell('a', comparisonInput)).rejects.toThrow('query upload failed');
+  expect(io.state.cells).toHaveLength(0);
+  expect(io.queueSave).not.toHaveBeenCalled();
+  io.flush.mockRejectedValueOnce(new Error('save failed'));
+  await expect(publishComparisonCell('a', comparisonInput)).rejects.toThrow('save failed');
+  const cell = io.state.cells[0];
+  expect(cell).toMatchObject({
+    type: 'code',
+    language: 'aal',
+    metadata: { nativeComparison: { neighbors: 2, columns: ['area', 'rooms'] } },
+  });
+  expect(JSON.stringify(cell.metadata)).not.toContain(comparisonInput.referenceCsv);
+  await publishComparisonCell('a', comparisonInput);
+  expect(io.state.cells).toHaveLength(1);
+  cell.content = 'user edits';
+  await expect(publishComparisonCell('a', comparisonInput)).rejects.toThrow('已被编辑');
+  expect(cell.content).toBe('user edits');
+});
+it('freezes query and settings before asynchronous archival and changes identity with settings', async () => {
+  const upload = mockArchive();
+  const input = { ...comparisonInput, columns: [...comparisonInput.columns] };
+  const inserting = publishComparisonCell('a', input);
+  input.queryCsv = 'changed';
+  input.neighbors = 8;
+  input.columns[0] = 'changed';
+  await inserting;
+  expect(upload.mock.calls[1].slice(0, 2)).toEqual(['housing-query.csv', comparisonInput.queryCsv]);
+  expect(io.state.cells[0].content).toContain('csv, query, 2, report.reference_id');
+  expect(io.state.cells[0].content).toContain('["area", "rooms"]');
+  await publishComparisonCell('a', { ...comparisonInput, neighbors: 1 });
+  expect(io.state.cells).toHaveLength(2);
+});
+it('cancels between uploads on away-and-back navigation even if the first upload ignores abort', async () => {
+  const upload = mockArchive();
+  upload.mockImplementationOnce(async (name, csv, signal) => {
+    for (const id of ['b', 'a']) {
+      io.state.notebookId = id;
+      for (const listener of io.listeners) listener(io.state);
+    }
+    expect(signal?.aborted).toBe(true);
+    return { ...dataset, name, csv };
+  });
+  await expect(publishComparisonCell('a', comparisonInput)).rejects.toThrow('context changed');
+  expect(upload).toHaveBeenCalledTimes(1);
+  expect(io.state.cells).toHaveLength(0);
+  expect(io.listeners.size).toBe(0);
+});
+it('validates all comparison settings before archiving and cancels on panel disposal', async () => {
+  const upload = mockArchive();
+  await expect(publishComparisonCell('a', { ...comparisonInput, neighbors: 9 })).rejects.toThrow(
+    '近邻'
+  );
+  await expect(publishComparisonCell('a', { ...comparisonInput, queryCsv: ' ' })).rejects.toThrow(
+    'CSV'
+  );
+  expect(upload).not.toHaveBeenCalled();
+  const controller = new AbortController();
+  upload.mockImplementationOnce(async (name, csv) => {
+    controller.abort();
+    return { ...dataset, name, csv };
+  });
+  await expect(publishComparisonCell('a', comparisonInput, controller.signal)).rejects.toThrow();
+  expect(upload).toHaveBeenCalledTimes(1);
+  expect(io.state.cells).toHaveLength(0);
 });

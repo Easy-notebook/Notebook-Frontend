@@ -2,6 +2,8 @@ import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { HousingStudyPanel } from './HousingStudyPanel';
+import { publishComparisonCell } from '@Services/native-study/publishComparisonCell';
+vi.mock('@Services/native-study/publishComparisonCell', () => ({ publishComparisonCell: vi.fn() }));
 vi.mock('@Services/native-study/publishStudy', () => ({ publishStudy: vi.fn() }));
 vi.mock('@Services/native-study/publishDatasetCell', () => ({ publishDatasetCell: vi.fn() }));
 vi.mock('@Store/notebookStore', () => ({
@@ -95,4 +97,43 @@ it('admits only one initial read under StrictMode and enables the actual study f
   await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
   expect(screen.getByLabelText('参考 CSV 内容')).toBeEnabled();
   expect(screen.getByRole('button', { name: '执行房屋分群' })).toBeDisabled();
+});
+
+it('publishes captured comparison inputs, blocks duplicate actions, and aborts on disposal', async () => {
+  const view = savedView('a', 'area,rooms\n40,2');
+  view.study.current = true;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(view)))
+  );
+  let finish!: () => void;
+  vi.mocked(publishComparisonCell).mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  const panel = render(<HousingStudyPanel notebookId="a" />);
+  await screen.findByText(/研究已就绪/);
+  fireEvent.change(screen.getByLabelText('新样本 CSV'), { target: { value: 'area,rooms\n41,2' } });
+  const button = screen.getByRole('button', { name: '插入 AAL 相似样本单元格' });
+  fireEvent.click(button);
+  expect(button).toBeDisabled();
+  expect(screen.getByText('正在保存研究单元格…')).toBeInTheDocument();
+  expect(publishComparisonCell).toHaveBeenCalledWith(
+    'a',
+    {
+      referenceCsv: 'area,rooms\n40,2',
+      queryCsv: 'area,rooms\n41,2',
+      columns: ['area', 'rooms'],
+      clusters: 3,
+      neighbors: 3,
+    },
+    expect.any(AbortSignal)
+  );
+  const calls = vi.mocked(publishComparisonCell).mock.calls;
+  const signal = calls[calls.length - 1][2]!;
+  panel.unmount();
+  expect(signal.aborted).toBe(true);
+  finish();
 });

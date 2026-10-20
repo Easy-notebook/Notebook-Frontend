@@ -8,7 +8,7 @@ type PublishedCell = Partial<Cell> & { id: string; content: string };
 /** One owned publication: prepare, insert once, persist, then acknowledge. */
 export async function publishNotebookCells(
   notebookId: string,
-  prepare: () => PublishedCell[] | Promise<PublishedCell[]>,
+  prepare: (signal: AbortSignal) => PublishedCell[] | Promise<PublishedCell[]>,
   options: { signal?: AbortSignal; requireUnedited?: boolean } = {}
 ): Promise<void> {
   const scope = new NotebookActionScope(options.signal);
@@ -19,7 +19,7 @@ export async function publishNotebookCells(
   };
   try {
     owned();
-    const cells = await prepare();
+    const cells = await prepare(scope.signal);
     owned();
     const save = AutoSaveService.getInstance();
     await save.initialize();
