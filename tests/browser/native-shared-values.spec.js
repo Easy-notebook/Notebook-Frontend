@@ -1,48 +1,18 @@
 import { test, expect } from '@playwright/test';
-import { spawn } from 'node:child_process';
 import process from 'node:process';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { NativeTestServer } from './support/nativeServer.js';
 
 // Explicit locally built Rust server; never uses a paired EasyNet daemon or model.
 const binary = process.env.AAL_NATIVE_SERVER;
 const target = process.env.AAL_NOTEBOOK_TARGET;
-let child;
-let root;
+let native;
 test.skip(!binary || !target, 'Set AAL_NATIVE_SERVER and loopback AAL_NOTEBOOK_TARGET');
 test.beforeAll(async () => {
-  const url = new URL(target);
-  if (url.hostname !== '127.0.0.1' || !url.port) throw new Error('Explicit loopback port required');
-  root = await mkdtemp(join(tmpdir(), 'aal-browser-shared-'));
-  child = spawn(binary, [root, url.port], { stdio: ['ignore', 'pipe', 'pipe'] });
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Rust server startup timed out')), 10000);
-    child.once('error', (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
-    child.once('exit', (code) => {
-      clearTimeout(timer);
-      reject(new Error(`Rust server exited: ${code}`));
-    });
-    let output = '';
-    child.stdout.on('data', (bytes) => {
-      output += bytes;
-      if (output.includes('Notebook listening at ')) {
-        clearTimeout(timer);
-        resolve();
-      }
-    });
-  });
+  native = new NativeTestServer(binary, target);
+  await native.start();
 });
 test.afterAll(async () => {
-  if (child && child.exitCode === null && child.signalCode === null) {
-    const stopped = new Promise((resolve) => child.once('exit', resolve));
-    child.kill();
-    await stopped;
-  }
-  if (root) await rm(root, { recursive: true, force: true });
+  await native?.dispose();
 });
 
 test('housing UI publishes reusable native cells, executes them and retains results on reload', async ({

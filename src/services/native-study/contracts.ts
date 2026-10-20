@@ -2,6 +2,24 @@ import { z } from 'zod';
 
 const index = z.number().int().nonnegative();
 const finite = z.number().finite();
+const boundedText = (bytes: number) =>
+  z
+    .string()
+    .refine((text) => new TextEncoder().encode(text).length <= bytes, 'Text exceeds byte limit');
+const recipient = z.object({
+  id: z.string().min(1).max(128),
+  label: z.string().min(1).max(256),
+  aliases: z.array(z.string().min(1).max(128)),
+});
+const conversation = z
+  .array(
+    z.object({
+      target_agent: z.string().min(1).max(128),
+      message: boundedText(8192),
+      reply: boundedText(8192),
+    })
+  )
+  .max(128);
 const term = z.object({
   feature: z.string(),
   value: finite,
@@ -45,9 +63,22 @@ export const nativeView = z
       .object({
         id: z.string().min(1),
         revision: index,
-        notebook: z.object({ status: z.string() }).passthrough(),
+        notebook: z
+          .object({
+            status: z.enum(['Open', 'Completed']),
+            chapters: z.array(z.object({ title: boundedText(1024) }).passthrough()).max(32),
+          })
+          .passthrough(),
+        messages: conversation,
       })
       .passthrough(),
+    recipients: z
+      .array(recipient)
+      .min(1)
+      .refine(
+        (items) => new Set(items.map((item) => item.id)).size === items.length,
+        'Duplicate collaborator IDs'
+      ),
     model_enabled: z.boolean(),
     generated_selection_enabled: z.boolean().optional(),
     study: z
@@ -90,6 +121,8 @@ export const pendingCommand = z
   .object({
     workspace: z.string().min(1),
     ability: z.enum([
+      'new_chapter',
+      'communication',
       'configure_study',
       'run_study',
       'compare_study',

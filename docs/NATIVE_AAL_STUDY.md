@@ -311,3 +311,49 @@ above pass against the native server. The full frontend `tsc --noEmit` gate stil
 reports 66 diagnostics in other editor/UI/stream files; this is not a claim of a
 clean full-project type check. The changed native-study paths have no diagnostics
 in that run.
+
+## Discuss actual research with native collaborators
+
+The housing panel now includes **与协作者讨论研究**. With model-enabled Rust,
+choose **开始研究讨论** once when the native document has no chapter. This executes
+the original `new_chapter` operation. Select a collaborator from the server catalog,
+enter **研究问题**, and send. The fifteen original collaborators remain available;
+**房屋特征分群** uses the current saved housing measurements, comparison terms and
+conversation history supplied by Rust. Unsaved form inputs are not sent. Save a
+changed reference before discussing it; changing input invalidates earlier results.
+Discussion does not refit, deploy or modify the numerical model.
+
+Configure the existing native model environment, then start with model support:
+
+```sh
+cargo run --manifest-path demos/notebook/Cargo.toml --features web,model \
+  --bin aal-notebook-server -- /tmp/aal-frontend-studies 8787 --model
+```
+
+Use `AAL_MODEL_ENDPOINT` and `AAL_MODEL`, or the existing `AAL_MODEL_ROUTES` deployment
+configuration. The frontend never handles provider credentials. Without a configured
+model, saved discussions remain visible while sending is disabled.
+
+The existing `NativeStudySession` owns chapter and communication commands: it captures
+the current native document/revision, persists the exact invocation before dispatch,
+and preserves it on response loss. **重试原操作** resumes that request after reload;
+it does not submit another question. History is read from Rust, including when the
+server restarts without a model. Closing the panel stops observation but does not
+undo an admitted command. Switching notebooks resets the local draft and displays
+only the newly selected notebook's history.
+
+Questions and answers are bounded to 8,192 UTF-8 bytes each, with at most 128 retained
+exchanges. Historical model replies are rendered as plain text, separately from
+measured evidence. **写入当前笔记** includes the saved questions/replies in a separately
+labelled model-discussion section of the immutable study snapshot. The existing
+save queue and publication identity prevent duplicate insertion on retry.
+
+Verification: 48 targeted Vitest tests and both native Chromium workflows pass.
+`tests/browser/native-discussion.spec.js` starts an isolated Rust process and a
+scripted loopback HTTP model, fits twelve houses, compares two query rows, checks
+actual model-request measurements and feature terms, loses the completed response,
+then shuts down the model and restarts Rust. Retrying retains one answer and one
+revision increment without another model request. It also saves the discussion into
+the editor. Run it with the same environment as the shared-value browser test; the
+server binary must be built with `web,model`. This verifies transport and measured
+context, not live-model answer quality or generic `/send_operation` compatibility.

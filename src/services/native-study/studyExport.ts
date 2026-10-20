@@ -1,4 +1,8 @@
 import type { NativeView } from './contracts';
+function jsonBlock(value: unknown): string[] {
+  // Prevent reported text from closing a Markdown fence; JSON decoding retains exact content.
+  return ['```json', JSON.stringify(value, null, 2).replace(/`/g, '\\u0060'), '```'];
+}
 /** Export a historical observation with identity/version; never label it as live editor state. */
 export function studyMarkdown(view: NativeView): string {
   if (!view.study.current || !view.study.result) throw new Error('请先执行房屋分群研究');
@@ -19,12 +23,21 @@ export function studyMarkdown(view: NativeView): string {
         `- 参考行 ${neighbor.row}：分群 ${neighbor.cluster}，标准化距离平方 ${neighbor.distance_squared}。`
       );
   }
-  // JSON string escaping prevents embedded content from closing a Markdown code fence.
-  const evidence = JSON.stringify(
-    { study: view.study, selection: view.study_selection ?? null },
-    null,
-    2
-  ).replace(/`/g, '\\u0060');
-  lines.push('', '### 测量与证据记录', '', '```json', evidence, '```');
+  lines.push(
+    '',
+    '### 测量与证据记录',
+    '',
+    ...jsonBlock({ study: view.study, selection: view.study_selection ?? null })
+  );
+  if (view.document.messages.length) {
+    lines.push(
+      '',
+      '### 协作者讨论（模型生成）',
+      '',
+      '以下为保存时的历史问答，不是测量结论；后续数据变更不会更新这些回答。',
+      '',
+      ...jsonBlock(view.document.messages)
+    );
+  }
   return lines.join('\n');
 }

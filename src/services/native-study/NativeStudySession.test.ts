@@ -6,7 +6,13 @@ import { studyMarkdown } from './studyExport';
 
 const view = (id = 'a', revision = 0) => ({
   frontend_notebook_id: id,
-  document: { id: `native-${id}`, revision, notebook: { status: 'Open' } },
+  document: {
+    id: `native-${id}`,
+    revision,
+    notebook: { status: 'Open', chapters: [] },
+    messages: [],
+  },
+  recipients: [{ id: 'data_mining', label: '房屋特征分群', aliases: ['mining'] }],
   model_enabled: false,
   study: {
     input: null,
@@ -28,7 +34,12 @@ describe('native study transport and lifecycle', () => {
     expect(() =>
       nativeView.parse({
         ...view(),
-        document: { id: 'x', revision: -1, notebook: { status: 'Open' } },
+        document: {
+          id: 'x',
+          revision: -1,
+          notebook: { status: 'Open', chapters: [] },
+          messages: [],
+        },
       })
     ).toThrow();
   });
@@ -177,4 +188,70 @@ it('reopens and retries the whole PCS task with its original query and caller th
   expect(reopened.getSnapshot().view?.document.revision).toBe(6);
   expect(reopened.getSnapshot().pending).toBe(false);
   reopened.dispose();
+});
+
+it('rejects malformed collaborator history and duplicate catalog identities before publication', () => {
+  const base = view();
+  expect(() =>
+    nativeView.parse({ ...base, recipients: [...base.recipients, ...base.recipients] })
+  ).toThrow();
+  expect(() =>
+    nativeView.parse({
+      ...base,
+      document: {
+        ...base.document,
+        messages: [
+          { target_agent: 'data_mining', message: 'Question', reply: { text: 'not a string' } },
+        ],
+      },
+    })
+  ).toThrow();
+  expect(() =>
+    nativeView.parse({
+      ...base,
+      document: {
+        ...base.document,
+        messages: [{ target_agent: 'data_mining', message: 'Question', reply: '房'.repeat(2731) }],
+      },
+    })
+  ).toThrow();
+});
+
+it('exports historical model discussion separately from measurements without executable fences', () => {
+  const base = view();
+  const record = nativeView.parse({
+    ...base,
+    document: {
+      ...base.document,
+      messages: [
+        {
+          target_agent: 'data_mining',
+          message: 'Why similar?',
+          reply: '```html\n<script>text</script>\n```',
+        },
+      ],
+    },
+    study: {
+      ...base.study,
+      current: true,
+      result: {
+        kind: 'mining',
+        report: {
+          reference_id: 'reference',
+          inertia: 1,
+          mean_silhouette: 0.8,
+          clusters: [],
+          model: { features: [] },
+        },
+      },
+    },
+  });
+  const exported = studyMarkdown(record);
+  expect(exported).toContain('### 协作者讨论（模型生成）');
+  expect(exported).toContain('不是测量结论');
+  expect(exported).not.toContain('```html');
+  const blocks = [...exported.matchAll(/```json\n([\s\S]*?)\n```/g)];
+  expect(blocks).toHaveLength(2);
+  expect(JSON.parse(blocks[0][1])).not.toHaveProperty('messages');
+  expect(JSON.parse(blocks[1][1])).toEqual(record.document.messages);
 });

@@ -8,6 +8,7 @@ import {
 } from '@Services/native-study/publishComparisonCell';
 import { StudyEvidence } from './StudyEvidence';
 import { NativeDatasetPicker } from './NativeDatasetPicker';
+import { StudyDiscussion } from './StudyDiscussion';
 
 const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm';
 const buttonClass = 'rounded border px-3 py-2 text-sm disabled:opacity-50';
@@ -424,6 +425,15 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           view={view}
           busy={busy || closed || publishing}
           explain={(row) => run('explain_study_sample', { query_row: row })}
+        />
+      )}
+      {view?.frontend_notebook_id === notebookId && (
+        <StudyDiscussion
+          key={notebookId}
+          view={view}
+          busy={busy || publishing || datasetBusy}
+          inputChanged={inputChanged}
+          execute={run}
         />
       )}
       <button

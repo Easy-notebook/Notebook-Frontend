@@ -22,7 +22,13 @@ afterEach(() => {
 function savedView(owner: string, csv: string) {
   return {
     frontend_notebook_id: owner,
-    document: { id: `native-${owner}`, revision: 1, notebook: { status: 'Open' } },
+    document: {
+      id: `native-${owner}`,
+      revision: 1,
+      notebook: { status: 'Open', chapters: [] },
+      messages: [],
+    },
+    recipients: [{ id: 'data_mining', label: '房屋特征分群', aliases: ['mining'] }],
     model_enabled: false,
     study: {
       input: {
@@ -79,7 +85,13 @@ it('admits only one initial read under StrictMode and enables the actual study f
       new Response(
         JSON.stringify({
           frontend_notebook_id: 'a',
-          document: { id: 'native-a', revision: 0, notebook: { status: 'Open' } },
+          document: {
+            id: 'native-a',
+            revision: 0,
+            notebook: { status: 'Open', chapters: [] },
+            messages: [],
+          },
+          recipients: [{ id: 'data_mining', label: '房屋特征分群', aliases: ['mining'] }],
           model_enabled: false,
           study: {
             input: null,
@@ -208,4 +220,136 @@ it('publishes reusable fit/compare cells from saved inputs before any study fit'
       expect.any(AbortSignal)
     )
   );
+});
+
+it('opens the native chapter and recovers the exact discussion after losing its response', async () => {
+  const base = savedView('a', 'area,rooms\n40,2');
+  let view = {
+    ...base,
+    model_enabled: true,
+    document: {
+      ...base.document,
+      notebook: { status: 'Open', chapters: [] as { title: string }[] },
+      messages: [] as { target_agent: string; message: string; reply: string }[],
+    },
+  };
+  const sent: Record<string, unknown>[] = [];
+  let lost = false;
+  const request = vi.fn<typeof fetch>(async (_url, options) => {
+    if (options?.method !== 'POST') return new Response(JSON.stringify(view));
+    const command = JSON.parse(String(options.body));
+    sent.push(command);
+    if (command.ability === 'new_chapter') {
+      view = {
+        ...view,
+        document: {
+          ...view.document,
+          revision: 2,
+          notebook: { status: 'Open', chapters: [{ title: command.arguments.title }] },
+        },
+      };
+    } else if (!lost) {
+      lost = true;
+      view = {
+        ...view,
+        document: {
+          ...view.document,
+          revision: 3,
+          messages: [
+            {
+              target_agent: command.arguments.target_agent,
+              message: command.arguments.message,
+              reply: '<script>reported text</script> Saved rows describe similarity.',
+            },
+          ],
+        },
+      };
+      throw new Error('reply lost after native commit');
+    }
+    return new Response('{}');
+  });
+  vi.stubGlobal('fetch', request);
+  const first = render(<HousingStudyPanel notebookId="a" />);
+  await screen.findByText(/研究已就绪/);
+  expect(screen.getByRole('button', { name: '发送研究问题' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '开始研究讨论' }));
+  await waitFor(() => expect(screen.getByLabelText('研究问题')).toBeEnabled());
+  fireEvent.change(screen.getByLabelText('研究问题'), {
+    target: { value: 'Explain actual neighbors' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '发送研究问题' }));
+  await screen.findByText(/上次操作待处理/);
+  expect(sent[1]).toMatchObject({
+    ability: 'communication',
+    workspace: 'native-a',
+    arguments: {
+      target_agent: 'data_mining',
+      message: 'Explain actual neighbors',
+      expected_revision: 2,
+    },
+  });
+  first.unmount();
+  render(<HousingStudyPanel notebookId="a" />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '重试原操作' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '重试原操作' }));
+  await screen.findByText(/研究已就绪/);
+  expect(sent[2]).toEqual(sent[1]);
+  expect(screen.getByRole('list', { name: '已保存的研究问答' }).children).toHaveLength(1);
+  expect(
+    screen.getByText('<script>reported text</script> Saved rows describe similarity.')
+  ).toBeVisible();
+  expect(document.querySelector('script')).toBeNull();
+  expect(sessionStorage.getItem('aal-study-pending:a')).toBeNull();
+});
+
+it('keeps history readable without a model and resets discussion drafts when changing notebooks', async () => {
+  const base = savedView('a', 'area,rooms\n40,2');
+  const owned = {
+    ...base,
+    model_enabled: true,
+    document: {
+      ...base.document,
+      notebook: { status: 'Open', chapters: [{ title: 'Housing' }] },
+      messages: [
+        {
+          target_agent: 'data_mining',
+          message: 'Previous question',
+          reply: 'Previous model answer',
+        },
+      ],
+    },
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>(
+      async (url) =>
+        new Response(
+          JSON.stringify(
+            String(url).includes('/a/')
+              ? owned
+              : {
+                  ...owned,
+                  frontend_notebook_id: 'b',
+                  model_enabled: false,
+                  document: { ...owned.document, id: 'native-b', messages: [] },
+                }
+          )
+        )
+    )
+  );
+  const panel = render(<HousingStudyPanel notebookId="a" />);
+  await screen.findByText('Previous model answer');
+  fireEvent.change(screen.getByLabelText('研究问题'), { target: { value: '房'.repeat(2731) } });
+  expect(screen.getByRole('button', { name: '发送研究问题' })).toBeDisabled();
+  expect(screen.getByText(/问题超过 8,192/)).toBeVisible();
+  fireEvent.change(screen.getByLabelText('研究问题'), { target: { value: 'My private draft' } });
+  expect(screen.getByRole('button', { name: '发送研究问题' })).toBeEnabled();
+  panel.rerender(<HousingStudyPanel notebookId="b" />);
+  await screen.findByText(/当前服务未启用模型/);
+  expect(screen.getByLabelText('研究问题')).toHaveValue('');
+  expect(screen.queryByText('Previous model answer')).toBeNull();
+  expect(screen.getByRole('button', { name: '发送研究问题' })).toBeDisabled();
+  panel.rerender(<HousingStudyPanel notebookId="a" />);
+  await screen.findByText('Previous model answer');
+  expect(screen.getByLabelText('研究问题')).toHaveValue('');
 });
