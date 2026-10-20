@@ -26,6 +26,138 @@ function MermaidBlockView(props: NodeViewProps) {
 }
 
 describe('Mermaid block controls', () => {
+  it('reattaches native history once per source view and releases the old input', () => {
+    const commands = { undo: vi.fn(), redo: vi.fn() };
+    render(
+      <MermaidBlockView
+        {...({
+          node: { attrs: { code: 'graph TD; A-->B' } },
+          editor: { isEditable: true, commands },
+          updateAttributes: vi.fn(),
+        } as unknown as NodeViewProps)}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+    const previous = screen.getByRole('textbox');
+    const history = (element: HTMLElement, inputType: string) => {
+      const event = new InputEvent('beforeinput', { inputType, cancelable: true, bubbles: true });
+      fireEvent(element, event);
+      return event.defaultPrevented;
+    };
+    expect(history(previous, 'historyUndo')).toBe(true);
+    expect(commands.undo).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    expect(history(previous, 'historyUndo')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+    expect(history(screen.getByRole('textbox'), 'historyRedo')).toBe(true);
+    expect(commands.redo).toHaveBeenCalledOnce();
+    expect(commands.undo).toHaveBeenCalledOnce();
+  });
+  it('discards copy feedback when source changes before clipboard completion', async () => {
+    let resolve!: () => void;
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((done) => {
+          resolve = done;
+        })
+    );
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const props = {
+      node: { attrs: { code: 'old' } },
+      editor: { isEditable: true },
+      updateAttributes: vi.fn(),
+    } as unknown as NodeViewProps;
+    const view = render(<MermaidBlockView {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Mermaid source' }));
+    view.rerender(
+      <MermaidBlockView
+        {...props}
+        node={{ attrs: { code: 'new' } } as unknown as NodeViewProps['node']}
+      />
+    );
+    await act(async () => resolve());
+    expect(screen.queryByText('Source copied')).toBeNull();
+    expect(writeText).toHaveBeenCalledExactlyOnceWith('old');
+  });
+  it('does not replace a newer copy success with an older failure', async () => {
+    let reject!: (error: Error) => void;
+    const writeText = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((_, fail) => {
+            reject = fail;
+          })
+      )
+      .mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    render(
+      <MermaidBlockView
+        {...({
+          node: { attrs: { code: 'source' } },
+          editor: { isEditable: true },
+          updateAttributes: vi.fn(),
+        } as unknown as NodeViewProps)}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Mermaid source' }));
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Copy Mermaid source' }))
+    );
+    await act(async () => reject(new Error('old failure')));
+    expect(screen.getByText('Source copied')).toBeDefined();
+    expect(screen.queryByText('Could not copy source')).toBeNull();
+  });
+  it.each(['', '短', 'graph TD'])(
+    'restores a valid selection after preview source shrinks to %j',
+    (code) => {
+      const updateAttributes = vi.fn();
+      const props = {
+        node: { attrs: { code: 'flowchart LR; A-->B' } },
+        editor: { isEditable: true },
+        updateAttributes,
+      } as unknown as NodeViewProps;
+      const view = render(<MermaidBlockView {...props} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+      const input = screen.getByRole('textbox') as HTMLTextAreaElement;
+      input.setSelectionRange(10, 16, 'backward');
+      fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+      view.rerender(
+        <MermaidBlockView
+          {...props}
+          node={{ attrs: { code } } as unknown as NodeViewProps['node']}
+        />
+      );
+      expect(screen.queryByRole('textbox')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+      const restored = screen.getByRole('textbox') as HTMLTextAreaElement;
+      expect(restored.value).toBe(code);
+      expect(restored.selectionStart).toBe(code.length);
+      expect(restored.selectionEnd).toBe(code.length);
+      expect(document.activeElement).toBe(restored);
+      expect(updateAttributes).not.toHaveBeenCalled();
+    }
+  );
+  it('pins undo to the composition lifecycle when native key flags are absent', () => {
+    const commands = { undo: vi.fn() };
+    render(
+      <MermaidBlockView
+        {...({
+          node: { attrs: { code: 'graph TD; A-->B' } },
+          editor: { isEditable: true, commands },
+          updateAttributes: vi.fn(),
+        } as unknown as NodeViewProps)}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+    const input = screen.getByRole('textbox');
+    fireEvent.compositionStart(input);
+    fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+    expect(commands.undo).not.toHaveBeenCalled();
+    fireEvent.compositionEnd(input);
+    fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+    expect(commands.undo).toHaveBeenCalledOnce();
+  });
   it('rejects a source edit when its rendered node has been replaced', () => {
     const node = { attrs: { code: 'graph TD; A-->B' } };
     const nodeAt = vi.fn(() => node);
@@ -45,7 +177,9 @@ describe('Mermaid block controls', () => {
     fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
     expect(updateAttributes).not.toHaveBeenCalled();
     expect(commands.undo).not.toHaveBeenCalled();
-    view.rerender(<MermaidBlockView {...props} node={replacement as unknown as NodeViewProps['node']} />);
+    view.rerender(
+      <MermaidBlockView {...props} node={replacement as unknown as NodeViewProps['node']} />
+    );
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'graph TD; NEW-->EDITED' } });
     expect(updateAttributes).toHaveBeenCalledExactlyOnceWith({ code: 'graph TD; NEW-->EDITED' });
   });

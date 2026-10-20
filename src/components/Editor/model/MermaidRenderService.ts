@@ -1,4 +1,5 @@
 import type { MermaidConfig } from 'mermaid';
+import { PreviewEngineLoadError } from './PreviewEngineLoadError';
 
 interface Renderer {
   initialize(config: MermaidConfig): void;
@@ -59,7 +60,7 @@ export class MermaidRenderService {
         try {
           this.renderer ??= this.load().catch((error) => {
             this.renderer = undefined;
-            throw error;
+            throw new PreviewEngineLoadError('Mermaid', error);
           });
           const renderer = await this.renderer;
           if (job.signal.aborted) continue;

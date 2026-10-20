@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MermaidRenderService } from './MermaidRenderService';
+import { PreviewEngineLoadError } from './PreviewEngineLoadError';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -15,6 +16,17 @@ const request = (
 ) => ({ id, source: id, theme, signal: controller.signal });
 
 describe('Mermaid render scheduling', () => {
+  it('classifies loader failures without confusing them with syntax errors', async () => {
+    const renderer = {
+      initialize: vi.fn(),
+      render: vi.fn().mockRejectedValue(new Error('syntax')),
+    };
+    const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(renderer);
+    const service = new MermaidRenderService(load);
+    await expect(service.render(request('loading'))).rejects.toBeInstanceOf(PreviewEngineLoadError);
+    await expect(service.render(request('parsing'))).rejects.toThrow('syntax');
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+  });
   it('does not load Mermaid for a request already cancelled before enqueueing', async () => {
     const load = vi.fn();
     const service = new MermaidRenderService(load);
@@ -29,10 +41,15 @@ describe('Mermaid render scheduling', () => {
     const started = deferred<void>();
     const renderer = {
       initialize: vi.fn(),
-      render: vi.fn().mockImplementationOnce(() => {
-        started.resolve();
-        return new Promise((_, reject) => { rejectRender = reject; });
-      }).mockResolvedValue({ svg: 'next' }),
+      render: vi
+        .fn()
+        .mockImplementationOnce(() => {
+          started.resolve();
+          return new Promise((_, reject) => {
+            rejectRender = reject;
+          });
+        })
+        .mockResolvedValue({ svg: 'next' }),
     };
     const service = new MermaidRenderService(async () => renderer);
     const controller = new AbortController();
@@ -44,8 +61,10 @@ describe('Mermaid render scheduling', () => {
     expect(renderer.render).toHaveBeenCalledTimes(1);
     rejectRender(new Error('obsolete parse failure'));
     await expect(next).resolves.toEqual({ svg: 'next' });
-    expect(renderer.render.mock.calls.map(call => call[0])).toEqual(['obsolete', 'next']);
-    expect(renderer.initialize).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'dark' }));
+    expect(renderer.render.mock.calls.map((call) => call[0])).toEqual(['obsolete', 'next']);
+    expect(renderer.initialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ theme: 'dark' })
+    );
   });
   it('retries configuration after initialization throws', async () => {
     const renderer = {

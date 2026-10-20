@@ -27,6 +27,10 @@ export class LaTeXModel {
       handleEvent: (event, payload, ctx) => {
         switch (event) {
           case 'SAVE':
+            if (typeof payload?.latex !== 'string') return null;
+            if (payload.latex !== ctx.node.attrs.latex)
+              ctx.updateAttributes({ latex: payload.latex });
+            return 'idle';
           case 'CANCEL':
             return 'idle';
           default:
