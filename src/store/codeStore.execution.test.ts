@@ -103,6 +103,139 @@ it('does not publish AAL results after switching notebooks', async () => {
   expect(io.outputs).not.toHaveBeenCalled();
   expect(io.save).not.toHaveBeenCalled();
 });
+it('runs a mixed-language batch in captured order through each explicit backend', async () => {
+  useNotebookStore.setState({
+    cells: [
+      { id: 'a', type: 'code', content: 'native source', language: 'aal' },
+      { id: 'b', type: 'code', content: 'python source', language: 'python' },
+    ],
+  });
+  const phases = vi.fn();
+  expect(await state().executeCells(['a', 'b'], phases)).toMatchObject({
+    success: true,
+    completed: ['a', 'b'],
+  });
+  expect(io.native).toHaveBeenCalledExactlyOnceWith('native source', expect.any(AbortSignal));
+  expect(io.execute).toHaveBeenCalledExactlyOnceWith(
+    'python source',
+    'book',
+    expect.any(AbortSignal)
+  );
+  expect(io.native.mock.invocationCallOrder[0]).toBeLessThan(
+    io.execute.mock.invocationCallOrder[0]
+  );
+  expect(phases.mock.calls).toEqual([['a'], ['b']]);
+  expect(io.save).toHaveBeenCalledTimes(2);
+});
+it('coalesces duplicate batches and rejects individual execution without cancelling', async () => {
+  const response = deferred<unknown>();
+  io.execute.mockReturnValueOnce(response.promise);
+  const first = state().executeCells(['a', 'b']);
+  expect(state().executeCells(['a', 'b'])).toBe(first);
+  expect(await state().executeCell('a')).toMatchObject({ error: 'batch_execution_active' });
+  expect(await state().executeCells(['b'])).toMatchObject({ error: 'batch_execution_active' });
+  expect(io.cancel).not.toHaveBeenCalled();
+  response.resolve({ status: 'ok' });
+  expect(await first).toMatchObject({ success: true, completed: ['a', 'b'] });
+  expect(io.execute).toHaveBeenCalledTimes(2);
+});
+it('rejects a batch while an individual cell is running without clearing or cancelling it', async () => {
+  const response = deferred<unknown>();
+  io.execute.mockReturnValueOnce(response.promise);
+  const single = state().executeCell('a');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(await state().executeCells(['a', 'b'])).toMatchObject({ error: 'kernel_busy' });
+  expect(io.cancel).not.toHaveBeenCalled();
+  expect(io.clear.mock.calls).toEqual([['a']]);
+  response.resolve({ status: 'ok' });
+  expect(await single).toMatchObject({ success: true });
+});
+it('stops on the first terminal failure and never clears later cell outputs', async () => {
+  io.execute.mockResolvedValueOnce({ status: 'error', error: 'E_COMPILE: missing name' });
+  expect(await state().executeCells(['a', 'b'])).toMatchObject({
+    success: false,
+    completed: [],
+    failedCellId: 'a',
+    error: 'E_COMPILE: missing name',
+  });
+  expect(io.execute).toHaveBeenCalledTimes(1);
+  expect(io.clear.mock.calls).toEqual([['a']]);
+  expect(io.save).toHaveBeenCalledOnce();
+  expect(await state().executeCell('b')).toMatchObject({ success: true });
+});
+it('stops between cells while allowing the admitted native cell to finish and save', async () => {
+  const response = deferred<unknown>();
+  io.native.mockReturnValueOnce(response.promise);
+  useNotebookStore.setState({
+    cells: [
+      { id: 'a', type: 'code', content: 'first native', language: 'aal' },
+      { id: 'b', type: 'code', content: 'second native', language: 'aal' },
+    ],
+  });
+  const batch = state().executeCells(['a', 'b']);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(state().batchExecution).toBe('running');
+  state().stopBatchExecution();
+  state().stopBatchExecution();
+  expect(state().batchExecution).toBe('stopping');
+  expect(await state().executeCell('b')).toMatchObject({ error: 'batch_execution_active' });
+  expect(io.cancel).not.toHaveBeenCalled();
+  expect(io.native.mock.calls[0][1].aborted).toBe(false);
+  response.resolve({ status: 'ok', outputs: [{ type: 'text', content: 'first result' }] });
+  expect(await batch).toMatchObject({ success: false, completed: ['a'], error: 'batch_stopped' });
+  expect(io.native).toHaveBeenCalledOnce();
+  expect(io.outputs).toHaveBeenCalledExactlyOnceWith('a', [
+    { type: 'text', content: 'first result' },
+  ]);
+  expect(io.save).toHaveBeenCalledOnce();
+  expect(state().batchExecution).toBe('idle');
+});
+it.each(['edit', 'language', 'delete', 'navigate', 'reset'] as const)(
+  '%s settles the batch, discards late output and prevents remaining dispatch',
+  async (change) => {
+    const response = deferred<unknown>();
+    io.execute.mockReturnValueOnce(response.promise);
+    const batch = state().executeCells(['a', 'b']);
+    await vi.advanceTimersByTimeAsync(0);
+    const cells = useNotebookStore.getState().cells;
+    if (change === 'edit')
+      useNotebookStore.setState({
+        cells: cells.map((c) => (c.id === 'b' ? { ...c, content: 'changed' } : c)),
+      });
+    if (change === 'language')
+      useNotebookStore.setState({
+        cells: cells.map((c) => (c.id === 'b' ? { ...c, language: 'aal' } : c)),
+      });
+    if (change === 'delete')
+      useNotebookStore.setState({ cells: cells.filter((c) => c.id !== 'b') });
+    if (change === 'navigate') {
+      useNotebookStore.setState({ notebookId: 'other' });
+      useNotebookStore.setState({ notebookId: 'book' });
+    }
+    if (change === 'reset') state().resetAll();
+    expect(await batch).toMatchObject({ success: false, completed: [] });
+    response.resolve({ status: 'ok', outputs: [{ type: 'text', content: 'stale' }] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(io.execute).toHaveBeenCalledTimes(1);
+    expect(io.outputs).not.toHaveBeenCalled();
+    expect(io.save).not.toHaveBeenCalled();
+    expect(state().getCellExecState('a').isExecuting).toBe(false);
+  }
+);
+it('validates the entire batch before any execution or output mutation', async () => {
+  useNotebookStore.setState({
+    cells: [
+      { id: 'a', type: 'code', content: 'native source', language: 'aal' },
+      { id: 'b', type: 'code', content: 'unsupported', language: 'javascript' },
+    ],
+  });
+  expect(await state().executeCells(['a', 'b'])).toMatchObject({ success: false, completed: [] });
+  expect(await state().executeCells(['a', 'a'])).toMatchObject({ success: false });
+  expect(await state().executeCells([])).toMatchObject({ success: false });
+  expect(io.native).not.toHaveBeenCalled();
+  expect(io.execute).not.toHaveBeenCalled();
+  expect(io.clear).not.toHaveBeenCalled();
+});
 it('executes captured user code exactly once without a warmup and saves owned output', async () => {
   const init = deferred<string>();
   io.initialize.mockReturnValue(init.promise);

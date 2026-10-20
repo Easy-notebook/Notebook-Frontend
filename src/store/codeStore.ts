@@ -7,7 +7,11 @@ import { CellStatusPoller } from '@Services/notebook/CellStatusPoller';
 import { CodeExecutionService } from '@Services/notebook/CodeExecutionService';
 import { NativeCellExecution } from '@Services/notebook/NativeCellExecution';
 import { storeLog } from '@Utils/logger';
-import { CellExecutionSession } from '@Services/notebook/CellExecutionSession';
+import {
+  CellExecutionSession,
+  type BatchExecutionResult,
+  type BatchExecutionPhase,
+} from '@Services/notebook/CellExecutionSession';
 import {
   DISPLAY_MODES,
   type DisplayMode,
@@ -25,6 +29,7 @@ export interface CodeStoreState {
   // ========== 全局内核状态 ==========
   isKernelReady: boolean;
   error: string | null;
+  batchExecution: BatchExecutionPhase;
 
   cellExecStates: Record<string, CellExecutionState>;
 
@@ -50,6 +55,11 @@ export interface CodeStoreActions {
   startStatusCheck: (cellId: string) => void;
   cancelCellExecution: (cellId: string) => Promise<ExecutionResult>;
   executeCell: (cellId: string) => Promise<ExecutionResult>;
+  executeCells: (
+    cellIds: readonly string[],
+    beforeCell?: (cellId: string) => void
+  ) => Promise<BatchExecutionResult>;
+  stopBatchExecution: () => void;
 
   // ========== 显示模式管理 ==========
   setCellMode: (cellId: string, mode: DisplayMode) => void;
@@ -128,11 +138,13 @@ const useCodeStore = create<CodeStore>((set, get) => {
       if (language !== 'aal') polling.start(id);
     },
     stopPolling: (id) => polling.stop(id),
+    batchState: (batchExecution) => set({ batchExecution }),
   });
   return {
     // ========== 全局内核状态 ==========
     isKernelReady: false,
     error: null,
+    batchExecution: 'idle',
 
     // ========== 每个 Cell 的执行状态 ==========
     cellExecStates: {},
@@ -202,6 +214,8 @@ const useCodeStore = create<CodeStore>((set, get) => {
 
     cancelCellExecution: (cellId: string) => execution.cancel(cellId),
     executeCell: (cellId: string) => execution.execute(cellId),
+    executeCells: (cellIds, beforeCell) => execution.executeAll(cellIds, beforeCell),
+    stopBatchExecution: () => execution.stopBatch(),
 
     // ========== 显示模式管理 ==========
     setCellMode: (cellId: string, mode: DisplayMode) => {
@@ -240,6 +254,7 @@ const useCodeStore = create<CodeStore>((set, get) => {
       set({
         isKernelReady: false,
         error: null,
+        batchExecution: 'idle',
         cellExecStates: {},
         cellModes: {},
       });

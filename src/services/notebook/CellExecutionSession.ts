@@ -24,6 +24,7 @@ interface ExecutionPorts {
   save(): void;
   startPolling(id: string, language: string): void;
   stopPolling(id: string): void;
+  batchState(phase: BatchExecutionPhase): void;
 }
 interface Attempt {
   cellId: string;
@@ -38,24 +39,163 @@ interface Attempt {
   cancellation?: Promise<ExecutionResult>;
   cancelSettle?: Attempt['settle'];
 }
+export interface BatchExecutionResult {
+  success: boolean;
+  completed: string[];
+  error?: string;
+  failedCellId?: string;
+}
+export class BatchExecutionError extends Error {
+  constructor(readonly result: BatchExecutionResult) {
+    super(
+      `${result.failedCellId ? `Cell ${result.failedCellId}: ` : ''}${result.error || 'Batch execution incomplete'}`
+    );
+    this.name = 'BatchExecutionError';
+  }
+}
+export type BatchExecutionPhase = 'idle' | 'running' | 'stopping';
+interface BatchAttempt {
+  owner: string;
+  phase: 'admitted' | 'running' | 'stopping' | 'settled';
+  cells: { id: string; content: string; language: string }[];
+  completed: string[];
+  promise: Promise<BatchExecutionResult>;
+  settle(result: BatchExecutionResult): void;
+  unsubscribe(): void;
+}
 const failure = (error: string): ExecutionResult => ({ success: false, error });
 
 /** One notebook kernel admits one owned execution, including initialization and cancellation. */
 export class CellExecutionSession {
   private current: Attempt | undefined;
+  private batch: BatchAttempt | undefined;
   constructor(private readonly ports: ExecutionPorts) {}
   isActive(cellId: string): boolean {
     return this.current?.cellId === cellId && this.current.phase !== 'settled';
   }
   reset(publish = false): void {
+    if (this.batch) this.finishBatch(this.batch, 'execution_context_changed', undefined, publish);
     if (this.current) this.finish(this.current, failure('execution_context_changed'), publish);
   }
   execute(cellId: string): Promise<ExecutionResult> {
+    if (this.batch) return Promise.resolve(failure('batch_execution_active'));
     if (this.current) {
       if (this.current.cellId === cellId && this.current.phase !== 'settled')
         return this.cancel(cellId);
       return Promise.resolve(failure('kernel_busy'));
     }
+    return this.start(cellId);
+  }
+  /** A sequence reserves the same execution owner as manual cells, including between awaits. */
+  executeAll(
+    cellIds: readonly string[],
+    beforeCell: (cellId: string) => void = () => {}
+  ): Promise<BatchExecutionResult> {
+    const rejected = (error: string) => Promise.resolve({ success: false, completed: [], error });
+    if (this.batch) {
+      return cellIds.length === this.batch.cells.length &&
+        cellIds.every((id, index) => id === this.batch!.cells[index].id)
+        ? this.batch.promise
+        : rejected('batch_execution_active');
+    }
+    if (this.current) return rejected('kernel_busy');
+    const owner = this.ports.notebookId();
+    if (!owner) return rejected('Notebook ID not found');
+    if (!cellIds.length) return rejected('No code cells to execute');
+    if (cellIds.length > 256 || new Set(cellIds).size !== cellIds.length)
+      return rejected('A batch requires 1..256 distinct code cells');
+    const cells: BatchAttempt['cells'] = [];
+    for (const id of cellIds) {
+      const cell = this.ports.cell(id);
+      if (!cell) return rejected(`Cell ${id} does not exist`);
+      if (!canExecuteCodeLanguage(cell.language))
+        return rejected(`Cell ${id}: ${cell.language} execution is unavailable`);
+      cells.push({ id, content: cell.content, language: normalizeCodeLanguage(cell.language) });
+    }
+    let settle!: BatchAttempt['settle'];
+    const promise = new Promise<BatchExecutionResult>((resolve) => {
+      settle = resolve;
+    });
+    const batch: BatchAttempt = {
+      owner,
+      cells,
+      completed: [],
+      phase: 'admitted',
+      promise,
+      settle,
+      unsubscribe: () => {},
+    };
+    this.batch = batch;
+    batch.unsubscribe = this.ports.watch(() => {
+      if (this.batch !== batch) return;
+      if (this.ports.notebookId() !== batch.owner)
+        this.finishBatch(batch, 'execution_context_changed');
+      else if (
+        batch.cells.some((snapshot) => {
+          const current = this.ports.cell(snapshot.id);
+          return (
+            !current ||
+            current.content !== snapshot.content ||
+            normalizeCodeLanguage(current.language) !== snapshot.language
+          );
+        })
+      )
+        this.finishBatch(batch, 'batch_source_changed');
+    });
+    if (this.batch !== batch) batch.unsubscribe();
+    else {
+      this.ports.batchState('running');
+      if (this.batch === batch) void this.runBatch(batch, beforeCell);
+    }
+    return promise;
+  }
+  /** Let the admitted cell settle, then stop before dispatching another cell. */
+  stopBatch(): void {
+    if (!this.batch || this.batch.phase === 'settled' || this.batch.phase === 'stopping') return;
+    this.batch.phase = 'stopping';
+    this.ports.batchState('stopping');
+  }
+  private async runBatch(batch: BatchAttempt, beforeCell: (id: string) => void): Promise<void> {
+    try {
+      if (batch.phase === 'admitted') batch.phase = 'running';
+      for (const cell of batch.cells) {
+        if (this.batch !== batch) return;
+        if (batch.phase === 'stopping') {
+          this.finishBatch(batch, 'batch_stopped');
+          return;
+        }
+        beforeCell(cell.id);
+        if (this.batch !== batch) return;
+        const result = await this.start(cell.id);
+        if (this.batch !== batch) return;
+        if (!result.success) {
+          this.finishBatch(batch, result.error || 'Code execution failed', cell.id);
+          return;
+        }
+        batch.completed.push(cell.id);
+      }
+      this.finishBatch(batch);
+    } catch (error) {
+      this.finishBatch(batch, error instanceof Error ? error.message : String(error));
+    }
+  }
+  private finishBatch(
+    batch: BatchAttempt,
+    error?: string,
+    failedCellId?: string,
+    publish = true
+  ): void {
+    if (this.batch !== batch || batch.phase === 'settled') return;
+    batch.phase = 'settled';
+    batch.unsubscribe();
+    // Retain admission through cell cleanup so reentrant subscribers cannot insert work.
+    if (this.current)
+      this.finish(this.current, failure(error || 'execution_context_changed'), publish);
+    this.batch = undefined;
+    this.ports.batchState('idle');
+    batch.settle({ success: !error, completed: [...batch.completed], error, failedCellId });
+  }
+  private start(cellId: string): Promise<ExecutionResult> {
     const cell = this.ports.cell(cellId);
     if (!cell) return Promise.resolve(failure('Cell does not exist'));
     if (!canExecuteCodeLanguage(cell.language))
@@ -84,9 +224,10 @@ export class CellExecutionSession {
       if (attempt.phase === 'initializing' && attempt.notebookId === null && owner !== null)
         attempt.notebookId = owner;
       if (owner !== attempt.notebookId || !this.ports.cell(cellId))
-        this.finish(attempt, failure('execution_context_changed'), false);
+        this.finish(attempt, failure('execution_context_changed'));
     });
-    void this.run(attempt);
+    if (this.current === attempt) void this.run(attempt);
+    else attempt.unsubscribe();
     return promise;
   }
   private owns(attempt: Attempt): boolean {
@@ -196,11 +337,9 @@ export class CellExecutionSession {
     attempt.unsubscribe();
     attempt.controller.abort();
     this.ports.stopPolling(attempt.cellId);
-    if (
-      publish &&
-      this.ports.notebookId() === attempt.notebookId &&
-      this.ports.cell(attempt.cellId)
-    )
+    // Execution telemetry belongs to this admitted attempt, even after navigation.
+    // Keep admission until cleanup completes so this cannot clear a newer attempt.
+    if (publish)
       this.ports.update(attempt.cellId, {
         isExecuting: false,
         isCancelling: false,

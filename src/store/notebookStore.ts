@@ -18,6 +18,7 @@ import { notebookLog, storeLog } from '@Utils/logger';
 
 import useCodeStore from '@Store/codeStore';
 import { NotebookExecutionActivity } from '@Services/notebook/NotebookExecutionActivity';
+import { BatchExecutionError } from '@Services/notebook/CellExecutionSession';
 import {
   CellModel,
   type Cell,
@@ -884,43 +885,28 @@ const useStore = create(
 
       runAllCells: async (): Promise<void> => {
         const state = get();
-        const { notebookId } = state;
-
-        if (!notebookId) {
-          showToast({ description: '未找到笔记本 ID', variant: 'destructive' });
-          return;
-        }
-
+        if (!state.notebookId) throw new Error('Notebook ID not found');
         const activity = notebookExecutionActivity.acquire();
-
+        let projectedPhase = false;
         try {
-          if (!activity.isCurrent()) return;
-          set({ currentRunningPhaseId: null });
-          if (!activity.isCurrent()) return;
-          get().clearAllOutputs();
-          if (!activity.isCurrent()) return;
-
-          const tasks = parseMarkdownCells(state.cells as any) as any;
-          updateCellsPhaseId(state.cells as any, tasks);
-          set({ tasks });
-
-          const codeCells = state.cells.filter((cell) => cell.type === 'code');
-
-          for (const cell of codeCells) {
-            if (!activity.isCurrent()) break;
-            const phase = tasks
-              .flatMap((t: any) => t.phases)
-              .find((p: any) => p.id === cell.phaseId);
-            if (phase && phase.id !== state.currentRunningPhaseId) {
-              set({ currentRunningPhaseId: phase.id });
+          if (!activity.isCurrent()) throw new Error('execution_context_changed');
+          const result = await useCodeStore.getState().executeCells(
+            state.cells.filter((cell) => cell.type === 'code').map((cell) => cell.id),
+            (cellId) => {
+              if (!activity.isCurrent()) throw new Error('execution_context_changed');
+              const cell = get().cells.find((cell) => cell.id === cellId);
+              projectedPhase = true;
+              set({ currentRunningPhaseId: cell?.phaseId || null });
             }
-
-            if (!activity.isCurrent()) break;
-            const result = await get().runSingleCell(cell.id);
-            if (!result.success) break;
-          }
+          );
+          if (!result.success) throw new BatchExecutionError(result);
         } finally {
-          if (activity.isCurrent()) set({ currentRunningPhaseId: null });
+          if (
+            projectedPhase &&
+            activity.isCurrent() &&
+            useCodeStore.getState().batchExecution === 'idle'
+          )
+            set({ currentRunningPhaseId: null });
           activity.release();
         }
       },
