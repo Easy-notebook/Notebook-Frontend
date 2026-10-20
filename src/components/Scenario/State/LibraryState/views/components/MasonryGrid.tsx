@@ -3,8 +3,9 @@
 
 import React, { memo, useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence, Variants } from 'framer-motion';
+import type { BentoSize } from '../../types';
 
-export type BentoSize = 'small' | 'medium' | 'large' | 'featured';
+export type { BentoSize } from '../../types';
 
 interface MasonryGridProps {
   children: React.ReactNode;
@@ -85,11 +86,13 @@ export const MasonryGrid: React.FC<MasonryGridProps> = memo(({ children, classNa
   }, []);
 
   const columnWrapper = useMemo(() => {
-    const cols: React.ReactNode[][] = Array.from({ length: columns }, () => []);
+    const cols: React.ReactElement[][] = Array.from({ length: columns }, () => []);
+    let cardIndex = 0;
 
-    React.Children.forEach(children, (child, index) => {
+    React.Children.forEach(children, (child) => {
       if (React.isValidElement(child)) {
-        cols[index % columns].push(child);
+        cols[cardIndex % columns].push(child);
+        cardIndex++;
       }
     });
 
@@ -106,7 +109,7 @@ export const MasonryGrid: React.FC<MasonryGridProps> = memo(({ children, classNa
       {columnWrapper.map((col, colIndex) => (
         <div key={colIndex} className="flex flex-col gap-4 flex-1 min-w-0">
           <AnimatePresence mode="popLayout">
-            {col.map((child: React.ReactElement, index) => (
+            {col.map((child, index) => (
               <motion.div
                 key={child.key || `${colIndex}-${index}`}
                 variants={itemVariants}

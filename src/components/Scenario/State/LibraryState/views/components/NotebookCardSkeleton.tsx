@@ -2,7 +2,7 @@
 // Lightweight skeleton placeholder for NotebookCard during lazy loading
 
 import React, { memo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import type { BentoSize } from '../../types';
 
 interface NotebookCardSkeletonProps {
@@ -51,7 +51,7 @@ const shimmerVariants = {
       ease: 'linear',
     },
   },
-};
+} satisfies Variants;
 
 export const NotebookCardSkeleton: React.FC<NotebookCardSkeletonProps> = memo(
   ({ bentoSize = 'small' }) => {
