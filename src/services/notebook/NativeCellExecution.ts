@@ -42,8 +42,9 @@ export class NativeCellExecution {
     // Persist before dispatch; a storage failure cannot create an untracked attempt.
     const serialized = JSON.stringify(request);
     this.storage.setItem(this.key, serialized);
-    const result = terminal.parse(await this.transport.send('execute', request, signal));
-    signal.throwIfAborted();
+    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
+    const result = terminal.parse(await this.transport.send('execute', request, requestSignal));
+    requestSignal.throwIfAborted();
     if (
       result.frontend_notebook_id !== this.notebookId ||
       result.cell_id !== this.cellId ||

@@ -46,6 +46,38 @@ it('rejects foreign results and retains the pending request', async () => {
   await expect(client.execute('source', signal())).rejects.toThrow('identity mismatch');
   expect(sessionStorage.length).toBe(1);
 });
+it('bounds a stalled native request and retains its exact invocation for retry', async () => {
+  const deadline = new AbortController();
+  const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementationOnce(
+      async (_, init) =>
+        new Promise((_, reject) => {
+          init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), {
+            once: true,
+          });
+        })
+    )
+    .mockImplementationOnce(async (_, init) => response(init!.body as string));
+  const client = new NativeCellExecution(
+    'book',
+    'cell',
+    sessionStorage,
+    new NativeNotebookTransport('book', fetcher)
+  );
+  try {
+    const first = client.execute('source', signal());
+    deadline.abort(new DOMException('Native execution request timed out', 'TimeoutError'));
+    await expect(first).rejects.toThrow('timed out');
+    expect(sessionStorage.length).toBe(1);
+    timeout.mockRestore();
+    expect((await client.execute('source', signal())).status).toBe('ok');
+    expect(fetcher.mock.calls[0][1]!.body).toBe(fetcher.mock.calls[1][1]!.body);
+  } finally {
+    timeout.mockRestore();
+  }
+});
 it('does not dispatch if the request cannot be tracked or exceeds the source limit', async () => {
   const fetcher = vi.fn<typeof fetch>();
   const storage = {
