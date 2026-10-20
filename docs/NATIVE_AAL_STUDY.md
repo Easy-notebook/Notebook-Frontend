@@ -206,3 +206,39 @@ continues to use its exact persisted invocation.
   independently confirms the failed batch added only the first cell's result.
 - Existing unrelated frontend type errors remain; use the targeted test/lint output
   and build result rather than treating a full repository type check as passing.
+
+## Executable similarity comparisons
+
+After saving the reference input and running grouping, enter the query CSV and
+neighbor count, then choose **插入 AAL 相似样本单元格**. This captures the saved
+reference configuration and the **current query form**, rather than assuming the
+form matches a previously displayed comparison. The generated `Cell.run` fits the
+pinned reference and calls native `segment_compare` with that model's measured
+reference identity. Its result contains reference row indices, cluster assignment,
+standardized feature differences and each feature's squared-distance contribution.
+Close the research panel and run the inserted AAL cell; Run All also supports it.
+
+The publisher archives exact inputs as `housing-reference.csv` and
+`housing-query.csv` within the same notebook, verifies their content/owner metadata,
+and embeds both immutable versions in source. Filenames are descriptive; only the
+versions grant reads through `notebook_csv`. Uploading a changed file cannot retarget
+the cell. Execution records both successfully read versions alongside measured output.
+The scratch cell does not write FoKn study state: **保存样本证据链** remains the
+study's explicit evidence-publication action. A fresh execution recomputes numerical
+results using the installed Rust implementation; input pins are not a runtime-version
+lock. Completed invocation replay retains its original result.
+
+Two uploads and notebook persistence are not a distributed transaction. A query
+upload failure leaves any completed reference version, but inserts no cell. Retry
+reuses identical archives. Save failure can leave the inserted cell in local memory;
+retry persists the same source-derived identity without duplication. Edited matching
+cells are never overwritten. Navigation (including away and back) or panel disposal
+aborts subsequent work and suppresses a success acknowledgement; a committed upload
+or save is not rolled back. Both publication buttons share the owned lifecycle.
+
+Existing grouping source identities and public HTTP contracts are unchanged. The
+same archive quotas and worker fuel/time/output bounds apply; a comparison that
+exceeds cell output limits fails instead of dropping feature evidence. Study inputs
+support up to 128 query rows, but fitting the cell output bound may require fewer.
+General files, shared cross-cell variables and online EasyNet validation remain
+outside this path.
