@@ -30,6 +30,32 @@ FoKn facts and their rule-derived explanation. **写入当前笔记** inserts a 
 snapshot and awaits the existing notebook save queue; the same revision is inserted
 once even if saving needs retry.
 
+**上传并读入 CSV** now saves a UTF-8 CSV version in Rust before filling the study
+input. **读取已保存 CSV** lists this notebook's archive, including older versions
+of a changed filename. Select a version to read and verify its exact bytes. A changed
+draft must be saved before running grouping or comparing new samples; the previous
+result remains explicitly identified as belonging to the last saved input.
+
+The archive is immutable: identical filename/content uploads return the same version,
+including after a lost response or server restart. Changed bytes produce another
+version. The browser checks notebook ID, version, byte length and SHA-256. Each
+notebook retains at most 128 versions and 16 MiB of raw content; each file is limited
+to 4 MiB and each JSON request to 5 MiB. Names are flat `.csv` names up to 256 UTF-8
+bytes. No silent eviction or delete operation is provided. At capacity, existing
+versions remain available; start another notebook for further data.
+
+The version is SHA-256 of filename UTF-8, a NUL separator, and exact CSV UTF-8.
+A separate SHA-256 covers only CSV bytes. UTF-8 BOM is retained; invalid UTF-8 is
+rejected instead of replaced. Closing or switching a panel aborts observation and
+suppresses late publication, but cannot undo a completed upload. Re-uploading the
+same file safely resolves an unknown upload outcome.
+
+Saved studies retain their full CSV input and existing invocation/revision history.
+The picker displays the most recently loaded filename/hash; it does not claim a
+persisted filename lineage in study exports. This archive belongs to the native
+study and is separate from the generic Python file browser. It does not expose
+arbitrary disk paths, binary downloads, or files to Python/AAL code cells.
+
 To enable PCS source revision and measured selection, configure the existing AAL
 model environment and run the Rust server with `--features web,model` and
 `--generated-selection`. Use a separate state root for this composition. The panel
@@ -69,7 +95,7 @@ changes do not silently rewrite the user's prose.
 ## Supported scope
 
 Implemented here: native study creation, housing feature grouping, saved-reference
-comparison, sample evidence, optional checked selector, editor publication and AAL
+comparison, immutable CSV storage, sample evidence, optional checked selector, editor publication and AAL
 code-cell execution. This does **not** replace the Python `/execute`, file-management,
 `/send_operation` streams or arbitrary QA/workflow services.
 Those existing endpoints remain a separate integration inventory; no successful
