@@ -1,13 +1,11 @@
+import type { Cell } from '@Store/models';
 import { createMarkdownParser, escapeHtml } from './inlineMarkdown';
 import { iterateFencedMarkdown, standaloneFence } from '@Utils/markdown/fencedMarkdown';
 import { sanitizeTableSource } from './tableSource';
 import { tableSourceTokenizer } from '@Utils/markdown/tableBoundary';
 
 type HeadingCounters = Map<string, Map<string, number>>;
-interface CellIdentity {
-  id?: string;
-  phaseId?: string;
-}
+export type CellIdentity = Partial<Pick<Cell, 'id' | 'phaseId'>>;
 
 /** A fresh parser owns per-cell heading state; tokenization owns block nesting. */
 export function renderNotebookMarkdown(

@@ -1,8 +1,8 @@
-import { renderNotebookMarkdown } from './notebookMarkdownParser';
+import { renderNotebookMarkdown, type CellIdentity } from './notebookMarkdownParser';
 
 export function convertMarkdownToHtml(
   markdown: string,
-  cell: { id?: string; phaseId?: string } | null = null,
+  cell: CellIdentity | null = null,
   headingSlugCounter: Map<string, Map<string, number>> | null = null
 ): string {
   return markdown ? renderNotebookMarkdown(markdown, cell, headingSlugCounter) : '<p></p>';
