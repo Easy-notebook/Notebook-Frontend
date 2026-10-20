@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
-import { comparisonCellSource, datasetCellSource } from './datasetCellSource';
+import {
+  comparisonCellSource,
+  comparisonWorkflowSources,
+  datasetCellSource,
+} from './datasetCellSource';
 
 it('quotes column names using AAL interpolation escapes and pins exactly one version', () => {
   const source = datasetCellSource('a'.repeat(64), ['area{units}', 'rooms "count"', '路径\\值'], 3);
@@ -39,4 +43,24 @@ it('pins both comparison inputs and uses the measured reference identity', () =>
   expect(() => comparisonCellSource('a'.repeat(64), '../query.csv', ['area'], 2, 1)).toThrow(
     '版本'
   );
+});
+
+it('emits a reusable reference and a query cell with no hidden refitting', () => {
+  const [fit, compare] = comparisonWorkflowSources(
+    'a'.repeat(64),
+    'b'.repeat(64),
+    ['area', 'rooms'],
+    3,
+    2,
+    'housing-reference'
+  );
+  expect(fit).toContain(
+    'self.skill("notebook_set", "housing-reference", {version: version, model: report.model'
+  );
+  expect(compare).toContain('self.skill("notebook_get", "housing-reference")');
+  expect(compare).not.toContain('numeric_segments');
+  expect(compare).toContain('reference.model, csv, query, 2, reference.reference_id');
+  expect(() =>
+    comparisonWorkflowSources('a'.repeat(64), 'b'.repeat(64), ['area'], 3, 2, 'bad"name')
+  ).toThrow('名称');
 });

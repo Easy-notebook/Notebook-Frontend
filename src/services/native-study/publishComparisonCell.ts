@@ -1,5 +1,9 @@
 import { NativeDatasetClient, type DatasetMetadata } from './NativeDatasetClient';
-import { comparisonCellSource } from './datasetCellSource';
+import {
+  comparisonCellSource,
+  comparisonWorkflowSources,
+  datasetCellSource,
+} from './datasetCellSource';
 import { nativeCodeCell } from './nativeCodeCell';
 import { publishNotebookCells } from './publishNotebookCells';
 
@@ -12,9 +16,24 @@ export interface ComparisonCellInput {
 }
 
 /** Freeze form inputs, archive both versions, then durably publish executable source. */
-export async function publishComparisonCell(
+export function publishComparisonCell(
   notebookId: string,
   input: ComparisonCellInput,
+  signal?: AbortSignal
+): Promise<void> {
+  return publishComparison(notebookId, input, false, signal);
+}
+export function publishComparisonWorkflow(
+  notebookId: string,
+  input: ComparisonCellInput,
+  signal?: AbortSignal
+): Promise<void> {
+  return publishComparison(notebookId, input, true, signal);
+}
+async function publishComparison(
+  notebookId: string,
+  input: ComparisonCellInput,
+  shared: boolean,
   signal?: AbortSignal
 ): Promise<void> {
   const frozen = { ...input, columns: [...input.columns] };
@@ -50,6 +69,27 @@ export async function publishComparisonCell(
         sha256,
         size,
       });
+      if (shared) {
+        const key = (
+          await nativeCodeCell(
+            'reference',
+            datasetCellSource(reference.version, frozen.columns, frozen.clusters),
+            {}
+          )
+        ).id;
+        const [fit, compare] = comparisonWorkflowSources(
+          reference.version,
+          query.version,
+          frozen.columns,
+          frozen.clusters,
+          frozen.neighbors,
+          key
+        );
+        return [
+          await nativeCodeCell('reference', fit, { nativeSharedValue: key }),
+          await nativeCodeCell('comparison', compare, { nativeSharedValue: key }),
+        ];
+      }
       return [
         await nativeCodeCell('comparison', source, {
           nativeComparison: {

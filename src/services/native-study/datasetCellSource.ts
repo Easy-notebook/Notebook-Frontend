@@ -94,3 +94,45 @@ export function comparisonCellSource(
 `
   );
 }
+
+/** A reference fit is committed once and reused by later query cells in this notebook. */
+export function comparisonWorkflowSources(
+  referenceVersion: string,
+  queryVersion: string,
+  columns: readonly string[],
+  clusters: number,
+  neighbors: number,
+  binding: string
+): [string, string] {
+  comparisonCellSource(referenceVersion, queryVersion, columns, clusters, neighbors);
+  if (!/^[a-zA-Z0-9_-]{1,128}$/.test(binding)) throw new Error('无效的共享结果名称');
+  const fit =
+    groupingSource(
+      referenceVersion,
+      columns,
+      clusters,
+      `    skill notebook_set
+      "Commit reusable reference data after successful cell completion"
+`
+    ) +
+    `      self.skill("notebook_set", "${binding}", {version: version, model: report.model, reference_id: report.reference_id})
+      return {reference_version: version, shared_value: "${binding}", groups: report.clusters}
+`;
+  const compare = `agent Cell is Agent
+  private
+    skill notebook_get
+      "Read the latest successfully committed reference in this notebook"
+    skill notebook_csv
+      "Read exact CSV versions owned by this notebook"
+    skill segment_compare
+      "Explain neighbors using the saved fitted model"
+  public
+    ability run() -> Any effects(skill)
+      reference = self.skill("notebook_get", "${binding}")
+      csv = self.skill("notebook_csv", reference.version)
+      query = self.skill("notebook_csv", "${queryVersion}")
+      comparison = self.skill("segment_compare", reference.model, csv, query, ${neighbors}, reference.reference_id)
+      return {reference_version: reference.version, query_version: "${queryVersion}", comparison: comparison}
+`;
+  return [fit, compare];
+}

@@ -1,0 +1,120 @@
+import { test, expect } from '@playwright/test';
+import { spawn } from 'node:child_process';
+import process from 'node:process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// Explicit locally built Rust server; never uses a paired EasyNet daemon or model.
+const binary = process.env.AAL_NATIVE_SERVER;
+const target = process.env.AAL_NOTEBOOK_TARGET;
+let child;
+let root;
+test.skip(!binary || !target, 'Set AAL_NATIVE_SERVER and loopback AAL_NOTEBOOK_TARGET');
+test.beforeAll(async () => {
+  const url = new URL(target);
+  if (url.hostname !== '127.0.0.1' || !url.port) throw new Error('Explicit loopback port required');
+  root = await mkdtemp(join(tmpdir(), 'aal-browser-shared-'));
+  child = spawn(binary, [root, url.port], { stdio: ['ignore', 'pipe', 'pipe'] });
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Rust server startup timed out')), 10000);
+    child.once('error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`Rust server exited: ${code}`));
+    });
+    let output = '';
+    child.stdout.on('data', (bytes) => {
+      output += bytes;
+      if (output.includes('Notebook listening at ')) {
+        clearTimeout(timer);
+        resolve();
+      }
+    });
+  });
+});
+test.afterAll(async () => {
+  if (child && child.exitCode === null && child.signalCode === null) {
+    const stopped = new Promise((resolve) => child.once('exit', resolve));
+    child.kill();
+    await stopped;
+  }
+  if (root) await rm(root, { recursive: true, force: true });
+});
+
+test('housing UI publishes reusable native cells, executes them and retains results on reload', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  await page.goto('/');
+  await page.getByRole('button', { name: '新建房屋研究', exact: true }).click();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await page
+    .getByLabel('参考 CSV 内容')
+    .fill(
+      'area,rooms\n40,2\n41,2\n42,2\n43,2\n90,4\n91,4\n92,4\n93,4\n180,7\n181,7\n182,7\n183,7\n'
+    );
+  await page.getByLabel('数值特征（每行一个）').fill('area\nrooms');
+  await page.getByLabel('分群数量', { exact: true }).fill('3');
+  await page.getByRole('button', { name: '保存研究输入', exact: true }).click();
+  await expect(page.getByRole('button', { name: '执行房屋分群', exact: true })).toBeEnabled();
+  await page.getByLabel('新样本 CSV').fill('area,rooms\n42.5,2\n182,7\n');
+  await page.getByRole('button', { name: '插入可复用的拟合与比较单元格', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: '已保存拟合与比较两个 AAL 单元格' })
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  const result = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    await store.getState().runAllCells();
+    return store
+      .getState()
+      .cells.filter((cell) => cell.metadata?.nativeSharedValue)
+      .map((cell) => ({
+        id: cell.id,
+        language: cell.language,
+        content: cell.content,
+        outputs: cell.outputs,
+      }));
+  });
+  expect(result).toHaveLength(2);
+  expect(result[1].content).not.toContain('numeric_segments');
+  const output = result[1].outputs.find((item) => item.content?.includes('"comparison"'));
+  const measured = JSON.parse(output.content);
+  expect(measured.comparison.rows[0].neighbors[0].row).toBe(2);
+  expect(measured.comparison.rows[1].neighbors[0].row).toBe(10);
+  expect(result[1].outputs.some((item) => item.content?.includes('producer invocation'))).toBe(
+    true
+  );
+  await page.reload();
+  await page.waitForFunction(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    return (
+      !!store.getState().notebookId &&
+      store.getState().cells.filter((cell) => cell.metadata?.nativeSharedValue).length === 2
+    );
+  });
+  await expect(page.getByRole('button', { name: '房屋研究', exact: true })).toBeEnabled();
+  const replay = await page.evaluate(async (id) => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    const before = store.getState().notebookId;
+    const outcome = await store.getState().runSingleCell(id);
+    return {
+      before,
+      after: store.getState().notebookId,
+      outcome,
+      cell: store.getState().cells.find((cell) => cell.id === id),
+    };
+  }, result[1].id);
+  expect(
+    replay.outcome.success,
+    JSON.stringify({ before: replay.before, after: replay.after, outcome: replay.outcome })
+  ).toBe(true);
+  expect(replay.cell.language).toBe('aal');
+  expect(
+    JSON.parse(replay.cell.outputs.find((item) => item.content?.includes('"comparison"')).content)
+  ).toEqual(measured);
+});

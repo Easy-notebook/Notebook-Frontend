@@ -18,7 +18,7 @@ const terminal = z.object({
   outputs: z.array(z.object({ type: z.enum(['text', 'error']), content: z.string() })),
 });
 
-/** A transport failure retains the exact invocation; each new computation has scratch state. */
+/** A transport failure retains the exact invocation; new computations have fresh local state and explicit notebook data transactions. */
 export class NativeCellExecution {
   private readonly key: string;
   constructor(

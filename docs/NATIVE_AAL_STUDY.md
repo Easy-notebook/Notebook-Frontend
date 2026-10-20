@@ -112,8 +112,9 @@ The return value is displayed as JSON; compile/runtime errors use the existing
 error output. No Python kernel initialization, polling or translation occurs.
 The editor currently displays AAL source as plain text.
 
-Every run has fresh scratch state. Cells do not share globals or mutate the saved
-housing-study document. Native language computations and the numerical skills
+Every run has fresh local VM state. Explicit `notebook_get(name)` and
+`notebook_set(name, value)` exchange committed notebook data; implicit globals and
+the saved housing-study document are not shared. Native language computations and the numerical skills
 `numeric_segments`, `segment_assign`, `segment_compare` are available. The
 `notebook_csv(version)` skill reads one immutable CSV version owned by this notebook.
 Arbitrary file, process, network, clock and model Host calls are unavailable.
@@ -133,14 +134,14 @@ cell is not rolled back.
 
 The parent supplies a verified read-only archive snapshot to the supervised worker;
 the child receives no filesystem path. Snapshot bounds remain 128 versions, 16 MiB
-of raw CSV and 32 MiB encoded; internal worker input is capped at 33 MiB including
-source. This copies the bounded archive per run. An invalid archive blocks new cell
+of raw CSV and 32 MiB encoded; internal worker input is capped at 34 MiB including
+source and the committed shared-value snapshot. This copies the bounded archive per run. An invalid archive blocks new cell
 work, while completed invocation replay uses its existing result without reopening
 the archive. Worker death may leave no returned read log. Shared mutable globals,
 filesystem access and cross-cell FoKn state are not introduced by this read-only path.
 
 Execution uses a supervised Rust child process: 32 KiB source, 100,000 fuel,
-10 seconds wall time, 512 KiB formatted result and 1 MiB worker output limits.
+10 seconds wall time, 512 KiB formatted result, 1 MiB response and 2 MiB worker output (including staged writes) limits.
 These are local trusted-authoring limits, not a hostile-code memory/OS sandbox.
 Native cancellation and kernel restart are disabled because no persistent cell
 kernel is exposed. Python cells continue to use their explicit Python backend.
@@ -187,7 +188,7 @@ succeeded. Completion, failure and explicit-stop notices use the application's
 mounted Sonner notification system and are suppressed after notebook navigation.
 The existing `runAllCells(): Promise<void>` public signature is preserved.
 Starting Run All again creates a new batch from the beginning; there is no claim
-of durable batch-plan resume or shared cross-cell state. Native per-cell retry
+of durable batch-plan resume or implicit shared VM globals. Native per-cell retry
 continues to use its exact persisted invocation.
 
 ## Verification
@@ -240,7 +241,7 @@ Existing grouping source identities and public HTTP contracts are unchanged. The
 same archive quotas and worker fuel/time/output bounds apply; a comparison that
 exceeds cell output limits fails instead of dropping feature evidence. Study inputs
 support up to 128 query rows, but fitting the cell output bound may require fewer.
-General files, shared cross-cell variables and online EasyNet validation remain
+General files, implicit shared VM globals and online EasyNet validation remain
 outside this path.
 
 ## PCS planning across the complete study
@@ -268,3 +269,45 @@ neighbor count or maximum. The API also accepts a null maximum to forbid selecti
 Only one current sample proof is retained, matching the existing evidence view.
 Arbitrary workflow DAGs and online EasyNet verification are not established by this
 path.
+
+
+## Reuse a fitted reference in later cells
+
+After saving reference data, fill the query CSV and choose
+**插入可复用的拟合与比较单元格**. This saves two AAL cells. Run the fit cell first;
+the comparison cell then reads its stored model without fitting again. Run All also
+executes this order. Additional query configurations reuse the same producer cell
+when reference version/features/cluster count are unchanged. Existing edited cells
+are preserved and reported as conflicts.
+
+The private native skills `notebook_set(name, value)` and `notebook_get(name)` expose
+this same capability to authored AAL. Writes are staged until the complete cell
+succeeds and its result is durably saved. Runtime failure and timeout discard writes;
+replaying an old invocation never overwrites later values. A new execution reads
+currently committed values, and its outputs list the producer invocation(s) actually
+read. Values survive browser/server restart and belong only to this notebook.
+
+The state retains at most 64 names (128 UTF-8 bytes each), 256 KiB per native value
+and 1 MiB total. Scalars, lists and records retain native integer fidelity; closures,
+named types and typed maps require explicit portable data projection. Depth is at
+most 32; non-finite numbers are rejected. Existing execution-history limits still
+apply. There is no implicit global interpreter, cross-notebook sharing, deletion API
+or automatic recomputation of dependent cells. Explicitly rerun a comparison after
+changing its producer; old displayed results remain historical observations.
+
+Browser verification requires a locally built native server:
+
+```sh
+AAL_NATIVE_SERVER=/absolute/path/to/aal-notebook-server \
+AAL_NOTEBOOK_TARGET=http://127.0.0.1:4256 \
+npx playwright test tests/browser/native-shared-values.spec.js
+```
+
+The test starts/stops an isolated Rust server and uses actual browser storage,
+source publication and native execution. It does not pair with EasyNet.
+
+Verification for shared values: 49 relevant Vitest cases and the Chromium workflow
+above pass against the native server. The full frontend `tsc --noEmit` gate still
+reports 66 diagnostics in other editor/UI/stream files; this is not a claim of a
+clean full-project type check. The changed native-study paths have no diagnostics
+in that run.

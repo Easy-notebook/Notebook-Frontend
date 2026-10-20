@@ -1,7 +1,7 @@
 import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { publishDatasetCell } from './publishDatasetCell';
-import { publishComparisonCell } from './publishComparisonCell';
+import { publishComparisonCell, publishComparisonWorkflow } from './publishComparisonCell';
 import { NativeDatasetClient } from './NativeDatasetClient';
 
 const io = vi.hoisted(() => ({
@@ -189,4 +189,28 @@ it('validates all comparison settings before archiving and cancels on panel disp
   await expect(publishComparisonCell('a', comparisonInput, controller.signal)).rejects.toThrow();
   expect(upload).toHaveBeenCalledTimes(1);
   expect(io.state.cells).toHaveLength(0);
+});
+
+it('publishes one reusable producer for multiple queries and retains edited producer source', async () => {
+  const upload = mockArchive();
+  await publishComparisonWorkflow('a', comparisonInput);
+  expect(io.state.cells).toHaveLength(2);
+  const [producer, consumer] = io.state.cells;
+  expect(producer.content).toContain('self.skill("notebook_set"');
+  expect(consumer.content).toContain('self.skill("notebook_get"');
+  expect(consumer.content).not.toContain('numeric_segments');
+  expect(producer.metadata).toEqual(consumer.metadata);
+  upload.mockImplementation(async (name, csv) => ({
+    name,
+    csv,
+    version: (name.includes('reference') ? 'a' : 'd').repeat(64),
+    sha256: 'b'.repeat(64),
+    size: csv.length,
+  }));
+  await publishComparisonWorkflow('a', { ...comparisonInput, queryCsv: 'area,rooms\n90,4' });
+  expect(io.state.cells).toHaveLength(3);
+  expect(io.state.cells[2].metadata).toEqual(producer.metadata);
+  producer.content = 'edited reference';
+  await expect(publishComparisonWorkflow('a', comparisonInput)).rejects.toThrow('已被编辑');
+  expect(producer.content).toBe('edited reference');
 });

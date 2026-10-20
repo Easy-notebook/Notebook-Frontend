@@ -2,8 +2,14 @@ import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { HousingStudyPanel } from './HousingStudyPanel';
-import { publishComparisonCell } from '@Services/native-study/publishComparisonCell';
-vi.mock('@Services/native-study/publishComparisonCell', () => ({ publishComparisonCell: vi.fn() }));
+import {
+  publishComparisonCell,
+  publishComparisonWorkflow,
+} from '@Services/native-study/publishComparisonCell';
+vi.mock('@Services/native-study/publishComparisonCell', () => ({
+  publishComparisonCell: vi.fn(),
+  publishComparisonWorkflow: vi.fn(),
+}));
 vi.mock('@Services/native-study/publishStudy', () => ({ publishStudy: vi.fn() }));
 vi.mock('@Services/native-study/publishDatasetCell', () => ({ publishDatasetCell: vi.fn() }));
 vi.mock('@Store/notebookStore', () => ({
@@ -181,4 +187,25 @@ it('submits a complete PCS task from current inputs without a prior fitted study
   });
   expect(JSON.parse(sessionStorage.getItem('aal-study-pending:a')!)).toEqual(sent);
   expect(screen.getByRole('button', { name: '重试原操作' })).toBeEnabled();
+});
+
+it('publishes reusable fit/compare cells from saved inputs before any study fit', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(savedView('a', 'area,rooms\n40,2'))))
+  );
+  render(<HousingStudyPanel notebookId="a" />);
+  await waitFor(() =>
+    expect(screen.getByLabelText('参考 CSV 内容')).toHaveValue('area,rooms\n40,2')
+  );
+  fireEvent.change(screen.getByLabelText('新样本 CSV'), { target: { value: 'area,rooms\n41,2' } });
+  expect(screen.getByRole('button', { name: '比较并解释相似样本' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '插入可复用的拟合与比较单元格' }));
+  await waitFor(() =>
+    expect(publishComparisonWorkflow).toHaveBeenCalledWith(
+      'a',
+      expect.objectContaining({ referenceCsv: 'area,rooms\n40,2', queryCsv: 'area,rooms\n41,2' }),
+      expect.any(AbortSignal)
+    )
+  );
 });

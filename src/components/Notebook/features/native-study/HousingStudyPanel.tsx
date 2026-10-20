@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { NativeStudySession, type StudySnapshot } from '@Services/native-study/NativeStudySession';
 import { publishStudy } from '@Services/native-study/publishStudy';
-import { publishComparisonCell } from '@Services/native-study/publishComparisonCell';
+import {
+  publishComparisonCell,
+  publishComparisonWorkflow,
+} from '@Services/native-study/publishComparisonCell';
 import { StudyEvidence } from './StudyEvidence';
 import { NativeDatasetPicker } from './NativeDatasetPicker';
 
@@ -92,7 +95,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     ability: Parameters<NativeStudySession['execute']>[0],
     args: Record<string, unknown>
   ) => void session.current?.execute(ability, args);
-  const insert = async (kind: 'snapshot' | 'comparison') => {
+  const insert = async (kind: 'snapshot' | 'comparison' | 'shared') => {
     if (
       !view ||
       view.frontend_notebook_id !== notebookId ||
@@ -101,7 +104,10 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
       publication.current
     )
       return;
-    if (kind === 'comparison' && (closed || inputChanged || !view.study.current || !savedInput))
+    if (
+      kind !== 'snapshot' &&
+      (closed || inputChanged || !savedInput || (kind === 'comparison' && !view.study.current))
+    )
       return;
     const owner = session.current;
     const attempt = new AbortController();
@@ -111,8 +117,8 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     setPublishing(true);
     setNotice('');
     try {
-      if (kind === 'comparison') {
-        await publishComparisonCell(
+      if (kind !== 'snapshot') {
+        await (kind === 'shared' ? publishComparisonWorkflow : publishComparisonCell)(
           notebookId,
           {
             referenceCsv: savedInput!.configuration.csv,
@@ -128,9 +134,11 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
       }
       if (active())
         setNotice(
-          kind === 'comparison'
-            ? '已保存 AAL 相似样本单元格。关闭研究面板后运行，可查看近邻及各特征的距离贡献。'
-            : '已写入并保存当前笔记，作为本次研究快照。'
+          kind === 'shared'
+            ? '已保存拟合与比较两个 AAL 单元格。先运行拟合单元格，再运行比较；后续比较可复用已保存的参考模型。'
+            : kind === 'comparison'
+              ? '已保存 AAL 相似样本单元格。关闭研究面板后运行，可查看近邻及各特征的距离贡献。'
+              : '已写入并保存当前笔记，作为本次研究快照。'
         );
     } catch (error) {
       if (active()) setNotice(String(error));
@@ -320,6 +328,17 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           >
             插入 AAL 相似样本单元格
           </button>
+          <button
+            className={buttonClass}
+            type="button"
+            disabled={!query.trim() || inputChanged || !savedInput}
+            onClick={() => void insert('shared')}
+          >
+            插入可复用的拟合与比较单元格
+          </button>
+          <p className="text-xs text-muted-foreground">
+            拆分后先运行拟合，再运行比较。参考模型仅在成功时保存，可供本笔记后续新样本比较复用。
+          </p>
           <p className="text-xs text-muted-foreground">
             将已保存的参考输入、当前新样本 CSV
             和近邻数量固定为文件版本，运行单元格时重新计算解释。重复插入同一配置不会新增单元格。

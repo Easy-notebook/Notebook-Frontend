@@ -32,7 +32,7 @@ export class NativeStudyNotebook {
           id: crypto.randomUUID(),
           type: 'markdown',
           content:
-            '在「房屋研究」中保存参考 CSV，运行分群并比较新样本。下方 AAL 单元格可独立运行 Rust 分群示例；每次运行使用独立状态。',
+            '在「房屋研究」中保存参考 CSV，运行分群并比较新样本。下方 AAL 单元格可独立运行 Rust 分群示例；每次运行使用独立局部状态；可通过 notebook_get/notebook_set 显式共享已提交的数据。',
         },
         {
           id: crypto.randomUUID(),
