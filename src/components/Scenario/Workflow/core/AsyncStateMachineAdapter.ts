@@ -358,13 +358,25 @@ export class AsyncStateMachineAdapter {
 // ==============================================
 let asyncStateMachineInitialization: Promise<AsyncStateMachineAdapter> | null = null;
 let initializationGeneration = 0;
+let readyAsyncStateMachine: AsyncStateMachineAdapter | null = null;
+
+/** Publish a synchronously initialized adapter to the same owner used by lazy callers. */
+export function installAsyncStateMachine(adapter: AsyncStateMachineAdapter): void {
+  initializationGeneration++;
+  readyAsyncStateMachine = adapter;
+  asyncStateMachineInitialization = Promise.resolve(adapter);
+}
+
+export function peekAsyncStateMachine(): AsyncStateMachineAdapter | null {
+  return readyAsyncStateMachine;
+}
 
 /** Share one initialization across concurrent callers, including dynamic imports. */
 export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> {
   if (!asyncStateMachineInitialization) {
     const generation = initializationGeneration;
     const initialization = (async () => {
-      const [{ WorkflowAPIClient }, { useScriptStore }, { default: useNotebookStore }] =
+      const [{ getWorkflowAPIClient }, { useScriptStore }, { default: useNotebookStore }] =
         await Promise.all([
           import('../api/WorkflowAPIClient'),
           import('../store/useScriptStore'),
@@ -373,14 +385,16 @@ export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> 
 
       // Reset revokes publication before any global dependency is installed.
       if (generation !== initializationGeneration) {
+        if (readyAsyncStateMachine) return readyAsyncStateMachine;
         throw new DOMException('Workflow initialization was reset', 'AbortError');
       }
 
       const adapter = new AsyncStateMachineAdapter(
-        new WorkflowAPIClient(),
+        getTransitionCoordinator().getContext().apiClient ?? getWorkflowAPIClient(),
         useScriptStore.getState()
       );
       getTransitionCoordinator().setContext({ notebookStore: useNotebookStore.getState() });
+      readyAsyncStateMachine = adapter;
       console.log('[AsyncFSM] Created singleton instance');
       return adapter;
     })();
@@ -398,6 +412,7 @@ export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> 
 /** Revoke pending initialization and let the next caller create a fresh instance. */
 export function resetAsyncStateMachine(): void {
   initializationGeneration++;
+  readyAsyncStateMachine = null;
   asyncStateMachineInitialization = null;
   console.log('[AsyncFSM] Reset singleton instance');
 }
