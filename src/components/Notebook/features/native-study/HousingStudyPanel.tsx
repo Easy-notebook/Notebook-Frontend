@@ -170,6 +170,8 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             notebookId={notebookId}
             disabled={busy || closed}
             onBusyChange={setDatasetBusy}
+            columns={selectedColumns}
+            clusters={clusters}
             onSelect={(text) => {
               setCsv(text);
               setNotice('已从 Rust 文件版本读入 CSV，请保存研究输入。');

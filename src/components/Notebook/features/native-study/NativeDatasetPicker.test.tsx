@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { NativeDatasetPicker } from './NativeDatasetPicker';
 const client = vi.hoisted(() => ({ list: vi.fn(), read: vi.fn(), upload: vi.fn() }));
+const publication = vi.hoisted(() => ({ publishDatasetCell: vi.fn() }));
+vi.mock('@Services/native-study/publishDatasetCell', () => publication);
 vi.mock('@Services/native-study/NativeDatasetClient', () => ({
   NativeDatasetClient: class {
     list = client.list;
@@ -22,6 +24,8 @@ it('loads saved versions on demand and publishes selected bytes only after the r
       disabled={false}
       onSelect={onSelect}
       onBusyChange={onBusy}
+      columns={['area', 'rooms']}
+      clusters={3}
     />
   );
   expect(client.list).not.toHaveBeenCalled();
@@ -39,7 +43,13 @@ it('switching notebook ownership clears the catalog and suppresses the old pendi
       finish = resolve;
     })
   );
-  const props = { disabled: false, onSelect: vi.fn(), onBusyChange: vi.fn() };
+  const props = {
+    disabled: false,
+    onSelect: vi.fn(),
+    onBusyChange: vi.fn(),
+    columns: ['area', 'rooms'],
+    clusters: 3,
+  };
   const view = render(<NativeDatasetPicker notebookId="a" {...props} />);
   fireEvent.click(screen.getByRole('button', { name: '读取已保存 CSV' }));
   view.rerender(<NativeDatasetPicker notebookId="b" {...props} />);
@@ -47,4 +57,40 @@ it('switching notebook ownership clears the catalog and suppresses the old pendi
   await waitFor(() => expect(screen.getByRole('button', { name: '读取已保存 CSV' })).toBeEnabled());
   expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   expect(props.onSelect).not.toHaveBeenCalled();
+});
+it('inserts the selected file and visible settings, waiting for the durable publication result', async () => {
+  client.list.mockResolvedValue([metadata]);
+  client.read.mockResolvedValue({ ...metadata, csv: 'a\n1' });
+  let finish!: () => void;
+  publication.publishDatasetCell.mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finish = resolve;
+    })
+  );
+  render(
+    <NativeDatasetPicker
+      notebookId="a"
+      disabled={false}
+      onSelect={vi.fn()}
+      onBusyChange={vi.fn()}
+      columns={['area']}
+      clusters={2}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: '读取已保存 CSV' }));
+  fireEvent.change(await screen.findByRole('combobox'), { target: { value: metadata.version } });
+  const insert = await screen.findByRole('button', { name: '插入 AAL 分群单元格' });
+  fireEvent.click(insert);
+  expect(insert).toBeDisabled();
+  expect(publication.publishDatasetCell).toHaveBeenCalledWith(
+    'a',
+    metadata,
+    ['area'],
+    2,
+    expect.any(AbortSignal)
+  );
+  expect(screen.queryByText(/已保存 AAL 分群单元格/)).not.toBeInTheDocument();
+  finish();
+  await screen.findByText(/已保存 AAL 分群单元格/);
+  expect(insert).toBeEnabled();
 });

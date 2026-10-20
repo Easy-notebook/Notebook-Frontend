@@ -4,6 +4,7 @@ import {
   NativeDatasetSession,
   type DatasetSnapshot,
 } from '@Services/native-study/NativeDatasetSession';
+import { publishDatasetCell } from '@Services/native-study/publishDatasetCell';
 
 /** CSV archive owned by the native study, separate from Python's file workspace. */
 export function NativeDatasetPicker({
@@ -11,11 +12,15 @@ export function NativeDatasetPicker({
   disabled,
   onSelect,
   onBusyChange,
+  columns,
+  clusters,
 }: {
   notebookId: string;
   disabled: boolean;
   onSelect: (csv: string) => void;
   onBusyChange: (busy: boolean) => void;
+  columns: readonly string[];
+  clusters: number;
 }) {
   const session = useRef<NativeDatasetSession | null>(null);
   const owner = useRef(notebookId);
@@ -24,6 +29,9 @@ export function NativeDatasetPicker({
   selection.current = onSelect;
   const busyChange = useRef(onBusyChange);
   busyChange.current = onBusyChange;
+  const insertion = useRef<AbortController | null>(null);
+  const [inserting, setInserting] = useState(false);
+  const [insertionNotice, setInsertionNotice] = useState('');
   const [state, setState] = useState<DatasetSnapshot>({
     phase: 'idle',
     datasets: [],
@@ -31,6 +39,8 @@ export function NativeDatasetPicker({
     error: null,
   });
   useEffect(() => {
+    setInserting(false);
+    setInsertionNotice('');
     setState({ phase: 'idle', datasets: [], selected: null, error: null });
     const owned = new NativeDatasetSession(
       new NativeDatasetClient(notebookId),
@@ -46,11 +56,37 @@ export function NativeDatasetPicker({
     session.current = owned;
     return () => {
       owned.dispose();
+      insertion.current?.abort();
+      insertion.current = null;
       busyChange.current(false);
       if (session.current === owned) session.current = null;
     };
   }, [notebookId]);
-  const busy = state.phase === 'loading' || state.phase === 'uploading';
+  const busy = inserting || state.phase === 'loading' || state.phase === 'uploading';
+  const insert = async () => {
+    if (!state.selected || disabled || busy || insertion.current) return;
+    const attempt = new AbortController();
+    insertion.current = attempt;
+    setInserting(true);
+    setInsertionNotice('');
+    busyChange.current(true);
+    try {
+      await publishDatasetCell(notebookId, state.selected, columns, clusters, attempt.signal);
+      if (insertion.current === attempt && owner.current === notebookId && !attempt.signal.aborted)
+        setInsertionNotice(
+          '已保存 AAL 分群单元格。关闭研究面板后可运行，重复插入不会新增同一配置。'
+        );
+    } catch (error) {
+      if (insertion.current === attempt && owner.current === notebookId && !attempt.signal.aborted)
+        setInsertionNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (insertion.current === attempt) {
+        insertion.current = null;
+        setInserting(false);
+        busyChange.current(false);
+      }
+    }
+  };
   return (
     <fieldset disabled={disabled || busy} className="space-y-2 rounded border p-3">
       <legend className="text-sm font-medium">当前笔记的 CSV 文件</legend>
@@ -97,7 +133,7 @@ export function NativeDatasetPicker({
           </select>
         </label>
       )}
-      {busy && (
+      {(state.phase === 'loading' || state.phase === 'uploading') && (
         <p role="status">
           {state.phase === 'uploading' ? '正在保存 CSV 文件…' : '正在读取 CSV 文件…'}
         </p>
@@ -108,8 +144,26 @@ export function NativeDatasetPicker({
         </p>
       )}
       {state.selected && (
-        <p className="break-all text-xs">
-          最近读入：{state.selected.name} · SHA-256 {state.selected.sha256}
+        <>
+          <p className="break-all text-xs">
+            最近读入：{state.selected.name} · SHA-256 {state.selected.sha256}
+          </p>
+          <button
+            type="button"
+            className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+            onClick={() => void insert()}
+          >
+            插入 AAL 分群单元格
+          </button>
+          <p className="text-xs text-muted-foreground">
+            使用所选文件版本、下方数值特征和分群数量。
+          </p>
+        </>
+      )}
+      {inserting && <p role="status">正在保存 AAL 单元格…</p>}
+      {insertionNotice && (
+        <p role="status" className="text-sm">
+          {insertionNotice}
         </p>
       )}
       {state.error && (

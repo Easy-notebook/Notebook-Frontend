@@ -1,0 +1,101 @@
+import { webcrypto } from 'node:crypto';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { publishDatasetCell } from './publishDatasetCell';
+
+const io = vi.hoisted(() => ({
+  state: {
+    notebookId: 'a',
+    notebookTitle: 'Research',
+    tasks: [],
+    cells: [] as {
+      id: string;
+      content: string;
+      type: string;
+      language?: string;
+      metadata?: unknown;
+    }[],
+    addCell: vi.fn(),
+  },
+  listeners: new Set<(value: { notebookId: string }) => void>(),
+  initialize: vi.fn(),
+  queueSave: vi.fn(),
+  flush: vi.fn(),
+}));
+vi.mock('@Store/notebookStore', () => ({
+  default: {
+    getState: () => io.state,
+    subscribe: (listener: (value: { notebookId: string }) => void) => {
+      io.listeners.add(listener);
+      return () => io.listeners.delete(listener);
+    },
+  },
+}));
+vi.mock('@Services/autoSave', () => ({ AutoSaveService: { getInstance: () => io } }));
+const dataset = { name: '房屋.csv', version: 'a'.repeat(64), sha256: 'b'.repeat(64), size: 12 };
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.stubGlobal('crypto', webcrypto);
+  io.state.notebookId = 'a';
+  io.state.cells = [];
+  io.listeners.clear();
+  io.initialize.mockResolvedValue(undefined);
+  io.queueSave.mockResolvedValue(undefined);
+  io.flush.mockResolvedValue(undefined);
+  io.state.addCell.mockImplementation((cell) => io.state.cells.push(cell));
+});
+afterEach(() => vi.unstubAllGlobals());
+it('inserts a pinned AAL cell once and awaits persistence on every retry', async () => {
+  io.flush.mockRejectedValueOnce(new Error('storage failed'));
+  await expect(publishDatasetCell('a', dataset, ['area', 'rooms'], 3)).rejects.toThrow(
+    'storage failed'
+  );
+  expect(io.state.cells).toHaveLength(1);
+  expect(io.state.cells[0]).toMatchObject({
+    type: 'code',
+    language: 'aal',
+    metadata: { nativeDataset: { ...dataset, columns: ['area', 'rooms'], clusters: 3 } },
+  });
+  expect(io.state.cells[0].content).toContain(`version = "${dataset.version}"`);
+  await publishDatasetCell('a', dataset, ['area', 'rooms'], 3);
+  expect(io.state.cells).toHaveLength(1);
+  expect(io.flush).toHaveBeenCalledTimes(2);
+  await publishDatasetCell('a', dataset, ['area'], 2);
+  expect(io.state.cells).toHaveLength(2);
+  expect(io.listeners.size).toBe(0);
+});
+it('does not overwrite an edited generated cell or report it as newly published', async () => {
+  await publishDatasetCell('a', dataset, ['area'], 2);
+  io.state.cells[0].content = 'User code';
+  io.queueSave.mockClear();
+  await expect(publishDatasetCell('a', dataset, ['area'], 2)).rejects.toThrow('已被编辑');
+  expect(io.state.cells[0].content).toBe('User code');
+  expect(io.queueSave).not.toHaveBeenCalled();
+});
+it('leaving and returning to the same notebook during initialization cancels insertion', async () => {
+  io.initialize.mockImplementationOnce(async () => {
+    for (const id of ['b', 'a']) {
+      io.state.notebookId = id;
+      for (const listener of io.listeners) listener(io.state);
+    }
+  });
+  await expect(publishDatasetCell('a', dataset, ['area'], 2)).rejects.toThrow('context changed');
+  expect(io.state.cells).toHaveLength(0);
+  expect(io.queueSave).not.toHaveBeenCalled();
+  expect(io.listeners.size).toBe(0);
+});
+it('panel disposal before durable insertion cannot publish even if initialization later succeeds', async () => {
+  const controller = new AbortController();
+  io.initialize.mockImplementationOnce(async () => controller.abort());
+  await expect(publishDatasetCell('a', dataset, ['area'], 2, controller.signal)).rejects.toThrow();
+  expect(io.state.cells).toHaveLength(0);
+  expect(io.listeners.size).toBe(0);
+});
+it('retains the old notebook save but does not acknowledge success after navigation during flush', async () => {
+  io.flush.mockImplementationOnce(async () => {
+    io.state.notebookId = 'b';
+    for (const listener of io.listeners) listener(io.state);
+  });
+  await expect(publishDatasetCell('a', dataset, ['area'], 2)).rejects.toThrow('笔记已切换');
+  expect(io.queueSave).toHaveBeenCalledWith(expect.objectContaining({ notebookId: 'a' }));
+  expect(io.state.cells).toHaveLength(1);
+});

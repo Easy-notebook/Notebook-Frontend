@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { HousingStudyPanel } from './HousingStudyPanel';
 vi.mock('@Services/native-study/publishStudy', () => ({ publishStudy: vi.fn() }));
+vi.mock('@Services/native-study/publishDatasetCell', () => ({ publishDatasetCell: vi.fn() }));
 vi.mock('@Store/notebookStore', () => ({
   default: { getState: () => ({ notebookId: 'a', addCell: vi.fn() }) },
 }));

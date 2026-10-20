@@ -13,7 +13,9 @@ const io = vi.hoisted(() => ({
   queueSave: vi.fn(async () => {}),
   flush: vi.fn(async () => {}),
 }));
-vi.mock('@Store/notebookStore', () => ({ default: { getState: () => io.state } }));
+vi.mock('@Store/notebookStore', () => ({
+  default: { getState: () => io.state, subscribe: () => () => {} },
+}));
 vi.mock('@Services/autoSave', () => ({ AutoSaveService: { getInstance: () => io } }));
 vi.mock('./studyExport', () => ({ studyMarkdown: () => '## Research\n\nMeasured evidence' }));
 const view = { document: { id: 'native-a', revision: 4 } } as NativeView;
