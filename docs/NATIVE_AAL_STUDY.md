@@ -242,3 +242,29 @@ exceeds cell output limits fails instead of dropping feature evidence. Study inp
 support up to 128 query rows, but fitting the cell output bound may require fewer.
 General files, shared cross-cell variables and online EasyNet validation remain
 outside this path.
+
+## PCS planning across the complete study
+
+With the Rust server started using `--generated-selection`, the research panel now
+also offers **由 PCS 规划并执行完整研究**. Prepare reference CSV, query CSV, neighbor
+count, goal and distance maximum, then choose this action. It can start before a
+manual fit. PCS selects feature columns/cluster count and plans comparison, optionally
+one sample's FoKn proof and checked generated selection. Manual feature settings are
+not silently treated as constraints on PCS; express required choices in the goal.
+The server validates action ordering, row bounds and caller authority before adoption.
+
+The current form inputs, maximum, original revision and invocation are persisted
+before dispatch. **重试原操作** reuses the complete frozen command even after closing
+and reopening the panel. Completed steps remain durable if a later model/source
+request fails; exact retry resumes them. Refresh can inspect those partial results.
+Closing the panel or abandoning retry does not undo server work. Existing manual
+comparison/selection and study snapshot publication remain available.
+
+This uses the same Rust numerical calculations, FoKn fact/proof engine, generated
+source compiler and immutable selector lifecycle as the individual actions. The
+frontend performs no numerical or workflow execution. A planned task can omit
+unnecessary evidence or selection actions; it cannot change the supplied query CSV,
+neighbor count or maximum. The API also accepts a null maximum to forbid selection.
+Only one current sample proof is retained, matching the existing evidence view.
+Arbitrary workflow DAGs and online EasyNet verification are not established by this
+path.
