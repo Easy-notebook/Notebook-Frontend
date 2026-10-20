@@ -57,3 +57,19 @@ it('keeps successful step transitions and dispatches their action once', async (
   expect(result.state.state.FSM.state).toBe(Status.STEP_RUNNING);
   expect(execAction).toHaveBeenCalledOnce();
 });
+
+it('rejects a transition requiring a notebook action when no executor is installed', async () => {
+  const coordinator = new TransitionCoordinator();
+  const state = WorkflowState.create();
+  state.state.FSM.setState(Status.STAGE_RUNNING);
+  const before = state.toJSON();
+  await expect(
+    coordinator.applyTransition(
+      state,
+      { steps: [{ step_id: 'step-a', title: 'Analyze' }] },
+      undefined,
+      false
+    )
+  ).rejects.toThrow('Workflow action executor is not configured');
+  expect(state.toJSON()).toEqual(before);
+});

@@ -189,33 +189,29 @@ export class AsyncStateMachineAdapter {
             streamingLogger.actionReceived(actionIndex, actionType as string);
 
             // Execute action immediately using scriptStore
-            if (scriptStore) {
-              try {
-                streamingLogger.actionExecutionStart(actionIndex);
+            if (typeof scriptStore?.execAction !== 'function') {
+              throw new Error('Workflow action executor is not configured');
+            }
+            try {
+              streamingLogger.actionExecutionStart(actionIndex);
 
-                // Convert backend action format to frontend ExecutionStep format
-                const executionStep = this.convertActionToExecutionStep(
-                  action as Record<string, unknown>
-                );
-
-                console.log(`[AsyncFSM] Executing action step:`, executionStep);
-                await scriptStore.execAction(executionStep, signal);
-                signal?.throwIfAborted();
-
-                streamingLogger.actionExecutionEnd(actionIndex);
-                console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
-              } catch (error) {
-                signal?.throwIfAborted();
-                const errorMsg = error instanceof Error ? error.message : String(error);
-                streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
-                console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
-                throw error;
-              }
-            } else {
-              console.warn(
-                '[AsyncFSM] No scriptStore available, action will be executed by handler'
+              // Convert backend action format to frontend ExecutionStep format
+              const executionStep = this.convertActionToExecutionStep(
+                action as Record<string, unknown>
               );
-              streamingLogger.actionDeferred(actionIndex);
+
+              console.log(`[AsyncFSM] Executing action step:`, executionStep);
+              await scriptStore.execAction(executionStep, signal);
+              signal?.throwIfAborted();
+
+              streamingLogger.actionExecutionEnd(actionIndex);
+              console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
+            } catch (error) {
+              signal?.throwIfAborted();
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
+              console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
+              throw error;
             }
 
             // Still collect actions for transition handler (store the unwrapped action)

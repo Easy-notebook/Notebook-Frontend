@@ -165,9 +165,8 @@ export abstract class BaseTransitionHandler {
     signal?: AbortSignal
   ): Promise<void> {
     signal?.throwIfAborted();
-    if (!this.scriptStore) {
-      console.debug(`[Action] Skipping ${actionType}: no script_store available`);
-      return;
+    if (typeof this.scriptStore?.execAction !== 'function') {
+      throw new Error('Workflow action executor is not configured');
     }
 
     try {

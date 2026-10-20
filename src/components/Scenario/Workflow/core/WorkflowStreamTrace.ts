@@ -1,5 +1,5 @@
 export type StreamOutcome = 'completed' | 'cancelled' | 'failed';
-type ActionPhase = 'received' | 'running' | StreamOutcome | 'deferred';
+type ActionPhase = 'received' | 'running' | StreamOutcome;
 
 interface ActionTrace {
   actionIndex: number;
@@ -40,18 +40,13 @@ export class WorkflowStreamTrace {
     action.error = error;
   }
 
-  actionDeferred(index: number): void {
-    const action = this.actions[index];
-    if (this.phase === 'running' && action?.phase === 'received') action.phase = 'deferred';
-  }
-
   finish(outcome: StreamOutcome): void {
     if (this.phase !== 'running') return;
     this.phase = outcome;
     this.endTime = Date.now();
     for (const action of this.actions) {
       if (action.phase === 'running' || action.phase === 'received') {
-        action.phase = outcome === 'completed' ? 'deferred' : outcome;
+        action.phase = outcome;
         if (action.executionStartAt !== undefined) action.executionEndAt = this.endTime;
       }
     }

@@ -91,3 +91,31 @@ it('forwards the run signal when a logic-only state automatically transitions', 
   await new AsyncStateMachineAdapter().step(snapshot, abort.signal);
   expect(auto).toHaveBeenCalledExactlyOnceWith(expect.any(Object), abort.signal);
 });
+
+it('closes the action stream and rejects before transition when no executor is installed', async () => {
+  const closed = vi.fn();
+  async function* actions() {
+    try {
+      yield { type: 'plan_stage', stage_id: 'a', title: 'Analysis' };
+      yield { type: 'must-not-be-read' };
+    } finally {
+      closed();
+    }
+  }
+  vi.spyOn(StateFactory.getState('IDLE')!, 'callAPI').mockResolvedValue(actions());
+  const coordinator = getTransitionCoordinator();
+  const previous = coordinator.getContext().scriptStore;
+  coordinator.setContext({ scriptStore: undefined });
+  const transition = vi
+    .spyOn(coordinator, 'applyTransition')
+    .mockImplementation(async (state) => ({ state, transitionName: 'unexpected' }));
+  try {
+    await expect(new AsyncStateMachineAdapter().step(createInitialStateJSON())).rejects.toThrow(
+      'Workflow action executor is not configured'
+    );
+    expect(closed).toHaveBeenCalledOnce();
+    expect(transition).not.toHaveBeenCalled();
+  } finally {
+    coordinator.setContext({ scriptStore: previous });
+  }
+});

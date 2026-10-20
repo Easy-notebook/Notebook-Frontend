@@ -28,17 +28,11 @@ it('keeps interleaved traces independent and settles interrupted actions', () =>
   expect(first.snapshot().actions[0].phase).toBe('cancelled');
 });
 
-it('distinguishes delegated actions from executed ones and preserves empty error messages', () => {
+it('preserves an action failure with an empty error message', () => {
   const trace = new WorkflowStreamTrace('generating');
-  trace.actionReceived(0, 'deferred');
-  trace.actionDeferred(0);
-  trace.actionReceived(1, 'failed');
-  trace.actionExecutionStart(1);
-  trace.actionExecutionEnd(1, '');
+  trace.actionReceived(0, 'failed');
+  trace.actionExecutionStart(0);
+  trace.actionExecutionEnd(0, '');
   trace.finish('failed');
-  expect(trace.snapshot().actions).toMatchObject([
-    { phase: 'deferred' },
-    { phase: 'failed', error: '' },
-  ]);
-  expect(trace.snapshot().actions[0].executionStartAt).toBeUndefined();
+  expect(trace.snapshot().actions).toMatchObject([{ phase: 'failed', error: '' }]);
 });
