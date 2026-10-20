@@ -136,3 +136,26 @@ export const pendingCommand = z
   .strict();
 export type PendingCommand = z.infer<typeof pendingCommand>;
 export type StudyAbility = PendingCommand['ability'];
+
+const operationCount = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const nativeOperation = z
+  .object({
+    frontend_notebook_id: z.string(),
+    invocation: z.string(),
+    observation: z
+      .object({
+        attempt: z.string().uuid(),
+        workspace: z.string().min(1).max(128),
+        ability: z.string().min(1).max(128),
+        phase: z.enum(['running', 'succeeded', 'failed', 'interrupted']),
+        completed_calls: operationCount,
+        failed_calls: operationCount,
+        active: z
+          .object({ model: operationCount, skill: operationCount, other: operationCount })
+          .strict(),
+      })
+      .strict()
+      .nullable(),
+  })
+  .strict();
+export type NativeObservation = NonNullable<z.infer<typeof nativeOperation>['observation']>;

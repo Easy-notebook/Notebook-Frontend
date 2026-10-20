@@ -17,7 +17,13 @@ export class NativeNotebookTransport {
     this.path = `/aal-api/workspaces/${encodeURIComponent(notebookId)}`;
   }
   async send(
-    route: 'state' | 'command' | 'execute' | 'datasets' | `datasets/${string}`,
+    route:
+      | 'state'
+      | 'command'
+      | 'execute'
+      | 'datasets'
+      | `datasets/${string}`
+      | `operations/${string}`,
     body?: unknown,
     signal?: AbortSignal
   ): Promise<unknown> {

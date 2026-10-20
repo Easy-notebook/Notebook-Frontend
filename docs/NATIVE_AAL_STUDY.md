@@ -357,3 +357,20 @@ revision increment without another model request. It also saves the discussion i
 the editor. Run it with the same environment as the shared-value browser test; the
 server binary must be built with `web,model`. This verifies transport and measured
 context, not live-model answer quality or generic `/send_operation` compatibility.
+
+## 执行进度
+
+房屋研究任务和协作者问答运行期间，面板会读取 Rust 当前调用的观察状态，显示
+“正在等待模型回答”或“正在执行数据技能”，以及已返回成功/错误的调用数量。
+这些数量包含前置读取，不等于已完成的研究步骤，也不是完成百分比。
+
+观察接口是 `/aal-api/workspaces/{id}/operations/{invocation}`。每次实际接收执行请求
+都有独立 attempt ID；服务只保留最近 128 条观察，重启后为空。网络重试尚未被接收时，
+可能仍看到上一次尝试。未知或无法读取进度不表示未执行。原有请求编号、修订校验和
+持久化恢复逻辑仍负责确认结果；进度不会自动重发请求或清除待恢复记录。
+
+前端延迟 500 ms 开始读取，之后串行轮询，每次读取最多等待 3 秒。切换笔记、关闭面板、
+重试替换、成功读取最终结果或放弃重试都会终止旧观察，迟到响应不能更新新会话。
+浏览器测试在实际房屋拟合与近邻比较后暂停本地模型响应，验证等待状态可见，再测试
+响应丢失、Rust 重启和原请求恢复。此接口不包含代码单元格进度、模型 token 流或
+EasyNet 收据，线上验证仍按用户要求暂缓。

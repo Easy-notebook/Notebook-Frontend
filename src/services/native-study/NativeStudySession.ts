@@ -1,3 +1,4 @@
+import { NativeOperationObserver, type CommandProgress } from './NativeOperationObserver';
 import { NativeStudyClient } from './NativeStudyClient';
 import {
   pendingCommand,
@@ -12,6 +13,7 @@ export interface StudySnapshot {
   view: NativeView | null;
   error: string | null;
   pending: boolean;
+  progress: CommandProgress | null;
 }
 /** One notebook's request lifecycle. Durable retry uses the exact accepted request, never a new ID. */
 export class NativeStudySession {
@@ -20,10 +22,12 @@ export class NativeStudySession {
     view: null,
     error: null,
     pending: false,
+    progress: null,
   };
   private readonly listeners = new Set<() => void>();
   private readonly controller = new AbortController();
   private pending: PendingCommand | null = null;
+  private observer: NativeOperationObserver | null = null;
   private readonly key: string;
   constructor(
     private readonly client: NativeStudyClient,
@@ -52,8 +56,18 @@ export class NativeStudySession {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  private observePending() {
+    this.observer?.dispose();
+    this.observer = this.pending
+      ? new NativeOperationObserver(this.client, this.pending, (progress) =>
+          this.publish({ progress })
+        )
+      : null;
+  }
   async refresh(): Promise<void> {
     if (this.snapshot.status === 'running' || this.snapshot.status === 'loading') return;
+    if (this.controller.signal.aborted) return;
+    if (this.pending) this.observePending();
     this.publish({ status: 'loading', error: null });
     try {
       const view = await this.client.state(this.controller.signal);
@@ -99,6 +113,7 @@ export class NativeStudySession {
       this.controller.signal.aborted
     )
       return;
+    this.observePending();
     this.publish({ status: 'running', error: null });
     try {
       await this.client.command(this.pending, this.controller.signal);
@@ -108,7 +123,9 @@ export class NativeStudySession {
       this.controller.signal.throwIfAborted();
       this.storage.removeItem(this.key);
       this.pending = null;
-      this.publish({ view, status: 'ready' });
+      this.observer?.dispose();
+      this.observer = null;
+      this.publish({ view, status: 'ready', progress: null });
     } catch (error) {
       this.failed(error);
     }
@@ -117,10 +134,14 @@ export class NativeStudySession {
     if (this.snapshot.status === 'running' || this.controller.signal.aborted) return;
     this.storage.removeItem(this.key);
     this.pending = null;
-    this.publish({ status: 'disconnected', error: null });
+    this.observer?.dispose();
+    this.observer = null;
+    this.publish({ status: 'disconnected', error: null, progress: null });
     await this.refresh();
   }
   dispose() {
+    this.observer?.dispose();
+    this.observer = null;
     this.controller.abort();
     this.listeners.clear();
   }

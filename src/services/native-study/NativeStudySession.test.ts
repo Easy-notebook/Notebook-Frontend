@@ -255,3 +255,46 @@ it('exports historical model discussion separately from measurements without exe
   expect(JSON.parse(blocks[0][1])).not.toHaveProperty('messages');
   expect(JSON.parse(blocks[1][1])).toEqual(record.document.messages);
 });
+
+it('observes a lost response without resending or treating observed success as durable result delivery', async () => {
+  vi.useFakeTimers();
+  let command: Record<string, unknown> | undefined;
+  let posts = 0;
+  const request = vi.fn<typeof fetch>(async (url, options) => {
+    if (options?.method === 'POST') {
+      posts++;
+      command = JSON.parse(String(options.body));
+      throw new Error('response lost while server continues');
+    }
+    if (String(url).includes('/operations/'))
+      return response({
+        frontend_notebook_id: 'a',
+        invocation: command?.invocation,
+        observation: {
+          attempt: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          workspace: 'native-a',
+          ability: 'run_study',
+          phase: 'succeeded',
+          completed_calls: 5,
+          failed_calls: 0,
+          active: { model: 0, skill: 0, other: 0 },
+        },
+      });
+    return response(view());
+  });
+  const session = new NativeStudySession(new NativeStudyClient('a', request));
+  try {
+    await session.refresh();
+    await session.execute('run_study', {});
+    await vi.advanceTimersByTimeAsync(500);
+    expect(session.getSnapshot().progress?.status).toBe('observed');
+    expect(session.getSnapshot().status).toBe('recoverable');
+    expect(session.getSnapshot().pending).toBe(true);
+    expect(sessionStorage.getItem('aal-study-pending:a')).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(posts).toBe(1);
+  } finally {
+    session.dispose();
+    vi.useRealTimers();
+  }
+});

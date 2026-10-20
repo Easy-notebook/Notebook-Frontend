@@ -9,14 +9,19 @@ const answer =
   'Observed reference rows 2 and 10 are nearest. Feature distances do not establish house prices.';
 let native;
 let provider;
+let releaseModel;
 const captured = [];
 test.skip(!binary || !target, 'Set a web,model AAL_NATIVE_SERVER and loopback AAL_NOTEBOOK_TARGET');
 test.beforeAll(async () => {
+  const modelGate = new Promise((resolve) => {
+    releaseModel = resolve;
+  });
   provider = createServer(async (request, response) => {
     let body = '';
     for await (const chunk of request) body += chunk;
     const payload = JSON.parse(body);
     captured.push(payload);
+    await modelGate;
     const slots = Object.fromEntries(
       Object.entries(payload.response_format.json_schema.schema.properties).map(
         ([name, schema]) => [name, schema.type === 'array' ? [] : 'Local protocol fixture']
@@ -43,11 +48,12 @@ test.beforeAll(async () => {
   await native.start(`http://127.0.0.1:${provider.address().port}/v1/chat/completions`);
 });
 test.afterAll(async () => {
+  releaseModel?.();
   await native?.dispose();
   if (provider?.listening) await new Promise((resolve) => provider.close(resolve));
 });
 
-test('native housing discussion uses measured context and replays after reply loss and restart without a model', async ({
+test('native housing discussion shows live Rust progress, uses measured context and replays after reply loss and restart without a model', async ({
   page,
 }) => {
   test.setTimeout(90000);
@@ -87,6 +93,12 @@ test('native housing discussion uses measured context and replays after reply lo
     } else await route.continue();
   });
   await page.getByRole('button', { name: '发送研究问题', exact: true }).click();
+  await expect(page.getByRole('status', { name: '原生执行进度' })).toContainText(
+    '正在等待模型回答'
+  );
+  await expect(page.getByRole('button', { name: '重试原操作', exact: true })).toBeDisabled();
+  expect(captured).toHaveLength(1);
+  releaseModel();
   await expect(page.getByRole('button', { name: '重试原操作', exact: true })).toBeEnabled();
   expect(captured).toHaveLength(1);
   const prompt = JSON.parse(captured[0].messages[1].content);

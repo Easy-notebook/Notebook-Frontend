@@ -8,6 +8,7 @@ import {
 } from '@Services/native-study/publishComparisonCell';
 import { StudyEvidence } from './StudyEvidence';
 import { NativeDatasetPicker } from './NativeDatasetPicker';
+import { StudyProgress } from './StudyProgress';
 import { StudyDiscussion } from './StudyDiscussion';
 
 const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm';
@@ -22,6 +23,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     view: null,
     error: null,
     pending: false,
+    progress: null,
   });
   const [csv, setCsv] = useState('');
   const [columns, setColumns] = useState('area\nrooms');
@@ -177,6 +179,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           刷新研究
         </button>
       </div>
+      <StudyProgress progress={state.progress} />
       {state.error && (
         <p role="alert" className="text-destructive">
           {state.error}
