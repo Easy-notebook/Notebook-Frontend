@@ -4,6 +4,8 @@ import { ChevronDown, ChevronRight, CheckCircle2 } from 'lucide-react';
 import iconMapping from '@Utils/iconMapping';
 import { SHARED_STYLES } from '@LeftSidebar/shared/constants';
 import { StatusIcon, StatusDot, SidebarButton } from '@LeftSidebar/shared/components';
+import { useHeadingNavigation } from './useHeadingNavigation';
+import { indexHeadingTargets } from '@Utils/markdown/headingIdentity';
 
 /* ----------------------------- Types ------------------------------ */
 
@@ -32,75 +34,6 @@ const NB_SHADOW = 'shadow-[0_2px_8px_rgba(0,0,0,0.1)] dark:shadow-[0_2px_8px_rgb
 const StatusStyles = SHARED_STYLES.status;
 
 /* -------------------------- Helpers ------------------------------- */
-
-/**
- * 标准化 slug 生成函数，与编辑器保持一致
- * 用于生成滚动目标的 DOM ID
- */
-const generateSlug = (text: string): string => {
-  return text
-    .toLowerCase()
-    .replace(/<[^>]+>/g, '')
-    .replace(/[^a-z0-9\s-]/gi, '')
-    .replace(/\s+/g, '-')
-    .slice(0, 80);
-};
-
-/**
- * 优化的滚动函数，支持多种滚动容器检测
- * 与 FileExplorer 使用相同的滚动逻辑
- */
-const scrollToTarget = (elementId: string): void => {
-  // 使用双重 requestAnimationFrame 确保 DOM 更新完成
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const targetElement = document.getElementById(elementId);
-      if (targetElement) {
-        const scrollContainer =
-          document.querySelector('.flex-1.overflow-y-auto.scroll-smooth') ||
-          document.querySelector('.flex-1.overflow-y-auto') ||
-          document.querySelector('[class*="overflow-y-auto"]') ||
-          document.documentElement;
-
-        const targetRect = targetElement.getBoundingClientRect();
-        const containerRect = scrollContainer.getBoundingClientRect();
-
-        if (scrollContainer === document.documentElement) {
-          targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-          const scrollTop = targetRect.top - containerRect.top + scrollContainer.scrollTop - 20;
-          scrollContainer.scrollTo({
-            top: scrollTop,
-            behavior: 'smooth',
-          });
-        }
-        return;
-      }
-
-      // Fallback: 在 TiptapNotebookEditor 容器内查找
-      const tiptapContainer = document.querySelector('.tiptap-notebook-editor');
-      if (tiptapContainer) {
-        const [baseId, key] = elementId.includes('--') ? elementId.split('--') : [elementId, ''];
-        let heading = null as HTMLElement | null;
-
-        if (key) {
-          heading = tiptapContainer.querySelector(
-            `[data-base-id="${CSS.escape(baseId)}"][data-heading-key="${CSS.escape(key)}"]`
-          ) as HTMLElement | null;
-        }
-        if (!heading) {
-          heading = tiptapContainer.querySelector(
-            `#${CSS.escape(elementId)}`
-          ) as HTMLElement | null;
-        }
-
-        if (heading) {
-          heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-    });
-  });
-};
 
 /* --------------------------- Components --------------------------- */
 
@@ -141,6 +74,7 @@ export const PhaseSection = memo(
     currentStepId,
     isTitle,
   }: PhaseSectionProps) => {
+    const scrollToTarget = useHeadingNavigation();
     // 使用 useMemo 缓存计算值，提升性能
     const IconComponent = useMemo(
       () => iconMapping[phase.icon as keyof typeof iconMapping] || CheckCircle2,
@@ -163,25 +97,9 @@ export const PhaseSection = memo(
       [currentStepId, introStep?.id, regularSteps.length]
     );
 
-    // 生成唯一的 element ID，与编辑器保持一致
-    const generateUniqueElementId = useCallback(
-      (stepId: string): string => {
-        const stepTitle = phase.steps.find((s) => s.id === stepId)?.title;
-        if (!stepTitle) return phase.id;
-
-        const baseId = phase.id;
-        const rawSlug = generateSlug(stepTitle);
-        const siblings = phase.steps.filter((s) => s.title === stepTitle);
-
-        if (siblings.length <= 1) {
-          return `${baseId}--${rawSlug}`;
-        }
-
-        const indexAmongSame = siblings.findIndex((s) => s.id === stepId);
-        const uniqueSlug = indexAmongSame > 0 ? `${rawSlug}-${indexAmongSame + 1}` : rawSlug;
-        return `${baseId}--${uniqueSlug}`;
-      },
-      [phase.id, phase.steps]
+    const headingTargets = useMemo(
+      () => indexHeadingTargets(phase.id, regularSteps),
+      [phase.id, regularSteps]
     );
 
     const handleStepClick = useCallback(
@@ -189,19 +107,10 @@ export const PhaseSection = memo(
         onStepSelect(phase.id, stepId);
 
         // 生成唯一的元素 ID 并滚动
-        const elementId = generateUniqueElementId(stepId);
+        const elementId = headingTargets.get(stepId) ?? phase.id;
         scrollToTarget(elementId);
-
-        // Fallback: 尝试不带序号的版本
-        const stepTitle = phase.steps.find((s) => s.id === stepId)?.title;
-        if (stepTitle) {
-          const fallbackId = `${phase.id}--${generateSlug(stepTitle)}`;
-          setTimeout(() => {
-            scrollToTarget(fallbackId);
-          }, 150);
-        }
       },
-      [phase.id, phase.steps, onStepSelect, generateUniqueElementId]
+      [phase.id, onStepSelect, headingTargets, scrollToTarget]
     );
 
     const handleTitleClick = useCallback(() => {
@@ -214,7 +123,7 @@ export const PhaseSection = memo(
 
       // 滚动到对应元素
       scrollToTarget(phase.id);
-    }, [phase.id, introStep, onStepSelect, onToggle, hasSubSteps]);
+    }, [phase.id, introStep, onStepSelect, onToggle, hasSubSteps, scrollToTarget]);
 
     // 计算动态样式类
     const buttonClasses = useMemo(
