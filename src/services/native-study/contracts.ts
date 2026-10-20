@@ -96,6 +96,18 @@ export const nativeView = z
         comparison: comparison.nullable(),
         practice: z.unknown(),
         sample_evidence: z.unknown(),
+        procedures: z
+          .array(
+            z
+              .object({
+                name: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
+                content_hash: z.string().regex(/^[a-f0-9]{64}$/),
+                content: boundedText(65536),
+              })
+              .strict()
+          )
+          .max(64)
+          .optional(),
       })
       .passthrough(),
     study_selection: z
@@ -123,6 +135,8 @@ export const pendingCommand = z
     ability: z.enum([
       'new_chapter',
       'communication',
+      'save_study_procedure',
+      'reuse_study_procedure',
       'configure_study',
       'run_study',
       'compare_study',

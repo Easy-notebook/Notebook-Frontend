@@ -10,6 +10,7 @@ import { StudyEvidence } from './StudyEvidence';
 import { NativeDatasetPicker } from './NativeDatasetPicker';
 import { StudyProgress } from './StudyProgress';
 import { StudyDiscussion } from './StudyDiscussion';
+import { StudyProcedures } from './StudyProcedures';
 
 const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm';
 const buttonClass = 'rounded border px-3 py-2 text-sm disabled:opacity-50';
@@ -180,6 +181,23 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
         </button>
       </div>
       <StudyProgress progress={state.progress} />
+      <StudyProcedures
+        key={`procedures:${notebookId}`}
+        procedures={view?.frontend_notebook_id === notebookId ? (view.study.procedures ?? []) : []}
+        disabled={
+          busy || closed || publishing || datasetBusy || view?.frontend_notebook_id !== notebookId
+        }
+        canSave={!!view?.study.current && !!view.study.comparison && !inputChanged}
+        hasInputs={!!(csv || savedInput?.configuration.csv)?.trim() && !!query.trim()}
+        onSave={(name) => run('save_study_procedure', { name })}
+        onReuse={(name) =>
+          run('reuse_study_procedure', {
+            name,
+            csv: csv || savedInput?.configuration.csv,
+            query,
+          })
+        }
+      />
       {state.error && (
         <p role="alert" className="text-destructive">
           {state.error}
