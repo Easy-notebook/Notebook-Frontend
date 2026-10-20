@@ -95,6 +95,7 @@ export const pendingCommand = z
       'compare_study',
       'explain_study_sample',
       'select_study',
+      'auto_study_task',
     ]),
     arguments: z.record(z.string(), z.unknown()),
     invocation: z.string().min(1).max(128),

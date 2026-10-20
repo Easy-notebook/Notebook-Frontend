@@ -141,3 +141,40 @@ describe('native study transport and lifecycle', () => {
     expect(() => studyMarkdown(nativeView.parse(view()))).toThrow('请先执行');
   });
 });
+
+it('reopens and retries the whole PCS task with its original query and caller threshold', async () => {
+  const sent: string[] = [];
+  let fail = true;
+  const request = vi.fn<typeof fetch>(async (_input, options) => {
+    if (options?.method === 'POST') {
+      sent.push(String(options.body));
+      if (fail) throw new Error('source provider interrupted');
+      return response({});
+    }
+    return response(view('a', fail ? 0 : 6));
+  });
+  const first = new NativeStudySession(new NativeStudyClient('a', request));
+  await first.refresh();
+  const input = {
+    goal: 'Compare and retain evidence',
+    csv: 'area,rooms\n40,2',
+    query_csv: 'area,rooms\n41,2',
+    neighbors: 3,
+    maximum: 0.001,
+  };
+  await first.execute('auto_study_task', input);
+  input.query_csv = 'changed';
+  input.maximum = 1000;
+  first.dispose();
+  fail = false;
+  const reopened = new NativeStudySession(new NativeStudyClient('a', request));
+  await reopened.refresh();
+  await reopened.retry();
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toBe(sent[0]);
+  expect(JSON.parse(sent[1]).arguments.maximum).toBe(0.001);
+  expect(JSON.parse(sent[1]).arguments.query_csv).toBe('area,rooms\n41,2');
+  expect(reopened.getSnapshot().view?.document.revision).toBe(6);
+  expect(reopened.getSnapshot().pending).toBe(false);
+  reopened.dispose();
+});

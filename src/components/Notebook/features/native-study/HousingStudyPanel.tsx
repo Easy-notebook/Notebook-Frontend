@@ -280,12 +280,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           run('compare_study', { csv: query, neighbors });
         }}
       >
-        <fieldset
-          disabled={
-            busy || closed || datasetBusy || publishing || inputChanged || !view?.study.current
-          }
-          className="space-y-3"
-        >
+        <fieldset disabled={busy || closed || datasetBusy || publishing} className="space-y-3">
           <legend className="font-semibold">2. 比较新房屋样本</legend>
           <label className="block">
             新样本 CSV
@@ -310,13 +305,17 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
               onChange={(event) => setNeighbors(Number(event.target.value))}
             />
           </label>
-          <button className={buttonClass} type="submit">
+          <button
+            className={buttonClass}
+            type="submit"
+            disabled={inputChanged || !view?.study.current}
+          >
             比较并解释相似样本
           </button>
           <button
             className={buttonClass}
             type="button"
-            disabled={!query.trim()}
+            disabled={!query.trim() || inputChanged || !view?.study.current}
             onClick={() => void insert('comparison')}
           >
             插入 AAL 相似样本单元格
@@ -334,19 +333,10 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             run('select_study', { goal, maximum });
           }}
         >
-          <fieldset
-            disabled={
-              busy ||
-              closed ||
-              publishing ||
-              !view.study.comparison ||
-              view.study.comparison.rows.length > 8
-            }
-            className="space-y-3"
-          >
-            <legend className="font-semibold">3. 按距离筛选近邻</legend>
+          <fieldset disabled={busy || closed || publishing || datasetBusy} className="space-y-3">
+            <legend className="font-semibold">3. PCS 研究规划与筛选</legend>
             <label className="block">
-              筛选目标
+              研究或筛选目标
               <textarea
                 className={inputClass}
                 required
@@ -368,9 +358,45 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
               />
             </label>
             <p className="text-sm">
-              支持最多 8 个查询样本。模型可复用或修订筛选能力，执行检查通过后保存。
+              筛选支持最多 8 个查询样本。模型可复用或修订筛选能力，执行检查通过后保存。
             </p>
-            <button className={buttonClass}>规划并执行筛选</button>
+            <button
+              className={buttonClass}
+              type="submit"
+              disabled={!view.study.comparison || view.study.comparison.rows.length > 8}
+            >
+              规划并执行筛选
+            </button>
+            <button
+              className={buttonClass}
+              type="button"
+              disabled={
+                !query.trim() ||
+                !(csv || savedInput?.configuration.csv)?.trim() ||
+                !goal.trim() ||
+                !Number.isFinite(maximum) ||
+                maximum < 0 ||
+                !Number.isInteger(neighbors) ||
+                neighbors < 1 ||
+                neighbors > 8
+              }
+              onClick={() =>
+                run('auto_study_task', {
+                  goal,
+                  csv: csv || savedInput?.configuration.csv,
+                  query_csv: query,
+                  neighbors,
+                  maximum,
+                })
+              }
+            >
+              由 PCS 规划并执行完整研究
+            </button>
+            <p className="text-sm text-muted-foreground">
+              完整研究使用当前参考和新样本 CSV，由 PCS 选择特征与分群数，再安排比较、单个样本的 FoKn
+              证据保存及可选筛选。上方手动特征配置不约束
+              PCS；需要的特征请写入目标。已完成步骤会保存，失败后可重试原操作。
+            </p>
           </fieldset>
         </form>
       )}

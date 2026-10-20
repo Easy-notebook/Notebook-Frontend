@@ -137,3 +137,48 @@ it('publishes captured comparison inputs, blocks duplicate actions, and aborts o
   expect(signal.aborted).toBe(true);
   finish();
 });
+
+it('submits a complete PCS task from current inputs without a prior fitted study', async () => {
+  const view = {
+    ...savedView('a', 'area,rooms\n40,2'),
+    model_enabled: true,
+    generated_selection_enabled: true,
+  };
+  const request = vi.fn<typeof fetch>(async (_url, options) =>
+    options?.method === 'POST'
+      ? new Response(JSON.stringify({ error: { message: 'Injected model interruption' } }), {
+          status: 503,
+        })
+      : new Response(JSON.stringify(view))
+  );
+  vi.stubGlobal('fetch', request);
+  render(<HousingStudyPanel notebookId="a" />);
+  await screen.findByText(/研究已就绪/);
+  expect(screen.getByRole('button', { name: '比较并解释相似样本' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('参考 CSV 内容'), {
+    target: { value: 'area,rooms\n41,2' },
+  });
+  fireEvent.change(screen.getByLabelText('新样本 CSV'), { target: { value: 'area,rooms\n42,2' } });
+  fireEvent.change(screen.getByLabelText('研究或筛选目标'), {
+    target: { value: 'Compare houses and save sample evidence' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '由 PCS 规划并执行完整研究' }));
+  await screen.findByText(/上次操作待处理/);
+  const sent = JSON.parse(
+    String(request.mock.calls.find((call) => call[1]?.method === 'POST')![1]!.body)
+  );
+  expect(sent).toMatchObject({
+    ability: 'auto_study_task',
+    workspace: 'native-a',
+    arguments: {
+      csv: 'area,rooms\n41,2',
+      query_csv: 'area,rooms\n42,2',
+      neighbors: 3,
+      maximum: 0.001,
+      goal: 'Compare houses and save sample evidence',
+      expected_revision: 1,
+    },
+  });
+  expect(JSON.parse(sessionStorage.getItem('aal-study-pending:a')!)).toEqual(sent);
+  expect(screen.getByRole('button', { name: '重试原操作' })).toBeEnabled();
+});
