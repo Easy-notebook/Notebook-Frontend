@@ -3,6 +3,7 @@ import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { NativeStudySession, type StudySnapshot } from '@Services/native-study/NativeStudySession';
 import { publishStudy } from '@Services/native-study/publishStudy';
 import { StudyEvidence } from './StudyEvidence';
+import { NativeDatasetPicker } from './NativeDatasetPicker';
 
 const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm';
 const buttonClass = 'rounded border px-3 py-2 text-sm disabled:opacity-50';
@@ -23,6 +24,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
   const [goal, setGoal] = useState('保留距离平方不超过指定上限的房屋近邻，保持原始排序。');
   const [notice, setNotice] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [datasetBusy, setDatasetBusy] = useState(false);
   useEffect(() => {
     let runtime: NativeStudySession;
     try {
@@ -32,6 +34,11 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
       return;
     }
     session.current = runtime;
+    loadedInput.current = undefined;
+    setCsv('');
+    setQuery('');
+    setNotice('');
+    setPublishing(false);
     const unsubscribe = runtime.subscribe(() => setState(runtime.getSnapshot()));
     setState(runtime.getSnapshot());
     queueMicrotask(() => {
@@ -63,27 +70,22 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
   const busy = state.status !== 'ready';
   const view = state.view;
   const closed = view?.document.notebook.status !== 'Open';
+  const selectedColumns = columns
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const savedParameters = savedInput?.configuration.parameters as
+    | { columns?: unknown; clusters?: unknown }
+    | undefined;
+  const inputChanged =
+    !!savedInput &&
+    ((csv || savedInput.configuration.csv) !== savedInput.configuration.csv ||
+      JSON.stringify(selectedColumns) !== JSON.stringify(savedParameters?.columns) ||
+      clusters !== savedParameters?.clusters);
   const run = (
     ability: Parameters<NativeStudySession['execute']>[0],
     args: Record<string, unknown>
   ) => void session.current?.execute(ability, args);
-  const upload = async (file?: File) => {
-    if (!file) return;
-    if (file.size > 4 * 1024 * 1024) {
-      setNotice('CSV 不能超过 4 MiB');
-      return;
-    }
-    const owner = session.current;
-    try {
-      const text = await file.text();
-      if (owner === session.current) {
-        setCsv(text);
-        setNotice('已读入 CSV，请保存研究输入。');
-      }
-    } catch (error) {
-      if (owner === session.current) setNotice(String(error));
-    }
-  };
   const insert = async () => {
     if (!view || publishing) return;
     const owner = session.current;
@@ -156,26 +158,23 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             kind: 'mining',
             csv: csv || view?.study.input?.configuration.csv,
             parameters: {
-              columns: columns
-                .split('\n')
-                .map((s) => s.trim())
-                .filter(Boolean),
+              columns: selectedColumns,
               clusters,
             },
           });
         }}
       >
-        <fieldset disabled={busy || closed} className="space-y-3">
+        <fieldset disabled={busy || closed || datasetBusy} className="space-y-3">
           <legend className="font-semibold">1. 房屋研究输入</legend>
-          <label className="block">
-            参考数据 CSV
-            <input
-              aria-label="参考数据 CSV 文件"
-              type="file"
-              accept=".csv,text/csv"
-              onChange={(event) => void upload(event.target.files?.[0])}
-            />
-          </label>
+          <NativeDatasetPicker
+            notebookId={notebookId}
+            disabled={busy || closed}
+            onBusyChange={setDatasetBusy}
+            onSelect={(text) => {
+              setCsv(text);
+              setNotice('已从 Rust 文件版本读入 CSV，请保存研究输入。');
+            }}
+          />
           <label className="block">
             参考 CSV 内容
             <textarea
@@ -212,13 +211,18 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             最多 2,000 行、16 个特征；缺失值需先处理。保存新输入后，旧结果失效。
             {view?.study.input ? '已保存研究输入；留空 CSV 可沿用已保存数据。' : ''}
           </p>
+          {inputChanged && (
+            <p role="status" className="text-sm">
+              当前输入尚未保存。请先保存再执行；下方结果仍对应上次保存的输入。
+            </p>
+          )}
           <button className={buttonClass} type="submit" disabled={!csv && !view?.study.input}>
             保存研究输入
           </button>{' '}
           <button
             className={buttonClass}
             type="button"
-            disabled={!view?.study.input}
+            disabled={!view?.study.input || inputChanged}
             onClick={() => run('run_study', {})}
           >
             执行房屋分群
@@ -231,7 +235,10 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           run('compare_study', { csv: query, neighbors });
         }}
       >
-        <fieldset disabled={busy || closed || !view?.study.current} className="space-y-3">
+        <fieldset
+          disabled={busy || closed || datasetBusy || inputChanged || !view?.study.current}
+          className="space-y-3"
+        >
           <legend className="font-semibold">2. 比较新房屋样本</legend>
           <label className="block">
             新样本 CSV
