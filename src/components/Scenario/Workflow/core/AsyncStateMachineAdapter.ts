@@ -356,44 +356,48 @@ export class AsyncStateMachineAdapter {
 // ==============================================
 // Singleton Instance
 // ==============================================
-let asyncStateMachineInstance: AsyncStateMachineAdapter | null = null;
+let asyncStateMachineInitialization: Promise<AsyncStateMachineAdapter> | null = null;
+let initializationGeneration = 0;
 
-/**
- * Get or create the AsyncStateMachine singleton instance
- *
- * This ensures we reuse the same instance with the same apiClient and scriptStore
- */
+/** Share one initialization across concurrent callers, including dynamic imports. */
 export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> {
-  if (!asyncStateMachineInstance) {
-    // Dynamic import to avoid circular dependencies
-    const { WorkflowAPIClient } = await import('../api/WorkflowAPIClient');
-    const { useScriptStore } = await import('../store/useScriptStore');
+  if (!asyncStateMachineInitialization) {
+    const generation = initializationGeneration;
+    const initialization = (async () => {
+      const [{ WorkflowAPIClient }, { useScriptStore }, { default: useNotebookStore }] =
+        await Promise.all([
+          import('../api/WorkflowAPIClient'),
+          import('../store/useScriptStore'),
+          import('@Store/notebookStore'),
+        ]);
 
-    const apiClient = new WorkflowAPIClient();
-    const scriptStore = useScriptStore.getState();
-    const notebookStore = (await import('@Store/notebookStore')).default.getState();
+      // Reset revokes publication before any global dependency is installed.
+      if (generation !== initializationGeneration) {
+        throw new DOMException('Workflow initialization was reset', 'AbortError');
+      }
 
-    asyncStateMachineInstance = new AsyncStateMachineAdapter(apiClient, scriptStore);
-
-    // Inject notebookStore into TransitionCoordinator
-    const coordinator = getTransitionCoordinator();
-    coordinator.setContext({
-      notebookStore,
+      const adapter = new AsyncStateMachineAdapter(
+        new WorkflowAPIClient(),
+        useScriptStore.getState()
+      );
+      getTransitionCoordinator().setContext({ notebookStore: useNotebookStore.getState() });
+      console.log('[AsyncFSM] Created singleton instance');
+      return adapter;
+    })();
+    asyncStateMachineInitialization = initialization;
+    // A failed older attempt must not clear a replacement installed after reset.
+    void initialization.catch(() => {
+      if (asyncStateMachineInitialization === initialization) {
+        asyncStateMachineInitialization = null;
+      }
     });
-
-    // Initialize StateFactory with apiClient
-    StateFactory.setApiClient(apiClient);
-
-    console.log('[AsyncFSM] Created singleton instance');
   }
-
-  return asyncStateMachineInstance;
+  return asyncStateMachineInitialization;
 }
 
-/**
- * Reset the singleton instance (useful for testing)
- */
+/** Revoke pending initialization and let the next caller create a fresh instance. */
 export function resetAsyncStateMachine(): void {
-  asyncStateMachineInstance = null;
+  initializationGeneration++;
+  asyncStateMachineInitialization = null;
   console.log('[AsyncFSM] Reset singleton instance');
 }
