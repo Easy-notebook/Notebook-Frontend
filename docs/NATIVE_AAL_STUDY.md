@@ -54,7 +54,8 @@ Saved studies retain their full CSV input and existing invocation/revision histo
 The picker displays the most recently loaded filename/hash; it does not claim a
 persisted filename lineage in study exports. This archive belongs to the native
 study and is separate from the generic Python file browser. It does not expose
-arbitrary disk paths, binary downloads, or files to Python/AAL code cells.
+arbitrary disk paths, binary downloads, or files to Python cells. AAL cells can
+explicitly read pinned CSV versions as described below.
 
 To enable PCS source revision and measured selection, configure the existing AAL
 model environment and run the Rust server with `--features web,model` and
@@ -113,8 +114,30 @@ The editor currently displays AAL source as plain text.
 
 Every run has fresh scratch state. Cells do not share globals or mutate the saved
 housing-study document. Native language computations and the numerical skills
-`numeric_segments`, `segment_assign`, `segment_compare` are available; file, process,
-network, clock and model Host calls are unavailable.
+`numeric_segments`, `segment_assign`, `segment_compare` are available. The
+`notebook_csv(version)` skill reads one immutable CSV version owned by this notebook.
+Arbitrary file, process, network, clock and model Host calls are unavailable.
+
+After loading a version in **房屋研究**, use **插入 AAL 分群单元格**. It creates and
+durably saves a complete AAL program using that file version and the visible feature/
+cluster settings. Close the panel to run the cell. The program reads the saved file
+version, so later same-name uploads do not change its input. Its output includes the
+measured groups and an actual-read file/version/hash record. Editing the CSV textarea
+does not change an immutable saved file version.
+
+Repeated insertion of the same configuration does not duplicate the cell, including
+after a save failure. A changed configuration gets a distinct cell. If the generated
+cell has been edited, insertion reports a conflict and preserves that edit. Notebook
+navigation and panel disposal cancel pending insertion observation; an already saved
+cell is not rolled back.
+
+The parent supplies a verified read-only archive snapshot to the supervised worker;
+the child receives no filesystem path. Snapshot bounds remain 128 versions, 16 MiB
+of raw CSV and 32 MiB encoded; internal worker input is capped at 33 MiB including
+source. This copies the bounded archive per run. An invalid archive blocks new cell
+work, while completed invocation replay uses its existing result without reopening
+the archive. Worker death may leave no returned read log. Shared mutable globals,
+filesystem access and cross-cell FoKn state are not introduced by this read-only path.
 
 Execution uses a supervised Rust child process: 32 KiB source, 100,000 fuel,
 10 seconds wall time, 512 KiB formatted result and 1 MiB worker output limits.
