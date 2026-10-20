@@ -1144,3 +1144,76 @@ it('never blocks a newer edit without retaining it when admission races recovery
   else expect(progress.phase).toBe('scheduled');
   expect(progress.committedRevision).toBe(0);
 });
+
+it('keeps storage open when disposal meets an unfinished conflict recovery', async () => {
+  const recovery = deferred();
+  const conflict = new NotebookConflictError('notebook', 'body');
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(conflict);
+  storage.recovery.saveDraft.mockImplementationOnce(() => recovery.promise);
+  const saving = expect(service.saveNow(snapshot('recover before close'))).rejects.toBe(conflict);
+  await vi.waitFor(() => expect(storage.recovery.saveDraft).toHaveBeenCalledOnce());
+  const disposing = expect(service.dispose()).rejects.toBe(conflict);
+  try {
+    expect(service.getState().lifecycle).toBe('closing');
+    expect(storage.close).not.toHaveBeenCalled();
+  } finally {
+    recovery.resolve();
+  }
+  await Promise.all([saving, disposing]);
+  expect(storage.close).not.toHaveBeenCalled();
+  expect(service.getState()).toMatchObject({ lifecycle: 'active', isDirty: true });
+  expect(service.getSaveProgress('notebook')?.phase).toBe('blocked');
+});
+
+it('waits for recovery ownership before an explicit discard closes storage', async () => {
+  const recovery = deferred();
+  const conflict = new NotebookConflictError('notebook', 'body');
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(conflict);
+  storage.recovery.saveDraft.mockImplementationOnce(() => recovery.promise);
+  const saving = expect(service.saveNow(snapshot('retained before discard'))).rejects.toBe(
+    conflict
+  );
+  await vi.waitFor(() => expect(storage.recovery.saveDraft).toHaveBeenCalledOnce());
+  const resetting = AutoSaveService.resetInstance();
+  try {
+    expect(service.getState().lifecycle).toBe('closing');
+    expect(storage.close).not.toHaveBeenCalled();
+  } finally {
+    recovery.resolve();
+  }
+  await Promise.all([saving, resetting]);
+  expect(storage.close).toHaveBeenCalledOnce();
+  expect(service.getState().lifecycle).toBe('disposed');
+  expect(service.hasPending()).toBe(false);
+});
+
+it('restores scheduling after a pause conflict while retaining edits admitted during recovery', async () => {
+  const recovery = deferred();
+  const conflict = new NotebookConflictError('notebook', 'body');
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(conflict);
+  storage.recovery.saveDraft.mockImplementationOnce(() => recovery.promise);
+  const pausing = expect(service.pause(snapshot('pause snapshot'))).rejects.toBe(conflict);
+  await vi.waitFor(() => expect(storage.recovery.saveDraft).toHaveBeenCalledOnce());
+  try {
+    expect(service.getState().scheduling).toBe('pausing');
+    await service.queueSave(snapshot('newest pause edit'));
+  } finally {
+    recovery.resolve();
+  }
+  await pausing;
+  expect(service.getState()).toMatchObject({
+    lifecycle: 'active',
+    scheduling: 'running',
+    isDirty: true,
+  });
+  expect(service.getSaveProgress('notebook')).toMatchObject({
+    phase: 'blocked',
+    currentRevision: 2,
+    committedRevision: 0,
+  });
+  expect(storage.recovery.saveDraft).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(storage.recovery.saveDraft.mock.calls[1][0].content).cells[0].content).toBe(
+    '# newest pause edit'
+  );
+  expect(storage.close).not.toHaveBeenCalled();
+});

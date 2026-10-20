@@ -145,3 +145,12 @@ the storage/autosave/session gate passes 333 tests. Two Chromium regressions now
 on the first recovery put request success, before transaction completion. The next transaction
 persists the newer revision; when deliberately aborted, it leaves the earlier recovery copy intact
 and the newest edit queued. Both cases preserve the canonical notebook content.
+
+### Recovery ownership during pause and shutdown
+
+The scheduler retains ownership until recovery persistence and conflict settlement finish. Ordinary
+disposal that encounters this conflict rejects and leaves storage open with the pending edit intact.
+Explicit discard waits for the scheduler to become idle before closing storage and clearing the queue.
+A pause continues accepting edits during recovery; if the conflict prevents completion, it restores
+its previous scheduling mode and retains the newest recovered revision as blocked. Service tests hold
+recovery writes behind a gate to verify these ordering guarantees and the actual close call count.
