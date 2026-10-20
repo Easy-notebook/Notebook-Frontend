@@ -43,6 +43,16 @@ export const analyzeDatasetStructure = async (
     const data = parsed.data ?? [];
     const columns = parsed.meta?.fields ?? [];
     if (!columns.length) throw new Error('No header detected');
+    // Papa's header rows and dynamic-typing lookup use ordinary objects.
+    // These names cannot be analyzed reliably; never publish partial statistics.
+    const unsupportedColumn = columns.find(
+      (column) =>
+        column === '__parsed_extra' ||
+        Object.prototype.hasOwnProperty.call(Object.prototype, column)
+    );
+    if (unsupportedColumn !== undefined) {
+      throw new Error(`Unsupported dataset column name: ${unsupportedColumn}`);
+    }
 
     const stats: Record<string, ColumnStatistics> = {};
     const numericColumns: string[] = [];

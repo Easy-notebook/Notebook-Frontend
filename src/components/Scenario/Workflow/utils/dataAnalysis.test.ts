@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { analyzeDatasetStructure } from './dataAnalysis';
+import { DatasetAnalysisSession } from '../store/DatasetAnalysisSession';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -67,4 +68,43 @@ it('settles aborted file reads as a failed analysis', async () => {
     }
   );
   expect(await analyzeDatasetStructure(new File(['a'], 'dataset.csv'))).toBeNull();
+});
+
+it.each(['__proto__', 'constructor', 'toString', 'hasOwnProperty', '__parsed_extra'])(
+  'rejects the parser-reserved column %s instead of publishing incorrect statistics',
+  async (column) => {
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await analyzeDatasetStructure(`${column},value\n1,2\n3,4`)).toBeNull();
+    expect(report).toHaveBeenCalledWith('Error analyzing dataset structure:', expect.any(Error));
+  }
+);
+
+it('validates transformed headers before publishing statistics', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  expect(
+    await analyzeDatasetStructure('name,value\n1,2', {
+      transformHeader: (header) => (header === 'name' ? '__proto__' : header),
+    })
+  ).toBeNull();
+});
+
+it('accepts ordinary columns that merely contain reserved words', async () => {
+  const result = await analyzeDatasetStructure('constructor_count,prototype\n1,2\n3,4');
+  expect(result?.metadata.numericColumns).toEqual(['constructor_count', 'prototype']);
+});
+
+it('settles the analysis session without exposing columns or context from unsupported input', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const publish = vi.fn();
+  const reportError = vi.fn();
+  const session = new DatasetAnalysisSession(analyzeDatasetStructure, publish, reportError);
+  const file = new File(['__proto__,value\n1,2'], 'dataset.csv');
+  await session.select(file);
+  expect(publish).toHaveBeenLastCalledWith({
+    currentFile: file,
+    isUploading: false,
+    file_columns: [],
+    datasetInfo: '',
+  });
+  expect(reportError).toHaveBeenCalledOnce();
 });
