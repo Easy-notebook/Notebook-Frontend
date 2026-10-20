@@ -6,7 +6,7 @@ import { Output } from './types';
 export const processOutput = (output: unknown): Output | null => {
   if (!output || typeof output !== 'object') return null;
 
-  const outputObj = output as { type?: string; content?: unknown; key?: string };
+  const outputObj = output as { type?: string; content?: unknown; key?: string | number };
 
   if (outputObj.type === 'image') {
     try {
@@ -16,14 +16,14 @@ export const processOutput = (output: unknown): Output | null => {
           typeof outputObj.content === 'object'
             ? JSON.stringify(outputObj.content)
             : String(outputObj.content),
-        key: outputObj.key || `image-${Date.now()}-${Math.random()}`,
+        key: outputObj.key,
       };
     } catch (error) {
       console.error('Error processing image output:', error);
       return {
         type: 'error',
         content: 'Error processing image output',
-        key: `error-${Date.now()}-${Math.random()}`,
+        key: outputObj.key,
       };
     }
   }
@@ -32,15 +32,15 @@ export const processOutput = (output: unknown): Output | null => {
     try {
       return {
         type: outputObj.type as 'text' | 'error',
-        content: String(outputObj.content || ''),
-        key: outputObj.key || `${outputObj.type}-${Date.now()}-${Math.random()}`,
+        content: String(outputObj.content ?? ''),
+        key: outputObj.key,
       };
     } catch (error) {
       console.error('Error processing text/error output:', error);
       return {
         type: 'error',
         content: 'Error processing output',
-        key: `error-${Date.now()}-${Math.random()}`,
+        key: outputObj.key,
       };
     }
   }

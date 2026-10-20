@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { produce } from 'immer';
+import { reconcileOutputSnapshot } from './models/outputSnapshot';
 
 import {
   parseMarkdownCells,
@@ -30,7 +31,10 @@ import type { Task, Phase } from '@Store/models';
 import { getCellById, getCellIndexById } from '@Store/models/cellIndex';
 import { CellContent } from '@Store/models/CellContent';
 import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
-import { startsWithNotebookTitle } from '@Utils/markdown/structureIndex';
+import {
+  leadingMarkdownHeadingDepth,
+  startsWithNotebookTitle,
+} from '@Utils/markdown/structureIndex';
 import {
   bindTaskCellReferences,
   replaceTaskCellReferences,
@@ -237,18 +241,22 @@ const updateCellOutputsHelper = (
   if (cellIndex === undefined) return;
   const outArr: OutputItem[] = serializeOutput(outputs);
   const isErr = get().checkOutputsIsError(outArr);
+  const previous = get().cells[cellIndex].outputs;
+  const next = reconcileOutputSnapshot(
+    previous,
+    outArr.length > 0
+      ? isErr
+        ? [{ type: 'text', content: '[error-message-for-debug]', timestamp: '' }, ...outArr]
+        : outArr
+      : [{ type: 'text', content: '[without-output]', timestamp: '' }]
+  );
+  if (next === previous) return;
 
   set(
     produce((state: NotebookStoreState) => {
       const cell = state.cells[cellIndex];
 
-      if (outArr.length > 0) {
-        cell.outputs = isErr
-          ? [{ type: 'text', content: '[error-message-for-debug]', timestamp: '' }, ...outArr]
-          : outArr;
-      } else {
-        cell.outputs = [{ type: 'text', content: '[without-output]', timestamp: '' }, ...outArr];
-      }
+      cell.outputs = next;
       replaceTaskCellReferences(state.tasks, cell);
     })
   );
@@ -1078,23 +1086,14 @@ const useStore = create(
         const state = get();
         const lastCell = state.cells[state.cells.length - 1];
 
-        // Check if we need a new cell:
-        // 1. No cells exist
-        // 2. Last cell is NOT markdown
-        // 3. Last cell IS markdown but content starts with # (title)
+        // Keep generated body text separate from a leading Markdown heading.
         const shouldCreateNew =
           !lastCell ||
           lastCell.type !== 'markdown' ||
-          (lastCell.type === 'markdown' && lastCell.content.trim().startsWith('#'));
+          leadingMarkdownHeadingDepth(lastCell.content) !== undefined;
 
         if (shouldCreateNew) {
-          get().addNewCell2End('markdown', '', true);
-          // After creating new cell, append content to it (it becomes the last/current cell)
-          // addNewCell2End sets currentCellId to the new cell
-          const newCurrentId = get().currentCellId;
-          if (newCurrentId) {
-            get().updateCell(newCurrentId, content);
-          }
+          get().addNewCell2End('markdown', content, true);
         } else {
           // Append to last markdown cell
           const updatedContent = `${lastCell.content}${content}`;
@@ -1112,12 +1111,7 @@ const useStore = create(
         const shouldCreateNew = !lastCell || lastCell.type !== 'code';
 
         if (shouldCreateNew) {
-          get().addNewCell2End('code', '', true);
-          // After creating new cell, append content to it
-          const newCurrentId = get().currentCellId;
-          if (newCurrentId) {
-            get().updateCell(newCurrentId, content);
-          }
+          get().addNewCell2End('code', content, true);
         } else {
           // Append to last code cell
           const updatedContent = `${lastCell.content}${content}`;

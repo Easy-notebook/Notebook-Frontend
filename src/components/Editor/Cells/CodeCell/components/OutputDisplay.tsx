@@ -33,7 +33,7 @@ export const ThinkingStatus: React.FC<{
   thinkingText: string;
   onClick: () => void;
 }> = ({ thinkingText, onClick }) => (
-  <div className="flex flex-col justify-center px-2" onClick={onClick}>
+  <button type="button" className="flex flex-col justify-center px-2" onClick={onClick}>
     <div
       className="flex items-center gap-2 p-1"
       style={{
@@ -43,17 +43,29 @@ export const ThinkingStatus: React.FC<{
       <CheckCircle className="w-4 h-4 text-green-500" />
       <span className="text-sm text-gray-600 font-medium">{thinkingText}</span>
     </div>
-  </div>
+  </button>
 );
 
-/**
- * Main output display component
- */
+/** Clock, status and toolbar updates do not own the immutable output list. */
+const OutputRows = React.memo(function OutputRows({
+  outputs,
+}: Pick<OutputDisplayProps, 'outputs'>) {
+  return (
+    <>
+      {outputs.map((output) => (
+        <div key={output.key}>
+          <OutputRenderer output={output} />
+        </div>
+      ))}
+    </>
+  );
+});
+
+/** Main output display component. */
 export const OutputDisplay: React.FC<OutputDisplayProps> = ({
   outputs,
   isExecuting,
   elapsedTime,
-  outputUpdateKey,
   cellMode,
   isInDetachedView,
   finished_thinking,
@@ -62,6 +74,7 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
   thinkingText = 'finished thinking',
   onToggleThinking,
 }) => {
+  const showingThinking = finished_thinking && dslcMode && showThinking;
   return (
     <div className={`${isInDetachedView ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
       {/* Executing placeholder */}
@@ -73,17 +86,14 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
 
       {/* Actual output content */}
       <div
-        onClick={onToggleThinking}
+        onClick={showingThinking ? undefined : onToggleThinking}
         className={`${isInDetachedView ? 'flex-1 min-h-0 overflow-auto' : ''}`}
       >
-        {finished_thinking && dslcMode && showThinking ? (
+        {showingThinking ? (
           <ThinkingStatus thinkingText={thinkingText} onClick={onToggleThinking || (() => {})} />
         ) : (
           outputs.length > 0 && (
-            <div
-              className="p-4 rounded-b-lg space-y-4 output-container relative"
-              key={`output-${outputs.length}-${outputUpdateKey}`}
-            >
+            <div className="p-4 rounded-b-lg space-y-4 output-container relative">
               <div className="relative">
                 {isExecuting && cellMode !== DISPLAY_MODES.OUTPUT_ONLY && (
                   <div className="absolute -top-2 right-0 flex items-center gap-1 text-xs bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-200">
@@ -92,11 +102,7 @@ export const OutputDisplay: React.FC<OutputDisplayProps> = ({
                   </div>
                 )}
 
-                {outputs.map((output) => (
-                  <div key={`${output.key}-${outputUpdateKey}`}>
-                    <OutputRenderer output={output} />
-                  </div>
-                ))}
+                <OutputRows outputs={outputs} />
               </div>
             </div>
           )

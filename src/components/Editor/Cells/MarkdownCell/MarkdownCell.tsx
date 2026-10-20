@@ -2,7 +2,7 @@ import React, { useMemo, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { Trash2, Eye } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import { markdownRemarkPlugins, markdownRehypePlugins } from '../../markdownPreviewPlugins';
+import { markdownRemarkPlugins } from '../../markdownPreviewPlugins';
 import useStore from '@Store/notebookStore';
 import type { Cell as StoreCell } from '@Store/models';
 import editorLogger from '@Utils/logger/editor_logger';
@@ -33,99 +33,90 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
 
   /** ---------- Markdown 渲染组件 ---------- **/
   const markdownComponents = useMemo<Components>(
-    () =>
-      ({
-        ...markdownCodeComponents,
-        ...markdownSoftLineComponents,
-        img: MarkdownImage,
-        table: MarkdownTable,
-        tr: MarkdownTableRow,
-        td: MarkdownTableCell,
-        th: MarkdownTableHead,
-        a: ({
-          href = '',
-          children,
-          node: _node,
-          ...props
-        }) => (
-          <a
-            {...props}
-            href={href}
-            onClick={(e) => {
-              if (!href) return;
-              e.preventDefault();
-              import('@Store/previewStore').then(async (mod) => {
-                const usePreviewStore = mod.default;
-                const useNotebookStore = (await import('@Store/notebookStore')).default;
-                const notebookId = useNotebookStore.getState().notebookId;
-                if (!notebookId) return;
-                const { Backend_BASE_URL } = await import('@Config/base_url');
+    () => ({
+      ...markdownCodeComponents,
+      ...markdownSoftLineComponents,
+      img: MarkdownImage,
+      table: MarkdownTable,
+      tr: MarkdownTableRow,
+      td: MarkdownTableCell,
+      th: MarkdownTableHead,
+      a: ({ href = '', children, node: _node, ...props }) => (
+        <a
+          {...props}
+          href={href}
+          onClick={(e) => {
+            if (!href) return;
+            e.preventDefault();
+            import('@Store/previewStore').then(async (mod) => {
+              const usePreviewStore = mod.default;
+              const useNotebookStore = (await import('@Store/notebookStore')).default;
+              const notebookId = useNotebookStore.getState().notebookId;
+              if (!notebookId) return;
+              const { Backend_BASE_URL } = await import('@Config/base_url');
 
-                const base = (Backend_BASE_URL as string)?.replace(/\/$/, '');
-                let filePath: string | null = null;
+              const base = (Backend_BASE_URL as string)?.replace(/\/$/, '');
+              let filePath: string | null = null;
+              try {
+                const pattern = new RegExp(`^${base}/download_file/${notebookId}/(.+)$`);
+                const m = href.match(pattern);
+                if (m && m[1]) filePath = decodeURIComponent(m[1]);
+              } catch {
+                // Ignore regex parsing errors
+              }
+              if (!filePath) {
+                const relPattern = new RegExp(
+                  '^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\assets\\/|\\assets\\/)'
+                );
+                if (relPattern.test(href)) {
+                  filePath = href.replace(new RegExp('^\\./'), '');
+                } else if (!new RegExp('^[a-z]+://', 'i').test(href) && href.indexOf('/') === -1) {
+                  filePath = href;
+                }
+              }
+
+              if (!filePath) {
+                window.open(href, '_blank', 'noopener,noreferrer');
+                return;
+              }
+
+              try {
+                const fileObj = {
+                  name: filePath.split('/').pop() || filePath,
+                  path: filePath,
+                  type: 'file' as const,
+                };
+                await usePreviewStore
+                  .getState()
+                  .previewFile(notebookId, filePath, { file: fileObj });
+                if (usePreviewStore.getState().previewMode !== 'file') {
+                  usePreviewStore.getState().changePreviewMode();
+                }
+              } catch (err) {
+                console.error('Markdown link split preview failed:', err);
                 try {
-                  const pattern = new RegExp(`^${base}/download_file/${notebookId}/(.+)$`);
-                  const m = href.match(pattern);
-                  if (m && m[1]) filePath = decodeURIComponent(m[1]);
-                } catch {
-                  // Ignore regex parsing errors
-                }
-                if (!filePath) {
-                  const relPattern = new RegExp(
-                    '^(\\.|\\.\\.|[^:/?#]+$|\\.\\/\\assets\\/|\\assets\\/)'
-                  );
-                  if (relPattern.test(href)) {
-                    filePath = href.replace(new RegExp('^\\./'), '');
-                  } else if (
-                    !new RegExp('^[a-z]+://', 'i').test(href) &&
-                    href.indexOf('/') === -1
-                  ) {
-                    filePath = href;
-                  }
-                }
-
-                if (!filePath) {
-                  window.open(href, '_blank', 'noopener,noreferrer');
-                  return;
-                }
-
-                try {
-                  const fileObj = {
-                    name: filePath.split('/').pop() || filePath,
-                    path: filePath,
-                    type: 'file' as const,
-                  };
-                  await usePreviewStore
-                    .getState()
-                    .previewFile(notebookId, filePath, { file: fileObj });
-                  if (usePreviewStore.getState().previewMode !== 'file') {
-                    usePreviewStore.getState().changePreviewMode();
-                  }
-                } catch (err) {
-                  console.error('Markdown link split preview failed:', err);
-                  try {
-                    const baseName = (filePath || href).split('/').pop() || '';
-                    if (baseName && baseName !== filePath) {
-                      const fileObj2 = { name: baseName, path: baseName, type: 'file' as const };
-                      await usePreviewStore
-                        .getState()
-                        .previewFile(notebookId, baseName, { file: fileObj2 });
-                      if (usePreviewStore.getState().previewMode !== 'file') {
-                        usePreviewStore.getState().changePreviewMode();
-                      }
-                      return;
+                  const baseName = (filePath || href).split('/').pop() || '';
+                  if (baseName && baseName !== filePath) {
+                    const fileObj2 = { name: baseName, path: baseName, type: 'file' as const };
+                    await usePreviewStore
+                      .getState()
+                      .previewFile(notebookId, baseName, { file: fileObj2 });
+                    if (usePreviewStore.getState().previewMode !== 'file') {
+                      usePreviewStore.getState().changePreviewMode();
                     }
-                  } catch (e) {
-                    console.error('Fallback to root failed:', e);
+                    return;
                   }
+                } catch (e) {
+                  console.error('Fallback to root failed:', e);
                 }
-              });
-            }}
-          >
-            {children}
-          </a>
-        ),
-      }),
+              }
+            });
+          }}
+        >
+          {children}
+        </a>
+      ),
+    }),
     []
   );
 
@@ -194,7 +185,6 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                 >
                   <ReactMarkdown
                     remarkPlugins={markdownRemarkPlugins}
-                    rehypePlugins={markdownRehypePlugins}
                     components={markdownComponents}
                   >
                     {cell.content}

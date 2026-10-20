@@ -6,6 +6,8 @@ import editorLogger from '@Utils/logger/editor_logger';
 export abstract class BaseCellViewModel {
   // State listeners
   protected listeners: Set<() => void> = new Set();
+  private revision = 0;
+  public getSnapshot = () => this.revision;
 
   // Properties
   public cell: StoreCell;
@@ -15,14 +17,15 @@ export abstract class BaseCellViewModel {
   }
 
   // Subscriptions
-  public subscribe(listener: () => void) {
+  public subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
     };
-  }
+  };
 
   protected notify() {
+    this.revision++;
     this.listeners.forEach((l) => l());
   }
 

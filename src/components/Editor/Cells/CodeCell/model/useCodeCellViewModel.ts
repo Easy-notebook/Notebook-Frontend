@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { CodeCellViewModel } from './CodeCellViewModel';
 import { Cell, ReactCodeMirrorRef } from '../utils/types';
 
@@ -26,11 +26,9 @@ export const useCodeCellViewModel = (
     viewModel.setRefs(editorRef, codeBlockWrapperRef, codeContainerRef);
   }, [editorRef, codeBlockWrapperRef, codeContainerRef, viewModel]);
 
-  // Subscribe to updates
-  const [, forceUpdate] = useState(0);
-  useEffect(() => {
-    return viewModel.subscribe(() => forceUpdate((n) => n + 1));
-  }, [viewModel]);
+  // Detect changes between render and subscription, including child layout measurements.
+  useSyncExternalStore(viewModel.subscribe, viewModel.getSnapshot, viewModel.getSnapshot);
+  useEffect(() => viewModel.cancelPendingScroll, [viewModel]);
 
   return viewModel;
 };

@@ -39,6 +39,8 @@ export class CodeEditorSession {
   }
 
   restoreScroll(view: EditorView): void {
+    // Fresh editors and already-consumed sessions have no scroll to restore.
+    if (!this.json) return;
     const saved = this.scroll;
     view.requestMeasure({
       read: () => saved,
