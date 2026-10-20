@@ -19,10 +19,14 @@ export abstract class BaseAPIHandler {
   /** Load application state only when requesting data, not while defining FSM states. */
   protected async synchronizeNotebook(state: WorkflowState, signal?: AbortSignal) {
     signal?.throwIfAborted();
+    const owner = state.state.notebook.id;
     const { default: updates } = await import('@/interfaces/globalUpdateInterface');
     signal?.throwIfAborted();
     const notebook = updates.getNotebookState();
     signal?.throwIfAborted();
+    if (owner !== null && owner !== notebook.notebook_id) {
+      throw new DOMException('Workflow notebook context changed', 'AbortError');
+    }
     state.state.notebook.update(notebook);
     return notebook;
   }
