@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Play, FolderOpen, Code, Globe, Settings } from 'lucide-react';
 // moved to features/viewers/web
-import NotebookTabManager, { TabContentRenderer } from './NotebookTabManager';
+import NotebookTabManager from './NotebookTabManager';
 
 /**
  * WebView 演示组件 - 展示如何使用 CodeSandbox 集成的 WebView 系统
