@@ -1,4 +1,5 @@
 import type { NotebookSnapshot, NotebookSaveProgress } from './types';
+import { NotebookSnapshotData } from './NotebookSnapshotData';
 
 export type QueuedSnapshot = NotebookSnapshot & { readonly revision: number };
 interface Barrier {
@@ -38,7 +39,7 @@ export class NotebookSaveQueue {
     const previous = this.entries.get(snapshot.notebookId);
     // A revision owns its accepted data across debounce, retries and conflict recovery.
     // Clone before changing queue state so rejected input cannot replace an accepted edit.
-    const owned = structuredClone(snapshot);
+    const owned = NotebookSnapshotData.capture(snapshot);
     const queued = { ...owned, timestamp: Date.now(), revision: ++this.revision };
     this.entries.set(snapshot.notebookId, {
       snapshot: queued,
