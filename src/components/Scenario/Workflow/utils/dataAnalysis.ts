@@ -1,32 +1,38 @@
-/* analyzeDatasetStructure.js */
-import Papa from 'papaparse';
+import Papa, { type ParseConfig } from 'papaparse';
 import _ from 'lodash-es';
+import type { AnalysisResult, ColumnStatistics } from '@Store/models/preStage';
 
 /* ---------- helpers ---------- */
-const readContent = (fileOrText) =>
+const readContent = (fileOrText: string | Blob): Promise<string> =>
   typeof fileOrText === 'string'
     ? Promise.resolve(fileOrText)
-    : new Promise((res, rej) => {
+    : new Promise<string>((res, rej) => {
         const r = new FileReader();
-        r.onload = (e) => res(e.target.result);
-        r.onerror = rej;
+        r.onload = () => {
+          if (typeof r.result === 'string') res(r.result);
+          else rej(new Error('Expected text from dataset reader'));
+        };
+        r.onerror = () => rej(r.error ?? new Error('Failed to read dataset'));
+        r.onabort = () => rej(new DOMException('Dataset read aborted', 'AbortError'));
         r.readAsText(fileOrText);
       });
 
-const median = (nums) => {
-  if (!nums.length) return null;
+const median = (nums: number[]): number => {
   const s = [...nums].sort((a, b) => a - b);
   const mid = Math.floor(s.length / 2);
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 };
 
 /* ---------- main ---------- */
-export const analyzeDatasetStructure = async (fileOrText, options = {}) => {
+export const analyzeDatasetStructure = async (
+  fileOrText: string | Blob,
+  options: ParseConfig<Record<string, unknown>> = {}
+): Promise<AnalysisResult | null> => {
   try {
     const content = await readContent(fileOrText);
     if (!content) throw new Error('Empty file content');
 
-    const parsed = Papa.parse(content, {
+    const parsed = Papa.parse<Record<string, unknown>>(content, {
       header: true,
       dynamicTyping: true,
       skipEmptyLines: true,
@@ -38,45 +44,48 @@ export const analyzeDatasetStructure = async (fileOrText, options = {}) => {
     const columns = parsed.meta?.fields ?? [];
     if (!columns.length) throw new Error('No header detected');
 
-    const stats = {};
-    const numericColumns = [];
-    const categoricalColumns = [];
-    const dateColumns = [];
-    const missingValueSummary = {};
-    const uniqueValueCounts = {};
+    const stats: Record<string, ColumnStatistics> = {};
+    const numericColumns: string[] = [];
+    const categoricalColumns: string[] = [];
+    const dateColumns: string[] = [];
+    const missingValueSummary: Record<string, number> = {};
+    const uniqueValueCounts: Record<string, number> = {};
 
     columns.forEach((col) => {
       const colVals = data
         .map((r) => r[col])
         .filter((v) => v !== null && v !== undefined && v !== '');
-      const numVals = colVals.filter((v) => typeof v === 'number' && !Number.isNaN(v));
+      const numVals = colVals.filter((v): v is number => typeof v === 'number' && !Number.isNaN(v));
       const uniqVals = _.uniq(colVals);
 
-      const stat = {
+      const base = {
         count: colVals.length,
         empty: data.length - colVals.length,
         unique: uniqVals.length,
         topValues: uniqVals.slice(0, 5),
       };
 
+      let stat: ColumnStatistics;
       if (numVals.length && numVals.length === colVals.length) {
-        Object.assign(stat, {
+        const sum = _.sum(numVals);
+        stat = {
+          ...base,
           dataType: 'numeric',
-          min: _.min(numVals),
-          max: _.max(numVals),
-          sum: _.sum(numVals),
-          avg: _.sum(numVals) / numVals.length,
+          min: numVals.reduce((min, value) => Math.min(min, value), numVals[0]),
+          max: numVals.reduce((max, value) => Math.max(max, value), numVals[0]),
+          sum,
+          avg: sum / numVals.length,
           median: median(numVals),
-        });
+        };
         numericColumns.push(col);
       } else if (
         colVals.length &&
         colVals.every((v) => typeof v === 'string' && !Number.isNaN(Date.parse(v)))
       ) {
-        stat.dataType = 'date';
+        stat = { ...base, dataType: 'date' };
         dateColumns.push(col);
       } else {
-        stat.dataType = 'categorical';
+        stat = { ...base, dataType: 'categorical' };
         categoricalColumns.push(col);
       }
 
