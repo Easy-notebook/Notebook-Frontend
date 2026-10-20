@@ -1,7 +1,6 @@
 /** Generating API Handler - Calls VDSAgents /generating endpoint */
 import { BaseAPIHandler } from './BaseAPIHandler';
 import { WorkflowState } from '../observation/WorkflowState';
-import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 
 export class GeneratingAPIHandler extends BaseAPIHandler {
   async *call(
@@ -16,11 +15,7 @@ export class GeneratingAPIHandler extends BaseAPIHandler {
       [stageId, stepId] = this.extractLocationInfo(state);
     }
 
-    // Get latest notebook state directly from notebookStore
-    const latestNotebook = globalUpdateInterface.getNotebookState();
-
-    // Update state with latest notebook data
-    state.state.notebook.update(latestNotebook);
+    const latestNotebook = await this.synchronizeNotebook(state, signal);
 
     console.log('[GeneratingAPI] Injected latest notebook data:', {
       notebook_id: latestNotebook.notebook_id,

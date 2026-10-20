@@ -1,3 +1,4 @@
+import type { WorkflowState } from '../observation/WorkflowState';
 import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Base API Handler
@@ -13,6 +14,17 @@ export abstract class BaseAPIHandler {
     this.apiClient = apiClient;
     this.scriptStore = scriptStore;
     this.name = name || this.constructor.name;
+  }
+
+  /** Load application state only when requesting data, not while defining FSM states. */
+  protected async synchronizeNotebook(state: WorkflowState, signal?: AbortSignal) {
+    signal?.throwIfAborted();
+    const { default: updates } = await import('@/interfaces/globalUpdateInterface');
+    signal?.throwIfAborted();
+    const notebook = updates.getNotebookState();
+    signal?.throwIfAborted();
+    state.state.notebook.update(notebook);
+    return notebook;
   }
 
   abstract call(

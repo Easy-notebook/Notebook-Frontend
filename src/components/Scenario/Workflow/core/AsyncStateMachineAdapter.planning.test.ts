@@ -78,3 +78,67 @@ it.each([false, true])(
     expect(state).toEqual(before);
   }
 );
+
+it('awaits each streamed planning action before reading the next and applying the transition', async () => {
+  const state = createInitialStateJSON();
+  useWorkflowStateMachine.setState({ stateJSON: state, currentState: WorkflowState.IDLE });
+  const read: string[] = [];
+  const completed: string[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered!: () => void;
+  const firstEntered = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const client = {
+    async *callPlanningAPI() {
+      read.push('plan_stage');
+      yield {
+        action: {
+          type: 'plan_stage',
+          stage_id: 'a',
+          title: 'Analysis',
+          task: 'Inspect',
+          acceptance: 'Done',
+        },
+      };
+      read.push('update_stage_context');
+      yield { action: { type: 'update_stage_context', stage_id: 'a', focus: 'Quality' } };
+    },
+    callGeneratingAPI: vi.fn(),
+    callReflectingAPI: vi.fn(),
+  };
+  const transition = vi
+    .spyOn(getTransitionCoordinator(), 'applyTransition')
+    .mockImplementation(async (current) => {
+      expect(completed).toEqual(['plan_stage', 'update_stage_context']);
+      return { state: current, transitionName: 'planning_applied' };
+    });
+  const execAction = vi.fn(async (step: ExecutionStep) => {
+    if (step.action === 'plan_stage') {
+      entered();
+      await gate;
+    }
+    const Action = getActionClass(step.action);
+    if (!Action) throw new Error(`Unregistered action: ${step.action}`);
+    await new Action({}).execute(step);
+    completed.push(step.action);
+  });
+  const pending = new AsyncStateMachineAdapter(client, { execAction }).step(state);
+  try {
+    await firstEntered;
+    expect(read).toEqual(['plan_stage']);
+    expect(completed).toEqual([]);
+    expect(transition).not.toHaveBeenCalled();
+  } finally {
+    release();
+  }
+  const [updated] = await pending;
+  expect(execAction).toHaveBeenCalledTimes(2);
+  expect(updated.observation.location.progress.stages.planned).toEqual([
+    expect.objectContaining({ stage_id: 'a', title: 'Analysis', focus: 'Quality' }),
+  ]);
+  expect(transition).toHaveBeenCalledOnce();
+});

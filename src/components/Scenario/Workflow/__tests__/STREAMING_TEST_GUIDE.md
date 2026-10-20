@@ -316,3 +316,13 @@ console.log(performance.getEntriesByType('measure'));
 2. 导出 streaming logger 数据
 3. 记录重现步骤
 4. 提交 issue
+
+## 自动化规划回归测试
+
+执行 `npx vitest run src/components/Scenario/Workflow --maxWorkers=2`。
+
+- `../api/PlanningAPIHandler.test.ts`：规划消息按顺序透传，处理器不执行笔记本动作。
+- `../core/AsyncStateMachineAdapter.planning.test.ts`：真实动作注册与状态更新；前一个动作完成后才读取后续消息，全部完成后才进行转换。
+- `../states/IdleState.test.ts`：直接导入状态类，验证规划响应的转换条件；同时防止应用层循环依赖再次进入状态类的加载过程。
+
+旧 `idle-planning-flow-test.ts` 使用过时的 Jest 接口且不匹配 Vitest 的默认发现规则，已在迁移有效覆盖后删除。API 处理器仅在请求开始时加载全局笔记本接口，并在异步加载后重新检查取消信号。

@@ -1,7 +1,6 @@
 /** Planning API Handler - Calls VDSAgents /planning endpoint (Streaming) */
 import { BaseAPIHandler } from './BaseAPIHandler';
 import { WorkflowState } from '../observation/WorkflowState';
-import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 
 export class PlanningAPIHandler extends BaseAPIHandler {
   /**
@@ -23,11 +22,7 @@ export class PlanningAPIHandler extends BaseAPIHandler {
       [stageId, stepId] = this.extractLocationInfo(state);
     }
 
-    // Get latest notebook state directly from notebookStore
-    const latestNotebook = globalUpdateInterface.getNotebookState();
-
-    // Update state with latest notebook data
-    state.state.notebook.update(latestNotebook);
+    const latestNotebook = await this.synchronizeNotebook(state, signal);
 
     console.log('[PlanningAPI] Injected latest notebook data:', {
       notebook_id: latestNotebook.notebook_id,
