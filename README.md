@@ -220,3 +220,7 @@ For questions or feedback, please open an issue on GitHub.
 ---
 
 **Built with ❤️ using React, TypeScript, and Tauri**
+
+## Rust housing-study integration
+
+See [Native AAL studies](docs/NATIVE_AAL_STUDY.md) for the existing frontend’s Rust-backed study creation, grouping, sample explanations, evidence and notebook publication.
