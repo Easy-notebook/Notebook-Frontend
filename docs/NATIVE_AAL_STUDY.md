@@ -107,6 +107,39 @@ A different request under an existing invocation UUID conflicts.
 Completed outputs use the existing editor save path. Notebook reload now preserves
 the cell's stored `language`, preventing saved AAL from being routed as Python.
 Late completion after switching notebooks cannot publish into the new document.
+The native browser request has a 20 second deadline. A stalled/aborted request
+keeps its invocation for retry; this does not claim cancellation of server work.
+
+## Run All
+
+**Run All** admits up to 256 distinct code cells in their document order. AAL cells
+use the Rust path above; Python cells retain their explicit Python backend.
+The execution session reserves admission for the whole batch, including the gaps
+between requests. A repeated request for the same active batch joins it instead
+of cancelling a cell or submitting duplicate work. Individual runs and other
+batches cannot insert work into the admitted sequence.
+
+All selected cell identities, source and languages are captured at admission.
+Unsupported languages fail preflight before any output is cleared. Editing the
+source/language or deleting a selected cell stops the batch and suppresses late
+results from that context. Switching notebooks, even away and back, also ends the
+old batch. Newly added cells are excluded; reordering does not change the admitted
+order. Output-only updates do not invalidate a run.
+
+The first execution error stops subsequent dispatch. Only the cell that actually
+starts has its previous output cleared; later cells retain their historical results.
+**Stop Run All** lets the admitted cell finish and save, then stops before the next
+one. While waiting, the button displays “Finishing current cell…”. It does not send
+a fictitious Rust cancellation request. If the last cell already finishes, the
+batch is complete.
+
+The notebook action rejects incomplete execution instead of reporting all cells
+succeeded. Completion, failure and explicit-stop notices use the application's
+mounted Sonner notification system and are suppressed after notebook navigation.
+The existing `runAllCells(): Promise<void>` public signature is preserved.
+Starting Run All again creates a new batch from the beginning; there is no claim
+of durable batch-plan resume or shared cross-cell state. Native per-cell retry
+continues to use its exact persisted invocation.
 
 ## Verification
 
@@ -118,5 +151,9 @@ Late completion after switching notebooks cannot publish into the new document.
 - Browser: create → configure → group → compare → FoKn evidence → publish to editor.
 - Native cell browser: create → execute AAL grouping → reload, preserving language
   and output (three groups, nine rows, silhouette `0.9692193427143321`).
+- Batch browser: Run All executes native grouping followed by area screening;
+  a first-cell compiler failure stops before the second and retains its output.
+  Corrected source runs again and both outputs survive reload. Rust result history
+  independently confirms the failed batch added only the first cell's result.
 - Existing unrelated frontend type errors remain; use the targeted test/lint output
   and build result rather than treating a full repository type check as passing.
