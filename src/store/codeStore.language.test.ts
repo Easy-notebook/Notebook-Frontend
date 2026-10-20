@@ -15,7 +15,10 @@ describe('code execution language guard', () => {
     const initializeKernel = vi.fn();
     useCodeStore.setState({ initializeKernel });
     const result = await useCodeStore.getState().executeCell('js-cell');
-    expect(result).toMatchObject({ success: false, error: expect.stringContaining('Python only') });
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('supported languages'),
+    });
     expect(initializeKernel).not.toHaveBeenCalled();
   });
 });

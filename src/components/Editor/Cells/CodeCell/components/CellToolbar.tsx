@@ -76,10 +76,15 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
           elapsedTime={elapsedTime}
           onExecute={onExecute}
           onCancel={onCancel}
+          cancellationUnavailable={
+            language === 'aal'
+              ? 'AAL calculation running (10 second maximum); server cancellation is unavailable'
+              : undefined
+          }
           disabledReason={
             canExecuteCodeLanguage(language)
               ? undefined
-              : 'Python kernel only; this language cannot run'
+              : 'Execution is available for Python and AAL'
           }
         />
         <select
@@ -87,7 +92,7 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
           title={
             canExecuteCodeLanguage(language)
               ? 'Code language'
-              : 'Syntax highlighting only; Python kernel cannot run this language'
+              : 'Syntax highlighting only; no execution backend for this language'
           }
           value={language}
           disabled={isExecuting}
@@ -106,8 +111,9 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
           <>
             <button
               onClick={onRestart}
+              disabled={language === 'aal'}
               className="p-2 hover:bg-theme-600 rounded"
-              title="Restart kernel"
+              title={language === 'aal' ? 'AAL uses fresh state on every run' : 'Restart kernel'}
             >
               <RefreshCw className="w-4 h-4" />
             </button>

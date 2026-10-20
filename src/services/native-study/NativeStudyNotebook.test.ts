@@ -33,7 +33,8 @@ it('creates one persisted editor document for concurrent create clicks', async (
   expect(notebook.id).toBe(first);
   const document = JSON.parse(file.content);
   expect(document.cells[0].content).toBe('# 房屋特征研究');
-  expect(document.cells).toHaveLength(2);
+  expect(document.cells).toHaveLength(3);
+  expect(document.cells[2]).toMatchObject({ type: 'code', language: 'aal' });
 });
 it('does not persist a misleading ready notebook when native connection fails', async () => {
   native.state.mockRejectedValueOnce(new Error('offline'));

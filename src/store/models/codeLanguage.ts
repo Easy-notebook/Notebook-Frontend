@@ -1,10 +1,11 @@
 export const CODE_LANGUAGES = [
   { value: 'python', label: 'Python', executable: true },
+  { value: 'aal', label: 'AAL · Rust', executable: true },
   { value: 'javascript', label: 'JavaScript', executable: false },
   { value: 'typescript', label: 'TypeScript', executable: false },
 ] as const;
 
-/** The notebook execution service currently exposes only a Python kernel. */
+/** Languages select explicit execution backends; unknown languages remain editable. */
 export function normalizeCodeLanguage(language?: string): string {
   const value = (language || 'python').toLowerCase();
   if (value === 'py') return 'python';

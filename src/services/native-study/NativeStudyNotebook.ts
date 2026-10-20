@@ -2,6 +2,7 @@ import { NativeStudyClient } from './NativeStudyClient';
 import { NotebookSnapshotDocument } from '@Services/autoSave/NotebookSnapshotDocument';
 import { PersistenceService } from '@Services/persistence/PersistenceService';
 import type { IPersistenceService } from '@Services/persistence/interfaces';
+import { housingCellExample } from '@Services/notebook/housingCellExample';
 
 /** Create a local editor document before navigation; no Python kernel is involved. */
 export class NativeStudyNotebook {
@@ -30,7 +31,14 @@ export class NativeStudyNotebook {
         {
           id: crypto.randomUUID(),
           type: 'markdown',
-          content: '在「房屋研究」中保存参考 CSV，运行分群并比较新样本。',
+          content:
+            '在「房屋研究」中保存参考 CSV，运行分群并比较新样本。下方 AAL 单元格可独立运行 Rust 分群示例；每次运行使用独立状态。',
+        },
+        {
+          id: crypto.randomUUID(),
+          type: 'code',
+          language: 'aal',
+          content: housingCellExample,
         },
       ],
       tasks: [],

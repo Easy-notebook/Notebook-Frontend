@@ -7,6 +7,7 @@ const io = vi.hoisted(() => ({
   clear: vi.fn(),
   outputs: vi.fn(),
   save: vi.fn(),
+  native: vi.fn(),
 }));
 vi.mock('@Store/notebookStore', async () => {
   const { create } = await import('zustand');
@@ -32,6 +33,11 @@ vi.mock('@Services/notebook/CodeExecutionService', () => ({
 }));
 vi.mock('@Services/notebook/NotebookLifecycleService', () => ({
   NotebookLifecycleService: { restartNotebook: async () => ({ status: 'ok' }) },
+}));
+vi.mock('@Services/notebook/NativeCellExecution', () => ({
+  NativeCellExecution: class {
+    execute = io.native;
+  },
 }));
 import useCodeStore from './codeStore';
 import useNotebookStore from './notebookStore';
@@ -62,11 +68,40 @@ beforeEach(() => {
   io.execute.mockResolvedValue({ status: 'ok', outputs: [{ type: 'text', content: 'done' }] });
   io.cancel.mockResolvedValue({ status: 'ok' });
   io.status.mockResolvedValue({ status: 'running' });
+  io.native.mockResolvedValue({ status: 'ok', outputs: [{ type: 'text', content: 'native' }] });
 });
 afterEach(() => {
   state().resetAll();
   useCodeStore.setState(initial, true);
   vi.useRealTimers();
+});
+it('runs AAL without Python initialization, execution or polling and saves the result', async () => {
+  useNotebookStore.setState({
+    cells: [{ id: 'a', type: 'code', content: 'native source', language: 'aal' }],
+  });
+  expect(await state().executeCell('a')).toMatchObject({ success: true });
+  expect(io.native).toHaveBeenCalledExactlyOnceWith('native source', expect.any(AbortSignal));
+  expect(io.initialize).not.toHaveBeenCalled();
+  expect(io.execute).not.toHaveBeenCalled();
+  expect(io.status).not.toHaveBeenCalled();
+  expect(io.outputs).toHaveBeenCalledExactlyOnceWith('a', [{ type: 'text', content: 'native' }]);
+  expect(io.save).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});
+it('does not publish AAL results after switching notebooks', async () => {
+  const result = deferred<unknown>();
+  io.native.mockReturnValue(result.promise);
+  useNotebookStore.setState({
+    cells: [{ id: 'a', type: 'code', content: 'native source', language: 'aal' }],
+  });
+  const attempt = state().executeCell('a');
+  await vi.advanceTimersByTimeAsync(0);
+  useNotebookStore.setState({ notebookId: 'other' });
+  result.resolve({ status: 'ok', outputs: [{ type: 'text', content: 'stale' }] });
+  expect(await attempt).toMatchObject({ success: false });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(io.outputs).not.toHaveBeenCalled();
+  expect(io.save).not.toHaveBeenCalled();
 });
 it('executes captured user code exactly once without a warmup and saves owned output', async () => {
   const init = deferred<string>();

@@ -5,6 +5,7 @@ import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleSe
 import { KernelSession } from '@Services/notebook/KernelSession';
 import { CellStatusPoller } from '@Services/notebook/CellStatusPoller';
 import { CodeExecutionService } from '@Services/notebook/CodeExecutionService';
+import { NativeCellExecution } from '@Services/notebook/NativeCellExecution';
 import { storeLog } from '@Utils/logger';
 import { CellExecutionSession } from '@Services/notebook/CellExecutionSession';
 import {
@@ -103,14 +104,29 @@ const useCodeStore = create<CodeStore>((set, get) => {
     notebookId: () => useStore.getState().notebookId,
     cell: (id) => useStore.getState().cells.find((cell) => cell.id === id),
     watch: (check) => useStore.subscribe(check),
-    initialize: () => get().initializeKernel(),
-    execute: (code, owner, signal) => CodeExecutionService.executeCode(code, owner, signal),
-    cancel: (owner, signal) => CodeExecutionService.cancelExecution(owner, signal),
+    initialize: (language) =>
+      language === 'aal'
+        ? Promise.resolve(useStore.getState().notebookId || false)
+        : get().initializeKernel(),
+    execute: (code, owner, signal, language, cellId) =>
+      language === 'aal'
+        ? new NativeCellExecution(owner, cellId).execute(code, signal)
+        : CodeExecutionService.executeCode(code, owner, signal),
+    cancel: (owner, signal, language) =>
+      language === 'aal'
+        ? Promise.resolve({
+            status: 'error',
+            message:
+              'AAL cells finish within a 10 second worker deadline; server cancellation is unavailable',
+          })
+        : CodeExecutionService.cancelExecution(owner, signal),
     update: (id, state) => get().setCellExecState(id, state),
     clear: (id) => useStore.getState().clearCellOutputs(id),
     outputs: (id, outputs) => useStore.getState().updateCellOutputs(id, outputs),
     save: () => useStore.getState().triggerAutoSave(),
-    startPolling: (id) => polling.start(id),
+    startPolling: (id, language) => {
+      if (language !== 'aal') polling.start(id);
+    },
     stopPolling: (id) => polling.stop(id),
   });
   return {

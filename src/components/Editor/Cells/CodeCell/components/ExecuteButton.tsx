@@ -9,6 +9,7 @@ export interface ExecuteButtonProps {
   onExecute: () => void;
   onCancel: () => void;
   disabledReason?: string;
+  cancellationUnavailable?: string;
 }
 
 /**
@@ -21,16 +22,17 @@ export const ExecuteButton: React.FC<ExecuteButtonProps> = ({
   onExecute,
   onCancel,
   disabledReason,
+  cancellationUnavailable,
 }) => {
   if (isExecuting) {
     return (
       <button
         onClick={onCancel}
         className="p-2 hover:bg-red-600 rounded flex items-center gap-2"
-        disabled={isCancelling}
-        title="Cancel execution"
+        disabled={isCancelling || !!cancellationUnavailable}
+        title={cancellationUnavailable || 'Cancel execution'}
       >
-        {isCancelling ? (
+        {isCancelling || cancellationUnavailable ? (
           <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
           <>

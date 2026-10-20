@@ -240,7 +240,7 @@ export class CodeCellViewModel extends BaseCellViewModel {
     if (!canExecuteCodeLanguage(this.cell.language)) {
       showToast({
         description:
-          'This notebook runs Python only. Switch the cell language to Python to execute it.',
+          'Execution is available for Python and AAL. Switch the cell language to execute it.',
         variant: 'destructive',
       });
       return;

@@ -1,4 +1,4 @@
-import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
+import { canExecuteCodeLanguage, normalizeCodeLanguage } from '@Store/models/codeLanguage';
 import type { CellExecutionState, ExecutionResult } from '@Store/models';
 import type {
   ApiResponse,
@@ -9,20 +9,27 @@ interface ExecutionPorts {
   notebookId(): string | null;
   cell(id: string): { content: string; language?: string } | undefined;
   watch(check: () => void): () => void;
-  initialize(): Promise<string | false>;
-  execute(code: string, owner: string, signal: AbortSignal): Promise<BackendResult>;
-  cancel(owner: string, signal: AbortSignal): Promise<ApiResponse>;
+  initialize(language: string): Promise<string | false>;
+  execute(
+    code: string,
+    owner: string,
+    signal: AbortSignal,
+    language: string,
+    cellId: string
+  ): Promise<BackendResult>;
+  cancel(owner: string, signal: AbortSignal, language: string): Promise<ApiResponse>;
   update(id: string, state: Partial<CellExecutionState>): void;
   clear(id: string): void;
   outputs(id: string, outputs: ExecutionOutput[]): void;
   save(): void;
-  startPolling(id: string): void;
+  startPolling(id: string, language: string): void;
   stopPolling(id: string): void;
 }
 interface Attempt {
   cellId: string;
   notebookId: string | null;
   code: string;
+  language: string;
   phase: 'initializing' | 'running' | 'cancelling' | 'settled';
   controller: AbortController;
   promise: Promise<ExecutionResult>;
@@ -53,7 +60,7 @@ export class CellExecutionSession {
     if (!cell) return Promise.resolve(failure('Cell does not exist'));
     if (!canExecuteCodeLanguage(cell.language))
       return Promise.resolve(
-        failure(`${cell.language} execution is unavailable; the kernel runs Python only`)
+        failure(`${cell.language} execution is unavailable; supported languages are Python and AAL`)
       );
     let settle!: Attempt['settle'];
     const promise = new Promise<ExecutionResult>((resolve) => {
@@ -63,6 +70,7 @@ export class CellExecutionSession {
       cellId,
       notebookId: this.ports.notebookId(),
       code: cell.content,
+      language: normalizeCodeLanguage(cell.language),
       phase: 'initializing',
       controller: new AbortController(),
       promise,
@@ -94,14 +102,20 @@ export class CellExecutionSession {
     try {
       this.ports.update(attempt.cellId, { isExecuting: true, isCancelling: false, elapsedTime: 0 });
       if (!this.owns(attempt)) return;
-      const kernelId = await this.ports.initialize();
+      const kernelId = await this.ports.initialize(attempt.language);
       if (!this.owns(attempt)) return;
       if (!kernelId || kernelId !== attempt.notebookId) throw new Error('内核初始化失败');
       attempt.phase = 'running';
       this.ports.clear(attempt.cellId);
       if (!this.owns(attempt)) return;
-      const resultPromise = this.ports.execute(attempt.code, kernelId, attempt.controller.signal);
-      if (this.owns(attempt)) this.ports.startPolling(attempt.cellId);
+      const resultPromise = this.ports.execute(
+        attempt.code,
+        kernelId,
+        attempt.controller.signal,
+        attempt.language,
+        attempt.cellId
+      );
+      if (this.owns(attempt)) this.ports.startPolling(attempt.cellId, attempt.language);
       const result = await resultPromise;
       if (attempt.cancellation) await attempt.cancellation;
       if (!this.owns(attempt)) return;
@@ -156,7 +170,11 @@ export class CellExecutionSession {
       if (!this.owns(attempt)) return failure('execution_context_changed');
       this.ports.update(attempt.cellId, { isCancelling: true });
       if (!this.owns(attempt)) return failure('execution_context_changed');
-      const response = await this.ports.cancel(attempt.notebookId!, attempt.controller.signal);
+      const response = await this.ports.cancel(
+        attempt.notebookId!,
+        attempt.controller.signal,
+        attempt.language
+      );
       if (!this.owns(attempt)) return failure('execution_context_changed');
       if (response.status !== 'ok') throw new Error(response.message || 'Cancellation failed');
       const result = failure('canceled_by_user');
@@ -168,7 +186,7 @@ export class CellExecutionSession {
       attempt.cancellation = undefined;
       attempt.cancelSettle = undefined;
       this.ports.update(attempt.cellId, { isCancelling: false });
-      if (this.owns(attempt)) this.ports.startPolling(attempt.cellId);
+      if (this.owns(attempt)) this.ports.startPolling(attempt.cellId, attempt.language);
       return failure(error instanceof Error ? error.message : String(error));
     }
   }
