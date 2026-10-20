@@ -38,7 +38,7 @@ Finite acceptance checks do not prove correctness for every input.
 
 ## Boundary and persistence
 
-The Vite proxy maps `/aal-api/workspaces/{encodedNotebookId}/{state|command}` to
+The Vite proxy maps `/aal-api/workspaces/{encodedNotebookId}/{state|command|execute}` to
 Rust `/api/workspaces/...`. It accepts only a configured loopback HTTP target and
 checks incoming Host/Origin before replacing the upstream Origin header. There is
 no wildcard CORS grant or automatic fallback to the old backend. Production hosting
@@ -69,12 +69,44 @@ changes do not silently rewrite the user's prose.
 ## Supported scope
 
 Implemented here: native study creation, housing feature grouping, saved-reference
-comparison, sample evidence, optional checked selector, and editor publication.
-This does **not** replace the existing general `/execute`, file-management,
-`/send_operation` streams, arbitrary QA/workflow services or Python code cells.
+comparison, sample evidence, optional checked selector, editor publication and AAL
+code-cell execution. This does **not** replace the Python `/execute`, file-management,
+`/send_operation` streams or arbitrary QA/workflow services.
 Those existing endpoints remain a separate integration inventory; no successful
 housing test is evidence that all frontend backend contracts have been migrated.
 No online EasyNet pairing or production network validation was performed.
+
+## Run AAL code cells
+
+New housing notebooks contain a runnable nine-row grouping example. Click its run
+button; existing cells can select **AAL · Rust**. The Rust compiler executes a
+complete `agent Cell is Agent` program with a public, zero-argument `run` ability.
+The return value is displayed as JSON; compile/runtime errors use the existing
+error output. No Python kernel initialization, polling or translation occurs.
+The editor currently displays AAL source as plain text.
+
+Every run has fresh scratch state. Cells do not share globals or mutate the saved
+housing-study document. Native language computations and the numerical skills
+`numeric_segments`, `segment_assign`, `segment_compare` are available; file, process,
+network, clock and model Host calls are unavailable.
+
+Execution uses a supervised Rust child process: 32 KiB source, 100,000 fuel,
+10 seconds wall time, 512 KiB formatted result and 1 MiB worker output limits.
+These are local trusted-authoring limits, not a hostile-code memory/OS sandbox.
+Native cancellation and kernel restart are disabled because no persistent cell
+kernel is exposed. Python cells continue to use their explicit Python backend.
+
+`NativeCellExecution` persists `{cell_id,source,invocation}` before dispatch and
+checks the notebook/cell/invocation in the terminal response. A transport failure
+can be retried by running the same source again, including after reload. Changed
+source starts a new scratch calculation. The server retains exact result replay
+(including compile/runtime failures) across restart, with 256 executions and 16 MiB
+per notebook; it refuses new work at capacity rather than evicting replay history.
+A different request under an existing invocation UUID conflicts.
+
+Completed outputs use the existing editor save path. Notebook reload now preserves
+the cell's stored `language`, preventing saved AAL from being routed as Python.
+Late completion after switching notebooks cannot publish into the new document.
 
 ## Verification
 
@@ -84,5 +116,7 @@ No online EasyNet pairing or production network validation was performed.
   suppression, concurrent command rejection, response identity, imported names,
   StrictMode admission, native notebook creation and durable/idempotent publication.
 - Browser: create → configure → group → compare → FoKn evidence → publish to editor.
+- Native cell browser: create → execute AAL grouping → reload, preserving language
+  and output (three groups, nine rows, silhouette `0.9692193427143321`).
 - Existing unrelated frontend type errors remain; use the targeted test/lint output
   and build result rather than treating a full repository type check as passing.
