@@ -1,6 +1,5 @@
 import { toast } from 'sonner';
 import { create } from 'zustand';
-import React from 'react';
 import NotificationToast from '@/components/UI/NotificationToast';
 
 export type NotificationType = 'success' | 'error' | 'info' | 'warning';
@@ -24,42 +23,37 @@ interface NotificationStore {
   removeNotification: (id: string) => void;
 }
 
+function notificationSnapshot(
+  notifications: NotificationItem[]
+): Pick<NotificationStore, 'notifications' | 'unreadCount'> {
+  return {
+    notifications,
+    unreadCount: notifications.reduce((count, item) => count + (item.read ? 0 : 1), 0),
+  };
+}
+
 export const useNotificationStore = create<NotificationStore>((set) => ({
-  notifications: [],
-  unreadCount: 0,
+  ...notificationSnapshot([]),
   addNotification: (notification) =>
-    set((state) => ({
-      notifications: [notification, ...state.notifications],
-      unreadCount: state.unreadCount + 1,
-    })),
+    set((state) => notificationSnapshot([notification, ...state.notifications])),
   markAsRead: (id) =>
     set((state) => {
-      const notification = state.notifications.find((n) => n.id === id);
-      if (notification && !notification.read) {
-        return {
-          notifications: state.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
-          unreadCount: Math.max(0, state.unreadCount - 1),
-        };
-      }
-      return state;
+      if (!state.notifications.some((item) => item.id === id && !item.read)) return state;
+      return notificationSnapshot(
+        state.notifications.map((item) =>
+          item.id === id && !item.read ? { ...item, read: true } : item
+        )
+      );
     }),
   markAllAsRead: () =>
-    set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, read: true })),
-      unreadCount: 0,
-    })),
-  clearAll: () => set({ notifications: [], unreadCount: 0 }),
+    set((state) =>
+      notificationSnapshot(
+        state.notifications.map((item) => (item.read ? item : { ...item, read: true }))
+      )
+    ),
+  clearAll: () => set(notificationSnapshot([])),
   removeNotification: (id) =>
-    set((state) => {
-      const notification = state.notifications.find((n) => n.id === id);
-      return {
-        notifications: state.notifications.filter((n) => n.id !== id),
-        unreadCount:
-          notification && !notification.read
-            ? Math.max(0, state.unreadCount - 1)
-            : state.unreadCount,
-      };
-    }),
+    set((state) => notificationSnapshot(state.notifications.filter((item) => item.id !== id))),
 }));
 
 class NotificationService {
