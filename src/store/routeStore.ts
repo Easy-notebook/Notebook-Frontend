@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import { storeLog } from '@Utils/logger';
-import { getCurrentAppPath, updateAppHistory, isHashRoutingEnabled } from '@Utils/routerMode';
+import { getCurrentAppPath, updateAppHistory } from '@Utils/routerMode';
 import type { AppView } from '@Store/models';
 
 export interface RouteState {
