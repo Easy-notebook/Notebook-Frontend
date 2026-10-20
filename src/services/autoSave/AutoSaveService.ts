@@ -8,7 +8,7 @@ import { v4 as uuid } from 'uuid';
 import { AutoSaveActivity } from './AutoSaveActivity';
 import { NotebookSnapshotDocument } from './NotebookSnapshotDocument';
 import { NotebookSaveQueue, type QueuedSnapshot } from './NotebookSaveQueue';
-import { NotebookSaveScheduler } from './NotebookSaveScheduler';
+import { NotebookSaveScheduler, type NotebookSaveRecovery } from './NotebookSaveScheduler';
 import { NotebookWriteBaseline } from './NotebookWriteBaseline';
 import { PersistenceService } from '../persistence/PersistenceService';
 import { NotebookConflictError } from '../persistence/NotebookConflictError';
@@ -554,7 +554,7 @@ export class AutoSaveService implements IAutoSaveService {
   /**
    * Perform actual save operation
    */
-  private async performSave(snapshot: QueuedSnapshot): Promise<void> {
+  private async performSave(snapshot: QueuedSnapshot): Promise<void | NotebookSaveRecovery> {
     const { notebookId, notebookTitle, cells, tasks } = snapshot;
     let condition: NotebookSnapshotCondition | undefined;
     let release = () => {};
@@ -596,32 +596,33 @@ export class AutoSaveService implements IAutoSaveService {
       });
     } catch (error) {
       if (error instanceof NotebookConflictError) {
-        let retained = this.saveQueue.get(notebookId) ?? snapshot;
-        try {
-          for (;;) {
-            await this.persistence.recovery.saveDraft({
-              notebookId,
-              writerId: this.writerId,
-              revision: retained.revision,
-              content: new NotebookSnapshotDocument(retained).content,
-              expectedContent: (condition ?? this.writeBaseline.condition(notebookId))
-                .expectedContent,
-              reason: error.reason,
-            });
-            // Recovery I/O may outlive more accepted edits. Persist their revision too,
-            // without attempting the conflicting canonical write again.
-            const latest = this.saveQueue.get(notebookId);
-            if (!latest || latest.revision === retained.revision) break;
-            retained = latest;
-          }
-        } catch (recoveryError) {
-          throw new NotebookConflictError(
-            error.notebookId,
-            error.filePath,
-            error.reason,
-            recoveryError
-          );
-        }
+        const expectedContent = (condition ?? this.writeBaseline.condition(notebookId))
+          .expectedContent;
+        return {
+          error,
+          retain: async (retained) => {
+            const releaseRecovery = this.activity.begin(AutoSaveStatus.SYNCING);
+            try {
+              await this.persistence.recovery.saveDraft({
+                notebookId,
+                writerId: this.writerId,
+                revision: retained.revision,
+                content: new NotebookSnapshotDocument(retained).content,
+                expectedContent,
+                reason: error.reason,
+              });
+            } catch (recoveryError) {
+              throw new NotebookConflictError(
+                error.notebookId,
+                error.filePath,
+                error.reason,
+                recoveryError
+              );
+            } finally {
+              releaseRecovery();
+            }
+          },
+        };
       }
       notebookLog.error('AutoSaveService: Save failed', { notebookId, error });
       throw error;

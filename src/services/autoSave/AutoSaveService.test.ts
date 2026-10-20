@@ -1123,3 +1123,24 @@ it('reports a later recovery write failure while keeping the newest pending edit
   });
   expect(storage.notebooks.saveNotebookSnapshot).toHaveBeenCalledOnce();
 });
+
+it('never blocks a newer edit without retaining it when admission races recovery settlement', async () => {
+  const conflict = new NotebookConflictError('notebook', 'body');
+  storage.notebooks.saveNotebookSnapshot.mockRejectedValue(conflict);
+  storage.recovery.saveDraft.mockImplementationOnce(() => {
+    queueMicrotask(() =>
+      queueMicrotask(() => {
+        void service.queueSave(snapshot('settlement edit'));
+      })
+    );
+    return Promise.resolve();
+  });
+  await expect(service.saveNow(snapshot('first conflict'))).rejects.toBe(conflict);
+  const progress = service.getSaveProgress('notebook')!;
+  expect(progress.currentRevision).toBe(2);
+  const retained =
+    storage.recovery.saveDraft.mock.calls[storage.recovery.saveDraft.mock.calls.length - 1][0];
+  if (progress.phase === 'blocked') expect(retained.revision).toBe(progress.currentRevision);
+  else expect(progress.phase).toBe('scheduled');
+  expect(progress.committedRevision).toBe(0);
+});

@@ -130,13 +130,17 @@ retry A, then admit and read back a corrected A revision.
 
 ## Edits accepted during conflict recovery
 
-Recovery persistence checks the queue again after each recovery write. If a newer revision was
+The save scheduler owns recovery catch-up and checks the queue again after each recovery write. If a newer revision was
 accepted while that write was pending, it writes the newer recovery copy before returning the
 conflict. This does not retry the canonical notebook write or acknowledge any pending revision.
 A later recovery failure is reported with the original conflict while the newest edit stays queued.
 Continuous editing can extend this catch-up phase; copies remain coalesced to the latest revision
-observed after each write. Edits accepted after recovery completes still follow normal admission.
-Two deterministic regressions cover catch-up and a failure of the subsequent recovery write;
+observed after each write. The final revision check and the transition to blocked occur in the same synchronous scheduler
+continuation. There is no intervening promise rejection handoff where a newer edit can become
+blocked without retention. Edits accepted after that transition follow normal admission and remain
+scheduled. The service supplies a retention operation with the original conflict and write baseline;
+the scheduler owns when retention is complete, while the service owns recovery I/O.
+Deterministic regressions cover catch-up, a later recovery write failure, and microtask admission during recovery settlement;
 the storage/autosave/session gate passes 333 tests. Two Chromium regressions now inject an edit
 on the first recovery put request success, before transaction completion. The next transaction
 persists the newer revision; when deliberately aborted, it leaves the earlier recovery copy intact

@@ -13,12 +13,18 @@ interface Retry {
   failures: number;
   readyAt: number;
 }
+/** A failed canonical write can retain edits before its failure becomes terminal. */
+export interface NotebookSaveRecovery {
+  readonly error: unknown;
+  retain(snapshot: QueuedSnapshot): Promise<void>;
+}
+
 interface SchedulerOptions {
   maxRetries: number;
   retryDelayMs: number;
   retryable?: (error: unknown) => boolean;
   canRun: () => boolean;
-  write: (snapshot: QueuedSnapshot) => Promise<void>;
+  write: (snapshot: QueuedSnapshot) => Promise<void | NotebookSaveRecovery>;
   committed: (snapshot: QueuedSnapshot) => void;
   failed: (snapshot: QueuedSnapshot, error: unknown) => void;
 }
@@ -144,7 +150,19 @@ export class NotebookSaveScheduler {
     const failures = retry?.revision === snapshot.revision ? retry.failures : 0;
     this.queue.begin(snapshot);
     try {
-      await this.options.write(snapshot);
+      const recovery = await this.options.write(snapshot);
+      if (recovery) {
+        let retained = this.queue.get(id) ?? snapshot;
+        for (;;) {
+          await recovery.retain(retained);
+          const latest = this.queue.get(id);
+          if (!latest || latest.revision === retained.revision) break;
+          retained = latest;
+        }
+        // No await between the final revision check and fail(): edits arriving
+        // after this point observe blocked and enqueue a fresh scheduled revision.
+        throw recovery.error;
+      }
     } catch (error) {
       const terminal = this.options.retryable?.(error) === false;
       const exhausted = terminal || failures >= this.options.maxRetries;
