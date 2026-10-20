@@ -93,22 +93,26 @@ const TextType = ({
   useEffect(() => {
     if (showCursor && cursorRef.current) {
       gsap.set(cursorRef.current, { opacity: 1 });
-      gsap.to(cursorRef.current, {
+      const animation = gsap.to(cursorRef.current, {
         opacity: 0,
         duration: cursorBlinkDuration,
         repeat: -1,
         yoyo: true,
         ease: 'power2.inOut',
       });
+      return () => {
+        animation.kill();
+      };
     }
   }, [showCursor, cursorBlinkDuration]);
 
   useEffect(() => {
     if (!isVisible) return;
 
-    let timeout: number;
+    let timeout: ReturnType<typeof setTimeout>;
 
     const currentText = textArray[currentTextIndex];
+    if (currentText === undefined) return;
     const processedText = reverseMode ? currentText.split('').reverse().join('') : currentText;
 
     const executeTypingAnimation = () => {
@@ -170,10 +174,12 @@ const TextType = ({
     reverseMode,
     variableSpeed,
     onSentenceComplete,
+    getRandomSpeed,
   ]);
 
   const shouldHideCursor =
-    hideCursorWhileTyping && (currentCharIndex < textArray[currentTextIndex].length || isDeleting);
+    hideCursorWhileTyping &&
+    (currentCharIndex < (textArray[currentTextIndex]?.length ?? 0) || isDeleting);
 
   return createElement(
     Component,
