@@ -1446,6 +1446,7 @@ const useStore = create(
             const restoredCells: Cell[] = cells.map((cell) => ({
               id: cell.id,
               type: cell.type as CellType,
+              language: cell.language,
               content: cell.content || '',
               outputs: cell.outputs || [],
               enableEdit: cell.enableEdit !== false,
