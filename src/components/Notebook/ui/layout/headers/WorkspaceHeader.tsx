@@ -7,6 +7,7 @@ import ModeToggle from './ModeToggle';
 import ExportToFile from '../../../features/function-bar/ExportToFile';
 import NotificationCenter from './NotificationCenter';
 import type { Cell } from '@Store/models';
+import { HousingStudyButton } from '../../../features/native-study/HousingStudyButton';
 
 interface WorkspaceHeaderProps {
   viewMode: string;
@@ -52,6 +53,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
+        <HousingStudyButton />
         {!(cells.length === 0 || viewMode === 'dslc') && (
           <>
             <button

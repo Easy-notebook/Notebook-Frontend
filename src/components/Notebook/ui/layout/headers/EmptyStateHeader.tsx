@@ -4,6 +4,7 @@
 import { useTranslation } from 'react-i18next';
 import { Upload, BarChartHorizontalBig } from 'lucide-react';
 import NotificationCenter from './NotificationCenter';
+import { CreateHousingStudyButton } from '../../../features/native-study/CreateHousingStudyButton';
 
 interface EmptyStateHeaderProps {
   onTriggerFileInput?: () => void;
@@ -23,6 +24,7 @@ const EmptyStateHeader: React.FC<EmptyStateHeaderProps> = ({
 
   return (
     <div className="w-full h-18 mt-4 flex items-center justify-end px-4">
+      <CreateHousingStudyButton />
       {onTriggerFileInput && onHandleImport && fileInputRef && (
         <div className="flex items-center gap-2">
           <button
