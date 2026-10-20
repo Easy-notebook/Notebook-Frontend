@@ -45,21 +45,33 @@ export function useLazyLoad(options: UseLazyLoadOptions = {}): UseLazyLoadResult
     // If already visible and frozen, no need to observe
     if (freezeOnceVisible && hasBeenVisible) return;
 
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const cancelDelay = () => {
+      clearTimeout(timer);
+      timer = undefined;
+    };
+    const markVisible = () => {
+      timer = undefined;
+      if (!active) return;
+      setIsIntersecting(true);
+      setHasBeenVisible(true);
+    };
+
     const observer = new IntersectionObserver(
       ([entry]) => {
-        const isVisible = entry.isIntersecting;
-
-        if (delay > 0 && isVisible) {
-          // Delayed visibility for staggered loading
-          const timer = setTimeout(() => {
-            setIsIntersecting(true);
-            if (isVisible) setHasBeenVisible(true);
-          }, delay);
-          return () => clearTimeout(timer);
+        if (!active || !entry) return;
+        if (!entry.isIntersecting) {
+          cancelDelay();
+          setIsIntersecting(false);
+          return;
         }
-
-        setIsIntersecting(isVisible);
-        if (isVisible) setHasBeenVisible(true);
+        if (delay > 0) {
+          // Repeated observations share the delay started on entry.
+          if (timer === undefined) timer = setTimeout(markVisible, delay);
+        } else {
+          markVisible();
+        }
       },
       { rootMargin, threshold }
     );
@@ -67,6 +79,8 @@ export function useLazyLoad(options: UseLazyLoadOptions = {}): UseLazyLoadResult
     observer.observe(element);
 
     return () => {
+      active = false;
+      cancelDelay();
       observer.disconnect();
     };
   }, [rootMargin, threshold, freezeOnceVisible, hasBeenVisible, delay]);
@@ -80,7 +94,7 @@ export function useLazyLoad(options: UseLazyLoadOptions = {}): UseLazyLoadResult
  */
 export function usePriorityLazyLoad(
   index: number,
-  totalItems: number,
+  _totalItems: number,
   options: UseLazyLoadOptions = {}
 ): UseLazyLoadResult {
   // Calculate delay based on position (items at top load faster)
