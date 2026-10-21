@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { StudyInstruction } from './StudyInstruction';
 import type { NativeView, StudyAbility } from '@Services/native-study/contracts';
 
 const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm';
@@ -39,6 +40,15 @@ export function StudyDiscussion({
       <p className="text-sm text-muted-foreground">
         回答使用已保存的研究结果及历史问答。未提交的输入不会发送；讨论不会重新拟合模型。
       </p>
+      {view.study.discussion_instruction && (
+        <StudyInstruction
+          instruction={view.study.discussion_instruction}
+          disabled={disabled || inputChanged || !view.study.current || !view.study.comparison}
+          onRevise={(feedback, expected_hash) =>
+            execute('revise_discussion_instruction', { feedback, expected_hash })
+          }
+        />
+      )}
       {!view.model_enabled && <p className="text-sm">当前服务未启用模型，仍可查看历史讨论。</p>}
       {inputChanged && <p className="text-sm">请先保存修改后的研究输入，再发起讨论。</p>}
       {!hasChapter && (

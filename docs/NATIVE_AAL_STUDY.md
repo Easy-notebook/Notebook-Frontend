@@ -503,3 +503,20 @@ restart, compares the displayed full JSON with `/knowledge`, and verifies exclus
 after changed inputs. Unit checks cover identity/revision conflicts, failed reads and
 late replies across navigation or active commands. Use a fresh native state root when
 changing compiled application compositions, as for other native study changes.
+
+## Revise housing explanation instructions
+
+Open **与协作者讨论研究 → 调整房屋解释说明** after saving inputs and completing
+similar-sample comparison. The current instruction is displayed as text with its
+revision number. Enter feedback and choose **根据反馈修订说明**. The server uses
+saved measured context, proposes an exact patch and commits the instruction with one
+notebook revision. Subsequent DataMining discussions use the new instruction; numeric
+results, saved recipes and historical replies remain unchanged.
+
+This uses the existing pending-command session and response-loss recovery. Restarting
+Rust without a model disables new feedback but permits retry of an already committed
+proposal or result. An intervening notebook/instruction edit rejects an older proposal;
+refresh before submitting a new request. Feedback is bounded to 8192 Unicode characters.
+New notebooks own separate default instructions. Model-proposed wording is not proof
+of improved explanation quality. `native-instruction.spec.js` exercises actual Rust,
+HTTP requests, response loss, server/browser restart, later guidance reuse and isolation.

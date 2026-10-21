@@ -66,6 +66,17 @@ const studyProcedure = z
     observations: boundedText(65536).optional(),
   })
   .strict();
+export const discussionInstruction = z.object({
+  descriptor: z
+    .object({
+      name: z.literal('housing-discussion'),
+      revision: z.number().int().positive(),
+      content_hash: z.string().regex(/^[a-f0-9]{64}$/),
+    })
+    .passthrough(),
+  content: boundedText(65536),
+});
+export type DiscussionInstruction = z.infer<typeof discussionInstruction>;
 export const nativeView = z
   .object({
     frontend_notebook_id: z.string(),
@@ -106,6 +117,7 @@ export const nativeView = z
         comparison: comparison.nullable(),
         practice: z.unknown(),
         sample_evidence: sampleEvidence.nullable(),
+        discussion_instruction: discussionInstruction.optional(),
         procedures: z.array(studyProcedure).max(64).optional(),
         observed_procedures: z
           .array(
@@ -143,6 +155,7 @@ export const pendingCommand = z
     ability: z.enum([
       'new_chapter',
       'communication',
+      'revise_discussion_instruction',
       'save_study_procedure',
       'learn_study',
       'reuse_study_procedure',
