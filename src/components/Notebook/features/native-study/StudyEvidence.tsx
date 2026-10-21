@@ -1,4 +1,5 @@
 import type { NativeView } from '@Services/native-study/contracts';
+import { SampleEvidence } from './SampleEvidence';
 
 const number = (value: number) => value.toPrecision(6);
 export function StudyEvidence({
@@ -120,14 +121,7 @@ export function StudyEvidence({
           </pre>
         </details>
       )}
-      {!!study.sample_evidence && (
-        <details>
-          <summary>FoKn 样本事实与推导</summary>
-          <pre className="text-xs overflow-auto max-h-64">
-            {JSON.stringify(study.sample_evidence, null, 2)}
-          </pre>
-        </details>
-      )}
+      {study.sample_evidence && <SampleEvidence evidence={study.sample_evidence} />}
     </div>
   );
 }

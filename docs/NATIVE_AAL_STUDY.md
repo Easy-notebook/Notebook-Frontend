@@ -30,6 +30,21 @@ FoKn facts and their rule-derived explanation. **写入当前笔记** inserts a 
 snapshot and awaits the existing notebook save queue; the same revision is inserted
 once even if saving needs retry.
 
+The **FoKn 样本事实与推导** section now shows the saved query/reference versions,
+same-cluster conclusions in neighbor-rank order, measured distances and each
+conclusion's current status. Expand a conclusion to inspect its premise assessment
+revisions and original Agent/invocation/step identifiers. **测量事实** lists the
+retained facts; **完整证据 JSON** preserves the native record for inspection.
+These are local Rust evidence projections, not independent browser proof verification
+or signed EasyNet receipts. Empty answers do not mean that no similar samples exist.
+
+Changing the saved study input retains the historical evidence and marks it expired.
+Status is read from the current native knowledge graph, not inferred from the presence
+of a saved answer. Save evidence again after recomputing the comparison to replace it.
+The existing request owner handles response loss and restart with the same invocation;
+the view adds no independent execution or recovery path. Typed response parsing checks
+answer/graph identity, premise links and query/reference scope before rendering.
+
 **上传并读入 CSV** now saves a UTF-8 CSV version in Rust before filling the study
 input. **读取已保存 CSV** lists this notebook's archive, including older versions
 of a changed filename. Select a version to read and verify its exact bytes. A changed

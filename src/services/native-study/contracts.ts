@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sampleEvidence } from './sampleEvidence';
 
 const index = z.number().int().nonnegative();
 const finite = z.number().finite();
@@ -104,7 +105,7 @@ export const nativeView = z
         result: z.object({ kind: z.literal('mining'), report }).nullable(),
         comparison: comparison.nullable(),
         practice: z.unknown(),
-        sample_evidence: z.unknown(),
+        sample_evidence: sampleEvidence.nullable(),
         procedures: z.array(studyProcedure).max(64).optional(),
         observed_procedures: z
           .array(
