@@ -412,3 +412,23 @@ EasyNet 线上配对。运行方式与上面的原生浏览器测试相同。
 `tests/browser/native-procedures.spec.js` 的自动学习场景实际丢弃完成响应、重启 Rust，
 核对相同请求恢复后只有一份技能，再用修改过的 CSV 复用，检查新的参考标识、零距离
 近邻、特征贡献与笔记隔离。此功能不等于任意任务的自主算法生成或 EasyNet 自动发布。
+
+## Executable sample evidence
+
+**插入 FoKn 样本证据单元格** archives the saved reference and current query CSV,
+then inserts one executable AAL cell with the selected features, cluster count and
+neighbor count. Run it to recompute the comparison and inspect `sample_evidence`
+for the **first query row**: measured facts, same-cluster conclusions and derivation
+graphs. The cell uses the same Rust fact projection and rule as the study panel;
+its AAL source performs the actual FoKn checks and inference.
+
+Evidence includes the real execution UUID. New execution creates new evidence;
+retry after a lost response or server restart returns the original proof. Publication
+preserves edited cells and does not duplicate an identical generated cell on save
+retry. This is an independent cell result saved with editor outputs, not a mutation
+of the study panel's evidence or a shared live FoKn forest. The existing source,
+execution and output bounds apply. The proof checks captured observations and
+same-cluster membership; it does not establish causal or price predictions.
+
+This action requires the ordinary Rust `web` build. The cell server does not yet
+expose the CLI's automatic permission reviewer or a pending-approval UI.

@@ -3,6 +3,7 @@ import {
   comparisonCellSource,
   comparisonWorkflowSources,
   datasetCellSource,
+  evidenceCellSource,
 } from './datasetCellSource';
 
 it('quotes column names using AAL interpolation escapes and pins exactly one version', () => {
@@ -63,4 +64,16 @@ it('emits a reusable reference and a query cell with no hidden refitting', () =>
   expect(() =>
     comparisonWorkflowSources('a'.repeat(64), 'b'.repeat(64), ['area'], 3, 2, 'bad"name')
   ).toThrow('名称');
+});
+
+it('generates evidence from a fresh pinned comparison using native fact and inference checks', () => {
+  const source = evidenceCellSource('a'.repeat(64), 'b'.repeat(64), ['area{units}', 'rooms'], 3, 8);
+  expect(source).toContain('"area{{units}}"');
+  expect(source).toContain('effects(skill, memory.read, memory.write)');
+  expect(source).toContain('self.skill("notebook_sample_evidence", comparison, 0)');
+  expect(source).toContain('definition.atom, definition.predicate');
+  expect(source).toContain('[projected.rule], projected.goal, 8');
+  expect(source).toContain('knowledge.explain(answer.id)');
+  expect(source).toContain('sample_evidence: sample_evidence');
+  expect(() => evidenceCellSource('a'.repeat(64), '../other', ['area'], 3, 2)).toThrow('版本');
 });

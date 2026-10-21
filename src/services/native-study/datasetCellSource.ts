@@ -30,7 +30,8 @@ function groupingSource(
   version: string,
   columns: readonly string[],
   clusters: number,
-  additionalSkill = ''
+  additionalSkill = '',
+  evidence = false
 ): string {
   if (!/^[a-f0-9]{64}$/.test(version)) throw new Error('无效的 CSV 文件版本');
   if (!Number.isInteger(clusters) || clusters < 2 || clusters > 16)
@@ -43,13 +44,13 @@ function groupingSource(
   )
     throw new Error('请选择 1 至 16 个不重复的数值特征');
   return `agent Cell is Agent
-  private
+${evidence ? '  memory scope "sample" strict\n    study_sample: Any\n' : ''}  private
     skill notebook_csv
       "Read an immutable CSV version owned by this notebook"
     skill numeric_segments
       "Group explicit housing features with native Rust numerical code"
 ${additionalSkill}  public
-    ability run() -> Any effects(skill)
+    ability run() -> Any effects(skill${evidence ? ', memory.read, memory.write' : ''})
       version = "${version}"
       csv = self.skill("notebook_csv", version)
       report = self.skill("numeric_segments", csv, [${columns.map(literal).join(', ')}], ${clusters})
@@ -68,12 +69,13 @@ export function datasetCellSource(
   );
 }
 
-export function comparisonCellSource(
+function comparisonSource(
   referenceVersion: string,
   queryVersion: string,
   columns: readonly string[],
   clusters: number,
-  neighbors: number
+  neighbors: number,
+  evidence: boolean
 ): string {
   if (!/^[a-f0-9]{64}$/.test(queryVersion)) throw new Error('无效的查询 CSV 文件版本');
   if (!Number.isInteger(neighbors) || neighbors < 1 || neighbors > 8)
@@ -85,14 +87,56 @@ export function comparisonCellSource(
       clusters,
       `    skill segment_compare
       "Explain measured neighbors against the frozen reference model"
+${
+  evidence
+    ? `    skill notebook_sample_evidence
+      "Project measured sample values and the shared housing evidence rule"
 `
+    : ''
+}`,
+      evidence
     ) +
     `      query_version = "${queryVersion}"
       query = self.skill("notebook_csv", query_version)
       comparison = self.skill("segment_compare", report.model, csv, query, ${neighbors}, report.reference_id)
-      return {reference_version: version, query_version: query_version, comparison: comparison}
+${evidence ? sampleEvidenceSource : ''}      return {reference_version: version, query_version: query_version, comparison: comparison${evidence ? ', sample_evidence: sample_evidence' : ''}}
 `
   );
+}
+
+/** Execute the same fact definitions and domain rule used by the native study workspace. */
+const sampleEvidenceSource = `      projected = self.skill("notebook_sample_evidence", comparison, 0)
+      memory.store("study_sample", projected.observation)
+      facts = []
+      for definition in projected.facts
+        id = knowledge.fact("practice", "Measured values from these pinned housing CSV versions", definition.atom, definition.predicate)
+        facts.append(knowledge.get(id))
+      answers = knowledge.reason("inference", "Returned neighbor shares the query cluster in the frozen reference; no causal, price or algorithm-correctness claim", [projected.rule], projected.goal, 8)
+      graphs = []
+      for answer in answers
+        graphs.append(knowledge.explain(answer.id))
+      sample_evidence = {observation: projected.observation, facts: facts, answers: answers, graphs: graphs}
+`;
+
+export function comparisonCellSource(
+  referenceVersion: string,
+  queryVersion: string,
+  columns: readonly string[],
+  clusters: number,
+  neighbors: number
+): string {
+  return comparisonSource(referenceVersion, queryVersion, columns, clusters, neighbors, false);
+}
+
+/** First-query proof is computed from the cell's fresh comparison, never copied from panel state. */
+export function evidenceCellSource(
+  referenceVersion: string,
+  queryVersion: string,
+  columns: readonly string[],
+  clusters: number,
+  neighbors: number
+): string {
+  return comparisonSource(referenceVersion, queryVersion, columns, clusters, neighbors, true);
 }
 
 /** A reference fit is committed once and reused by later query cells in this notebook. */

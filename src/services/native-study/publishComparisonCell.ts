@@ -1,6 +1,7 @@
 import { NativeDatasetClient, type DatasetMetadata } from './NativeDatasetClient';
 import {
   comparisonCellSource,
+  evidenceCellSource,
   comparisonWorkflowSources,
   datasetCellSource,
 } from './datasetCellSource';
@@ -21,30 +22,32 @@ export function publishComparisonCell(
   input: ComparisonCellInput,
   signal?: AbortSignal
 ): Promise<void> {
-  return publishComparison(notebookId, input, false, signal);
+  return publishComparison(notebookId, input, 'comparison', signal);
 }
 export function publishComparisonWorkflow(
   notebookId: string,
   input: ComparisonCellInput,
   signal?: AbortSignal
 ): Promise<void> {
-  return publishComparison(notebookId, input, true, signal);
+  return publishComparison(notebookId, input, 'shared', signal);
+}
+export function publishEvidenceCell(
+  notebookId: string,
+  input: ComparisonCellInput,
+  signal?: AbortSignal
+): Promise<void> {
+  return publishComparison(notebookId, input, 'evidence', signal);
 }
 async function publishComparison(
   notebookId: string,
   input: ComparisonCellInput,
-  shared: boolean,
+  kind: 'comparison' | 'shared' | 'evidence',
   signal?: AbortSignal
 ): Promise<void> {
   const frozen = { ...input, columns: [...input.columns] };
+  const generate = kind === 'evidence' ? evidenceCellSource : comparisonCellSource;
   // Validate all source settings before the first durable upload.
-  comparisonCellSource(
-    '0'.repeat(64),
-    '0'.repeat(64),
-    frozen.columns,
-    frozen.clusters,
-    frozen.neighbors
-  );
+  generate('0'.repeat(64), '0'.repeat(64), frozen.columns, frozen.clusters, frozen.neighbors);
   if (!frozen.referenceCsv.trim() || !frozen.queryCsv.trim())
     throw new Error('请提供参考与新样本 CSV');
   const client = new NativeDatasetClient(notebookId);
@@ -55,7 +58,7 @@ async function publishComparison(
       owned.throwIfAborted();
       const query = await client.upload('housing-query.csv', frozen.queryCsv, owned);
       owned.throwIfAborted();
-      const source = comparisonCellSource(
+      const source = generate(
         reference.version,
         query.version,
         frozen.columns,
@@ -69,7 +72,7 @@ async function publishComparison(
         sha256,
         size,
       });
-      if (shared) {
+      if (kind === 'shared') {
         const key = (
           await nativeCodeCell(
             'reference',
@@ -91,7 +94,7 @@ async function publishComparison(
         ];
       }
       return [
-        await nativeCodeCell('comparison', source, {
+        await nativeCodeCell(kind, source, {
           nativeComparison: {
             reference: metadata(reference),
             query: metadata(query),

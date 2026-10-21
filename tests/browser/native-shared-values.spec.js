@@ -88,3 +88,92 @@ test('housing UI publishes reusable native cells, executes them and retains resu
     JSON.parse(replay.cell.outputs.find((item) => item.content?.includes('"comparison"')).content)
   ).toEqual(measured);
 });
+
+test('evidence cell retains measured FoKn proof after response loss and server restart', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  await page.goto('/');
+  await page.getByRole('button', { name: '新建房屋研究', exact: true }).click();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await page
+    .getByLabel('参考 CSV 内容')
+    .fill(
+      'area,rooms\n40,2\n41,2\n42,2\n43,2\n90,4\n91,4\n92,4\n93,4\n180,7\n181,7\n182,7\n183,7\n'
+    );
+  await page.getByLabel('数值特征（每行一个）').fill('area\nrooms');
+  await page.getByLabel('分群数量', { exact: true }).fill('3');
+  await page.getByRole('button', { name: '保存研究输入', exact: true }).click();
+  await expect(page.getByRole('button', { name: '执行房屋分群', exact: true })).toBeEnabled();
+  await page.getByLabel('新样本 CSV').fill('area,rooms\n42.5,2\n182,7\n');
+  await page.getByRole('button', { name: '插入 FoKn 样本证据单元格', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: '已保存 FoKn 样本证据单元格' })
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  let committed;
+  let request;
+  await page.route(
+    '**/aal-api/workspaces/*/execute',
+    async (route) => {
+      request = route.request().postDataJSON();
+      committed = await (await route.fetch()).json();
+      await route.abort('failed');
+    },
+    { times: 1 }
+  );
+  const first = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    const cell = store.getState().cells.find((cell) => cell.id.startsWith('aal-evidence-'));
+    return { id: cell.id, outcome: await store.getState().runSingleCell(cell.id) };
+  });
+  expect(first.outcome.success).toBe(false);
+  expect(committed.status, JSON.stringify(committed)).toBe('ok');
+  const measured = JSON.parse(committed.outputs[0].content);
+  expect(measured.comparison.rows[0].neighbors[0].row).toBe(2);
+  expect(measured.sample_evidence.facts).toHaveLength(4);
+  expect(measured.sample_evidence.answers).toHaveLength(3);
+  expect(measured.sample_evidence.graphs).toHaveLength(3);
+  for (const fact of measured.sample_evidence.facts) {
+    expect(fact.status).toBe('supported');
+    expect(fact.source.invocation).toBe(request.invocation);
+  }
+  for (const answer of measured.sample_evidence.answers) {
+    const terms = answer.atom.terms;
+    const neighbor = measured.comparison.rows[0].neighbors.find((n) => n.row === terms[3].literal);
+    expect(neighbor.distance_squared).toBe(terms[6].literal);
+    expect(terms[4].literal).toBe(measured.comparison.rows[0].assignment.cluster);
+  }
+  await native.stop();
+  await native.start();
+  await page.reload();
+  await page.waitForFunction(async (id) => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    return !!store.getState().cells.find((cell) => cell.id === id);
+  }, first.id);
+  // Wait for editor restoration, not only the transient persisted store snapshot.
+  await expect(page.getByRole('button', { name: '房屋研究', exact: true })).toBeEnabled();
+  let replayRequest;
+  await page.route(
+    '**/aal-api/workspaces/*/execute',
+    async (route) => {
+      replayRequest = route.request().postDataJSON();
+      await route.continue();
+    },
+    { times: 1 }
+  );
+  const replay = await page.evaluate(async (id) => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    const before = store.getState().notebookId;
+    const outcome = await store.getState().runSingleCell(id);
+    return {
+      before,
+      after: store.getState().notebookId,
+      outcome,
+      outputs: store.getState().cells.find((cell) => cell.id === id)?.outputs,
+    };
+  }, first.id);
+  expect(replay.outcome.success, JSON.stringify(replay.outcome)).toBe(true);
+  expect(replayRequest).toEqual(request);
+  expect(JSON.parse(replay.outputs[0].content)).toEqual(measured);
+});

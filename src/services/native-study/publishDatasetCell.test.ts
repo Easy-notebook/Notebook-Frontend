@@ -1,7 +1,11 @@
 import { webcrypto } from 'node:crypto';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { publishDatasetCell } from './publishDatasetCell';
-import { publishComparisonCell, publishComparisonWorkflow } from './publishComparisonCell';
+import {
+  publishComparisonCell,
+  publishComparisonWorkflow,
+  publishEvidenceCell,
+} from './publishComparisonCell';
 import { NativeDatasetClient } from './NativeDatasetClient';
 
 const io = vi.hoisted(() => ({
@@ -213,4 +217,22 @@ it('publishes one reusable producer for multiple queries and retains edited prod
   producer.content = 'edited reference';
   await expect(publishComparisonWorkflow('a', comparisonInput)).rejects.toThrow('已被编辑');
   expect(producer.content).toBe('edited reference');
+});
+
+it('persists executable evidence separately from comparison, retries save and preserves edits', async () => {
+  mockArchive();
+  await publishComparisonCell('a', comparisonInput);
+  io.flush.mockRejectedValueOnce(new Error('save failed'));
+  await expect(publishEvidenceCell('a', comparisonInput)).rejects.toThrow('save failed');
+  expect(io.state.cells).toHaveLength(2);
+  const cell = io.state.cells[1];
+  expect(cell.id).toMatch(/^aal-evidence-/);
+  expect(cell.content).toContain('knowledge.fact(');
+  expect(cell.content).toContain('knowledge.reason(');
+  expect(cell.metadata).toEqual(io.state.cells[0].metadata);
+  await publishEvidenceCell('a', comparisonInput);
+  expect(io.state.cells).toHaveLength(2);
+  cell.content = 'owned edits';
+  await expect(publishEvidenceCell('a', comparisonInput)).rejects.toThrow('已被编辑');
+  expect(cell.content).toBe('owned edits');
 });

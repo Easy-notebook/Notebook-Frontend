@@ -4,6 +4,7 @@ import { NativeStudySession, type StudySnapshot } from '@Services/native-study/N
 import { publishStudy } from '@Services/native-study/publishStudy';
 import {
   publishComparisonCell,
+  publishEvidenceCell,
   publishComparisonWorkflow,
 } from '@Services/native-study/publishComparisonCell';
 import { StudyEvidence } from './StudyEvidence';
@@ -99,7 +100,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     ability: Parameters<NativeStudySession['execute']>[0],
     args: Record<string, unknown>
   ) => void session.current?.execute(ability, args);
-  const insert = async (kind: 'snapshot' | 'comparison' | 'shared') => {
+  const insert = async (kind: 'snapshot' | 'comparison' | 'shared' | 'evidence') => {
     if (
       !view ||
       view.frontend_notebook_id !== notebookId ||
@@ -122,7 +123,13 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     setNotice('');
     try {
       if (kind !== 'snapshot') {
-        await (kind === 'shared' ? publishComparisonWorkflow : publishComparisonCell)(
+        await (
+          kind === 'shared'
+            ? publishComparisonWorkflow
+            : kind === 'evidence'
+              ? publishEvidenceCell
+              : publishComparisonCell
+        )(
           notebookId,
           {
             referenceCsv: savedInput!.configuration.csv,
@@ -140,9 +147,11 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
         setNotice(
           kind === 'shared'
             ? '已保存拟合与比较两个 AAL 单元格。先运行拟合单元格，再运行比较；后续比较可复用已保存的参考模型。'
-            : kind === 'comparison'
-              ? '已保存 AAL 相似样本单元格。关闭研究面板后运行，可查看近邻及各特征的距离贡献。'
-              : '已写入并保存当前笔记，作为本次研究快照。'
+            : kind === 'evidence'
+              ? '已保存 FoKn 样本证据单元格。运行后查看第一条查询的测量事实与推导图。'
+              : kind === 'comparison'
+                ? '已保存 AAL 相似样本单元格。关闭研究面板后运行，可查看近邻及各特征的距离贡献。'
+                : '已写入并保存当前笔记，作为本次研究快照。'
         );
     } catch (error) {
       if (active()) setNotice(String(error));
@@ -394,6 +403,17 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           >
             插入可复用的拟合与比较单元格
           </button>
+          <button
+            className={buttonClass}
+            type="button"
+            disabled={!query.trim() || inputChanged || !savedInput}
+            onClick={() => void insert('evidence')}
+          >
+            插入 FoKn 样本证据单元格
+          </button>
+          <p className="text-xs text-muted-foreground">
+            证据单元格重新计算第一条查询的近邻，并生成事实与同群推导图。它保留独立的执行结果，不更新研究面板。
+          </p>
           <p className="text-xs text-muted-foreground">
             拆分后先运行拟合，再运行比较。参考模型仅在成功时保存，可供本笔记后续新样本比较复用。
           </p>
