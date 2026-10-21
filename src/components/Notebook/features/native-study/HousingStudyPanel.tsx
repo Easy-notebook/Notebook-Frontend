@@ -183,16 +183,21 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
       <StudyProgress progress={state.progress} />
       <StudyProcedures
         key={`procedures:${notebookId}`}
-        procedures={view?.frontend_notebook_id === notebookId ? (view.study.procedures ?? []) : []}
+        procedures={
+          view?.frontend_notebook_id === notebookId
+            ? [...(view.study.procedures ?? []), ...(view.study.observed_procedures ?? [])]
+            : []
+        }
         disabled={
           busy || closed || publishing || datasetBusy || view?.frontend_notebook_id !== notebookId
         }
         canSave={!!view?.study.current && !!view.study.comparison && !inputChanged}
         hasInputs={!!(csv || savedInput?.configuration.csv)?.trim() && !!query.trim()}
         onSave={(name) => run('save_study_procedure', { name })}
-        onReuse={(name) =>
+        onReuse={(name, origin) =>
           run('reuse_study_procedure', {
             name,
+            ...(origin === 'observed' ? { origin } : {}),
             csv: csv || savedInput?.configuration.csv,
             query,
           })
@@ -342,6 +347,37 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           >
             比较并解释相似样本
           </button>
+          <button
+            className={buttonClass}
+            type="button"
+            disabled={
+              !query.trim() ||
+              !(csv || savedInput?.configuration.csv)?.trim() ||
+              selectedColumns.length === 0 ||
+              new Set(selectedColumns).size !== selectedColumns.length ||
+              selectedColumns.length > 16 ||
+              !Number.isInteger(clusters) ||
+              clusters < 2 ||
+              clusters > 16 ||
+              !Number.isInteger(neighbors) ||
+              neighbors < 1 ||
+              neighbors > 8
+            }
+            onClick={() =>
+              run('learn_study', {
+                csv: csv || savedInput?.configuration.csv,
+                query,
+                parameters: { columns: selectedColumns, clusters },
+                neighbors,
+              })
+            }
+          >
+            分群、比较并学习
+          </button>
+          <p className="text-xs text-muted-foreground">
+            使用当前填写的参考与新样本 CSV、特征和数值参数，重新分群并保存第一条查询的 FoKn 证据。
+            全部完成后自动保存可复用技能；已完成步骤会保留，失败后可重试原操作。
+          </p>
           <button
             className={buttonClass}
             type="button"

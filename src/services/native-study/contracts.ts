@@ -56,6 +56,15 @@ const report = z
     model: z.object({ features: z.array(z.object({ name: z.string() })) }).passthrough(),
   })
   .passthrough();
+const studyProcedure = z
+  .object({
+    name: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
+    content_hash: z.string().regex(/^[a-f0-9]{64}$/),
+    content: boundedText(65536),
+    origin: z.enum(['saved', 'observed']).optional(),
+    observations: boundedText(65536).optional(),
+  })
+  .strict();
 export const nativeView = z
   .object({
     frontend_notebook_id: z.string(),
@@ -96,15 +105,13 @@ export const nativeView = z
         comparison: comparison.nullable(),
         practice: z.unknown(),
         sample_evidence: z.unknown(),
-        procedures: z
+        procedures: z.array(studyProcedure).max(64).optional(),
+        observed_procedures: z
           .array(
-            z
-              .object({
-                name: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/),
-                content_hash: z.string().regex(/^[a-f0-9]{64}$/),
-                content: boundedText(65536),
-              })
-              .strict()
+            studyProcedure.extend({
+              origin: z.literal('observed'),
+              observations: boundedText(65536),
+            })
           )
           .max(64)
           .optional(),
@@ -136,6 +143,7 @@ export const pendingCommand = z
       'new_chapter',
       'communication',
       'save_study_procedure',
+      'learn_study',
       'reuse_study_procedure',
       'configure_study',
       'run_study',

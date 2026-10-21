@@ -48,7 +48,40 @@ it('renders instructions as inert text and uses selected saved settings with exp
   expect(button).toBeDisabled();
   view.rerender(<StudyProcedures {...props} hasInputs />);
   fireEvent.click(button);
-  expect(reuse).toHaveBeenCalledExactlyOnceWith('saved-housing');
+  expect(reuse).toHaveBeenCalledExactlyOnceWith('saved-housing', 'saved');
   view.rerender(<StudyProcedures {...props} hasInputs disabled />);
   expect(button).toBeDisabled();
+});
+
+it('selects observed and manual skills with the same name by explicit owner and renders evidence inertly', () => {
+  const reuse = vi.fn();
+  const observed = {
+    ...procedure,
+    origin: 'observed' as const,
+    observations: '<script>observed</script>\nCommitted boundary calls: 5',
+  };
+  const view = render(
+    <StudyProcedures
+      procedures={[procedure, observed]}
+      disabled={false}
+      canSave
+      hasInputs
+      onSave={vi.fn()}
+      onReuse={reuse}
+    />
+  );
+  fireEvent.click(screen.getByText('可复用研究技能（2）'));
+  fireEvent.change(screen.getByLabelText('已保存的研究技能'), {
+    target: { value: 'observed/saved-housing' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '用当前 CSV 复用所选技能' }));
+  expect(reuse).toHaveBeenCalledExactlyOnceWith('saved-housing', 'observed');
+  expect(view.container.querySelector('script')).toBeNull();
+  fireEvent.click(screen.getByText('查看已提交的执行记录'));
+  expect(screen.getByText(/Committed boundary calls: 5/)).toBeVisible();
+  fireEvent.change(screen.getByLabelText('已保存的研究技能'), {
+    target: { value: 'saved-housing' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '用当前 CSV 复用所选技能' }));
+  expect(reuse).toHaveBeenLastCalledWith('saved-housing', 'saved');
 });

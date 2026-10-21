@@ -2,13 +2,15 @@ import { useState } from 'react';
 import type { NativeView } from '@Services/native-study/contracts';
 
 type Procedure = NonNullable<NativeView['study']['procedures']>[number];
+const selectionKey = (item: Procedure) =>
+  item.origin === 'observed' ? `observed/${item.name}` : item.name;
 interface Props {
   procedures: Procedure[];
   disabled: boolean;
   canSave: boolean;
   hasInputs: boolean;
   onSave: (name: string) => void;
-  onReuse: (name: string) => void;
+  onReuse: (name: string, origin: 'saved' | 'observed') => void;
 }
 /** Saved instruction documents are inspected here; only the native recipe executor runs them. */
 export function StudyProcedures({
@@ -21,9 +23,9 @@ export function StudyProcedures({
 }: Props) {
   const [name, setName] = useState('housing-comparison');
   const [selected, setSelected] = useState('');
-  const procedure = procedures.find((item) => item.name === selected) ?? procedures[0];
+  const procedure = procedures.find((item) => selectionKey(item) === selected) ?? procedures[0];
   const validName = /^[a-z0-9][a-z0-9_-]{0,63}$/.test(name);
-  const exists = procedures.some((item) => item.name === name);
+  const exists = procedures.some((item) => item.origin !== 'observed' && item.name === name);
   const buttonClass = 'rounded border px-3 py-2 text-sm disabled:opacity-50';
   return (
     <details className="rounded border p-3 space-y-3">
@@ -33,6 +35,7 @@ export function StudyProcedures({
       <p className="text-sm text-muted-foreground">
         完成分群与相似样本比较后，可保存特征、分群数和近邻数。复用会使用下方参考与查询 CSV
         重新拟合、比较并生成第一条查询的 FoKn 证据，替换当前研究。历史结论不会沿用。
+        “分群、比较并学习”成功后会自动保存技能及执行记录。
       </p>
       <form
         onSubmit={(event) => {
@@ -67,12 +70,13 @@ export function StudyProcedures({
           <label className="block text-sm">
             已保存的研究技能
             <select
-              value={procedure.name}
+              value={selectionKey(procedure)}
               onChange={(event) => setSelected(event.target.value)}
               className="block rounded border bg-background px-3 py-2"
             >
               {procedures.map((item) => (
-                <option key={item.name} value={item.name}>
+                <option key={selectionKey(item)} value={selectionKey(item)}>
+                  {item.origin === 'observed' ? '自动学习 · ' : '手动保存 · '}
                   {item.name}
                 </option>
               ))}
@@ -81,12 +85,20 @@ export function StudyProcedures({
           <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">
             {procedure.content}
           </pre>
+          {procedure.observations && (
+            <details>
+              <summary className="cursor-pointer text-sm">查看已提交的执行记录</summary>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs">
+                {procedure.observations}
+              </pre>
+            </details>
+          )}
           <button
             type="button"
             className={buttonClass}
             disabled={disabled || !hasInputs}
             onClick={() => {
-              if (!disabled && hasInputs) onReuse(procedure.name);
+              if (!disabled && hasInputs) onReuse(procedure.name, procedure.origin ?? 'saved');
             }}
           >
             用当前 CSV 复用所选技能
