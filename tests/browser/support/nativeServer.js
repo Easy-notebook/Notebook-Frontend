@@ -13,7 +13,7 @@ export class NativeTestServer {
     this.binary = binary;
     this.port = url.port;
   }
-  async start(modelEndpoint) {
+  async start(modelEndpoint, reviewerConfig) {
     if (this.child) throw new Error('Stop the existing native server before restarting');
     this.root ??= await mkdtemp(join(tmpdir(), 'aal-browser-native-'));
     const env = { ...process.env };
@@ -32,7 +32,12 @@ export class NativeTestServer {
     }
     const child = spawn(
       this.binary,
-      [this.root, this.port, ...(modelEndpoint ? ['--model'] : [])],
+      [
+        this.root,
+        this.port,
+        ...(modelEndpoint ? ['--model'] : []),
+        ...(reviewerConfig ? ['--auto-review', reviewerConfig] : []),
+      ],
       {
         env,
         stdio: ['ignore', 'pipe', 'pipe'],

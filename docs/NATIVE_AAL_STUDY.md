@@ -157,7 +157,7 @@ A different request under an existing invocation UUID conflicts.
 Completed outputs use the existing editor save path. Notebook reload now preserves
 the cell's stored `language`, preventing saved AAL from being routed as Python.
 Late completion after switching notebooks cannot publish into the new document.
-The native browser request has a 20 second deadline. A stalled/aborted request
+The native browser request has a 75 second deadline. A stalled/aborted request
 keeps its invocation for retry; this does not claim cancellation of server work.
 
 ## Run All
@@ -430,5 +430,35 @@ of the study panel's evidence or a shared live FoKn forest. The existing source,
 execution and output bounds apply. The proof checks captured observations and
 same-cluster membership; it does not establish causal or price predictions.
 
-This action requires the ordinary Rust `web` build. The cell server does not yet
-expose the CLI's automatic permission reviewer or a pending-approval UI.
+This action requires the ordinary Rust `web` build. Automatic permission review is
+optional, using the `web,model` build and server-owned reviewer configuration below.
+
+## Automatic review and waiting cells
+
+Start the Rust server with `--features web,model` and append
+`--auto-review /absolute/path/to/cell-reviewer.json`. Use AAL's
+`demos/notebook/cell-reviewer.example.json` and `cell-review-models.example.json` as
+configuration templates; fill in the actual provider/model, credential environment
+reference and authorized task. No key is entered into the notebook or cell source.
+This reviewer is independent of the optional agent model flag.
+
+To use it, add `behavior` with `permissions "auto"` to the cell's Agent declaration,
+for example to an inserted FoKn evidence cell. The source declaration opts into review;
+the server does not force auto onto other cells. Host capabilities remain the same
+closed native skill set.
+
+A temporary reviewer failure displays **等待自动审核**. The frozen request remains
+in sessionStorage through reload. Run the same cell again to continue with the same
+invocation and approved decisions. Run All stops before dependent cells during this
+wait. Denial is terminal. A changed reviewer/deployment terminates the old invocation;
+the next Run starts a new one. Completed results can replay even when the reviewer
+is offline. Editing source deliberately starts a separate calculation.
+
+Review workers are bounded to 60 seconds and reviewer HTTP calls to at most 45 seconds;
+native browser requests now allow 75 seconds. Ordinary workers retain their 10-second
+limit. An approval action, including its arguments, is limited to 64 KiB. Large FoKn
+graphs remain available in result output; use a compact observation/conclusion summary
+for reviewed shared-value publication. Oversized actions are rejected without truncation.
+The browser handles `pending` separately from `ok`/`error` and only clears the frozen
+request on a terminal response. Approval does not imply live model correctness or
+online EasyNet admission.

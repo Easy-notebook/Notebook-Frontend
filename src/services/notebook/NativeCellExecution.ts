@@ -9,11 +9,11 @@ const pending = z
     invocation: z.string().uuid(),
   })
   .strict();
-const terminal = z.object({
+const cellResponse = z.object({
   frontend_notebook_id: z.string(),
   cell_id: z.string(),
   invocation: z.string().uuid(),
-  status: z.enum(['ok', 'error']),
+  status: z.enum(['ok', 'error', 'pending']),
   error: z.string().optional(),
   outputs: z.array(z.object({ type: z.enum(['text', 'error']), content: z.string() })),
 });
@@ -42,8 +42,8 @@ export class NativeCellExecution {
     // Persist before dispatch; a storage failure cannot create an untracked attempt.
     const serialized = JSON.stringify(request);
     this.storage.setItem(this.key, serialized);
-    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
-    const result = terminal.parse(await this.transport.send('execute', request, requestSignal));
+    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(75_000)]);
+    const result = cellResponse.parse(await this.transport.send('execute', request, requestSignal));
     requestSignal.throwIfAborted();
     if (
       result.frontend_notebook_id !== this.notebookId ||
@@ -51,7 +51,9 @@ export class NativeCellExecution {
       result.invocation !== request.invocation
     )
       throw new Error('Native cell execution identity mismatch');
-    if (this.storage.getItem(this.key) === serialized) this.storage.removeItem(this.key);
+    // A review wait is observable, but it is not a terminal execution result.
+    if (result.status !== 'pending' && this.storage.getItem(this.key) === serialized)
+      this.storage.removeItem(this.key);
     return result;
   }
 }

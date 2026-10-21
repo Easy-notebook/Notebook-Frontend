@@ -121,3 +121,41 @@ it('cannot clear a newer request when a disposed execution completes late', asyn
   await expect(first).rejects.toThrow();
   expect(sessionStorage.getItem(sessionStorage.key(0)!)).toContain('second');
 });
+
+it('retains an explicit review wait across client recreation and clears only the terminal result', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async (_, init) => {
+    const request = JSON.parse(init!.body as string);
+    if (fetcher.mock.calls.length < 3)
+      return new Response(
+        JSON.stringify({
+          frontend_notebook_id: 'book',
+          cell_id: request.cell_id,
+          invocation: request.invocation,
+          status: 'pending',
+          error: 'E_PERMISSION_PENDING',
+          outputs: [{ type: 'text', content: '等待自动审核；再次运行此单元格可继续。' }],
+        })
+      );
+    return response(init!.body as string);
+  });
+  const transport = new NativeNotebookTransport('book', fetcher);
+  for (let i = 0; i < 2; i++) {
+    const result = await new NativeCellExecution('book', 'cell', sessionStorage, transport).execute(
+      'source',
+      signal()
+    );
+    expect(result.status).toBe('pending');
+    expect(result.outputs?.[0].content).toContain('等待');
+    expect(sessionStorage.length).toBe(1);
+  }
+  expect(
+    (
+      await new NativeCellExecution('book', 'cell', sessionStorage, transport).execute(
+        'source',
+        signal()
+      )
+    ).status
+  ).toBe('ok');
+  expect(new Set(fetcher.mock.calls.map((call) => call[1]!.body)).size).toBe(1);
+  expect(sessionStorage.length).toBe(0);
+});
