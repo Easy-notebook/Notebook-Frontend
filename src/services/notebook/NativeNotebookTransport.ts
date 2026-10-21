@@ -19,6 +19,7 @@ export class NativeNotebookTransport {
   async send(
     route:
       | 'state'
+      | 'knowledge'
       | 'command'
       | 'execute'
       | 'datasets'

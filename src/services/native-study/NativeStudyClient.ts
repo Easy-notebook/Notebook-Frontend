@@ -6,6 +6,7 @@ import {
   type PendingCommand,
 } from './contracts';
 import { NativeNotebookTransport } from '@Services/notebook/NativeNotebookTransport';
+import { studyKnowledge, type StudyKnowledge } from './studyKnowledge';
 
 /** Same-origin transport; native notebook identity is checked independently of the URL. */
 export class NativeStudyClient {
@@ -42,6 +43,17 @@ export class NativeStudyClient {
     )
       throw new Error('Native operation identity mismatch');
     return value.observation;
+  }
+  async knowledge(
+    workspace: string,
+    revision: number,
+    signal?: AbortSignal
+  ): Promise<StudyKnowledge> {
+    const value = studyKnowledge.parse(await this.transport.send('knowledge', undefined, signal));
+    if (value.frontend_notebook_id !== this.notebookId || value.workspace !== workspace)
+      throw new Error('研究知识所属笔记不一致，请刷新研究');
+    if (value.revision !== revision) throw new Error('研究已发生变化，请刷新研究后重新读取知识');
+    return value;
   }
   async command(command: PendingCommand, signal?: AbortSignal): Promise<void> {
     await this.transport.send('command', command, signal);

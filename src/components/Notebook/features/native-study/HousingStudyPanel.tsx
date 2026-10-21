@@ -11,6 +11,7 @@ import { StudyEvidence } from './StudyEvidence';
 import { NativeDatasetPicker } from './NativeDatasetPicker';
 import { StudyProgress } from './StudyProgress';
 import { StudyDiscussion } from './StudyDiscussion';
+import { StudyKnowledge } from './StudyKnowledge';
 import { StudyProcedures } from './StudyProcedures';
 
 const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm';
@@ -502,6 +503,14 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           view={view}
           busy={busy || closed || publishing}
           explain={(row) => run('explain_study_sample', { query_row: row })}
+        />
+      )}
+      {view?.frontend_notebook_id === notebookId && (
+        <StudyKnowledge
+          notebookId={notebookId}
+          workspace={view.document.id}
+          revision={view.document.revision}
+          busy={busy || publishing || datasetBusy}
         />
       )}
       {view?.frontend_notebook_id === notebookId && (

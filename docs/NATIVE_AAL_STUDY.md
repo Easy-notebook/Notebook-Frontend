@@ -477,3 +477,29 @@ for reviewed shared-value publication. Oversized actions are rejected without tr
 The browser handles `pending` separately from `ok`/`error` and only clears the frozen
 request on a terminal response. Approval does not imply live model correctness or
 online EasyNet admission.
+
+## Inspect the study's current knowledge
+
+In **房屋研究**, choose **查看研究知识** to read the workspace's effective FoKn
+context without a model call. The view groups active knowledge by area/tree and
+shows candidate/supported status, text and original Agent/invocation/step provenance.
+Expand **完整知识快照** for the complete native response. This is the study workspace's
+forest; individual collaborators and AAL cells retain separate knowledge.
+
+The read identifies the native document and revision. Navigation, saved input changes
+or a study command clear the observation; read again to inspect the new state. A
+revision mismatch asks you to refresh the study first. Unsaved form edits are not
+included. If the connection fails, the same button starts a fresh read. No browser
+knowledge copy or mutation retry command is created.
+
+After changed inputs expire the sample facts, a fresh read omits them while the
+existing sample-evidence view keeps the historical graph marked expired. Candidate
+text remains unverified; supported means the attached assertion/calculation passed,
+not universal truth. This view is not an entire model prompt or a signed EasyNet receipt.
+The native 64-KiB query bound fails explicitly rather than truncating the forest.
+
+The actual browser evidence test reads after lost-response recovery and Rust server
+restart, compares the displayed full JSON with `/knowledge`, and verifies exclusion
+after changed inputs. Unit checks cover identity/revision conflicts, failed reads and
+late replies across navigation or active commands. Use a fresh native state root when
+changing compiled application compositions, as for other native study changes.

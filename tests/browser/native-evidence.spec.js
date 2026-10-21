@@ -73,11 +73,41 @@ test('renders actual FoKn provenance after response loss/restart and expires it 
     return (await response.json()).study.sample_evidence;
   });
   expect(JSON.parse(await evidence.locator('pre').textContent())).toEqual(actual);
+  const knowledge = page.getByRole('region', { name: '研究知识上下文', exact: true });
+  await knowledge.getByRole('button', { name: '查看研究知识', exact: true }).click();
+  await expect(knowledge.getByText(/读取时修订 4.*NotebookWorkspace/)).toBeVisible();
+  const observed = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    const response = await fetch(
+      `/aal-api/workspaces/${encodeURIComponent(store.getState().notebookId)}/knowledge`
+    );
+    if (!response.ok) throw new Error('Native knowledge read failed');
+    return response.json();
+  });
+  const retained = JSON.parse(await knowledge.getByLabel('完整知识快照 JSON').textContent());
+  expect(retained).toEqual(observed);
+  const claims = Object.values(observed.context.learned).flatMap((trees) =>
+    Object.values(trees).flat()
+  );
+  expect(claims.some((claim) => claim.source.invocation === requests[0].invocation)).toBe(true);
+  expect(
+    claims.filter((claim) => claim.atom?.relation === 'housing_same_segment_neighbor')
+  ).toHaveLength(3);
+
   await first.scrollIntoViewIfNeeded();
   await page.screenshot({ path: '/tmp/aal-frontend-proof-current.png' });
   await page.getByLabel('数值特征（每行一个）').fill('area');
   await page.getByRole('button', { name: '保存研究输入', exact: true }).click();
   await expect(evidence.getByText(/历史证据已过期/)).toBeVisible();
+  await expect(knowledge.getByLabel('完整知识快照 JSON')).toHaveCount(0);
+  await knowledge.getByRole('button', { name: '查看研究知识', exact: true }).click();
+  await expect(
+    knowledge.getByText('当前没有纳入上下文的知识。历史证据仍可在研究结果中查看。')
+  ).toBeVisible();
+  const expired = JSON.parse(await knowledge.getByLabel('完整知识快照 JSON').textContent());
+  expect(expired.revision).toBe(5);
+  expect(expired.context.learned).toEqual({});
+
   await expect(evidence.locator('summary').filter({ hasText: /参考行 .*已过期/ })).toHaveCount(3);
   await expect(evidence.locator('summary').filter({ hasText: /参考行 .*已支持/ })).toHaveCount(0);
   await evidence.getByText(/历史证据已过期/).scrollIntoViewIfNeeded();
