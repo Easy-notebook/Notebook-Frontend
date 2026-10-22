@@ -99,6 +99,22 @@ export class NativeDatasetClient {
     if (response.dataset.version !== version) throw new Error('Dataset version mismatch');
     return this.verify(response.dataset);
   }
+  async download(selected: DatasetMetadata, signal?: AbortSignal): Promise<Blob> {
+    const expected = metadata.parse(selected);
+    if (!validName(expected.name)) throw new Error('Invalid dataset filename');
+    const deadline = AbortSignal.timeout(20_000);
+    const owned = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    const bytes = await this.transport.bytes(
+      `datasets/${expected.version}/download`,
+      expected.size,
+      owned
+    );
+    // Preserve BOM and CRLF, reject lossy decoding, and reuse the same identity check.
+    const csv = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    await this.verify({ ...expected, csv });
+    owned.throwIfAborted();
+    return new Blob([new Uint8Array(bytes)], { type: 'text/csv;charset=utf-8' });
+  }
   async upload(name: string, csv: string, signal?: AbortSignal): Promise<NativeDataset> {
     if (!validName(name)) throw new Error('请选择文件名不超过 256 字节的 CSV 文件');
     if (encoder.encode(csv).length > 4 * 1024 * 1024) throw new Error('CSV 不能超过 4 MiB');

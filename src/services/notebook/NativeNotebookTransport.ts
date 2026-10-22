@@ -1,3 +1,14 @@
+type NativeNotebookRoute =
+  | 'state'
+  | 'knowledge'
+  | 'command'
+  | 'commands/lookup'
+  | 'execute'
+  | 'executions/lookup'
+  | 'datasets'
+  | `datasets/${string}`
+  | `operations/${string}`;
+
 /** Local native HTTP boundary shared by study commands and AAL cells. */
 export class NativeNotebookTransport {
   private readonly path: string;
@@ -16,20 +27,11 @@ export class NativeNotebookTransport {
       throw new Error('Invalid notebook ID');
     this.path = `/aal-api/workspaces/${encodeURIComponent(notebookId)}`;
   }
-  async send(
-    route:
-      | 'state'
-      | 'knowledge'
-      | 'command'
-      | 'commands/lookup'
-      | 'execute'
-      | 'executions/lookup'
-      | 'datasets'
-      | `datasets/${string}`
-      | `operations/${string}`,
+  private async response(
+    route: NativeNotebookRoute,
     body?: unknown,
     signal?: AbortSignal
-  ): Promise<unknown> {
+  ): Promise<Response> {
     const response = await this.request(`${this.path}/${route}`, {
       method: body === undefined ? 'GET' : 'POST',
       ...(body === undefined
@@ -41,8 +43,8 @@ export class NativeNotebookTransport {
       signal,
       cache: 'no-store',
     });
-    const value: unknown = await response.json();
     if (!response.ok) {
+      const value: unknown = await response.json();
       const error = value as { error?: { message?: unknown } };
       throw new Error(
         typeof error?.error?.message === 'string'
@@ -50,6 +52,41 @@ export class NativeNotebookTransport {
           : `Native runtime HTTP ${response.status}`
       );
     }
-    return value;
+    return response;
+  }
+  async send(route: NativeNotebookRoute, body?: unknown, signal?: AbortSignal): Promise<unknown> {
+    return (await this.response(route, body, signal)).json();
+  }
+  async bytes(
+    route: `datasets/${string}/download`,
+    limit: number,
+    signal?: AbortSignal
+  ): Promise<Uint8Array> {
+    const response = await this.response(route, undefined, signal);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('Native download has no response body');
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        signal?.throwIfAborted();
+        const { done, value } = await reader.read();
+        signal?.throwIfAborted();
+        if (done) break;
+        size += value.length;
+        if (size > limit) throw new Error('Native download exceeds its byte limit');
+        chunks.push(value);
+      }
+    } finally {
+      await reader.cancel();
+      reader.releaseLock();
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return bytes;
   }
 }

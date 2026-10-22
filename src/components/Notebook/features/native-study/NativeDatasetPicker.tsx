@@ -5,6 +5,7 @@ import {
   type DatasetSnapshot,
 } from '@Services/native-study/NativeDatasetSession';
 import { publishDatasetCell } from '@Services/native-study/publishDatasetCell';
+import { DatasetDownload } from './DatasetDownload';
 
 /** CSV archive owned by the native study, separate from Python's file workspace. */
 export function NativeDatasetPicker({
@@ -31,6 +32,7 @@ export function NativeDatasetPicker({
   busyChange.current = onBusyChange;
   const insertion = useRef<AbortController | null>(null);
   const [inserting, setInserting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [insertionNotice, setInsertionNotice] = useState('');
   const [state, setState] = useState<DatasetSnapshot>({
     phase: 'idle',
@@ -62,7 +64,7 @@ export function NativeDatasetPicker({
       if (session.current === owned) session.current = null;
     };
   }, [notebookId]);
-  const busy = inserting || state.phase === 'loading' || state.phase === 'uploading';
+  const busy = downloading || inserting || state.phase === 'loading' || state.phase === 'uploading';
   const insert = async () => {
     if (!state.selected || disabled || busy || insertion.current) return;
     const attempt = new AbortController();
@@ -148,6 +150,17 @@ export function NativeDatasetPicker({
           <p className="break-all text-xs">
             最近读入：{state.selected.name} · SHA-256 {state.selected.sha256}
           </p>
+          <DatasetDownload
+            notebookId={notebookId}
+            dataset={state.selected}
+            disabled={
+              disabled || inserting || state.phase === 'loading' || state.phase === 'uploading'
+            }
+            onBusyChange={(active) => {
+              setDownloading(active);
+              busyChange.current(active);
+            }}
+          />
           <button
             type="button"
             className="rounded border px-3 py-2 text-sm disabled:opacity-50"
