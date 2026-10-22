@@ -53,7 +53,7 @@ test.afterAll(async () => {
   if (provider?.listening) await new Promise((resolve) => provider.close(resolve));
 });
 
-test('native housing discussion shows live Rust progress, uses measured context and replays after reply loss and restart without a model', async ({
+test('native housing discussion recovers through read-only lookup after reply loss and restart with the command endpoint blocked', async ({
   page,
 }) => {
   test.setTimeout(90000);
@@ -90,7 +90,9 @@ test('native housing discussion shows live Rust progress, uses measured context 
       expect(result.ok()).toBe(true);
       lost = true;
       await route.abort('failed');
-    } else await route.continue();
+    } else {
+      await route.abort('failed'); // Recovery must not reenter the command endpoint.
+    }
   });
   await page.getByRole('button', { name: '发送研究问题', exact: true }).click();
   await expect(page.getByRole('status', { name: '原生执行进度' })).toContainText(
@@ -120,8 +122,7 @@ test('native housing discussion shows live Rust progress, uses measured context 
   await expect(page.getByRole('button', { name: '重试原操作', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '重试原操作', exact: true }).click();
   await expect(page.getByRole('button', { name: '重试原操作', exact: true })).toHaveCount(0);
-  expect(commands).toHaveLength(2);
-  expect(commands[1]).toEqual(commands[0]);
+  expect(commands).toHaveLength(1);
   expect(captured).toHaveLength(1);
   await expect(page.getByRole('list', { name: '已保存的研究问答' }).locator('li')).toHaveCount(1);
   await expect(page.getByRole('button', { name: '发送研究问题', exact: true })).toBeDisabled();

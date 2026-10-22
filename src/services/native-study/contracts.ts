@@ -195,3 +195,23 @@ export const nativeOperation = z
   })
   .strict();
 export type NativeObservation = NonNullable<z.infer<typeof nativeOperation>['observation']>;
+
+/** Retained native root completion, independent of volatile operation progress. */
+export const nativeCommandLookup = z
+  .object({
+    frontend_notebook_id: z.string(),
+    workspace: z.string(),
+    invocation: z.string(),
+    ability: pendingCommand.shape.ability,
+  })
+  .and(
+    z.discriminatedUnion('status', [
+      z.object({
+        status: z.literal('completed'),
+        result: z
+          .object({ id: z.string(), revision: z.number().int().nonnegative() })
+          .passthrough(),
+      }),
+      z.object({ status: z.literal('unconfirmed'), result: z.null() }),
+    ])
+  );

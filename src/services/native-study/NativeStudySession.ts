@@ -103,9 +103,12 @@ export class NativeStudySession {
       return;
     }
     this.pending = command;
-    await this.retry();
+    await this.submit(false);
   }
   async retry(): Promise<void> {
+    await this.submit(true);
+  }
+  private async submit(lookup: boolean): Promise<void> {
     if (
       !this.pending ||
       this.snapshot.status === 'running' ||
@@ -116,7 +119,10 @@ export class NativeStudySession {
     this.observePending();
     this.publish({ status: 'running', error: null });
     try {
-      await this.client.command(this.pending, this.controller.signal);
+      const completed =
+        lookup && (await this.client.completed(this.pending, this.controller.signal));
+      this.controller.signal.throwIfAborted();
+      if (!completed) await this.client.command(this.pending, this.controller.signal);
       const view = await this.client.state(this.controller.signal);
       if (view.document.id !== this.pending.workspace)
         throw new Error('Native workspace changed; reload before editing');

@@ -21,6 +21,7 @@ export class NativeNotebookTransport {
       | 'state'
       | 'knowledge'
       | 'command'
+      | 'commands/lookup'
       | 'execute'
       | 'executions/lookup'
       | 'datasets'

@@ -531,3 +531,24 @@ refresh before submitting a new request. Feedback is bounded to 8192 Unicode cha
 New notebooks own separate default instructions. Model-proposed wording is not proof
 of improved explanation quality. `native-instruction.spec.js` exercises actual Rust,
 HTTP requests, response loss, server/browser restart, later guidance reuse and isolation.
+
+## 研究命令只读恢复
+
+`NativeStudySession` 在显式重试已有操作时先调用
+`POST /aal-api/workspaces/{id}/commands/lookup`，发送原来冻结的完整请求。
+Rust 从内核持久化记录核对调用身份、参数和部署；尚有任务或恢复回调待交付时，
+结果仍是 `unconfirmed`。进度观察不能替代这份完成记录。
+
+`completed` 会跳过 `/command`，重新读取当前研究状态后才清除 pending 请求，
+因此不会用旧结果覆盖后来更新的视图。`unconfirmed` 允许本次显式重试继续提交
+同一个原请求；查询失败、响应损坏或身份不匹配会保留 pending 并停止，不回退到执行。
+查询期间关闭面板也不会继续提交命令。初次执行仍只发送一次 `/command`。
+
+支持的研究命令启用既有内核 root 结果持久化：最多 256 个调用，每个结果不超过
+256 KiB，journal 不超过 8 MiB；普通状态读取不占调用记录。达到上限后需使用新的
+研究命名空间，不会自动删除历史并重新执行旧操作。早于该机制的操作可能返回
+`unconfirmed`，只能经原有显式重试恢复，不能据此认定从未执行。
+
+浏览器验收已将丢失讨论回复后的 `/command` 端点直接拦截：关闭模型服务、重启
+Rust 和刷新页面后仍能恢复原操作；历史讨论只有一条，模型请求只有一次。HTTP 测试
+还覆盖分群、相似样本和 FoKn 证据的四个结果，以及只读快照、参数冲突和笔记隔离。

@@ -1,6 +1,7 @@
 import {
   nativeView,
   nativeOperation,
+  nativeCommandLookup,
   type NativeObservation,
   type NativeView,
   type PendingCommand,
@@ -54,6 +55,20 @@ export class NativeStudyClient {
       throw new Error('研究知识所属笔记不一致，请刷新研究');
     if (value.revision !== revision) throw new Error('研究已发生变化，请刷新研究后重新读取知识');
     return value;
+  }
+  async completed(command: PendingCommand, signal?: AbortSignal): Promise<boolean> {
+    const value = nativeCommandLookup.parse(
+      await this.transport.send('commands/lookup', command, signal)
+    );
+    if (
+      value.frontend_notebook_id !== this.notebookId ||
+      value.workspace !== command.workspace ||
+      value.invocation !== command.invocation ||
+      value.ability !== command.ability ||
+      (value.status === 'completed' && value.result.id !== command.workspace)
+    )
+      throw new Error('Native command completion identity mismatch');
+    return value.status === 'completed';
   }
   async command(command: PendingCommand, signal?: AbortSignal): Promise<void> {
     await this.transport.send('command', command, signal);

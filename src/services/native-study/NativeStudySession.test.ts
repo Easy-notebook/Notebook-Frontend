@@ -25,6 +25,18 @@ const view = (id = 'a', revision = 0) => ({
 });
 const response = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+const lookupResponse = (input: RequestInfo | URL, options?: RequestInit) => {
+  if (!String(input).endsWith('/commands/lookup')) return null;
+  const command = JSON.parse(String(options?.body));
+  return response({
+    frontend_notebook_id: 'a',
+    workspace: command.workspace,
+    invocation: command.invocation,
+    ability: command.ability,
+    status: 'unconfirmed',
+    result: null,
+  });
+};
 beforeEach(() => sessionStorage.clear());
 describe('native study transport and lifecycle', () => {
   it('rejects wrong notebook responses and malformed numerical evidence', async () => {
@@ -53,6 +65,8 @@ describe('native study transport and lifecycle', () => {
     const calls: string[] = [];
     let fail = true;
     const request = vi.fn<typeof fetch>(async (_input, options) => {
+      const found = lookupResponse(_input, options);
+      if (found) return found;
       if (options?.method === 'POST') {
         calls.push(String(options.body));
         if (fail) throw new Error('Disconnected');
@@ -98,6 +112,8 @@ describe('native study transport and lifecycle', () => {
       resolve = r;
     });
     const request = vi.fn<typeof fetch>(async (_input, options) => {
+      const found = lookupResponse(_input, options);
+      if (found) return found;
       if (options?.method === 'POST') {
         await pending;
         return response({});
@@ -119,6 +135,8 @@ describe('native study transport and lifecycle', () => {
       resolve = r;
     });
     const request = vi.fn<typeof fetch>(async (_input, options) => {
+      const found = lookupResponse(_input, options);
+      if (found) return found;
       if (options?.method === 'POST') await pending;
       return response(view());
     });
@@ -135,6 +153,8 @@ describe('native study transport and lifecycle', () => {
   it('keeps a command retryable when the post succeeds but refreshing fails', async () => {
     let gets = 0;
     const request = vi.fn<typeof fetch>(async (_input, options) => {
+      const found = lookupResponse(_input, options);
+      if (found) return found;
       if (options?.method === 'POST') return response({});
       if (++gets === 2) throw new Error('read interrupted');
       return response(view());
@@ -145,7 +165,7 @@ describe('native study transport and lifecycle', () => {
     expect(session.getSnapshot().pending).toBe(true);
     await session.retry();
     expect(session.getSnapshot().status).toBe('ready');
-    const posts = request.mock.calls.filter(([, options]) => options?.method === 'POST');
+    const posts = request.mock.calls.filter(([input]) => String(input).endsWith('/command'));
     expect(posts[0][1]?.body).toBe(posts[1][1]?.body);
   });
   it('does not export absent or stale study evidence', () => {
@@ -157,6 +177,8 @@ it('reopens and retries the whole PCS task with its original query and caller th
   const sent: string[] = [];
   let fail = true;
   const request = vi.fn<typeof fetch>(async (_input, options) => {
+    const found = lookupResponse(_input, options);
+    if (found) return found;
     if (options?.method === 'POST') {
       sent.push(String(options.body));
       if (fail) throw new Error('source provider interrupted');
@@ -297,4 +319,103 @@ it('observes a lost response without resending or treating observed success as d
     session.dispose();
     vi.useRealTimers();
   }
+});
+
+const savedCommand = {
+  workspace: 'native-a',
+  ability: 'run_study',
+  arguments: { expected_revision: 0 },
+  invocation: 'saved-command',
+};
+const retainedReply = () => ({
+  frontend_notebook_id: 'a',
+  workspace: 'native-a',
+  ability: 'run_study',
+  invocation: 'saved-command',
+  status: 'completed',
+  result: { id: 'native-a', revision: 1 },
+});
+
+it('recovers a retained command after reopening without dispatch and refreshes the current revision', async () => {
+  sessionStorage.setItem('aal-study-pending:a', JSON.stringify(savedCommand));
+  const request = vi.fn<typeof fetch>(async (input, options) => {
+    if (String(input).endsWith('/commands/lookup')) {
+      expect(JSON.parse(String(options?.body))).toEqual(savedCommand);
+      return response(retainedReply());
+    }
+    if (String(input).endsWith('/command')) throw new Error('execution endpoint is blocked');
+    return response(view('a', 8));
+  });
+  const session = new NativeStudySession(new NativeStudyClient('a', request));
+  await session.refresh();
+  await session.retry();
+  expect(session.getSnapshot().status).toBe('ready');
+  expect(session.getSnapshot().view?.document.revision).toBe(8);
+  expect(sessionStorage.getItem('aal-study-pending:a')).toBeNull();
+  expect(request.mock.calls.filter(([input]) => String(input).endsWith('/command'))).toHaveLength(
+    0
+  );
+  session.dispose();
+});
+
+it.each([
+  { frontend_notebook_id: 'other' },
+  { workspace: 'other' },
+  { invocation: 'other' },
+  { ability: 'compare_study' },
+  { result: { id: 'other', revision: 1 } },
+  { result: null },
+  { status: 'unconfirmed' },
+])('keeps the frozen retry after invalid completion evidence: %j', async (changed) => {
+  sessionStorage.setItem('aal-study-pending:a', JSON.stringify(savedCommand));
+  const request = vi.fn<typeof fetch>(async (input) =>
+    String(input).endsWith('/commands/lookup')
+      ? response({ ...retainedReply(), ...changed })
+      : response(view())
+  );
+  const session = new NativeStudySession(new NativeStudyClient('a', request));
+  await session.retry();
+  expect(session.getSnapshot().status).toBe('recoverable');
+  expect(session.getSnapshot().pending).toBe(true);
+  expect(request.mock.calls.filter(([input]) => String(input).endsWith('/command'))).toHaveLength(
+    0
+  );
+  expect(JSON.parse(sessionStorage.getItem('aal-study-pending:a')!)).toEqual(savedCommand);
+  session.dispose();
+});
+
+it('does not fall back to execution after a failed lookup', async () => {
+  sessionStorage.setItem('aal-study-pending:a', JSON.stringify(savedCommand));
+  const request = vi.fn<typeof fetch>(async (input) => {
+    if (String(input).endsWith('/commands/lookup')) throw new Error('lookup unavailable');
+    return response(view());
+  });
+  const session = new NativeStudySession(new NativeStudyClient('a', request));
+  await session.retry();
+  expect(session.getSnapshot().error).toBe('lookup unavailable');
+  expect(session.getSnapshot().pending).toBe(true);
+  expect(request.mock.calls.filter(([input]) => String(input).endsWith('/command'))).toHaveLength(
+    0
+  );
+  session.dispose();
+});
+
+it('does not dispatch an unconfirmed retry if disposed during lookup', async () => {
+  sessionStorage.setItem('aal-study-pending:a', JSON.stringify(savedCommand));
+  let resolve!: (response: Response) => void;
+  const waiting = new Promise<Response>((done) => {
+    resolve = done;
+  });
+  const request = vi.fn<typeof fetch>(async (input) =>
+    String(input).endsWith('/commands/lookup') ? waiting : response(view())
+  );
+  const session = new NativeStudySession(new NativeStudyClient('a', request));
+  const retry = session.retry();
+  session.dispose();
+  resolve(response({ ...retainedReply(), status: 'unconfirmed', result: null }));
+  await retry;
+  expect(request.mock.calls.filter(([input]) => String(input).endsWith('/command'))).toHaveLength(
+    0
+  );
+  expect(JSON.parse(sessionStorage.getItem('aal-study-pending:a')!)).toEqual(savedCommand);
 });
