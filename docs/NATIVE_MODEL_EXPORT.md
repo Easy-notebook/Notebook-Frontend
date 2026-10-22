@@ -50,3 +50,25 @@ The real browser test uploads its downloaded model after restarting the server,
 compares all returned assignments with the offline CLI output, expands feature
 terms and verifies that editing query data hides the old result. HTTP tests reject
 wrong owners/revisions and invalid scaling, and verify unchanged study state.
+
+## Compare original reference samples
+
+Inside the imported-model panel, expand **使用原始参考样本解释相似性**. Supply the
+original reference CSV, its saved `reference_id`, and 1–8 neighbors; the currently
+loaded model and new-sample CSV are reused. The normal study result now displays
+its reference identity so it can be retained with exported files.
+
+The workspace-scoped `model-comparison` route verifies workspace/revision and
+calls native AAL `DataMining.compare`. The frozen model and selected reference
+rows must reproduce the supplied identity. Results show original neighbor indices,
+query/reference feature values and additive squared-distance contributions, using
+the same display component as saved study comparisons. Changing any input hides
+older results. The imported panel has no **保存样本证据链** action: comparison does
+not install or overwrite the current study or inherit the source workspace's FoKn
+claims. Numerical similarity does not establish price comparability or causality.
+
+Real-browser coverage imports the downloaded model, compares with original CSV,
+checks the expected nearest original row, expands distance terms, and verifies
+wrong-reference rejection and stale-result removal. The HTTP suite also exercises
+an existing current FoKn sample proof and checks the complete visible workspace
+state is unchanged after imported comparison and rejection cases.

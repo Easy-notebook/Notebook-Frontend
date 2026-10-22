@@ -76,3 +76,32 @@ it('rejects malformed and oversized files before a request', async () => {
   }
   expect(request).not.toHaveBeenCalled();
 });
+
+it('checks the returned comparison reference as well as workspace ownership', async () => {
+  const comparison = { reference_id: 'reference', query_data_id: 'query', rows: [] };
+  const request = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      frontend_notebook_id: 'notebook',
+      workspace: 'workspace',
+      revision: 3,
+      comparison,
+    }),
+  });
+  vi.stubGlobal('fetch', request);
+  const client = new ImportedModelClient('notebook');
+  const invoke = () =>
+    client.compare(
+      'workspace',
+      3,
+      model,
+      'area\n110\n',
+      'area\n100\n',
+      'reference',
+      3,
+      new AbortController().signal
+    );
+  expect(await invoke()).toEqual(comparison);
+  comparison.reference_id = 'other-reference';
+  await expect(invoke()).rejects.toThrow('参考身份不匹配');
+});

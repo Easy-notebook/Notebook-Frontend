@@ -35,7 +35,7 @@ const neighbor = z.object({
   distance_squared: finite,
   terms: z.array(term),
 });
-const comparison = z
+export const comparison = z
   .object({
     reference_id: z.string(),
     query_data_id: z.string(),

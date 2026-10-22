@@ -5,6 +5,7 @@ type NativeNotebookRoute =
   | 'knowledge-prompt'
   | 'figure'
   | 'model-assignment'
+  | 'model-comparison'
   | 'command'
   | 'commands/lookup'
   | 'execute'

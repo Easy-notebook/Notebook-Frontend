@@ -23,11 +23,19 @@ test('exports the complete native model after restart without refitting', async 
   page,
 }, testInfo) => {
   test.setTimeout(60000);
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
   let model;
+  let referenceId;
+  const referenceCsv =
+    'area,rooms\n40,2\n41,2\n42,2\n43,2\n90,4\n91,4\n92,4\n93,4\n180,7\n181,7\n182,7\n183,7\n';
   page.on('response', async (response) => {
     if (response.url().includes('/aal-api/workspaces/') && response.ok()) {
       const data = await response.json().catch(() => null);
-      if (data?.study?.result?.report?.model) model = data.study.result.report.model;
+      if (data?.study?.result?.report?.model) {
+        model = data.study.result.report.model;
+        referenceId = data.study.result.report.reference_id;
+      }
     }
   });
   await page.goto('/');
@@ -95,8 +103,31 @@ test('exports the complete native model after restart without refitting', async 
   await expect(imported.locator('summary')).toHaveCount(3);
   await imported.locator('summary').first().click();
   await expect(imported).toContainText('area：原值 47');
+  await page.getByText('使用原始参考样本解释相似性', { exact: true }).click();
+  await page.getByLabel('导入参考 CSV', { exact: true }).fill(referenceCsv);
+  await page.getByLabel('原报告参考身份').fill(referenceId);
+  const compared = page.waitForResponse(
+    (response) => response.url().endsWith('/model-comparison') && response.ok()
+  );
+  await page.getByRole('button', { name: '比较导入参考样本', exact: true }).click();
+  const comparison = (await (await compared).json()).comparison;
+  expect(comparison.reference_id).toBe(referenceId);
+  expect(comparison.rows).toHaveLength(3);
+  expect(comparison.rows[0].neighbors[0].row).toBe(3);
+  const referenceResult = page.getByLabel('导入参考比较结果');
+  await expect(referenceResult.locator('summary')).toHaveCount(3);
+  await referenceResult.locator('summary').first().click();
+  await expect(referenceResult).toContainText('参考样本行 3');
+  await expect(referenceResult.getByRole('button', { name: '保存样本证据链' })).toHaveCount(0);
+  await page.getByLabel('原报告参考身份').fill('wrong-reference');
+  await expect(referenceResult).toHaveCount(0);
+  await page.getByRole('button', { name: '比较导入参考样本', exact: true }).click();
+  await expect(page.getByLabel('导入参考相似比较').getByRole('alert')).toContainText(
+    'reference identity changed'
+  );
   await page.getByLabel('导入模型的新样本 CSV').fill('rooms,area\n2,49\n');
   await expect(imported).toHaveCount(0);
   await page.getByLabel('参考 CSV 内容').fill('area,rooms\n999,2\n');
   await expect(button).toBeDisabled();
+  expect(pageErrors).toEqual([]);
 });

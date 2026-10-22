@@ -1,3 +1,4 @@
+import { ImportedReferenceComparison } from './ImportedReferenceComparison';
 import { useRef, useState } from 'react';
 import { ImportedModelClient } from '@Services/native-study/ImportedModelClient';
 import { parseStudyModel } from '@Services/native-study/studyModel';
@@ -46,7 +47,7 @@ export function ImportedModel({
       <h3 className="font-semibold">使用已有分群模型</h3>
       <p className="text-sm text-muted-foreground">
         上传已导出的分群模型，对新样本进行分群。由本机 Rust 服务计算，无需
-        LLM；不会替换当前研究或恢复原始邻居证据。
+        LLM；不会替换当前研究或迁移原工作区的 FoKn 声明。
       </p>
       <label className="block">
         冻结分群模型文件
@@ -97,6 +98,14 @@ export function ImportedModel({
           ))}
         </div>
       )}
+      <ImportedReferenceComparison
+        notebookId={notebookId}
+        workspace={workspace}
+        revision={revision}
+        model={model}
+        csv={csv}
+        busy={busy || state.status === 'loading'}
+      />
     </section>
   );
 }
