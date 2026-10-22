@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { downloadBlob } from '@Services/notebook/BrowserDownload';
+import { studyModelExport } from '@Services/native-study/studyModel';
 import type { NativeView } from '@Services/native-study/contracts';
 import { SampleEvidence } from './SampleEvidence';
 
@@ -6,12 +9,26 @@ export function StudyEvidence({
   view,
   busy,
   explain,
+  modelExportDisabled = false,
 }: {
   view: NativeView;
   busy: boolean;
+  modelExportDisabled?: boolean;
   explain: (row: number) => void;
 }) {
   const study = view.study;
+  const [exportError, setExportError] = useState('');
+  const exportModel = () => {
+    setExportError('');
+    try {
+      downloadBlob(
+        new Blob([studyModelExport(view)], { type: 'application/json' }),
+        'mining-model.json'
+      );
+    } catch (reason) {
+      setExportError(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
   return (
     <div className="space-y-4">
       {study.result && (
@@ -24,6 +41,19 @@ export function StudyEvidence({
           <p className="text-sm text-muted-foreground">
             这些指标描述当前数据，不证明自然类别、房价或因果关系。所有样本行号从零开始。
           </p>
+          <button
+            type="button"
+            disabled={busy || modelExportDisabled || !study.current}
+            className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+            onClick={exportModel}
+          >
+            导出冻结分群模型
+          </button>
+          <p className="text-sm text-muted-foreground">
+            包含特征缩放和分群中心，可供 Rust
+            离线分群；不包含逐行参考样本，不能单独用于相似样本解释。
+          </p>
+          {exportError && <p role="alert">{exportError}</p>}
           <table className="w-full text-sm">
             <thead>
               <tr>

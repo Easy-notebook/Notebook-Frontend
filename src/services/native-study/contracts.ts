@@ -55,7 +55,9 @@ const report = z
     clusters: z.array(
       z.object({ cluster: index, count: index, representative_row: index, center: z.array(finite) })
     ),
-    model: z.object({ features: z.array(z.object({ name: z.string() })) }).passthrough(),
+    model: z
+      .object({ features: z.array(z.object({ name: z.string() }).passthrough()) })
+      .passthrough(),
   })
   .passthrough();
 const studyProcedure = z

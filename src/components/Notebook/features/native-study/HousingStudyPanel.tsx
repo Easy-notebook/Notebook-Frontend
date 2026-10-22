@@ -520,6 +520,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
         <StudyEvidence
           view={view}
           busy={busy || closed || publishing}
+          modelExportDisabled={inputChanged || datasetBusy}
           explain={(row) => run('explain_study_sample', { query_row: row })}
         />
       )}
