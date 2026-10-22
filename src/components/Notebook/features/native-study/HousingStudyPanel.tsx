@@ -12,6 +12,7 @@ import { NativeDatasetPicker } from './NativeDatasetPicker';
 import { StudyProgress } from './StudyProgress';
 import { StudyDiscussion } from './StudyDiscussion';
 import { StudyKnowledge } from './StudyKnowledge';
+import { StudyFigure } from './StudyFigure';
 import { StudyProcedures } from './StudyProcedures';
 
 const inputClass = 'block w-full rounded border bg-background px-3 py-2 text-sm';
@@ -522,6 +523,24 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           explain={(row) => run('explain_study_sample', { query_row: row })}
         />
       )}
+      {view?.frontend_notebook_id === notebookId &&
+        view.study.current &&
+        view.study.result?.kind === 'mining' && (
+          <StudyFigure
+            key={JSON.stringify([
+              notebookId,
+              view.document.id,
+              view.document.revision,
+              view.study.result.report.reference_id,
+            ])}
+            notebookId={notebookId}
+            workspace={view.document.id}
+            revision={view.document.revision}
+            reference={view.study.result.report.reference_id}
+            features={view.study.result.report.model.features.map((feature) => feature.name)}
+            busy={busy || publishing || datasetBusy || inputChanged}
+          />
+        )}
       {view?.frontend_notebook_id === notebookId && (
         <StudyKnowledge
           notebookId={notebookId}

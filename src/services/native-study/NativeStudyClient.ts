@@ -1,3 +1,4 @@
+import { studyFigure, type FigureQuery, type StudyFigureSnapshot } from './studyFigure';
 import {
   nativeView,
   nativeOperation,
@@ -54,6 +55,19 @@ export class NativeStudyClient {
     if (value.frontend_notebook_id !== this.notebookId || value.workspace !== workspace)
       throw new Error('研究知识所属笔记不一致，请刷新研究');
     if (value.revision !== revision) throw new Error('研究已发生变化，请刷新研究后重新读取知识');
+    return value;
+  }
+  async figure(query: FigureQuery, signal?: AbortSignal): Promise<StudyFigureSnapshot> {
+    const value = studyFigure.parse(await this.transport.send('figure', query, signal));
+    if (
+      value.frontend_notebook_id !== this.notebookId ||
+      value.workspace !== query.workspace ||
+      value.revision !== query.expected_revision ||
+      value.figure.reference_id !== query.expected_reference_id ||
+      value.figure.x_feature !== query.x_feature ||
+      value.figure.y_feature !== query.y_feature
+    )
+      throw new Error('图表不属于当前笔记、修订或所选参考，请刷新研究');
     return value;
   }
   async completed(command: PendingCommand, signal?: AbortSignal): Promise<boolean> {

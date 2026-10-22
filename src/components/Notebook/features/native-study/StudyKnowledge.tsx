@@ -1,12 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
-import type { StudyKnowledge as Snapshot } from '@Services/native-study/studyKnowledge';
-
-type Observation =
-  | { status: 'idle' }
-  | { status: 'loading'; scope: string }
-  | { status: 'ready'; scope: string; value: Snapshot }
-  | { status: 'error'; scope: string; message: string };
+import { useScopedNativeRead } from './useScopedNativeRead';
 
 /** An explicit read owns its request; navigation or a changed study invalidates the observation. */
 export function StudyKnowledge({
@@ -20,41 +13,10 @@ export function StudyKnowledge({
   revision: number;
   busy: boolean;
 }) {
-  const [state, setState] = useState<Observation>({ status: 'idle' });
-  const request = useRef<AbortController | null>(null);
   const scope = JSON.stringify([notebookId, workspace, revision]);
-  const current = useRef(scope);
-  current.current = scope;
-  useEffect(() => {
-    request.current?.abort();
-    request.current = null;
-    setState({ status: 'idle' });
-    return () => {
-      request.current?.abort();
-      request.current = null;
-    };
-  }, [scope, busy]);
-  const visible = 'scope' in state && state.scope === scope ? state : { status: 'idle' as const };
-  const read = async () => {
-    if (busy || request.current) return;
-    const attempt = new AbortController();
-    request.current = attempt;
-    setState({ status: 'loading', scope });
-    const active = () =>
-      !attempt.signal.aborted && request.current === attempt && current.current === scope;
-    try {
-      const value = await new NativeStudyClient(notebookId).knowledge(
-        workspace,
-        revision,
-        attempt.signal
-      );
-      if (active()) setState({ status: 'ready', scope, value });
-    } catch (error) {
-      if (active()) setState({ status: 'error', scope, message: String(error) });
-    } finally {
-      if (request.current === attempt) request.current = null;
-    }
-  };
+  const { state: visible, read } = useScopedNativeRead(scope, busy, (signal) =>
+    new NativeStudyClient(notebookId).knowledge(workspace, revision, signal)
+  );
   const snapshot = visible.status === 'ready' ? visible.value : null;
   const groups = snapshot
     ? Object.entries(snapshot.context.learned).flatMap(([area, trees]) =>

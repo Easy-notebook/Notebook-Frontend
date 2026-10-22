@@ -575,3 +575,28 @@ Rust 归档的原始字节。下载不会使用编辑框当前内容，也不会
 服务端新增 `GET /api/workspaces/{id}/datasets/{version}/download`，复用已有目录和
 完整性校验。仍只支持现有 UTF-8 CSV 归档；不是任意二进制文件或 Python 文件服务。
 真实浏览器验收：`tests/browser/native-download.spec.js`。
+
+## Native cluster figures
+
+After a saved mining fit, **房屋分群图** lets the user choose two fitted features,
+request the native SVG, and download the same bytes. No model or new fit is invoked.
+The image uses original feature units and full-feature cluster labels; a two-dimensional
+projection can hide separation. The UI reports the number of displayed/reference rows
+and exposes reference/source identities and the native caption.
+
+`NativeStudyClient.figure` uses `POST /api/workspaces/{id}/figure` through the existing
+loopback proxy. Rust checks native workspace identity, expected revision and current
+reference within the kernel invocation, then calls DataVisualization's native renderer.
+The client checks response owner, revision, reference, axes, bounded SVG and point records.
+SVG is displayed as an image data URL, never inserted into the page as inline markup.
+
+Figure and FoKn context reads share one scoped request hook. Changes to axes, notebook,
+revision, saved reference or busy state invalidate observations and abort the old request;
+a late reply cannot reappear after leaving and returning. Edited but unsaved study input
+also hides/disables the figure. These are explicit reads, not persisted mutation commands.
+
+Unit tests cover identity/shape failures, image-only rendering and late replies. The real
+Chromium/Rust test fits houses, verifies original points, restarts the server, reads with
+command/execution routes blocked, downloads identical SVG, and hides old results on input
+edits. It needs `AAL_NATIVE_SERVER` and `AAL_NOTEBOOK_TARGET`, like the other native browser
+suites: `npx playwright test tests/browser/native-figure.spec.js`.
