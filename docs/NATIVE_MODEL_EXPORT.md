@@ -20,3 +20,18 @@ including means/scales and stale/missing/incomplete rejection.
 clustering run, restarts server and browser page, shuts down the server, downloads
 the model, and compares every field with the native result. Editing the reference
 CSV then disables export. The existing study-session and panel suites also run.
+
+## Native offline loading
+
+The AAL Notebook binary `aal-notebook-assign MODEL_JSON QUERY_CSV STATE_DIR INVOCATION_ID`
+loads the downloaded file, validates it in Rust and invokes `DataMining.assign`.
+It writes `assignments.json` without requiring the training workspace or a model
+provider. Use the same AAL checkout's `demos/notebook/Cargo.toml` to build the binary.
+
+The browser test also passes the actual downloaded file to this binary after server
+shutdown, assigns three new houses, and independently checks the nearest center
+and squared distance from the exported scaling values. Run it with absolute
+`AAL_NATIVE_SERVER` and `AAL_NATIVE_ASSIGN` binary paths and an explicit loopback
+`AAL_NOTEBOOK_TARGET`; all three are required to avoid silently skipping native
+loading. This closes browser-export/native-load interoperability; model import
+inside the browser UI remains separate work.
