@@ -33,5 +33,32 @@ Validation: frontend component/client tests cover explicit selection, transfer t
 native assignment, stale-response cancellation and wrong-notebook responses. The
 Rust HTTP integration test deletes the original package directory, imports the
 lock, compares actual assignments with native model outputs, verifies the study
-stays unchanged, and rejects tampered resources. These are separate component and
-HTTP tests; a full browser end-to-end run for lock import has not yet been recorded.
+stays unchanged, and rejects tampered resources. A Chromium end-to-end run now also passes; details and reproduction follow.
+
+
+## Chromium end-to-end evidence
+
+`tests/browser/native-skill-model.spec.js` passed on 2026-10-23 (15.5 s test,
+17.7 s total). It uses the actual Vite page, Rust server and native assignment CLI.
+The page fits and exports a binary model; the real skills CLI packs, unpacks and
+accepts a synthetic test package. Its review record is explicitly labeled an
+automated fixture, not independent human review. The test deletes the source
+package directory, stops and restarts the server, uploads the resulting lock and
+requires explicit resource selection. All three native assignments exactly match
+the offline CLI, feature explanations render, tampered content disables assignment
+and clears prior results, and the browser reports no page script errors.
+
+Reproduce with newly built binaries and an available loopback port:
+
+```sh
+AAL_NATIVE_SERVER=/absolute/path/to/aal-notebook-server \
+AAL_NATIVE_ASSIGN=/absolute/path/to/aal-notebook-assign \
+AAL_SKILLS_CLI=/absolute/path/to/aal-skills \
+AAL_NOTEBOOK_TARGET=http://127.0.0.1:18879 \
+npx playwright test tests/browser/native-skill-model.spec.js
+```
+
+The harness owns a disposable native state directory and stops its server on
+completion. No remote model or online EasyNet service is used. This test covers
+frozen numerical-resource import, not LLM-selected tool grants or all notebook UI
+behavior. Run log: `/tmp/aal-skill-browser.log`.
