@@ -664,3 +664,29 @@ profile cancels pending reads and invalidates downloads, as do navigation, mutat
 revision changes. No export occurs until the user explicitly requests and downloads it.
 `native-evidence.spec.js` covers actual Rust restart, response/preview equality, downloaded
 bytes, retained complete evidence and expiration after changed study inputs.
+
+## Binary housing model files (2026-10-23)
+
+The housing results panel can export a frozen `.aalkm` model: choose “导出二进制模型”
+and then “保存 .aalkm 文件”. The existing JSON export remains available. The import
+control accepts JSON and AALKM files; after native decoding the same assignment and
+reference-comparison clients handle both. A model alone still lacks reference rows.
+
+`ModelFileClient` uses scoped `model-file/encode` and `model-file/decode` routes.
+The Rust service owns the versioned codec, checksum and numerical validation; the
+browser transfers bounded bytes and verifies response notebook identity. Binary
+input is capped at 32 KiB. Export requests are aborted/hidden when the view changes;
+file changes and unmount invalidate prior imports. Conversion does not install a
+model, refit it, replace study state or migrate FoKn evidence.
+
+Verification: 80 related Vitest tests passed; changed-file ESLint and scoped strict
+TypeScript checks passed. Full-project `tsc --noEmit` still fails in other Editor/UI
+and stream paths; no clean whole-project type check is claimed. Real Chromium
+`native-model-export.spec.js` passed with a local Rust server and native assignment
+binary: JSON regression, server restart, binary download, server-offline CLI
+assignment, upload, native assignment/comparison equality, corrupt-checksum rejection,
+and no page errors. No LLM or online EasyNet calls were involved.
+
+Logs: `/tmp/aal-binary-frontend-tests.log`, `/tmp/aal-binary-export-tests.log`,
+`/tmp/aal-binary-frontend-lint.log`, `/tmp/aal-binary-frontend-scoped-types.log`,
+`/tmp/aal-binary-frontend-types.log`, `/tmp/aal-binary-browser.log`.

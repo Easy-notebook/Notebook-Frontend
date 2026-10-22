@@ -125,6 +125,46 @@ test('exports the complete native model after restart without refitting', async 
   await expect(page.getByLabel('导入参考相似比较').getByRole('alert')).toContainText(
     'reference identity changed'
   );
+  await page.getByRole('button', { name: '导出二进制模型', exact: true }).click();
+  const binaryPending = page.waitForEvent('download');
+  await page.getByRole('button', { name: '保存 .aalkm 文件', exact: true }).click();
+  const binaryDownload = await binaryPending;
+  expect(binaryDownload.suggestedFilename()).toBe('mining-model.aalkm');
+  const binaryPath = testInfo.outputPath('mining-model.aalkm');
+  await binaryDownload.saveAs(binaryPath);
+  await native.stop();
+  const binaryResult = await promisify(execFile)(assign, [
+    binaryPath,
+    query,
+    testInfo.outputPath('binary-offline'),
+    'binary-download',
+  ]);
+  expect(JSON.parse(binaryResult.stdout)).toEqual(assignments);
+  await native.start();
+  await page.getByLabel('冻结分群模型文件').setInputFiles(binaryPath);
+  await expect(page.getByText('已加载：mining-model.aalkm', { exact: true })).toBeVisible();
+  const binaryAssigned = page.waitForResponse(
+    (response) => response.url().endsWith('/model-assignment') && response.ok()
+  );
+  await page.getByRole('button', { name: '使用导入模型分群', exact: true }).click();
+  expect((await (await binaryAssigned).json()).assignments).toEqual(assignments);
+  await page.getByLabel('原报告参考身份').fill(referenceId);
+  const binaryCompared = page.waitForResponse(
+    (response) => response.url().endsWith('/model-comparison') && response.ok()
+  );
+  await page.getByRole('button', { name: '比较导入参考样本', exact: true }).click();
+  expect((await (await binaryCompared).json()).comparison).toEqual(comparison);
+  const corrupt = await readFile(binaryPath);
+  corrupt[20] ^= 1;
+  await page.getByLabel('冻结分群模型文件').setInputFiles({
+    name: 'corrupt.aalkm',
+    mimeType: 'application/octet-stream',
+    buffer: corrupt,
+  });
+  await expect(page.getByLabel('导入房屋分群模型').getByRole('alert')).toContainText(
+    'checksum mismatch'
+  );
+  await expect(page.getByRole('button', { name: '使用导入模型分群', exact: true })).toBeDisabled();
   await page.getByLabel('导入模型的新样本 CSV').fill('rooms,area\n2,49\n');
   await expect(imported).toHaveCount(0);
   await page.getByLabel('参考 CSV 内容').fill('area,rooms\n999,2\n');

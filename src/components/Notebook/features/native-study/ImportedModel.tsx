@@ -1,5 +1,6 @@
+import { ModelFileClient } from '@Services/native-study/ModelFileClient';
 import { ImportedReferenceComparison } from './ImportedReferenceComparison';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImportedModelClient } from '@Services/native-study/ImportedModelClient';
 import { parseStudyModel } from '@Services/native-study/studyModel';
 import { useScopedNativeRead } from './useScopedNativeRead';
@@ -20,19 +21,35 @@ export function ImportedModel({
   const [csv, setCsv] = useState('');
   const [error, setError] = useState('');
   const selection = useRef(0);
+  const pending = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      selection.current += 1;
+      pending.current?.abort();
+    },
+    [notebookId, workspace]
+  );
   const scope = JSON.stringify([notebookId, workspace, revision, model, csv]);
   const { state, read } = useScopedNativeRead(scope, busy, (signal) =>
     new ImportedModelClient(notebookId).assign(workspace, revision, model, csv, signal)
   );
   const load = async (file?: File) => {
     const attempt = ++selection.current;
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
     setModel('');
     setName('');
     setError('');
     if (!file) return;
     try {
       if (file.size > 128 * 1024) throw new Error('模型文件不能超过 128 KiB。');
-      const text = await file.text();
+      const text = file.name.toLowerCase().endsWith('.aalkm')
+        ? await new ModelFileClient(notebookId).decode(
+            new Uint8Array(await file.arrayBuffer()),
+            controller.signal
+          )
+        : await file.text();
       parseStudyModel(text);
       if (selection.current === attempt) {
         setModel(text);
@@ -53,7 +70,7 @@ export function ImportedModel({
         冻结分群模型文件
         <input
           type="file"
-          accept=".json,application/json"
+          accept=".json,.aalkm,application/json,application/octet-stream"
           disabled={busy}
           onChange={(event) => void load(event.target.files?.[0])}
         />

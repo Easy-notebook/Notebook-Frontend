@@ -528,6 +528,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
       )}
       {view && (
         <StudyEvidence
+          notebookId={notebookId}
           view={view}
           busy={busy || closed || publishing}
           modelExportDisabled={inputChanged || datasetBusy}

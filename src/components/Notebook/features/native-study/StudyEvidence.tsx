@@ -1,3 +1,4 @@
+import { BinaryModelExport } from './BinaryModelExport';
 import { ComparisonEvidence } from './ComparisonEvidence';
 import { useState } from 'react';
 import { downloadBlob } from '@Services/notebook/BrowserDownload';
@@ -8,11 +9,13 @@ import { SampleEvidence } from './SampleEvidence';
 const number = (value: number) => value.toPrecision(6);
 export function StudyEvidence({
   view,
+  notebookId,
   busy,
   explain,
   modelExportDisabled = false,
 }: {
   view: NativeView;
+  notebookId: string;
   busy: boolean;
   modelExportDisabled?: boolean;
   explain: (row: number) => void;
@@ -53,6 +56,11 @@ export function StudyEvidence({
           >
             导出冻结分群模型
           </button>
+          <BinaryModelExport
+            notebookId={notebookId}
+            view={view}
+            disabled={busy || modelExportDisabled || !study.current}
+          />
           <p className="text-sm text-muted-foreground">
             包含特征缩放和分群中心，可供 Rust
             离线分群；不包含逐行参考样本，不能单独用于相似样本解释。

@@ -73,3 +73,56 @@ it('aborts and hides a late assignment when the notebook revision changes', asyn
   );
   expect(screen.queryByLabelText('导入模型分群结果')).not.toBeInTheDocument();
 });
+
+it('loads binary through Rust and ignores an aborted conversion after another selection', async () => {
+  let finish!: (value: Response) => void;
+  const fetch = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  vi.stubGlobal('fetch', fetch);
+  render(<ImportedModel {...props} />);
+  const binary = new File([new Uint8Array([65, 0, 255])], 'houses.aalkm');
+  Object.defineProperty(binary, 'arrayBuffer', {
+    value: async () => new Uint8Array([65, 0, 255]).buffer,
+  });
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), { target: { files: [binary] } });
+  await act(async () => {});
+  expect(fetch).toHaveBeenCalledOnce();
+  const signal = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1].signal!;
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), {
+    target: { files: [file('new.json', async () => model)] },
+  });
+  await screen.findByText('已加载：new.json');
+  expect(signal.aborted).toBe(true);
+  await act(async () =>
+    finish(
+      new Response(JSON.stringify({ frontend_notebook_id: 'houses', model: JSON.parse(model) }))
+    )
+  );
+  expect(screen.queryByText('已加载：houses.aalkm')).not.toBeInTheDocument();
+});
+
+it('accepts the native decoded binary model for assignment', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ frontend_notebook_id: 'houses', model: JSON.parse(model) }))
+      )
+  );
+  render(<ImportedModel {...props} />);
+  const binary = new File([new Uint8Array([0, 255])], 'houses.aalkm');
+  Object.defineProperty(binary, 'arrayBuffer', {
+    value: async () => new Uint8Array([0, 255]).buffer,
+  });
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), { target: { files: [binary] } });
+  await screen.findByText('已加载：houses.aalkm');
+  fireEvent.change(screen.getByLabelText('导入模型的新样本 CSV'), {
+    target: { value: 'area\n110\n' },
+  });
+  expect(screen.getByRole('button', { name: '使用导入模型分群' })).toBeEnabled();
+});

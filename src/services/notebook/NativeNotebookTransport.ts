@@ -4,6 +4,8 @@ type NativeNotebookRoute =
   | 'knowledge-report'
   | 'knowledge-prompt'
   | 'figure'
+  | 'model-file/decode'
+  | 'model-file/encode'
   | 'model-assignment'
   | 'model-comparison'
   | 'command'
