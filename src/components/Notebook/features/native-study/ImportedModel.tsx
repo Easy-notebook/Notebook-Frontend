@@ -1,3 +1,4 @@
+import { SkillModelClient, type SkillModel } from '@Services/native-study/SkillModelClient';
 import { ModelFileClient } from '@Services/native-study/ModelFileClient';
 import { ImportedReferenceComparison } from './ImportedReferenceComparison';
 import { useEffect, useRef, useState } from 'react';
@@ -20,6 +21,8 @@ export function ImportedModel({
   const [name, setName] = useState('');
   const [csv, setCsv] = useState('');
   const [error, setError] = useState('');
+  const [resources, setResources] = useState<SkillModel[]>([]);
+  const [resourceIndex, setResourceIndex] = useState('');
   const selection = useRef(0);
   const pending = useRef<AbortController | null>(null);
   useEffect(
@@ -41,15 +44,27 @@ export function ImportedModel({
     setModel('');
     setName('');
     setError('');
+    setResources([]);
+    setResourceIndex('');
     if (!file) return;
     try {
-      if (file.size > 128 * 1024) throw new Error('模型文件不能超过 128 KiB。');
+      if (file.size > 5 * 1024 * 1024) throw new Error('技能资源锁文件不能超过 5 MiB。');
       const text = file.name.toLowerCase().endsWith('.aalkm')
         ? await new ModelFileClient(notebookId).decode(
             new Uint8Array(await file.arrayBuffer()),
             controller.signal
           )
         : await file.text();
+      const parsed: unknown = JSON.parse(text);
+      if (parsed && typeof parsed === 'object' && 'skills' in parsed) {
+        const entries = await new SkillModelClient(notebookId).inspect(parsed, controller.signal);
+        if (selection.current === attempt) {
+          setResources(entries);
+          setName(file.name);
+        }
+        return;
+      }
+      if (file.size > 128 * 1024) throw new Error('模型文件不能超过 128 KiB。');
       parseStudyModel(text);
       if (selection.current === attempt) {
         setModel(text);
@@ -75,7 +90,36 @@ export function ImportedModel({
           onChange={(event) => void load(event.target.files?.[0])}
         />
       </label>
+      <p className="text-sm text-muted-foreground">
+        也可上传技能资源锁 JSON（最多 5 MiB），从冻结包中选择房屋模型；不会执行包内指令。
+      </p>
       {name && <p>已加载：{name}</p>}
+      {resources.length > 0 && (
+        <label className="block">
+          技能包中的房屋模型
+          <select
+            value={resourceIndex}
+            disabled={busy}
+            onChange={(event) => {
+              const index = event.target.value;
+              setResourceIndex(index);
+              setModel(index === '' ? '' : JSON.stringify(resources[Number(index)].model));
+            }}
+          >
+            <option value="">请选择模型</option>
+            {resources.map((entry, index) => (
+              <option key={index} value={String(index)}>
+                {entry.skill} · {entry.path} · {entry.location}
+              </option>
+            ))}
+          </select>
+          {resourceIndex !== '' && (
+            <p className="text-xs break-all">
+              来源校验值：{resources[Number(resourceIndex)].content_hash}
+            </p>
+          )}
+        </label>
+      )}
       <label className="block">
         导入模型的新样本 CSV
         <textarea

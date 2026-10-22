@@ -126,3 +126,95 @@ it('accepts the native decoded binary model for assignment', async () => {
   });
   expect(screen.getByRole('button', { name: '使用导入模型分群' })).toBeEnabled();
 });
+
+it('requires explicit selection of a frozen skill model before native assignment', async () => {
+  const fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      frontend_notebook_id: 'houses',
+      models: [
+        {
+          skill: 'housing',
+          source: 'local',
+          location: 'package',
+          content_hash: 'frozen-hash',
+          path: 'models/houses.aalkm',
+          model: JSON.parse(model),
+        },
+      ],
+    }),
+  });
+  vi.stubGlobal('fetch', fetch);
+  render(<ImportedModel {...props} />);
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), {
+    target: {
+      files: [file('skills.lock.json', async () => JSON.stringify({ version: 1, skills: [] }))],
+    },
+  });
+  const picker = await screen.findByLabelText('技能包中的房屋模型');
+  fireEvent.change(screen.getByLabelText('导入模型的新样本 CSV'), {
+    target: { value: 'area\n110\n' },
+  });
+  expect(screen.getByRole('button', { name: '使用导入模型分群' })).toBeDisabled();
+  fireEvent.change(picker, { target: { value: '0' } });
+  expect(screen.getByText('来源校验值：frozen-hash')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '使用导入模型分群' })).toBeEnabled();
+  fetch.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      frontend_notebook_id: 'houses',
+      workspace: 'workspace',
+      revision: 1,
+      assignments: [],
+    }),
+  });
+  fireEvent.click(screen.getByRole('button', { name: '使用导入模型分群' }));
+  await screen.findByLabelText('导入模型分群结果');
+  expect(JSON.parse(fetch.mock.calls[1][1].body).model).toEqual(JSON.parse(model));
+});
+
+it('ignores a late skill-lock response after choosing a standalone model', async () => {
+  let finish!: (value: Response) => void;
+  const fetch = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  vi.stubGlobal('fetch', fetch);
+  render(<ImportedModel {...props} />);
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), {
+    target: {
+      files: [file('skills.lock.json', async () => JSON.stringify({ version: 1, skills: [] }))],
+    },
+  });
+  await act(async () => {});
+  expect(fetch).toHaveBeenCalledOnce();
+  const signal = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1].signal!;
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), {
+    target: { files: [file('standalone.json', async () => model)] },
+  });
+  await screen.findByText('已加载：standalone.json');
+  expect(signal.aborted).toBe(true);
+  await act(async () =>
+    finish(
+      new Response(
+        JSON.stringify({
+          frontend_notebook_id: 'houses',
+          models: [
+            {
+              skill: 'housing',
+              source: 'local',
+              location: 'package',
+              content_hash: 'frozen-hash',
+              path: 'models/houses.aalkm',
+              model: JSON.parse(model),
+            },
+          ],
+        })
+      )
+    )
+  );
+  expect(screen.queryByLabelText('技能包中的房屋模型')).not.toBeInTheDocument();
+  expect(screen.getByText('已加载：standalone.json')).toBeInTheDocument();
+});
