@@ -511,7 +511,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             </button>
             <p className="text-sm text-muted-foreground">
               完整研究使用当前参考和新样本 CSV，由 PCS 选择特征与分群数，再安排比较、单个样本的 FoKn
-              证据保存、可选筛选和分群图。上方手动特征配置不约束
+              证据保存、可选筛选和分群图。比较之后可按目标安排这些步骤的顺序，例如先画图再保存证据。上方手动特征配置不约束
               PCS；需要的特征请写入目标。已完成步骤会保存，失败后可重试原操作。
             </p>
           </fieldset>

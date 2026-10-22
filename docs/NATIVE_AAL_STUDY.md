@@ -267,7 +267,10 @@ count, goal and distance maximum, then choose this action. It can start before a
 manual fit. PCS selects feature columns/cluster count and plans comparison, optionally
 one sample's FoKn proof and checked generated selection. Manual feature settings are
 not silently treated as constraints on PCS; express required choices in the goal.
-The server validates action ordering, row bounds and caller authority before adoption.
+The server requires comparison first and at most one explanation, selection and
+visualization afterward. Those optional actions may follow the order requested in
+the goal (for example, plot before saving sample evidence). It validates dependencies,
+row bounds and caller authority before adoption.
 
 The current form inputs, maximum, original revision and invocation are persisted
 before dispatch. **重试原操作** reuses the complete frozen command even after closing
@@ -603,7 +606,7 @@ suites: `npx playwright test tests/browser/native-figure.spec.js`.
 
 ### Saved PCS figures
 
-A generated-selection task may finish its computation actions with `visualize`,
+A generated-selection task may include `visualize` after comparison,
 using two fitted feature names. The native workspace stores the SVG with its
 study dependency. The housing panel validates saved artifacts through the same
 figure schema as explicit reads and displays/downloads them without another HTTP
@@ -690,3 +693,21 @@ and no page errors. No LLM or online EasyNet calls were involved.
 Logs: `/tmp/aal-binary-frontend-tests.log`, `/tmp/aal-binary-export-tests.log`,
 `/tmp/aal-binary-frontend-lint.log`, `/tmp/aal-binary-frontend-scoped-types.log`,
 `/tmp/aal-binary-frontend-types.log`, `/tmp/aal-binary-browser.log`.
+
+### Browser evidence for figure-before-proof ordering
+
+The PCS figure browser regression now executes compare → visualize → explain. It
+checks nonempty native FoKn facts/proofs, query-row identity, and measured evidence
+in the actual discussion request. After stopping the model fixture and restarting
+the Rust server with execution/render routes blocked, the page restores exactly the
+same SVG and complete evidence JSON. Existing download, publication, notebook reload
+and user-edit retention checks remain in the test. Only the two planned local model
+fixture exchanges occur; no paid or online EasyNet requests are made.
+
+Validation on 2026-10-23: Chromium passed (22.8 s test / 25.1 s total), 19 panel/evidence
+component tests passed, changed-source ESLint, formatting and diff checks passed.
+The browser locator now matches the query CSV label exactly because the import form
+also has a CSV field. Result readiness permits up to 30 seconds for the complete
+native workflow; no fixed sleep is used. Logs: `/tmp/aal-pcs-order-browser.log`,
+`/tmp/aal-pcs-order-unit.log`, `/tmp/aal-pcs-order-lint.log`. This verifies one concrete
+closed-action sequence, not arbitrary generated graphs or real-model planning quality.
