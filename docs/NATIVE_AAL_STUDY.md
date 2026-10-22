@@ -600,3 +600,12 @@ Chromium/Rust test fits houses, verifies original points, restarts the server, r
 command/execution routes blocked, downloads identical SVG, and hides old results on input
 edits. It needs `AAL_NATIVE_SERVER` and `AAL_NOTEBOOK_TARGET`, like the other native browser
 suites: `npx playwright test tests/browser/native-figure.spec.js`.
+
+### Saved PCS figures
+
+A generated-selection task may finish its computation actions with `visualize`,
+using two fitted feature names. The native workspace stores the SVG with its
+study dependency. The housing panel validates saved artifacts through the same
+figure schema as explicit reads and displays/downloads them without another HTTP
+request. Changed references, axes or pending input edits hide stale figures.
+Discussion receives only figure metadata, not SVG markup or point arrays.

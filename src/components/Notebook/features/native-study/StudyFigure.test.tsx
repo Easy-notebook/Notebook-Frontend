@@ -23,7 +23,7 @@ function snapshot() {
     workspace: 'workspace',
     revision: 2,
     figure: {
-      name: 'housing-clusters.svg',
+      name: 'housing-clusters.svg' as const,
       svg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
       caption: 'Projection is not full-space distance',
       reference_id: 'reference',
@@ -109,4 +109,20 @@ it('rejects wrong identities, axes and oversized or out-of-range figure payloads
   await expect(
     new NativeStudyClient('houses', async () => response(bad)).figure(query)
   ).rejects.toThrow();
+});
+
+it('displays a saved PCS artifact without fetching and hides stale references or pending edits', () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  const figure = snapshot().figure;
+  const view = render(<StudyFigure {...props} savedFigure={figure} />);
+  expect(screen.getByRole('img')).toBeInTheDocument();
+  expect(fetch).not.toHaveBeenCalled();
+  view.rerender(<StudyFigure {...props} savedFigure={figure} busy />);
+  expect(screen.queryByRole('img')).toBeNull();
+  view.rerender(<StudyFigure {...props} savedFigure={figure} reference="new-reference" />);
+  expect(screen.queryByRole('img')).toBeNull();
+  view.rerender(<StudyFigure {...props} savedFigure={figure} />);
+  fireEvent.change(screen.getByLabelText('分群图横轴'), { target: { value: 'rooms' } });
+  expect(screen.queryByRole('img')).toBeNull();
 });

@@ -1,3 +1,4 @@
+import { clusterFigure } from './studyFigure';
 import { z } from 'zod';
 import { sampleEvidence } from './sampleEvidence';
 
@@ -113,6 +114,7 @@ export const nativeView = z
           })
           .nullable(),
         current: z.boolean(),
+        figure: clusterFigure.nullable().optional(),
         result: z.object({ kind: z.literal('mining'), report }).nullable(),
         comparison: comparison.nullable(),
         practice: z.unknown(),

@@ -1,3 +1,4 @@
+import type { NativeClusterFigure } from '@Services/native-study/studyFigure';
 import { useState } from 'react';
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { useScopedNativeRead } from './useScopedNativeRead';
@@ -7,6 +8,7 @@ export function StudyFigure({
   revision,
   reference,
   features,
+  savedFigure,
   busy,
 }: {
   notebookId: string;
@@ -14,10 +16,17 @@ export function StudyFigure({
   revision: number;
   reference: string;
   features: string[];
+  savedFigure?: NativeClusterFigure | null;
   busy: boolean;
 }) {
-  const [x, setX] = useState(features[0] ?? '');
-  const [y, setY] = useState(features[1] ?? '');
+  const saved =
+    savedFigure?.reference_id === reference &&
+    features.includes(savedFigure.x_feature) &&
+    features.includes(savedFigure.y_feature)
+      ? savedFigure
+      : null;
+  const [x, setX] = useState(saved?.x_feature ?? features[0] ?? '');
+  const [y, setY] = useState(saved?.y_feature ?? features[1] ?? '');
   const xFeature = features.includes(x) ? x : (features[0] ?? '');
   const yFeature = features.includes(y) ? y : (features[1] ?? '');
   const blocked = busy || !xFeature || !yFeature || xFeature === yFeature;
@@ -34,7 +43,15 @@ export function StudyFigure({
       signal
     )
   );
-  const figure = state.status === 'ready' ? state.value.figure : null;
+  const figure =
+    state.status === 'ready'
+      ? state.value.figure
+      : state.status === 'idle' &&
+          !blocked &&
+          saved?.x_feature === xFeature &&
+          saved?.y_feature === yFeature
+        ? saved
+        : null;
   const source = figure
     ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(figure.svg)}`
     : undefined;

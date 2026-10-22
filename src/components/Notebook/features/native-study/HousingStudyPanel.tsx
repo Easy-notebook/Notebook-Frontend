@@ -537,6 +537,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             workspace={view.document.id}
             revision={view.document.revision}
             reference={view.study.result.report.reference_id}
+            savedFigure={view.study.figure}
             features={view.study.result.report.model.features.map((feature) => feature.name)}
             busy={busy || publishing || datasetBusy || inputChanged}
           />
