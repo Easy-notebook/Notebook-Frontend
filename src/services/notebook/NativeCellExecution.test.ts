@@ -253,3 +253,53 @@ it('retains an explicit review wait across client recreation and clears only the
   expect(new Set(fetcher.mock.calls.map((call) => call[1]!.body)).size).toBe(1);
   expect(sessionStorage.length).toBe(0);
 });
+
+it.each(['valid', 'wrong-source', 'outside-source'] as const)(
+  'validates and retains native diagnostics for %s',
+  async (kind) => {
+    const source =
+      'agent Cell is Agent\n  public\n    ability run() -> Any\n      return 100 / 0\n';
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+    const hash = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, '0')
+    ).join('');
+    const metadata = {
+      source_sha256: kind === 'wrong-source' ? '0'.repeat(64) : hash,
+      diagnostics: [
+        {
+          phase: 'runtime',
+          code: 'E_VALUE',
+          message: 'division by zero',
+          span: { line: kind === 'outside-source' ? 100 : 4, column: 14 },
+        },
+      ],
+    };
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (_, init) => {
+      const request = JSON.parse(init!.body as string);
+      return new Response(
+        JSON.stringify({
+          frontend_notebook_id: 'book',
+          cell_id: request.cell_id,
+          invocation: request.invocation,
+          status: 'error',
+          error: 'division by zero',
+          outputs: [{ type: 'error', content: 'division by zero', metadata }],
+        })
+      );
+    });
+    const client = new NativeCellExecution(
+      'book',
+      'cell',
+      sessionStorage,
+      new NativeNotebookTransport('book', fetcher)
+    );
+    if (kind === 'valid') {
+      const result = await client.execute(source, signal());
+      expect(result.outputs![0].metadata).toEqual(metadata);
+      expect(sessionStorage.length).toBe(0);
+    } else {
+      await expect(client.execute(source, signal())).rejects.toThrow(/diagnostic/);
+      expect(sessionStorage.length).toBe(1);
+    }
+  }
+);

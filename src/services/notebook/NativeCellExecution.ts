@@ -9,13 +9,35 @@ const pending = z
     invocation: z.string().uuid(),
   })
   .strict();
+const diagnosticMetadata = z.object({
+  source_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  diagnostics: z
+    .array(
+      z.object({
+        phase: z.enum(['compile', 'runtime']),
+        code: z.string().min(1),
+        message: z.string(),
+        span: z
+          .object({ line: z.number().int().positive(), column: z.number().int().positive() })
+          .nullable(),
+      })
+    )
+    .min(1)
+    .max(64),
+});
 const cellResponse = z.object({
   frontend_notebook_id: z.string(),
   cell_id: z.string(),
   invocation: z.string().uuid(),
   status: z.enum(['ok', 'error', 'pending']),
   error: z.string().optional(),
-  outputs: z.array(z.object({ type: z.enum(['text', 'error']), content: z.string() })),
+  outputs: z.array(
+    z.object({
+      type: z.enum(['text', 'error']),
+      content: z.string(),
+      metadata: diagnosticMetadata.optional(),
+    })
+  ),
 });
 const lookupIdentity = z.object({
   frontend_notebook_id: z.string(),
@@ -78,6 +100,31 @@ export class NativeCellExecution {
       retained ?? cellResponse.parse(await this.transport.send('execute', request, requestSignal));
     requestSignal.throwIfAborted();
     this.verifyIdentity(result, request.invocation);
+    const diagnosed = result.outputs.filter((output) => output.metadata);
+    if (diagnosed.length) {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
+      const hash = Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, '0')
+      ).join('');
+      const lines = source.split('\n');
+      for (const output of diagnosed) {
+        if (
+          result.status !== 'error' ||
+          output.type !== 'error' ||
+          output.metadata!.source_sha256 !== hash
+        )
+          throw new Error('Native cell diagnostic source mismatch');
+        for (const diagnostic of output.metadata!.diagnostics) {
+          const span = diagnostic.span;
+          if (
+            span &&
+            (span.line > lines.length || span.column > Array.from(lines[span.line - 1]).length + 1)
+          )
+            throw new Error('Native cell diagnostic position outside source');
+        }
+      }
+      requestSignal.throwIfAborted();
+    }
     // A review wait is observable, but it is not a terminal execution result.
     if (result.status !== 'pending' && this.storage.getItem(this.key) === serialized)
       this.storage.removeItem(this.key);
