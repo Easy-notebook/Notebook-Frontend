@@ -1,3 +1,4 @@
+import { ImportedModel } from './ImportedModel';
 import { useEffect, useRef, useState } from 'react';
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { NativeStudySession, type StudySnapshot } from '@Services/native-study/NativeStudySession';
@@ -515,6 +516,15 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             </p>
           </fieldset>
         </form>
+      )}
+      {view?.frontend_notebook_id === notebookId && (
+        <ImportedModel
+          key={`${notebookId}:${view.document.id}`}
+          notebookId={notebookId}
+          workspace={view.document.id}
+          revision={view.document.revision}
+          busy={busy || publishing || datasetBusy}
+        />
       )}
       {view && (
         <StudyEvidence

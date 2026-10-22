@@ -29,3 +29,9 @@ export function studyModelExport(view: NativeView): string {
   if (!parsed.success) throw new Error('分群模型不完整，无法导出。');
   return JSON.stringify(parsed.data, null, 2);
 }
+
+export function parseStudyModel(text: string) {
+  if (new TextEncoder().encode(text).length > 128 * 1024)
+    throw new Error('模型文件不能超过 128 KiB。');
+  return model.parse(JSON.parse(text));
+}

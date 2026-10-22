@@ -12,7 +12,7 @@ This is the native `mining::Model` format, consumed by Rust
 `DataMining.assign(model, csv)` / `skill.segment_assign`. Rust owns numerical
 validation. It is a clustering model, not a regression predictor. It contains no
 individual reference rows and cannot on its own reproduce nearest-sample explanations.
-A standalone model import UI and full skill archive download are not provided here.
+The panel also accepts standalone clustering-model files; full skill archive download remains separate.
 
 Verification: `studyModel.test.ts` covers complete response parsing and export,
 including means/scales and stale/missing/incomplete rejection.
@@ -33,5 +33,20 @@ shutdown, assigns three new houses, and independently checks the nearest center
 and squared distance from the exported scaling values. Run it with absolute
 `AAL_NATIVE_SERVER` and `AAL_NATIVE_ASSIGN` binary paths and an explicit loopback
 `AAL_NOTEBOOK_TARGET`; all three are required to avoid silently skipping native
-loading. This closes browser-export/native-load interoperability; model import
-inside the browser UI remains separate work.
+loading. This closes browser-export/native-load interoperability; the browser import flow is described below.
+
+## Import in the housing panel
+
+Use **使用已有分群模型** to select the JSON file and enter a new CSV. The browser
+checks the bounded file shape and posts data (never filesystem paths) to the
+workspace-scoped `model-assignment` route. Rust checks model invariants and the
+workspace/revision, then AAL calls `DataMining.assign`. Results show cluster,
+squared distance and per-feature contributions. No LLM is needed; the local Rust
+server must be running. This does not overwrite the current study or create FoKn
+claims. Imported data and results are transient panel state, not a saved model
+registry; changing inputs, revision or notebook invalidates visible results.
+
+The real browser test uploads its downloaded model after restarting the server,
+compares all returned assignments with the offline CLI output, expands feature
+terms and verifies that editing query data hides the old result. HTTP tests reject
+wrong owners/revisions and invalid scaling, and verify unchanged study state.

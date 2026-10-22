@@ -83,6 +83,20 @@ test('exports the complete native model after restart without refitting', async 
     expect(assignments[index].distance_squared).toBeCloseTo(Math.min(...distances), 10);
   }
 
+  await native.start();
+  await page.getByLabel('冻结分群模型文件').setInputFiles(await download.path());
+  await page.getByLabel('导入模型的新样本 CSV').fill('rooms,area\n2,47\n4,113\n7,195\n');
+  const assigned = page.waitForResponse(
+    (response) => response.url().endsWith('/model-assignment') && response.ok()
+  );
+  await page.getByRole('button', { name: '使用导入模型分群', exact: true }).click();
+  expect((await (await assigned).json()).assignments).toEqual(assignments);
+  const imported = page.getByLabel('导入模型分群结果');
+  await expect(imported.locator('summary')).toHaveCount(3);
+  await imported.locator('summary').first().click();
+  await expect(imported).toContainText('area：原值 47');
+  await page.getByLabel('导入模型的新样本 CSV').fill('rooms,area\n2,49\n');
+  await expect(imported).toHaveCount(0);
   await page.getByLabel('参考 CSV 内容').fill('area,rooms\n999,2\n');
   await expect(button).toBeDisabled();
 });
