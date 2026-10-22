@@ -364,7 +364,7 @@ it('keeps history readable without a model and resets discussion drafts when cha
   fireEvent.change(screen.getByLabelText('研究问题'), { target: { value: 'My private draft' } });
   expect(screen.getByRole('button', { name: '发送研究问题' })).toBeEnabled();
   panel.rerender(<HousingStudyPanel notebookId="b" />);
-  await screen.findByText(/当前服务未启用模型/);
+  await screen.findByText('当前服务未启用模型，仍可查看历史讨论。');
   expect(screen.getByLabelText('研究问题')).toHaveValue('');
   expect(screen.queryByText('Previous model answer')).toBeNull();
   expect(screen.getByRole('button', { name: '发送研究问题' })).toBeDisabled();

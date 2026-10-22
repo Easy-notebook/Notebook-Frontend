@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { Buffer } from 'node:buffer';
 import { test, expect } from '@playwright/test';
 import process from 'node:process';
@@ -12,16 +13,43 @@ const target = process.env.AAL_NOTEBOOK_TARGET;
 const assign = process.env.AAL_NATIVE_ASSIGN;
 const skills = process.env.AAL_SKILLS_CLI;
 let native;
+let provider;
+let endpoint;
+const captured = [];
+const reviewCsv = 'rooms,area\n2,47\n4,113\n7,195\n';
 test.skip(
   !binary || !target || !assign || !skills,
   'Set local native server, assign, skills CLI and loopback target'
 );
 test.beforeAll(async () => {
+  provider = createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    captured.push(JSON.parse(body));
+    const step =
+      captured.length === 1
+        ? { tool: 'assign', arguments: { csv: reviewCsv } }
+        : { result: 'Browser fixture: measured frozen housing groups.' };
+    response.writeHead(200, { 'Content-Type': 'application/json' });
+    response.end(
+      JSON.stringify({
+        choices: [
+          {
+            finish_reason: 'stop',
+            message: { role: 'assistant', content: JSON.stringify({ step }) },
+          },
+        ],
+      })
+    );
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  endpoint = `http://127.0.0.1:${provider.address().port}/v1/chat/completions`;
   native = new NativeTestServer(binary, target);
-  await native.start();
+  await native.start(endpoint);
 });
 test.afterAll(async () => {
   await native?.dispose();
+  if (provider?.listening) await new Promise((resolve) => provider.close(resolve));
 });
 
 test('selects a packaged housing model after source deletion and server restart', async ({
@@ -32,6 +60,7 @@ test('selects a packaged housing model after source deletion and server restart'
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
   await page.getByRole('button', { name: '新建房屋研究', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '房屋特征研究', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '房屋研究', exact: true }).click();
   await page
     .getByLabel('参考 CSV 内容')
@@ -89,7 +118,7 @@ test('selects a packaged housing model after source deletion and server restart'
       ])
     ).stdout
   );
-  await native.start();
+  await native.start(endpoint);
   await page.getByLabel('冻结分群模型文件').setInputFiles(lockPath);
   const picker = page.getByRole('combobox', { name: '技能包中的房屋模型' });
   await expect(picker).toBeVisible();
@@ -128,5 +157,53 @@ test('selects a packaged housing model after source deletion and server restart'
   await expect(page.getByLabel('导入房屋分群模型').getByRole('alert')).toBeVisible();
   await expect(submit).toBeDisabled();
   await expect(result).toHaveCount(0);
+  await page.getByLabel('冻结分群模型文件').setInputFiles(lockPath);
+  await picker.selectOption('0');
+  await page.getByRole('button', { name: '检查技能工具绑定', exact: true }).click();
+  await expect(page.getByLabel('已核对技能工具')).toBeVisible();
+  await page.getByRole('button', { name: '保存本次技能调用供审批', exact: true }).click();
+  await expect(page.getByRole('button', { name: '批准本次技能调用', exact: true })).toBeVisible();
+  expect(captured).toHaveLength(0);
+  await page.getByRole('button', { name: '批准本次技能调用', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '执行已批准的技能调用', exact: true })
+  ).toBeVisible();
+  expect(captured).toHaveLength(0);
+  await page.route('**/skill-review/execute', async (route) => {
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    await route.abort('failed'); // Native completion is retained, browser loses its response.
+  });
+  await page.getByRole('button', { name: '执行已批准的技能调用', exact: true }).click();
+  await expect(page.getByLabel('技能审批与执行').getByRole('alert')).toBeVisible();
+  expect(captured).toHaveLength(2);
+  expect(JSON.parse(captured[1].messages[3].content).tool_result.output).toEqual(expected);
+  await page.unroute('**/skill-review/execute');
+  await native.stop();
+  await new Promise((resolve) => provider.close(resolve));
+  await native.start(endpoint); // Same deployment, provider offline.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '房屋特征研究', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await expect(page.getByLabel('技能审批与执行')).toBeVisible();
+  await testInfo.attach('recovery-state', {
+    body: JSON.stringify(
+      await page.evaluate(() => ({
+        records: Object.keys(sessionStorage)
+          .filter((key) => key.startsWith('aal-skill-review:'))
+          .map((key) => {
+            const record = JSON.parse(sessionStorage.getItem(key));
+            return { key, phase: record.phase, workspace: record.input.workspace };
+          }),
+        text: document.querySelector('[aria-label="技能审批与执行"]')?.textContent,
+      }))
+    ),
+    contentType: 'application/json',
+  });
+  await page.getByRole('button', { name: '恢复本次操作（复用原调用）', exact: true }).click();
+  await expect(page.getByLabel('技能执行结果')).toContainText(
+    'Browser fixture: measured frozen housing groups.'
+  );
+  expect(captured).toHaveLength(2);
   expect(errors).toEqual([]);
 });

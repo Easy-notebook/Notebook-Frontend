@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { NativeNotebookTransport } from '@Services/notebook/NativeNotebookTransport';
-const selectionSchema = z
+export const selectionSchema = z
   .object({
     source: z.string(),
     location: z.string(),
@@ -10,7 +10,7 @@ const selectionSchema = z
   })
   .strict();
 export type ReviewSelection = z.infer<typeof selectionSchema>;
-const previewSchema = z
+export const previewSchema = z
   .object({
     artifact_fingerprint: z.string().min(1),
     selection: selectionSchema,

@@ -1,3 +1,6 @@
+import { SkillReviewExecution } from './SkillReviewExecution';
+import { SkillReviewSession, type ReviewSnapshot } from '@Services/native-study/SkillReviewSession';
+import { SkillReviewExecutionClient } from '@Services/native-study/SkillReviewExecutionClient';
 import { SkillReviewPreview } from './SkillReviewPreview';
 import { SkillModelClient, type SkillModel } from '@Services/native-study/SkillModelClient';
 import { ModelFileClient } from '@Services/native-study/ModelFileClient';
@@ -12,6 +15,7 @@ interface ImportedModelProps {
   workspace: string;
   revision: number;
   busy: boolean;
+  modelEnabled?: boolean;
 }
 
 /** Imported inputs and pending reads belong to exactly one notebook workspace. */
@@ -21,7 +25,31 @@ export function ImportedModel(props: ImportedModelProps) {
   );
 }
 
-function ImportedModelSession({ notebookId, workspace, revision, busy }: ImportedModelProps) {
+function ImportedModelSession({
+  notebookId,
+  workspace,
+  revision,
+  busy,
+  modelEnabled = false,
+}: ImportedModelProps) {
+  const review = useRef<SkillReviewSession | null>(null);
+  const [reviewState, setReviewState] = useState<ReviewSnapshot>({
+    record: null,
+    busy: false,
+    error: null,
+    blocked: false,
+  });
+  useEffect(() => {
+    const session = new SkillReviewSession(new SkillReviewExecutionClient(notebookId), workspace);
+    review.current = session;
+    const unsubscribe = session.subscribe(() => setReviewState(session.getSnapshot()));
+    setReviewState(session.getSnapshot());
+    return () => {
+      unsubscribe();
+      session.dispose();
+      if (review.current === session) review.current = null;
+    };
+  }, [notebookId, workspace]);
   const [model, setModel] = useState('');
   const [name, setName] = useState('');
   const [csv, setCsv] = useState('');
@@ -178,8 +206,34 @@ function ImportedModelSession({ notebookId, workspace, revision, busy }: Importe
           lock={lock}
           resource={resources[Number(resourceIndex)]}
           busy={busy}
+          prepareDisabled={
+            !modelEnabled ||
+            reviewState.busy ||
+            reviewState.blocked ||
+            !!reviewState.record ||
+            !csv.trim() ||
+            new TextEncoder().encode(csv).length > 32768
+          }
+          onPrepare={(selection) =>
+            void review.current?.prepare({ workspace, revision, csv, lock, selection })
+          }
         />
       ) : null}
+      {!modelEnabled && (
+        <p className="text-sm">当前服务未启用模型，可计算数值和检查工具，不能发起技能模型调用。</p>
+      )}
+      {new TextEncoder().encode(csv).length > 32768 && (
+        <p role="alert">技能调用输入不能超过 32 KiB，请缩短 CSV。</p>
+      )}
+      <SkillReviewExecution
+        state={reviewState}
+        revision={revision}
+        disabled={busy || !modelEnabled}
+        onDecide={(approve) => void review.current?.decide(approve)}
+        onExecute={() => void review.current?.execute()}
+        onResume={() => void review.current?.resume()}
+        onClear={() => review.current?.clearCompleted()}
+      />
       <ImportedReferenceComparison
         notebookId={notebookId}
         workspace={workspace}

@@ -523,7 +523,8 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           notebookId={notebookId}
           workspace={view.document.id}
           revision={view.document.revision}
-          busy={busy || publishing || datasetBusy}
+          busy={busy || closed || publishing || datasetBusy}
+          modelEnabled={view.model_enabled}
         />
       )}
       {view && (

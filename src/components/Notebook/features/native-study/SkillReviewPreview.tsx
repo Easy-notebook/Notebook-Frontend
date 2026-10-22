@@ -10,6 +10,8 @@ export function SkillReviewPreview({
   lock,
   resource,
   busy,
+  onPrepare,
+  prepareDisabled = true,
 }: {
   notebookId: string;
   workspace: string;
@@ -17,6 +19,8 @@ export function SkillReviewPreview({
   lock: unknown;
   resource: SkillModel;
   busy: boolean;
+  onPrepare?: (selection: ReviewSelection) => void;
+  prepareDisabled?: boolean;
 }) {
   const [includeReference, setIncludeReference] = useState(false);
   const [path, setPath] = useState('');
@@ -104,6 +108,15 @@ export function SkillReviewPreview({
               </li>
             ))}
           </ul>
+          {onPrepare && (
+            <button
+              type="button"
+              disabled={busy || prepareDisabled}
+              onClick={() => onPrepare(state.value.selection)}
+            >
+              保存本次技能调用供审批
+            </button>
+          )}
           <details>
             <summary>查看编译内容标识</summary>
             <p className="break-all text-xs">{state.value.artifact_fingerprint}</p>

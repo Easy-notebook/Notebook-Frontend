@@ -95,7 +95,7 @@ content identity, never an execution authorization. Changes to the selected reso
 reference or workspace revision invalidate the preview; stale responses cannot restore
 it. The client also rejects a mismatched selection/workspace or a response claiming
 execution authorization. No new model call, fitting, FoKn migration or durable grant
-occurs. Web authorization and skill execution controls remain to be implemented.
+occurs. The explicit authorization and execution flow is described below.
 
 Preview validation on 2026-10-23: 14 frontend component tests and changed-source ESLint
 passed. The extended Chromium test passed (17.0 s test, 19.3 s total), including the
@@ -105,3 +105,42 @@ TypeScript checking still reports errors in other modules; the final check has n
 diagnostics in the changed preview/import/transport files. Log:
 `/tmp/aal-skill-preview-typecheck-final.log`. This is not a claim that the entire
 frontend repository passes type checking or that skill execution is authorized.
+
+
+## Approve, execute and recover the exact imported call
+
+With a model-enabled Rust server, **保存本次技能调用供审批** freezes the selected
+lock, resource bindings, CSV, workspace revision and a single invocation ID before
+requesting approval. The server-checked preview is shown with separate approval,
+denial and execution buttons. Inspection, preparation and approval do not call the
+model. Execution uses the native kernel and only the checked skill tools; output
+is displayed separately and is not automatically published as FoKn evidence.
+
+The session persists before each remote operation. If a response is lost, use
+**恢复本次操作（复用原调用）** to resend the same stage with the same frozen input and
+ID. Reload does not automatically dispatch. Server-side completed execution replay
+can return the stored result after server restart even with the provider offline.
+Pending or unknown calls cannot be discarded to silently create a replacement ID.
+Completed or denied local records can be explicitly cleared.
+
+Retention uses `sessionStorage`, scoped by frontend notebook and native workspace:
+it supports reload in the same tab, not recovery after closing that tab. Storage
+failure prevents a new dispatch; invalid stored records remain blocked and retained.
+A workspace revision change disables remote recovery of the old call under the
+current backend revision contract. This flow adds no global model-spend budget and
+requires the existing server model configuration. CSV is limited to 32 KiB.
+
+Validation on 2026-10-23: 30 session/component tests passed, including lost approval
+and execution replies, completion-storage failure, immutable input, scope rejection,
+denial and corrupt storage. Full-project TypeScript checking still fails in unrelated
+modules; the changed native-study and transport files have no diagnostics in
+`/tmp/aal-skill-execution-types-verified.log`. This is not a repository-wide type-check
+pass. The browser test now exercises approval, actual native tool output, deliberately
+lost execution response and exact replay after a server restart with the local fixture
+provider offline. No paid model calls or online EasyNet calls are part of these tests.
+
+Final Chromium run: **1 passed**, 27.4 s test / 29.5 s total; log
+`/tmp/aal-skill-execution-browser-clean.log`. Earlier runs intermittently lost the
+research dialog during notebook initialization; the test now waits for the loaded
+notebook heading before opening it. No general dialog lifecycle fix is claimed.
+Changed-source ESLint and `git diff --check` passed.
