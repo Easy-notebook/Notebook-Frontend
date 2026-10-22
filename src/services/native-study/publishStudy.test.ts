@@ -18,7 +18,7 @@ vi.mock('@Store/notebookStore', () => ({
 }));
 vi.mock('@Services/autoSave', () => ({ AutoSaveService: { getInstance: () => io } }));
 vi.mock('./studyExport', () => ({ studyMarkdown: () => '## Research\n\nMeasured evidence' }));
-const view = { document: { id: 'native-a', revision: 4 } } as NativeView;
+const view = { frontend_notebook_id: 'a', document: { id: 'native-a', revision: 4 } } as NativeView;
 beforeEach(() => {
   vi.clearAllMocks();
   io.initialize.mockResolvedValue();
@@ -45,4 +45,37 @@ it('rechecks notebook ownership after asynchronous initialization', async () => 
   await expect(publishStudy(view, 'a')).rejects.toThrow('笔记已切换');
   expect(io.state.addCell).not.toHaveBeenCalled();
   expect(io.queueSave).not.toHaveBeenCalled();
+});
+
+it('rejects a snapshot from another notebook before inserting or saving', async () => {
+  await expect(publishStudy({ ...view, frontend_notebook_id: 'b' }, 'a')).rejects.toThrow(
+    '属于其他笔记'
+  );
+  expect(io.initialize).not.toHaveBeenCalled();
+  expect(io.state.addCell).not.toHaveBeenCalled();
+  expect(io.queueSave).not.toHaveBeenCalled();
+});
+it('preserves edits and refuses to acknowledge a modified snapshot after a failed save', async () => {
+  io.flush.mockRejectedValueOnce(new Error('disk error'));
+  await expect(publishStudy(view, 'a')).rejects.toThrow('disk error');
+  const original = io.state.cells[1].content;
+  io.state.cells[1].content = 'My revised interpretation';
+  io.queueSave.mockClear();
+  await expect(publishStudy(view, 'a')).rejects.toThrow('已被编辑');
+  expect(io.state.cells).toHaveLength(2);
+  expect(io.state.cells[1].content).toBe('My revised interpretation');
+  expect(io.queueSave).not.toHaveBeenCalled();
+  io.state.cells[1].content = original;
+  await publishStudy(view, 'a');
+  expect(io.state.cells).toHaveLength(2);
+  expect(io.flush).toHaveBeenLastCalledWith('a');
+});
+it('validates all existing fragments before inserting any missing fragment', async () => {
+  await publishStudy(view, 'a');
+  io.state.cells.shift();
+  io.state.cells[0].content = 'Edited evidence';
+  io.state.addCell.mockClear();
+  await expect(publishStudy(view, 'a')).rejects.toThrow('已被编辑');
+  expect(io.state.addCell).not.toHaveBeenCalled();
+  expect(io.state.cells).toHaveLength(1);
 });

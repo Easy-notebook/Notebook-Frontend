@@ -624,3 +624,9 @@ coordinates and caption, excluding the duplicate SVG string. A mismatched refere
 rejects publication. The browser test also publishes with the model and rendering
 routes unavailable, reloads the notebook and verifies the saved image decodes at
 its native width; unit tests cover Unicode/parentheses and mismatched references.
+
+A historical study publication is scoped to its original frontend notebook ID.
+Re-publishing the same workspace/revision checks every existing snapshot cell before
+inserting missing cells. Edited content is preserved and produces an explicit error,
+including retry after a failed durable save; it is never acknowledged as the original
+measurement snapshot. Unchanged retries reuse the existing cells and flush persistence.

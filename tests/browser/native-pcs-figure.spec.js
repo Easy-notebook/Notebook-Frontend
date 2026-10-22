@@ -128,6 +128,24 @@ test('PCS saves a native chart shown after restart without rendering or model re
     .getByRole('img', { name: '房屋分群图', exact: true })
     .screenshot({ path: testInfo.outputPath('published-pcs-figure.png') });
   await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  const editedCount = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    const cells = store.getState().cells.filter((cell) => cell.metadata?.nativeStudy);
+    const cell = cells[cells.length - 1];
+    store.getState().updateCell(cell.id, cell.content + '\n\nUser interpretation retained.');
+    return cells.length;
+  });
+  await page.getByRole('button', { name: '写入当前笔记', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '已被编辑' })).toBeVisible();
+  const retained = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    return store
+      .getState()
+      .cells.filter((cell) => cell.metadata?.nativeStudy)
+      .map((cell) => cell.content);
+  });
+  expect(retained).toHaveLength(editedCount);
+  expect(retained[retained.length - 1]).toContain('User interpretation retained.');
   await page.getByLabel('参考 CSV 内容').fill('area,rooms\n999,2\n');
   await expect(plot.getByRole('img')).toHaveCount(0);
 });

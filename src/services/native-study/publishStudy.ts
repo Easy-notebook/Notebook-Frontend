@@ -8,6 +8,8 @@ export async function publishStudy(
   notebookId: string,
   signal?: AbortSignal
 ): Promise<void> {
+  if (view.frontend_notebook_id !== notebookId)
+    throw new Error('研究快照属于其他笔记，请重新加载当前研究');
   const markdown = studyMarkdown(view);
   const identity = `aal-study-${view.document.id}-${view.document.revision}`;
   const content = [markdown.split('\n')[0], markdown.slice(markdown.indexOf('\n') + 1).trim()];
@@ -22,6 +24,6 @@ export async function publishStudy(
           nativeStudy: { workspace: view.document.id, revision: view.document.revision },
         },
       })),
-    { signal }
+    { signal, requireUnedited: true }
   );
 }
