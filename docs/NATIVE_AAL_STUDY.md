@@ -609,3 +609,10 @@ study dependency. The housing panel validates saved artifacts through the same
 figure schema as explicit reads and displays/downloads them without another HTTP
 request. Changed references, axes or pending input edits hide stale figures.
 Discussion receives only figure metadata, not SVG markup or point arrays.
+
+`tests/browser/native-pcs-figure.spec.js` runs the real Rust generated-selection
+server with a local scripted model. It verifies PCS-selected axes, immediate saved
+SVG display without `/figure`, restart with the model stopped and execution/figure
+routes blocked, identical SVG download, and hiding after an unsaved input edit.
+The model fixture makes no paid requests; the native compiler, fit, comparison,
+renderer and persistence are executed rather than mocked.

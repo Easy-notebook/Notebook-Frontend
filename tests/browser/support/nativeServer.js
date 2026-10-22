@@ -13,7 +13,10 @@ export class NativeTestServer {
     this.binary = binary;
     this.port = url.port;
   }
-  async start(modelEndpoint, reviewerConfig) {
+  async start(modelEndpoint, reviewerConfig, mode = 'model') {
+    if (!['model', 'generated-selection'].includes(mode)) throw new Error('Unknown native mode');
+    if (mode === 'generated-selection' && !modelEndpoint)
+      throw new Error('Generated mode requires a fixture endpoint');
     if (this.child) throw new Error('Stop the existing native server before restarting');
     this.root ??= await mkdtemp(join(tmpdir(), 'aal-browser-native-'));
     const env = { ...process.env };
@@ -35,7 +38,7 @@ export class NativeTestServer {
       [
         this.root,
         this.port,
-        ...(modelEndpoint ? ['--model'] : []),
+        ...(modelEndpoint ? [`--${mode}`] : []),
         ...(reviewerConfig ? ['--auto-review', reviewerConfig] : []),
       ],
       {
