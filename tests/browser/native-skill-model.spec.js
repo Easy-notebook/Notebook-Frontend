@@ -179,6 +179,12 @@ test('selects a packaged housing model after source deletion and server restart'
   expect(captured).toHaveLength(2);
   expect(JSON.parse(captured[1].messages[3].content).tool_result.output).toEqual(expected);
   await page.unroute('**/skill-review/execute');
+  // Keep the lost-response invocation frozen while the notebook advances.
+  await page
+    .getByLabel('参考 CSV 内容')
+    .fill('area,rooms\n50,2\n60,3\n100,4\n110,4\n190,7\n200,7\n');
+  await page.getByRole('button', { name: '保存研究输入', exact: true }).click();
+  await expect(page.getByRole('button', { name: '取回原调用结果', exact: true })).toBeEnabled();
   await native.stop();
   await new Promise((resolve) => provider.close(resolve));
   await native.start(endpoint); // Same deployment, provider offline.
@@ -200,9 +206,15 @@ test('selects a packaged housing model after source deletion and server restart'
     ),
     contentType: 'application/json',
   });
-  await page.getByRole('button', { name: '恢复本次操作（复用原调用）', exact: true }).click();
+  await page.getByRole('button', { name: '取回原调用结果', exact: true }).click();
   await expect(page.getByLabel('技能执行结果')).toContainText(
     'Browser fixture: measured frozen housing groups.'
+  );
+  await expect(
+    page.getByText('此结果来自历史版本，不代表当前研究输入。', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByLabel('参考 CSV 内容')).toHaveValue(
+    'area,rooms\n50,2\n60,3\n100,4\n110,4\n190,7\n200,7\n'
   );
   expect(captured).toHaveLength(2);
   expect(errors).toEqual([]);

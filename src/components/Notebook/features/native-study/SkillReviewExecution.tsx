@@ -19,7 +19,8 @@ export function SkillReviewExecution({
 }) {
   const record = state.record;
   const stale = !!record && record.input.revision !== revision;
-  const busy = disabled || state.busy || state.blocked || stale;
+  const unavailable = disabled || state.busy || state.blocked;
+  const busy = unavailable || stale;
   return (
     <section aria-label="技能审批与执行" className="space-y-3 rounded border p-3">
       <h4 className="font-semibold">本次技能调用</h4>
@@ -29,13 +30,20 @@ export function SkillReviewExecution({
       {state.error && <p role="alert">{state.error}</p>}
       {stale && (
         <p role="alert">
-          工作区版本已变化，当前接口不能继续此调用。已保存的输入保留，不会自动生成新调用。
+          {record?.phase === 'execute'
+            ? '工作区版本已变化。可取回原调用已完成的结果；尚未完成的旧调用不会继续执行。'
+            : record?.phase === 'completed'
+              ? '此结果来自历史版本，不代表当前研究输入。'
+              : '工作区版本已变化，不能继续审批或开始此旧调用。已保存的输入保留。'}
         </p>
       )}
       {!record && !state.blocked && <p>先检查技能工具绑定，再保存本次调用供审批。</p>}
       {record && (
         <>
-          <p className="break-all text-xs">调用标识：{record.input.invocation}</p>
+          <p className="break-all text-xs">
+            调用标识：{record.input.invocation} · 输入版本：{record.input.revision} · 当前版本：
+            {revision}
+          </p>
           <details>
             <summary>查看本次冻结输入</summary>
             <pre className="overflow-auto text-xs">{record.input.csv}</pre>
@@ -58,8 +66,14 @@ export function SkillReviewExecution({
           )}
           {state.busy && <p role="status">正在处理本次技能调用…</p>}
           {['request', 'decision', 'execute'].includes(record.phase) && !state.busy && (
-            <button type="button" disabled={busy} onClick={onResume}>
-              恢复本次操作（复用原调用）
+            <button
+              type="button"
+              disabled={unavailable || (stale && record.phase !== 'execute')}
+              onClick={onResume}
+            >
+              {stale && record.phase === 'execute'
+                ? '取回原调用结果'
+                : '恢复本次操作（复用原调用）'}
             </button>
           )}
           {record.phase === 'ready' && record.approval?.state.status === 'pending' && (

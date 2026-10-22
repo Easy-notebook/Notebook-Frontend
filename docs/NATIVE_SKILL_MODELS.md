@@ -126,8 +126,12 @@ Completed or denied local records can be explicitly cleared.
 Retention uses `sessionStorage`, scoped by frontend notebook and native workspace:
 it supports reload in the same tab, not recovery after closing that tab. Storage
 failure prevents a new dispatch; invalid stored records remain blocked and retained.
-A workspace revision change disables remote recovery of the old call under the
-current backend revision contract. This flow adds no global model-spend budget and
+After a workspace revision change, an unresolved execution offers **取回原调用结果**.
+It sends the original frozen input and invocation; the Rust service returns only an
+exact completed result and rejects unfinished old-revision work. Approval and first
+execution remain disabled for stale calls. Results display their input revision and
+are labeled historical when it differs from the current revision; they do not
+replace the new study input. This flow adds no global model-spend budget and
 requires the existing server model configuration. CSV is limited to 32 KiB.
 
 Validation on 2026-10-23: 30 session/component tests passed, including lost approval
@@ -144,3 +148,17 @@ Final Chromium run: **1 passed**, 27.4 s test / 29.5 s total; log
 research dialog during notebook initialization; the test now waits for the loaded
 notebook heading before opening it. No general dialog lifecycle fix is claimed.
 Changed-source ESLint and `git diff --check` passed.
+
+## Historical completion after a study edit (2026-10-23)
+
+The Chromium scenario now advances the reference input after deliberately losing a
+completed review response, stops the model fixture, restarts Rust, reloads the page
+and explicitly recovers the original result. The UI retains the new reference CSV,
+labels the result historical, and the provider request count stays at two. This uses
+the Rust completed-result lookup added in AAL commit `4a2739c`; it does not permit
+resuming unfinished stale work or recover storage after closing the browser tab.
+
+Validation: 23 session/component tests, scoped ESLint and diff checks passed. Chromium:
+1 passed, 35.6 s test / 39.1 s total (`/tmp/aal-historical-ui-browser.log`). No paid
+model requests or online EasyNet validation. Full repository type checking is not
+claimed by these scoped checks.
