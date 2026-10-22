@@ -6,17 +6,21 @@ import { ImportedModelClient } from '@Services/native-study/ImportedModelClient'
 import { parseStudyModel } from '@Services/native-study/studyModel';
 import { useScopedNativeRead } from './useScopedNativeRead';
 
-export function ImportedModel({
-  notebookId,
-  workspace,
-  revision,
-  busy,
-}: {
+interface ImportedModelProps {
   notebookId: string;
   workspace: string;
   revision: number;
   busy: boolean;
-}) {
+}
+
+/** Imported inputs and pending reads belong to exactly one notebook workspace. */
+export function ImportedModel(props: ImportedModelProps) {
+  return (
+    <ImportedModelSession key={JSON.stringify([props.notebookId, props.workspace])} {...props} />
+  );
+}
+
+function ImportedModelSession({ notebookId, workspace, revision, busy }: ImportedModelProps) {
   const [model, setModel] = useState('');
   const [name, setName] = useState('');
   const [csv, setCsv] = useState('');

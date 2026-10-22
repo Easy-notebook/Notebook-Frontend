@@ -218,3 +218,80 @@ it('ignores a late skill-lock response after choosing a standalone model', async
   expect(screen.queryByLabelText('技能包中的房屋模型')).not.toBeInTheDocument();
   expect(screen.getByText('已加载：standalone.json')).toBeInTheDocument();
 });
+
+it.each([
+  { notebookId: 'other-notebook', workspace: 'workspace' },
+  { notebookId: 'houses', workspace: 'other-workspace' },
+])('clears the imported model and reference when ownership changes to %j', async (owner) => {
+  const view = render(<ImportedModel {...props} />);
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), {
+    target: { files: [file('private-model.json', async () => model)] },
+  });
+  await screen.findByText('已加载：private-model.json');
+  fireEvent.change(screen.getByLabelText('导入模型的新样本 CSV'), {
+    target: { value: 'area\n110\n' },
+  });
+  fireEvent.change(screen.getByLabelText('导入参考 CSV'), {
+    target: { value: 'area\n90\n' },
+  });
+  fireEvent.change(screen.getByLabelText('原报告参考身份'), {
+    target: { value: 'private-reference' },
+  });
+  // A revision of the same workspace invalidates results, not the user's inputs.
+  view.rerender(<ImportedModel {...props} revision={2} />);
+  expect(screen.getByText('已加载：private-model.json')).toBeInTheDocument();
+  expect(screen.getByLabelText('导入参考 CSV')).toHaveValue('area\n90\n');
+  view.rerender(<ImportedModel {...props} {...owner} revision={2} />);
+  expect(screen.queryByText('已加载：private-model.json')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('导入模型的新样本 CSV')).toHaveValue('');
+  expect(screen.getByLabelText('导入参考 CSV')).toHaveValue('');
+  expect(screen.getByLabelText('原报告参考身份')).toHaveValue('');
+  expect(screen.getByRole('button', { name: '使用导入模型分群' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '比较导入参考样本' })).toBeDisabled();
+});
+
+it('cancels package inspection on workspace switch and cannot revive its model selection', async () => {
+  let finish!: (value: Response) => void;
+  const fetch = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      })
+  );
+  vi.stubGlobal('fetch', fetch);
+  const view = render(<ImportedModel {...props} />);
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), {
+    target: { files: [file('old.lock.json', async () => JSON.stringify({ skills: [] }))] },
+  });
+  await act(async () => {});
+  expect(fetch).toHaveBeenCalledOnce();
+  const signal = (fetch.mock.calls[0] as unknown as [string, RequestInit])[1].signal!;
+  view.rerender(<ImportedModel {...props} workspace="new-workspace" />);
+  expect(signal.aborted).toBe(true);
+  fireEvent.change(screen.getByLabelText('冻结分群模型文件'), {
+    target: { files: [file('new-model.json', async () => model)] },
+  });
+  await screen.findByText('已加载：new-model.json');
+  await act(async () =>
+    finish(
+      new Response(
+        JSON.stringify({
+          frontend_notebook_id: 'houses',
+          models: [
+            {
+              skill: 'old',
+              source: 'local',
+              location: 'private',
+              content_hash: 'old-hash',
+              path: 'old.aalkm',
+              model: JSON.parse(model),
+            },
+          ],
+        })
+      )
+    )
+  );
+  expect(screen.queryByText('已加载：old.lock.json')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('技能包中的房屋模型')).not.toBeInTheDocument();
+  expect(screen.getByText('已加载：new-model.json')).toBeInTheDocument();
+});
