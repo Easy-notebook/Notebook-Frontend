@@ -5,10 +5,12 @@ import { HousingStudyPanel } from './HousingStudyPanel';
 import {
   publishComparisonCell,
   publishComparisonWorkflow,
+  publishEvidenceCell,
 } from '@Services/native-study/publishComparisonCell';
 vi.mock('@Services/native-study/publishComparisonCell', () => ({
   publishComparisonCell: vi.fn(),
   publishComparisonWorkflow: vi.fn(),
+  publishEvidenceCell: vi.fn(),
 }));
 vi.mock('@Services/native-study/publishStudy', () => ({ publishStudy: vi.fn() }));
 vi.mock('@Services/native-study/publishDatasetCell', () => ({ publishDatasetCell: vi.fn() }));
@@ -239,6 +241,17 @@ it('opens the native chapter and recovers the exact discussion after losing its 
     if (options?.method !== 'POST') return new Response(JSON.stringify(view));
     const command = JSON.parse(String(options.body));
     sent.push(command);
+    if (String(_url).endsWith('/commands/lookup'))
+      return new Response(
+        JSON.stringify({
+          frontend_notebook_id: 'a',
+          workspace: command.workspace,
+          invocation: command.invocation,
+          ability: command.ability,
+          status: 'completed',
+          result: { id: command.workspace, revision: 3 },
+        })
+      );
     if (command.ability === 'new_chapter') {
       view = {
         ...view,
@@ -294,6 +307,12 @@ it('opens the native chapter and recovers the exact discussion after losing its 
   fireEvent.click(screen.getByRole('button', { name: '重试原操作' }));
   await screen.findByText(/研究已就绪/);
   expect(sent[2]).toEqual(sent[1]);
+  expect(sent).toHaveLength(3);
+  expect(
+    request.mock.calls.filter(
+      ([url, options]) => String(url).endsWith('/command') && options?.method === 'POST'
+    )
+  ).toHaveLength(2);
   expect(screen.getByRole('list', { name: '已保存的研究问答' }).children).toHaveLength(1);
   expect(
     screen.getByText('<script>reported text</script> Saved rows describe similarity.')
@@ -352,4 +371,42 @@ it('keeps history readable without a model and resets discussion drafts when cha
   panel.rerender(<HousingStudyPanel notebookId="a" />);
   await screen.findByText('Previous model answer');
   expect(screen.getByLabelText('研究问题')).toHaveValue('');
+});
+
+it('publishes the selected evidence row, rejects invalid form rows and resets on notebook change', async () => {
+  vi.mocked(publishEvidenceCell).mockClear();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async (url: string) =>
+        new Response(JSON.stringify(savedView(url.includes('/b/') ? 'b' : 'a', 'area,rooms\n40,2')))
+    )
+  );
+  const view = render(<HousingStudyPanel notebookId="a" />);
+  await waitFor(() =>
+    expect(screen.getByLabelText('参考 CSV 内容')).toHaveValue('area,rooms\n40,2')
+  );
+  fireEvent.change(screen.getByLabelText('新样本 CSV'), {
+    target: { value: 'area,rooms\n41,2\n90,4' },
+  });
+  const row = screen.getByLabelText('证据样本行（从 0 开始）');
+  const publish = screen.getByRole('button', { name: '插入 FoKn 样本证据单元格' });
+  expect(row).toHaveValue(0);
+  for (const value of ['', '-1', '128', '0.5']) {
+    fireEvent.change(row, { target: { value } });
+    expect(publish).toBeDisabled();
+  }
+  fireEvent.change(row, { target: { value: '1' } });
+  expect(publish).toBeEnabled();
+  fireEvent.click(publish);
+  await waitFor(() =>
+    expect(publishEvidenceCell).toHaveBeenCalledWith(
+      'a',
+      expect.objectContaining({ queryRow: 1 }),
+      expect.any(AbortSignal)
+    )
+  );
+  await screen.findByText(/运行后查看查询行 1/);
+  view.rerender(<HousingStudyPanel notebookId="b" />);
+  await waitFor(() => expect(row).toHaveValue(0));
 });

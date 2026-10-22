@@ -75,7 +75,8 @@ function comparisonSource(
   columns: readonly string[],
   clusters: number,
   neighbors: number,
-  evidence: boolean
+  evidence: boolean,
+  queryRow = 0
 ): string {
   if (!/^[a-f0-9]{64}$/.test(queryVersion)) throw new Error('无效的查询 CSV 文件版本');
   if (!Number.isInteger(neighbors) || neighbors < 1 || neighbors > 8)
@@ -99,13 +100,15 @@ ${
     `      query_version = "${queryVersion}"
       query = self.skill("notebook_csv", query_version)
       comparison = self.skill("segment_compare", report.model, csv, query, ${neighbors}, report.reference_id)
-${evidence ? sampleEvidenceSource : ''}      return {reference_version: version, query_version: query_version, comparison: comparison${evidence ? ', sample_evidence: sample_evidence' : ''}}
+${evidence ? sampleEvidenceSource(queryRow) : ''}      return {reference_version: version, query_version: query_version, comparison: comparison${evidence ? ', sample_evidence: sample_evidence' : ''}}
 `
   );
 }
 
 /** Execute the same fact definitions and domain rule used by the native study workspace. */
-const sampleEvidenceSource = `      projected = self.skill("notebook_sample_evidence", comparison, 0)
+const sampleEvidenceSource = (
+  queryRow: number
+) => `      projected = self.skill("notebook_sample_evidence", comparison, ${queryRow})
       memory.store("study_sample", projected.observation)
       facts = []
       for definition in projected.facts
@@ -128,15 +131,26 @@ export function comparisonCellSource(
   return comparisonSource(referenceVersion, queryVersion, columns, clusters, neighbors, false);
 }
 
-/** First-query proof is computed from the cell's fresh comparison, never copied from panel state. */
+/** Selected-query proof is computed from the cell's fresh comparison, never copied from panel state. */
 export function evidenceCellSource(
   referenceVersion: string,
   queryVersion: string,
   columns: readonly string[],
   clusters: number,
-  neighbors: number
+  neighbors: number,
+  queryRow = 0
 ): string {
-  return comparisonSource(referenceVersion, queryVersion, columns, clusters, neighbors, true);
+  if (!Number.isInteger(queryRow) || queryRow < 0 || queryRow > 127)
+    throw new Error('证据样本行必须为 0 至 127 的整数');
+  return comparisonSource(
+    referenceVersion,
+    queryVersion,
+    columns,
+    clusters,
+    neighbors,
+    true,
+    queryRow
+  );
 }
 
 /** A reference fit is committed once and reused by later query cells in this notebook. */

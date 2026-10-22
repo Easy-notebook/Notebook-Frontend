@@ -432,9 +432,12 @@ EasyNet 线上配对。运行方式与上面的原生浏览器测试相同。
 
 **插入 FoKn 样本证据单元格** archives the saved reference and current query CSV,
 then inserts one executable AAL cell with the selected features, cluster count and
-neighbor count. Run it to recompute the comparison and inspect `sample_evidence`
-for the **first query row**: measured facts, same-cluster conclusions and derivation
-graphs. The cell uses the same Rust fact projection and rule as the study panel;
+neighbor count. Choose **证据样本行（从 0 开始）** to pin a query row (0–127,
+excluding the CSV header; default 0). Run it to recompute the comparison and inspect
+`sample_evidence` for that row: measured facts, same-cluster conclusions and derivation
+graphs. Rust checks that the selected row exists in the archived query CSV. Changing
+the row produces a separate source identity, so multiple rows can retain independent
+proofs; publishing the same settings again reuses the same cell. The cell uses the same Rust fact projection and rule as the study panel;
 its AAL source performs the actual FoKn checks and inference.
 
 Evidence includes the real execution UUID. New execution creates new evidence;
@@ -444,6 +447,14 @@ retry. This is an independent cell result saved with editor outputs, not a mutat
 of the study panel's evidence or a shared live FoKn forest. The existing source,
 execution and output bounds apply. The proof checks captured observations and
 same-cluster membership; it does not establish causal or price predictions.
+
+The native browser regression in `tests/browser/native-shared-values.spec.js`
+publishes rows 0 and 1 from the same CSV, checks their distinct measured neighbors
+and proof row bindings, then loses row 1's execution response and restarts Rust.
+The read-only completion lookup restores that exact proof without another execution;
+row 0's persisted result remains unchanged. Unit tests cover invalid indices,
+input capture before uploads, publication deduplication and notebook navigation.
+Default row 0 retains its existing source and cell identity.
 
 This action requires the ordinary Rust `web` build. Automatic permission review is
 optional, using the `web,model` build and server-owned reviewer configuration below.

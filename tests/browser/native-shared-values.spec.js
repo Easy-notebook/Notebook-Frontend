@@ -89,7 +89,7 @@ test('housing UI publishes reusable native cells, executes them and retains resu
   ).toEqual(measured);
 });
 
-test('evidence cell retains measured FoKn proof after response loss and server restart', async ({
+test('selected evidence rows stay independent after response loss and server restart', async ({
   page,
 }) => {
   test.setTimeout(90000);
@@ -110,7 +110,26 @@ test('evidence cell retains measured FoKn proof after response loss and server r
   await expect(
     page.getByRole('status').filter({ hasText: '已保存 FoKn 样本证据单元格' })
   ).toBeVisible();
+  await page.getByLabel('证据样本行（从 0 开始）').fill('1');
+  await page.getByRole('button', { name: '插入 FoKn 样本证据单元格', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '运行后查看查询行 1' })).toBeVisible();
   await page.keyboard.press('Escape');
+  const rowZero = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    const cells = store.getState().cells.filter((cell) => cell.id.startsWith('aal-evidence-'));
+    if (cells.length !== 2) throw new Error('Expected independent row cells');
+    const cell = cells.find((cell) => cell.content.includes('comparison, 0)'));
+    const outcome = await store.getState().runSingleCell(cell.id);
+    return {
+      id: cell.id,
+      outcome,
+      outputs: store.getState().cells.find((item) => item.id === cell.id).outputs,
+    };
+  });
+  expect(rowZero.outcome.success).toBe(true);
+  const firstProof = JSON.parse(rowZero.outputs[0].content);
+  expect(firstProof.sample_evidence.observation.query_row).toBe(0);
+  expect(firstProof.sample_evidence.observation.neighbor_0_row).toBe(2);
   let committed;
   let request;
   await page.route(
@@ -124,25 +143,33 @@ test('evidence cell retains measured FoKn proof after response loss and server r
   );
   const first = await page.evaluate(async () => {
     const store = (await import('/src/store/notebookStore.ts')).default;
-    const cell = store.getState().cells.find((cell) => cell.id.startsWith('aal-evidence-'));
+    const cell = store
+      .getState()
+      .cells.find(
+        (cell) => cell.id.startsWith('aal-evidence-') && cell.content.includes('comparison, 1)')
+      );
     return { id: cell.id, outcome: await store.getState().runSingleCell(cell.id) };
   });
   expect(first.outcome.success).toBe(false);
   expect(committed.status, JSON.stringify(committed)).toBe('ok');
   const measured = JSON.parse(committed.outputs[0].content);
-  expect(measured.comparison.rows[0].neighbors[0].row).toBe(2);
+  expect(first.id).not.toBe(rowZero.id);
+  expect(measured.sample_evidence.observation.query_row).toBe(1);
+  expect(measured.sample_evidence.observation.neighbor_0_row).toBe(10);
   expect(measured.sample_evidence.facts).toHaveLength(4);
   expect(measured.sample_evidence.answers).toHaveLength(3);
   expect(measured.sample_evidence.graphs).toHaveLength(3);
   for (const fact of measured.sample_evidence.facts) {
     expect(fact.status).toBe('supported');
+    expect(fact.atom.terms[1].literal).toBe(1);
     expect(fact.source.invocation).toBe(request.invocation);
   }
   for (const answer of measured.sample_evidence.answers) {
     const terms = answer.atom.terms;
-    const neighbor = measured.comparison.rows[0].neighbors.find((n) => n.row === terms[3].literal);
+    expect(terms[1].literal).toBe(1);
+    const neighbor = measured.comparison.rows[1].neighbors.find((n) => n.row === terms[3].literal);
     expect(neighbor.distance_squared).toBe(terms[6].literal);
-    expect(terms[4].literal).toBe(measured.comparison.rows[0].assignment.cluster);
+    expect(terms[4].literal).toBe(measured.comparison.rows[1].assignment.cluster);
   }
   await native.stop();
   await native.start();
@@ -182,4 +209,9 @@ test('evidence cell retains measured FoKn proof after response loss and server r
   expect(replayRequest).toEqual(request);
   expect(executionRetries).toBe(0);
   expect(JSON.parse(replay.outputs[0].content)).toEqual(measured);
+  const retainedZero = await page.evaluate(async (id) => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    return store.getState().cells.find((cell) => cell.id === id).outputs;
+  }, rowZero.id);
+  expect(JSON.parse(retainedZero[0].content)).toEqual(firstProof);
 });

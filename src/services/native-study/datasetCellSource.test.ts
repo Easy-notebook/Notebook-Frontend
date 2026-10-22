@@ -77,3 +77,12 @@ it('generates evidence from a fresh pinned comparison using native fact and infe
   expect(source).toContain('sample_evidence: sample_evidence');
   expect(() => evidenceCellSource('a'.repeat(64), '../other', ['area'], 3, 2)).toThrow('版本');
 });
+
+it('pins the selected query row and rejects invalid evidence indices', () => {
+  const args = ['a'.repeat(64), 'b'.repeat(64), ['area'], 3, 2] as const;
+  expect(evidenceCellSource(...args, 0)).toBe(evidenceCellSource(...args));
+  for (const row of [1, 127])
+    expect(evidenceCellSource(...args, row)).toContain(`comparison, ${row})`);
+  for (const row of [-1, 128, 0.5, NaN, Infinity])
+    expect(() => evidenceCellSource(...args, row)).toThrow('证据样本行');
+});

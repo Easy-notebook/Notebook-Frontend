@@ -236,3 +236,23 @@ it('persists executable evidence separately from comparison, retries save and pr
   await expect(publishEvidenceCell('a', comparisonInput)).rejects.toThrow('已被编辑');
   expect(cell.content).toBe('owned edits');
 });
+
+it('freezes the evidence row before upload, gives each row its own cell and deduplicates retries', async () => {
+  const upload = mockArchive();
+  const input = { ...comparisonInput, queryRow: 1 };
+  const pending = publishEvidenceCell('a', input);
+  input.queryRow = 0;
+  await pending;
+  const secondRow = io.state.cells[0];
+  expect(secondRow.content).toContain('"notebook_sample_evidence", comparison, 1)');
+  await publishEvidenceCell('a', input);
+  expect(io.state.cells).toHaveLength(2);
+  expect(io.state.cells[1].id).not.toBe(secondRow.id);
+  expect(io.state.cells[1].content).toContain('"notebook_sample_evidence", comparison, 0)');
+  await publishEvidenceCell('a', { ...input, queryRow: 1 });
+  expect(io.state.cells).toHaveLength(2);
+  upload.mockClear();
+  for (const queryRow of [-1, 128, 0.5, NaN])
+    await expect(publishEvidenceCell('a', { ...input, queryRow })).rejects.toThrow('证据样本行');
+  expect(upload).not.toHaveBeenCalled();
+});

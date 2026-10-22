@@ -33,6 +33,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
   const [clusters, setClusters] = useState(3);
   const [query, setQuery] = useState('');
   const [neighbors, setNeighbors] = useState(3);
+  const [evidenceRow, setEvidenceRow] = useState(0);
   const [maximum, setMaximum] = useState(0.001);
   const [goal, setGoal] = useState('保留距离平方不超过指定上限的房屋近邻，保持原始排序。');
   const [notice, setNotice] = useState('');
@@ -50,6 +51,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     loadedInput.current = undefined;
     setCsv('');
     setQuery('');
+    setEvidenceRow(0);
     setNotice('');
     setPublishing(false);
     const unsubscribe = runtime.subscribe(() => setState(runtime.getSnapshot()));
@@ -97,6 +99,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
     ((csv || savedInput.configuration.csv) !== savedInput.configuration.csv ||
       JSON.stringify(selectedColumns) !== JSON.stringify(savedParameters?.columns) ||
       clusters !== savedParameters?.clusters);
+  const validEvidenceRow = Number.isInteger(evidenceRow) && evidenceRow >= 0 && evidenceRow <= 127;
   const run = (
     ability: Parameters<NativeStudySession['execute']>[0],
     args: Record<string, unknown>
@@ -115,6 +118,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
       (closed || inputChanged || !savedInput || (kind === 'comparison' && !view.study.current))
     )
       return;
+    if (kind === 'evidence' && !validEvidenceRow) return;
     const owner = session.current;
     const attempt = new AbortController();
     publication.current = attempt;
@@ -138,6 +142,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             columns: selectedColumns,
             clusters,
             neighbors,
+            ...(kind === 'evidence' ? { queryRow: evidenceRow } : {}),
           },
           attempt.signal
         );
@@ -149,7 +154,7 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           kind === 'shared'
             ? '已保存拟合与比较两个 AAL 单元格。先运行拟合单元格，再运行比较；后续比较可复用已保存的参考模型。'
             : kind === 'evidence'
-              ? '已保存 FoKn 样本证据单元格。运行后查看第一条查询的测量事实与推导图。'
+              ? `已保存 FoKn 样本证据单元格。运行后查看查询行 ${evidenceRow} 的测量事实与推导图。`
               : kind === 'comparison'
                 ? '已保存 AAL 相似样本单元格。关闭研究面板后运行，可查看近邻及各特征的距离贡献。'
                 : '已写入并保存当前笔记，作为本次研究快照。'
@@ -404,16 +409,28 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           >
             插入可复用的拟合与比较单元格
           </button>
+          <label className="block text-sm">
+            证据样本行（从 0 开始）
+            <input
+              className={inputClass}
+              type="number"
+              min={0}
+              max={127}
+              step={1}
+              value={Number.isNaN(evidenceRow) ? '' : evidenceRow}
+              onChange={(event) => setEvidenceRow(event.target.valueAsNumber)}
+            />
+          </label>
           <button
             className={buttonClass}
             type="button"
-            disabled={!query.trim() || inputChanged || !savedInput}
+            disabled={!query.trim() || inputChanged || !savedInput || !validEvidenceRow}
             onClick={() => void insert('evidence')}
           >
             插入 FoKn 样本证据单元格
           </button>
           <p className="text-xs text-muted-foreground">
-            证据单元格重新计算第一条查询的近邻，并生成事实与同群推导图。它保留独立的执行结果，不更新研究面板。
+            证据单元格重新计算所选查询行的近邻，并生成事实与同群推导图。行号不含表头，执行时检查是否存在；每行可分别保存独立结果。
           </p>
           <p className="text-xs text-muted-foreground">
             拆分后先运行拟合，再运行比较。参考模型仅在成功时保存，可供本笔记后续新样本比较复用。

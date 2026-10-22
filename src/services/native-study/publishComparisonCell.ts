@@ -16,6 +16,10 @@ export interface ComparisonCellInput {
   neighbors: number;
 }
 
+export interface EvidenceCellInput extends ComparisonCellInput {
+  queryRow?: number;
+}
+
 /** Freeze form inputs, archive both versions, then durably publish executable source. */
 export function publishComparisonCell(
   notebookId: string,
@@ -33,21 +37,32 @@ export function publishComparisonWorkflow(
 }
 export function publishEvidenceCell(
   notebookId: string,
-  input: ComparisonCellInput,
+  input: EvidenceCellInput,
   signal?: AbortSignal
 ): Promise<void> {
-  return publishComparison(notebookId, input, 'evidence', signal);
+  return publishComparison(notebookId, input, 'evidence', signal, input.queryRow ?? 0);
 }
 async function publishComparison(
   notebookId: string,
   input: ComparisonCellInput,
   kind: 'comparison' | 'shared' | 'evidence',
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  queryRow = 0
 ): Promise<void> {
   const frozen = { ...input, columns: [...input.columns] };
-  const generate = kind === 'evidence' ? evidenceCellSource : comparisonCellSource;
+  const generate = (reference: string, query: string) =>
+    kind === 'evidence'
+      ? evidenceCellSource(
+          reference,
+          query,
+          frozen.columns,
+          frozen.clusters,
+          frozen.neighbors,
+          queryRow
+        )
+      : comparisonCellSource(reference, query, frozen.columns, frozen.clusters, frozen.neighbors);
   // Validate all source settings before the first durable upload.
-  generate('0'.repeat(64), '0'.repeat(64), frozen.columns, frozen.clusters, frozen.neighbors);
+  generate('0'.repeat(64), '0'.repeat(64));
   if (!frozen.referenceCsv.trim() || !frozen.queryCsv.trim())
     throw new Error('请提供参考与新样本 CSV');
   const client = new NativeDatasetClient(notebookId);
@@ -58,13 +73,7 @@ async function publishComparison(
       owned.throwIfAborted();
       const query = await client.upload('housing-query.csv', frozen.queryCsv, owned);
       owned.throwIfAborted();
-      const source = generate(
-        reference.version,
-        query.version,
-        frozen.columns,
-        frozen.clusters,
-        frozen.neighbors
-      );
+      const source = generate(reference.version, query.version);
       // CSV contents live in the native archive, never duplicated in editor metadata.
       const metadata = ({ name, version, sha256, size }: DatasetMetadata): DatasetMetadata => ({
         name,
