@@ -81,3 +81,61 @@ it('retries failed reads and rejects mismatched owner or revision', async () => 
     ).rejects.toThrow();
   }
 });
+
+it('invalidates an in-flight report when selecting the prompt and exports only the new profile', async () => {
+  let finish!: (r: Response) => void;
+  const owner = {
+    frontend_notebook_id: value.frontend_notebook_id,
+    workspace: value.workspace,
+    revision: value.revision,
+    agent: value.agent,
+  };
+  const prompt = '# Selected agent prompt\n选定内容与省略数量\n';
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    )
+    .mockResolvedValueOnce(response({ ...owner, prompt }));
+  vi.stubGlobal('fetch', fetch);
+  const view = render(<StudyKnowledgeReport {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: '生成可下载知识报告' }));
+  fireEvent.change(screen.getByLabelText('导出内容'), { target: { value: 'prompt' } });
+  expect(fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  await act(async () => {
+    finish(response(value));
+  });
+  expect(screen.queryByRole('button', { name: '下载选定提示词 Markdown' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '生成可下载选定提示词' }));
+  await screen.findByRole('button', { name: '下载选定提示词 Markdown' });
+  expect(fetch.mock.calls[1][0]).toBe('/aal-api/workspaces/houses/knowledge-prompt');
+  expect(screen.getByLabelText('选定提示词 Markdown').textContent).toBe(prompt);
+  fireEvent.click(screen.getByRole('button', { name: '下载选定提示词 Markdown' }));
+  expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'knowledge-prompt-revision-4.md');
+  view.rerender(<StudyKnowledgeReport {...props} revision={5} />);
+  expect(screen.queryByRole('button', { name: '下载选定提示词 Markdown' })).not.toBeInTheDocument();
+});
+
+it('rejects malformed or foreign prompt snapshots', async () => {
+  const owner = {
+    frontend_notebook_id: value.frontend_notebook_id,
+    workspace: value.workspace,
+    revision: value.revision,
+    agent: value.agent,
+  };
+  for (const body of [
+    value,
+    { ...owner, prompt: '' },
+    { ...owner, prompt: 'selected', frontend_notebook_id: 'other' },
+    { ...owner, prompt: 'selected', workspace: 'other' },
+    { ...owner, prompt: 'selected', revision: 5 },
+  ]) {
+    const request = vi.fn<typeof globalThis.fetch>(async () => response(body));
+    await expect(
+      new NativeStudyClient('houses', request).knowledgePrompt('workspace-a', 4)
+    ).rejects.toThrow();
+  }
+});

@@ -31,3 +31,8 @@ export const studyKnowledgeReport = studyKnowledge
   .omit({ context: true })
   .extend({ report: z.string().min(1) });
 export type StudyKnowledgeReport = z.infer<typeof studyKnowledgeReport>;
+
+export const studyKnowledgePrompt = studyKnowledge
+  .omit({ context: true })
+  .extend({ prompt: z.string().min(1) });
+export type StudyKnowledgePrompt = z.infer<typeof studyKnowledgePrompt>;

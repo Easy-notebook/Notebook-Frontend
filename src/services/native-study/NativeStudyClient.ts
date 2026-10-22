@@ -11,8 +11,10 @@ import { NativeNotebookTransport } from '@Services/notebook/NativeNotebookTransp
 import {
   studyKnowledge,
   studyKnowledgeReport,
+  studyKnowledgePrompt,
   type StudyKnowledge,
   type StudyKnowledgeReport,
+  type StudyKnowledgePrompt,
 } from './studyKnowledge';
 
 /** Same-origin transport; native notebook identity is checked independently of the URL. */
@@ -67,6 +69,17 @@ export class NativeStudyClient {
   ): Promise<StudyKnowledgeReport> {
     const value = studyKnowledgeReport.parse(
       await this.transport.send('knowledge-report', undefined, signal)
+    );
+    this.checkKnowledgeOwner(value, workspace, revision);
+    return value;
+  }
+  async knowledgePrompt(
+    workspace: string,
+    revision: number,
+    signal?: AbortSignal
+  ): Promise<StudyKnowledgePrompt> {
+    const value = studyKnowledgePrompt.parse(
+      await this.transport.send('knowledge-prompt', undefined, signal)
     );
     this.checkKnowledgeOwner(value, workspace, revision);
     return value;

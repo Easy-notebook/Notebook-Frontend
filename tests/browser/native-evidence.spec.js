@@ -114,6 +114,29 @@ test('renders actual FoKn provenance after response loss/restart and expires it 
   expect(downloaded.suggestedFilename()).toBe('knowledge-revision-4.md');
   expect(await readFile(await downloaded.path(), 'utf8')).toBe(report);
 
+  await knowledge.getByLabel('导出内容').selectOption('prompt');
+  await expect(knowledge.getByRole('button', { name: '下载知识报告 Markdown' })).toHaveCount(0);
+  await knowledge.getByRole('button', { name: '生成可下载选定提示词', exact: true }).click();
+  await expect(knowledge.getByRole('button', { name: '下载选定提示词 Markdown' })).toBeVisible();
+  const prompt = await knowledge.getByLabel('选定提示词 Markdown').textContent();
+  const nativePrompt = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    const response = await fetch(
+      `/aal-api/workspaces/${encodeURIComponent(store.getState().notebookId)}/knowledge-prompt`
+    );
+    if (!response.ok) throw new Error('Native prompt read failed');
+    return response.json();
+  });
+  expect(prompt).toBe(nativePrompt.prompt);
+  expect(prompt).toContain('# Selected agent prompt');
+  expect(prompt).toContain('omitted by this profile');
+  for (const fact of actual.facts) expect(prompt).not.toContain(JSON.stringify(fact.id));
+  const promptDownload = page.waitForEvent('download');
+  await knowledge.getByRole('button', { name: '下载选定提示词 Markdown' }).click();
+  const downloadedPrompt = await promptDownload;
+  expect(downloadedPrompt.suggestedFilename()).toBe('knowledge-prompt-revision-4.md');
+  expect(await readFile(await downloadedPrompt.path(), 'utf8')).toBe(prompt);
+
   await first.scrollIntoViewIfNeeded();
   await page.screenshot({ path: '/tmp/aal-frontend-proof-current.png' });
   await page.getByLabel('数值特征（每行一个）').fill('area');
@@ -121,6 +144,8 @@ test('renders actual FoKn provenance after response loss/restart and expires it 
   await expect(evidence.getByText(/历史证据已过期/)).toBeVisible();
   await expect(knowledge.getByLabel('完整知识快照 JSON')).toHaveCount(0);
   await expect(knowledge.getByRole('button', { name: '下载知识报告 Markdown' })).toHaveCount(0);
+  await expect(knowledge.getByRole('button', { name: '下载选定提示词 Markdown' })).toHaveCount(0);
+  await knowledge.getByLabel('导出内容').selectOption('report');
   await knowledge.getByRole('button', { name: '查看研究知识', exact: true }).click();
   await expect(
     knowledge.getByText('当前没有纳入上下文的知识。历史证据仍可在研究结果中查看。')

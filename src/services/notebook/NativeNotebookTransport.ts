@@ -2,6 +2,7 @@ type NativeNotebookRoute =
   | 'state'
   | 'knowledge'
   | 'knowledge-report'
+  | 'knowledge-prompt'
   | 'figure'
   | 'command'
   | 'commands/lookup'

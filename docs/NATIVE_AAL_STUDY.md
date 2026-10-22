@@ -648,3 +648,19 @@ measurement snapshot. Unchanged retries reuse the existing cells and flush persi
 重启恢复、Markdown 下载逐字比较和输入变化后的过期过滤通过。该浏览器用例也确认恢复
 查询已完成命令，而不是再次发送业务命令。相关 ESLint 通过；全量 TypeScript 检查仍有
 66 条其他文件中的既有错误，本次修改文件未报告错误。
+
+### Explicit FoKn prompt export
+
+The knowledge export selector defaults to the full report. “FoKn 固定提示词选集”
+reads the native workspace's fixed selection through `knowledge-prompt`, previews
+literal text and downloads the exact UTF-8 String as `knowledge-prompt-revision-N.md`.
+The selected export states that structured clustering/neighbor evidence may be omitted;
+its counts distinguish that omission from missing or deleted evidence. Full reports and
+the model's default knowledge context retain their existing behavior.
+
+The response uses `prompt` plus the same notebook/workspace/revision/Agent identity as
+other knowledge reads. Schema and owner/revision checks run before display. Changing
+profile cancels pending reads and invalidates downloads, as do navigation, mutation and
+revision changes. No export occurs until the user explicitly requests and downloads it.
+`native-evidence.spec.js` covers actual Rust restart, response/preview equality, downloaded
+bytes, retained complete evidence and expiration after changed study inputs.
