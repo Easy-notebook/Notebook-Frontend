@@ -1,4 +1,5 @@
 import type { NativeView } from './contracts';
+import { studyFigureSource } from './studyFigure';
 function jsonBlock(value: unknown): string[] {
   // Prevent reported text from closing a Markdown fence; JSON decoding retains exact content.
   return ['```json', JSON.stringify(value, null, 2).replace(/`/g, '\\u0060'), '```'];
@@ -23,11 +24,25 @@ export function studyMarkdown(view: NativeView): string {
         `- 参考行 ${neighbor.row}：分群 ${neighbor.cluster}，标准化距离平方 ${neighbor.distance_squared}。`
       );
   }
+  const figure = view.study.figure;
+  if (figure && figure.reference_id !== report.reference_id)
+    throw new Error('图表参考数据与当前研究不一致，请重新加载');
+  if (figure) {
+    lines.push(
+      '',
+      '### 房屋分群图',
+      '',
+      `![房屋分群图](${studyFigureSource(figure)})`,
+      '',
+      '二维位置使用原始特征单位；颜色来自完整拟合特征空间。投影距离不证明价格相似性或因果关系。'
+    );
+  }
+  const evidence = figure ? { ...view.study, figure: { ...figure, svg: undefined } } : view.study;
   lines.push(
     '',
     '### 测量与证据记录',
     '',
-    ...jsonBlock({ study: view.study, selection: view.study_selection ?? null })
+    ...jsonBlock({ study: evidence, selection: view.study_selection ?? null })
   );
   if (view.document.messages.length) {
     lines.push(

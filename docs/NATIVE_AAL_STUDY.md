@@ -616,3 +616,11 @@ SVG display without `/figure`, restart with the model stopped and execution/figu
 routes blocked, identical SVG download, and hiding after an unsaved input edit.
 The model fixture makes no paid requests; the native compiler, fit, comparison,
 renderer and persistence are executed rather than mocked.
+
+Publishing a current study now embeds its saved native SVG as a Markdown image
+snapshot, with UTF-8 and Markdown-destination escaping. The image and manual figure
+panel share one data-URL encoder. The evidence JSON retains reference identity,
+coordinates and caption, excluding the duplicate SVG string. A mismatched reference
+rejects publication. The browser test also publishes with the model and rendering
+routes unavailable, reloads the notebook and verifies the saved image decodes at
+its native width; unit tests cover Unicode/parentheses and mismatched references.

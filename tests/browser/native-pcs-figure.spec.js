@@ -101,6 +101,33 @@ test('PCS saves a native chart shown after restart without rendering or model re
   );
   expect(captured).toHaveLength(2);
   expect(figureReads).toBe(0);
+  await page.getByRole('button', { name: '写入当前笔记', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: '已写入并保存当前笔记' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  const exported = await page.evaluate(async () => {
+    const store = (await import('/src/store/notebookStore.ts')).default;
+    return store
+      .getState()
+      .cells.filter((cell) => cell.metadata?.nativeStudy)
+      .map((cell) => cell.content)
+      .join('\n');
+  });
+  expect(exported).toContain(`![房屋分群图](${original})`);
+  expect(exported).not.toContain('"svg":');
+  await expect(page.getByRole('img', { name: '房屋分群图', exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('img', { name: '房屋分群图', exact: true })).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .getByRole('img', { name: '房屋分群图', exact: true })
+        .evaluate((img) => img.complete && img.naturalWidth === 960)
+    )
+    .toBe(true);
+  await page
+    .getByRole('img', { name: '房屋分群图', exact: true })
+    .screenshot({ path: testInfo.outputPath('published-pcs-figure.png') });
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
   await page.getByLabel('参考 CSV 内容').fill('area,rooms\n999,2\n');
   await expect(plot.getByRole('img')).toHaveCount(0);
 });

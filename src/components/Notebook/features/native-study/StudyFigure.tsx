@@ -1,4 +1,4 @@
-import type { NativeClusterFigure } from '@Services/native-study/studyFigure';
+import { studyFigureSource, type NativeClusterFigure } from '@Services/native-study/studyFigure';
 import { useState } from 'react';
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { useScopedNativeRead } from './useScopedNativeRead';
@@ -52,9 +52,7 @@ export function StudyFigure({
           saved?.y_feature === yFeature
         ? saved
         : null;
-  const source = figure
-    ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(figure.svg)}`
-    : undefined;
+  const source = figure ? studyFigureSource(figure) : undefined;
   return (
     <section aria-label="房屋分群图" className="space-y-3">
       <h3 className="font-semibold">房屋分群图</h3>

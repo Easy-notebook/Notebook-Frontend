@@ -50,3 +50,12 @@ export const studyFigure = z
   })
   .strict();
 export type StudyFigureSnapshot = z.infer<typeof studyFigure>;
+
+/** Image-only data URL, also safe inside a Markdown destination. */
+export function studyFigureSource(figure: NativeClusterFigure): string {
+  const encoded = encodeURIComponent(figure.svg).replace(
+    /[!'()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+  return `data:image/svg+xml;charset=utf-8,${encoded}`;
+}
