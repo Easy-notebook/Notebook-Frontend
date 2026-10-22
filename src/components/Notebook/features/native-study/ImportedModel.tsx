@@ -1,3 +1,4 @@
+import { SkillReviewPreview } from './SkillReviewPreview';
 import { SkillModelClient, type SkillModel } from '@Services/native-study/SkillModelClient';
 import { ModelFileClient } from '@Services/native-study/ModelFileClient';
 import { ImportedReferenceComparison } from './ImportedReferenceComparison';
@@ -27,6 +28,7 @@ function ImportedModelSession({ notebookId, workspace, revision, busy }: Importe
   const [error, setError] = useState('');
   const [resources, setResources] = useState<SkillModel[]>([]);
   const [resourceIndex, setResourceIndex] = useState('');
+  const [lock, setLock] = useState<unknown>(null);
   const selection = useRef(0);
   const pending = useRef<AbortController | null>(null);
   useEffect(
@@ -49,6 +51,7 @@ function ImportedModelSession({ notebookId, workspace, revision, busy }: Importe
     setName('');
     setError('');
     setResources([]);
+    setLock(null);
     setResourceIndex('');
     if (!file) return;
     try {
@@ -64,6 +67,7 @@ function ImportedModelSession({ notebookId, workspace, revision, busy }: Importe
         const entries = await new SkillModelClient(notebookId).inspect(parsed, controller.signal);
         if (selection.current === attempt) {
           setResources(entries);
+          setLock(parsed);
           setName(file.name);
         }
         return;
@@ -163,6 +167,19 @@ function ImportedModelSession({ notebookId, workspace, revision, busy }: Importe
           ))}
         </div>
       )}
+      {lock &&
+      resourceIndex !== '' &&
+      resources[Number(resourceIndex)].skill === 'house-feature-review' ? (
+        <SkillReviewPreview
+          key={JSON.stringify([resources[Number(resourceIndex)].content_hash, resourceIndex])}
+          notebookId={notebookId}
+          workspace={workspace}
+          revision={revision}
+          lock={lock}
+          resource={resources[Number(resourceIndex)]}
+          busy={busy}
+        />
+      ) : null}
       <ImportedReferenceComparison
         notebookId={notebookId}
         workspace={workspace}

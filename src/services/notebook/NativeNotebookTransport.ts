@@ -7,6 +7,7 @@ type NativeNotebookRoute =
   | 'model-file/decode'
   | 'model-file/encode'
   | 'model-file/skill-lock'
+  | 'skill-review/preview'
   | 'model-assignment'
   | 'model-comparison'
   | 'command'

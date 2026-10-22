@@ -134,7 +134,7 @@ it('requires explicit selection of a frozen skill model before native assignment
       frontend_notebook_id: 'houses',
       models: [
         {
-          skill: 'housing',
+          skill: 'house-feature-review',
           source: 'local',
           location: 'package',
           content_hash: 'frozen-hash',
@@ -158,6 +158,8 @@ it('requires explicit selection of a frozen skill model before native assignment
   expect(screen.getByRole('button', { name: '使用导入模型分群' })).toBeDisabled();
   fireEvent.change(picker, { target: { value: '0' } });
   expect(screen.getByText('来源校验值：frozen-hash')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '检查技能工具绑定' })).toBeEnabled();
+  expect(fetch).toHaveBeenCalledOnce();
   expect(screen.getByRole('button', { name: '使用导入模型分群' })).toBeEnabled();
   fetch.mockResolvedValue({
     ok: true,

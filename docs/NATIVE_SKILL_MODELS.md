@@ -79,3 +79,29 @@ cases before the fix. The 2026-10-23 component run passed 18 tests across
 an in-flight package inspection whose late response cannot populate the new session.
 ESLint passed for the two changed component/test files. This check does not extend
 the earlier Chromium coverage or add a Web grant for LLM-selected imported tools.
+
+## Inspect the imported skill's tool bindings
+
+Selecting a `house-feature-review` entry now exposes **检查技能工具绑定**. This sends
+an explicit preview request to the native server built with `web,model`; no provider
+configuration is needed. The default preview covers CSV profiling and frozen-model
+assignment only when the skill declares those tools. To include observed-sample
+comparison, select **包含参考样本比较工具** and enter the package-relative reference CSV
+path and the original reference identity. The Rust service verifies the reference
+against the selected model before returning the effective tools.
+
+Inspection is opt-in and read-only. The UI shows checked bindings and compiled
+content identity, never an execution authorization. Changes to the selected resources,
+reference or workspace revision invalidate the preview; stale responses cannot restore
+it. The client also rejects a mismatched selection/workspace or a response claiming
+execution authorization. No new model call, fitting, FoKn migration or durable grant
+occurs. Web authorization and skill execution controls remain to be implemented.
+
+Preview validation on 2026-10-23: 14 frontend component tests and changed-source ESLint
+passed. The extended Chromium test passed (17.0 s test, 19.3 s total), including the
+actual Rust preview endpoint after source deletion/server restart, followed by native
+assignment and tamper rejection. Log: `/tmp/aal-skill-preview-browser.log`. Full-project
+TypeScript checking still reports errors in other modules; the final check has no
+diagnostics in the changed preview/import/transport files. Log:
+`/tmp/aal-skill-preview-typecheck-final.log`. This is not a claim that the entire
+frontend repository passes type checking or that skill execution is authorized.
