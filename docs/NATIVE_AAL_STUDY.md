@@ -630,3 +630,21 @@ Re-publishing the same workspace/revision checks every existing snapshot cell be
 inserting missing cells. Edited content is preserved and produces an explicit error,
 including retry after a failed durable save; it is never acknowledged as the original
 measurement snapshot. Unchanged retries reuse the existing cells and flush persistence.
+
+### 当前知识报告下载
+
+研究面板的「当前研究知识」支持「生成可下载知识报告」，读取 Rust
+`NotebookWorkspace.knowledge_report()`（继承工作区读取自己的知识），然后下载
+`knowledge-revision-N.md`。文件保留原生 Markdown 的完整 UTF-8 内容、候选/已支持状态和
+来源元数据；原文预览使用纯文本，不执行 HTML，也不调用模型。
+
+接口为 `GET /aal-api/workspaces/{notebookId}/knowledge-report`，返回
+`{frontend_notebook_id, workspace, revision, agent, report}`。笔记归属及修订必须与当前
+研究一致。切换笔记、启动命令或修订变化会取消读取并移除旧下载入口；网络错误可以重试。
+报告是显示修订的快照，不提供其他客户端编辑后的实时刷新保证。现有知识 JSON 接口保持独立，
+报告超过原生 64 KiB 限制不会使 JSON 查看功能失败。
+
+验证：知识查看/报告组件 9 项测试通过；真实 Chromium 住房分群、近邻证据、响应丢失后
+重启恢复、Markdown 下载逐字比较和输入变化后的过期过滤通过。该浏览器用例也确认恢复
+查询已完成命令，而不是再次发送业务命令。相关 ESLint 通过；全量 TypeScript 检查仍有
+66 条其他文件中的既有错误，本次修改文件未报告错误。

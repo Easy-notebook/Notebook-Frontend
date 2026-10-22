@@ -1,5 +1,6 @@
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { useScopedNativeRead } from './useScopedNativeRead';
+import { StudyKnowledgeReport } from './StudyKnowledgeReport';
 
 /** An explicit read owns its request; navigation or a changed study invalidates the observation. */
 export function StudyKnowledge({
@@ -38,6 +39,12 @@ export function StudyKnowledge({
       >
         {visible.status === 'loading' ? '正在读取研究知识' : '查看研究知识'}
       </button>
+      <StudyKnowledgeReport
+        notebookId={notebookId}
+        workspace={workspace}
+        revision={revision}
+        busy={busy}
+      />
       {visible.status === 'error' && <p role="alert">{visible.message}</p>}
       {snapshot && (
         <>

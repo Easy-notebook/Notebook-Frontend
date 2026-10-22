@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import process from 'node:process';
+import { readFile } from 'node:fs/promises';
 import { NativeTestServer } from './support/nativeServer.js';
 
 const binary = process.env.AAL_NATIVE_SERVER;
@@ -34,6 +35,11 @@ test('renders actual FoKn provenance after response loss/restart and expires it 
   await page.getByRole('button', { name: '比较并解释相似样本', exact: true }).click();
   await page.getByText(/查询样本 0 → 分群/).click();
   const requests = [];
+  const lookups = [];
+  await page.route('**/aal-api/workspaces/*/commands/lookup', async (route) => {
+    lookups.push(route.request().postDataJSON());
+    await route.continue();
+  });
   await page.route('**/aal-api/workspaces/*/command', async (route) => {
     const command = route.request().postDataJSON();
     if (command.ability !== 'explain_study_sample') return route.continue();
@@ -52,8 +58,8 @@ test('renders actual FoKn provenance after response loss/restart and expires it 
   await expect(page.getByRole('button', { name: '重试原操作', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '重试原操作', exact: true }).click();
   await expect(page.getByRole('button', { name: '重试原操作', exact: true })).toHaveCount(0);
-  expect(requests).toHaveLength(2);
-  expect(requests[1]).toEqual(requests[0]);
+  expect(requests).toHaveLength(1);
+  expect(lookups).toContainEqual(requests[0]);
   const evidence = page.getByRole('region', { name: 'FoKn 样本证据', exact: true });
   await expect(evidence.getByText('证据对应当前研究')).toBeVisible();
   await expect(evidence.getByText('同群近邻推导（3）')).toBeVisible();
@@ -94,12 +100,27 @@ test('renders actual FoKn provenance after response loss/restart and expires it 
     claims.filter((claim) => claim.atom?.relation === 'housing_same_segment_neighbor')
   ).toHaveLength(3);
 
+  await knowledge.getByRole('button', { name: '生成可下载知识报告', exact: true }).click();
+  await expect(knowledge.getByRole('button', { name: '下载知识报告 Markdown' })).toBeVisible();
+  const report = await knowledge.getByLabel('知识报告 Markdown').textContent();
+  expect(report).toContain('# Effective knowledge');
+  for (const fact of actual.facts) {
+    expect(report).toContain(JSON.stringify(fact.id));
+    expect(report).toContain(JSON.stringify(fact.source.invocation));
+  }
+  const pendingDownload = page.waitForEvent('download');
+  await knowledge.getByRole('button', { name: '下载知识报告 Markdown' }).click();
+  const downloaded = await pendingDownload;
+  expect(downloaded.suggestedFilename()).toBe('knowledge-revision-4.md');
+  expect(await readFile(await downloaded.path(), 'utf8')).toBe(report);
+
   await first.scrollIntoViewIfNeeded();
   await page.screenshot({ path: '/tmp/aal-frontend-proof-current.png' });
   await page.getByLabel('数值特征（每行一个）').fill('area');
   await page.getByRole('button', { name: '保存研究输入', exact: true }).click();
   await expect(evidence.getByText(/历史证据已过期/)).toBeVisible();
   await expect(knowledge.getByLabel('完整知识快照 JSON')).toHaveCount(0);
+  await expect(knowledge.getByRole('button', { name: '下载知识报告 Markdown' })).toHaveCount(0);
   await knowledge.getByRole('button', { name: '查看研究知识', exact: true }).click();
   await expect(
     knowledge.getByText('当前没有纳入上下文的知识。历史证据仍可在研究结果中查看。')
@@ -107,6 +128,11 @@ test('renders actual FoKn provenance after response loss/restart and expires it 
   const expired = JSON.parse(await knowledge.getByLabel('完整知识快照 JSON').textContent());
   expect(expired.revision).toBe(5);
   expect(expired.context.learned).toEqual({});
+  await knowledge.getByRole('button', { name: '生成可下载知识报告', exact: true }).click();
+  await expect(knowledge.getByText(/知识报告 · 修订 5/)).toBeVisible();
+  const expiredReport = await knowledge.getByLabel('知识报告 Markdown').textContent();
+  expect(expiredReport).not.toContain('##### supported');
+  for (const fact of actual.facts) expect(expiredReport).not.toContain(JSON.stringify(fact.id));
 
   await expect(evidence.locator('summary').filter({ hasText: /参考行 .*已过期/ })).toHaveCount(3);
   await expect(evidence.locator('summary').filter({ hasText: /参考行 .*已支持/ })).toHaveCount(0);

@@ -26,3 +26,8 @@ export const studyKnowledge = z
   })
   .strict();
 export type StudyKnowledge = z.infer<typeof studyKnowledge>;
+
+export const studyKnowledgeReport = studyKnowledge
+  .omit({ context: true })
+  .extend({ report: z.string().min(1) });
+export type StudyKnowledgeReport = z.infer<typeof studyKnowledgeReport>;
