@@ -154,8 +154,13 @@ test('evidence cell retains measured FoKn proof after response loss and server r
   // Wait for editor restoration, not only the transient persisted store snapshot.
   await expect(page.getByRole('button', { name: '房屋研究', exact: true })).toBeEnabled();
   let replayRequest;
+  let executionRetries = 0;
+  await page.route('**/aal-api/workspaces/*/execute', async (route) => {
+    executionRetries++;
+    await route.abort('failed');
+  });
   await page.route(
-    '**/aal-api/workspaces/*/execute',
+    '**/aal-api/workspaces/*/executions/lookup',
     async (route) => {
       replayRequest = route.request().postDataJSON();
       await route.continue();
@@ -175,5 +180,6 @@ test('evidence cell retains measured FoKn proof after response loss and server r
   }, first.id);
   expect(replay.outcome.success, JSON.stringify(replay.outcome)).toBe(true);
   expect(replayRequest).toEqual(request);
+  expect(executionRetries).toBe(0);
   expect(JSON.parse(replay.outputs[0].content)).toEqual(measured);
 });

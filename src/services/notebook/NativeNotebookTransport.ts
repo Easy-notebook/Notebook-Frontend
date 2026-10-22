@@ -22,6 +22,7 @@ export class NativeNotebookTransport {
       | 'knowledge'
       | 'command'
       | 'execute'
+      | 'executions/lookup'
       | 'datasets'
       | `datasets/${string}`
       | `operations/${string}`,

@@ -469,6 +469,17 @@ wait. Denial is terminal. A changed reviewer/deployment terminates the old invoc
 the next Run starts a new one. Completed results can replay even when the reviewer
 is offline. Editing source deliberately starts a separate calculation.
 
+When an unchanged AAL cell still has a frozen pending request, Run first reads
+`POST /aal-api/workspaces/{id}/executions/lookup`. A retained success or error restores
+the exact result without another execution request, including after server/browser
+restart. An `unconfirmed` lookup does not mean the cell never ran: the explicit Run
+continues its original invocation through native replay. Lookup failure or an identity
+mismatch retains the pending request and stops. Lookup and execution share the existing
+75-second request deadline; there is no automatic polling or new invocation on failure.
+This is local native cell recovery, separate from study-command retry and EasyNet's
+signed history path. The browser housing-evidence test prohibits execution requests
+while recovering the saved numerical/FoKn result.
+
 Review workers are bounded to 60 seconds and reviewer HTTP calls to at most 45 seconds;
 native browser requests now allow 75 seconds. Ordinary workers retain their 10-second
 limit. An approval action, including its arguments, is limited to 64 KiB. Large FoKn
