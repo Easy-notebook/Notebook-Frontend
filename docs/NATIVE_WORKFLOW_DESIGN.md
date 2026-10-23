@@ -204,3 +204,28 @@ and /tmp/aal-front-publication-lint.log. No paid model, online EasyNet or push.
 Full tsc --noEmit still exits 2 on existing editor diagnostics, with none in the
 changed workflow/transport files; this is not a full-project type-check pass.
 Log: /tmp/aal-front-publication-types.log.
+
+## Current evidence inspection
+
+Confirmed publications now offer **刷新当前证据状态**. The client sends only workspace,
+revision and the saved claim ID to `/workflow/evidence`, then validates the returned
+notebook/workspace/revision, claim ID and exact original owner/invocation/call ID.
+It displays supported, refuted or stale alongside the unchanged historical receipt.
+The value represents the most recent explicit query, not a live subscription.
+
+Current status is transient: it is not saved with publication intent or receipts.
+Reload, failed refresh, clearing the record and session disposal cannot restore an
+old observation as current authority. Reads use the session's existing busy/abort
+lifecycle and never execute or publish another operation. This is the separate
+WorkflowEvidence forest, not a merge into the study-workspace knowledge context.
+
+Validation: 30 scoped client/session/component tests and scoped ESLint pass. Both
+Chromium/Rust scenarios pass (35.9 seconds total). The first queries support, executes
+and publishes a distinct second instance, observes the original claim become stale,
+rejects a lost read, and re-reads stale state after server/browser restart while the
+original supported receipt and original execution output stay intact. Model drafting
+uses one scripted request per scenario; no paid model or online EasyNet calls.
+Full TypeScript checking still exits 2 on diagnostics outside these changed files;
+none mention WorkflowDesign, workflowFixture or NativeNotebookTransport.
+Logs: `/tmp/aal-front-current-tests.log`, `/tmp/aal-front-current-browser.log`,
+`/tmp/aal-front-current-lint.log`, `/tmp/aal-front-current-types.log`.

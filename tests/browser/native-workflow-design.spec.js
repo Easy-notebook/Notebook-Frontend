@@ -152,6 +152,38 @@ test('reviews source and recovers a completed native workflow after response los
   await expect(panel.getByLabel('已保存的工作流证据')).toContainText(
     '已保存：本次结果符合数值契约。'
   );
+  await panel.getByRole('button', { name: '刷新当前证据状态', exact: true }).click();
+  await expect(panel.getByLabel('当前工作流证据状态')).toContainText('当前查询：支持本次实例。');
+  // A distinct native execution/publication changes the shared assessment dependency.
+  const secondInput = structuredClone(publicationIntent.assessment.execution);
+  secondInput.context.invocation = 'browser-second-execution';
+  const second = await page.request.post(published.url().replace('/publish', '/execute'), {
+    data: secondInput,
+  });
+  expect(second.ok()).toBe(true);
+  expect((await second.json()).result.execution.value.completed).toBe(2);
+  const nextPublication = await page.request.post(published.url(), {
+    data: { assessment: { execution: secondInput }, invocation: 'browser-second-publication' },
+  });
+  expect(nextPublication.ok()).toBe(true);
+  await panel.getByRole('button', { name: '刷新当前证据状态', exact: true }).click();
+  await expect(panel.getByLabel('当前工作流证据状态')).toContainText('证据已过期');
+  await expect(panel.getByLabel('已保存的工作流证据')).toContainText(
+    '已保存：本次结果符合数值契约。'
+  );
+  await page.route('**/workflow/evidence', (route) => route.abort('failed'));
+  await panel.getByRole('button', { name: '刷新当前证据状态', exact: true }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  await expect(panel.getByLabel('当前工作流证据状态')).toContainText('尚未读取当前状态');
+  await page.unroute('**/workflow/evidence');
+  await native.stop();
+  await native.start(endpoint);
+  await page.reload();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await expect(panel.getByLabel('当前工作流证据状态')).toContainText('尚未读取当前状态');
+  await panel.getByRole('button', { name: '刷新当前证据状态', exact: true }).click();
+  await expect(panel.getByLabel('当前工作流证据状态')).toContainText('证据已过期');
+  await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 1');
   expect(publication.publication.assessment.observed.completed).toBe(1);
   expect(captured).toHaveLength(1);
   expect(errors).toEqual([]);

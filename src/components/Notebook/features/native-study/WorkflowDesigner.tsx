@@ -236,6 +236,23 @@ export function WorkflowDesigner({
                   ? '已保存：本次结果符合数值契约。'
                   : '已保存：本次结果反驳数值契约。'}
               </p>
+              <button
+                type="button"
+                disabled={unavailable}
+                onClick={() => void session.current?.refreshEvidence()}
+                className="rounded border px-3 py-1 text-sm"
+              >
+                刷新当前证据状态
+              </button>
+              <p aria-label="当前工作流证据状态">
+                {state?.currentEvidence
+                  ? {
+                      supported: '当前查询：支持本次实例。',
+                      refuted: '当前查询：反驳本次实例。',
+                      stale: '当前查询：证据已过期，不能作为当前支持。',
+                    }[state.currentEvidence.evidence.status]
+                  : '尚未读取当前状态；发布回执仅表示发布时的结果。'}
+              </p>
               <p className="text-xs break-all">发布 ID：{record.publication.input.invocation}</p>
               <p className="text-xs">
                 这是发布时的历史回执；新实例可能使旧证据过期，不代表通用能力已经验证。

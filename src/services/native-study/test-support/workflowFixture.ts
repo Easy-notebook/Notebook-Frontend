@@ -27,6 +27,8 @@ export function memoryStorage() {
   };
 }
 export function workflowFixture() {
+  let publicationId = '';
+  let evidenceStatus = 'refuted';
   let loseDraft = false;
   let loseExecution = false;
   let suspended = false;
@@ -36,6 +38,23 @@ export function workflowFixture() {
     const route = url.split('/').pop()!;
     const body = JSON.parse(init.body as string);
     calls.push({ route, body });
+    if (route === 'evidence')
+      return {
+        ok: true,
+        json: async () => ({
+          frontend_notebook_id: 'houses',
+          workspace: body.workspace,
+          revision: body.expected_revision,
+          claim_id: body.claim_id,
+          evidence: {
+            id: body.claim_id,
+            status: evidenceStatus,
+            tree: 'practice',
+            source: { agent: 'WorkflowEvidence', invocation: publicationId, call_id: 'call:one' },
+          },
+        }),
+      };
+    if (route === 'publish') publicationId = body.invocation;
     const request = route === 'publish' ? body.assessment : body;
     const execution = ['resume', 'assess', 'publish'].includes(route) ? request.execution : body;
     const context = route === 'draft' ? body : execution.context;
@@ -141,6 +160,9 @@ export function workflowFixture() {
   return {
     calls,
     fetch,
+    stale: () => {
+      evidenceStatus = 'stale';
+    },
     loseDraft: () => {
       loseDraft = true;
     },

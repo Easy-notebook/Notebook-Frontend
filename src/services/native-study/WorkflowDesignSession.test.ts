@@ -303,3 +303,54 @@ it('does not dispatch a publication if its frozen intent cannot be saved', async
   expect(fixture.calls.filter((c) => c.route === 'publish')).toHaveLength(0);
   expect(current.getSnapshot().record?.publication).toBeUndefined();
 });
+
+it('reads current evidence transiently, clears failed reads, and binds claim provenance', async () => {
+  const fixture = workflowFixture();
+  const storage = memoryStorage();
+  let current = session(storage);
+  await current.refreshEvidence();
+  expect(fixture.calls).toHaveLength(0);
+  await current.prepare(input);
+  await current.execute(hash);
+  await current.assess();
+  await current.publishEvidence();
+  const before = [...storage.map];
+  await current.refreshEvidence();
+  expect(current.getSnapshot().currentEvidence?.evidence.status).toBe('refuted');
+  fixture.fetch.mockRejectedValueOnce(new Error('read lost'));
+  await current.refreshEvidence();
+  expect(current.getSnapshot().currentEvidence).toBeUndefined();
+  expect(current.getSnapshot().error).toContain('read lost');
+  fixture.stale();
+  await current.refreshEvidence();
+  const projection = current.getSnapshot().currentEvidence!;
+  expect(projection.evidence.status).toBe('stale');
+  const publication = current.getSnapshot().record!.publication!;
+  if (publication.state !== 'confirmed') throw new Error('expected publication');
+  const client = new WorkflowDesignClient('houses');
+  for (const patch of [
+    { workspace: 'foreign' },
+    { revision: 99 },
+    { claim_id: 'foreign' },
+    { frontend_notebook_id: 'foreign' },
+    { evidence: { ...projection.evidence, id: 'foreign' } },
+    { evidence: { ...projection.evidence, status: 'unknown' } },
+    ...['agent', 'invocation', 'call_id'].map((key) => ({
+      evidence: {
+        ...projection.evidence,
+        source: { ...projection.evidence.source, [key]: 'foreign' },
+      },
+    })),
+  ])
+    expect(() => client.parseEvidence({ ...projection, ...patch }, publication.result)).toThrow();
+  expect([...storage.map]).toEqual(before);
+  current.dispose();
+  current = session(storage);
+  expect(current.getSnapshot().currentEvidence).toBeUndefined();
+  const pending = current.refreshEvidence();
+  current.dispose();
+  await pending;
+  expect(current.getSnapshot().currentEvidence).toBeUndefined();
+  expect(fixture.calls.filter((c) => c.route === 'execute')).toHaveLength(1);
+  expect(fixture.calls.filter((c) => c.route === 'publish')).toHaveLength(1);
+});

@@ -34,10 +34,14 @@ it('requires source review before explicit execution and shows frozen results', 
   expect(screen.getByLabelText('工作流数值验收')).toHaveTextContent('差异字段');
   fireEvent.click(screen.getByRole('button', { name: '保存本次验收为 FoKn 实例证据' }));
   await screen.findByText('已保存：本次结果反驳数值契约。');
+  fixture.stale();
+  fireEvent.click(screen.getByRole('button', { name: '刷新当前证据状态' }));
+  await screen.findByText('当前查询：证据已过期，不能作为当前支持。');
+  expect(screen.getByText('已保存：本次结果反驳数值契约。')).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole('button', { name: '清除本地记录，准备新草稿' }));
   expect(screen.getByLabelText('工作流类名')).not.toHaveValue('HousingWorkflow');
-  expect(fixture.calls).toHaveLength(4);
+  expect(fixture.calls).toHaveLength(5);
   expect(screen.queryByLabelText('已保存的工作流证据')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('工作流数值验收')).not.toBeInTheDocument();
 });

@@ -91,7 +91,8 @@ export class WorkflowDesignClient {
       | 'workflow/execute'
       | 'workflow/resume'
       | 'workflow/assess'
-      | 'workflow/publish',
+      | 'workflow/publish'
+      | 'workflow/evidence',
     input: unknown,
     signal: AbortSignal
   ) {
@@ -309,6 +310,47 @@ export class WorkflowDesignClient {
         evidence: publication.evidence,
       },
     };
+  }
+  async inspectEvidence(
+    publication: ReturnType<WorkflowDesignClient['parsePublication']>,
+    signal: AbortSignal
+  ) {
+    const original = structuredClone(publication);
+    const input = {
+      workspace: original.workspace,
+      expected_revision: original.revision,
+      claim_id: original.publication.evidence.id,
+    };
+    return this.parseEvidence(await this.send('workflow/evidence', input, signal), original);
+  }
+  parseEvidence(
+    response: unknown,
+    publication: ReturnType<WorkflowDesignClient['parsePublication']>
+  ) {
+    const original = publication.publication.evidence;
+    return z
+      .object({
+        frontend_notebook_id: z.literal(this.notebookId),
+        workspace: z.literal(publication.workspace),
+        revision: z.literal(publication.revision),
+        claim_id: z.literal(original.id),
+        evidence: z
+          .object({
+            id: z.literal(original.id),
+            status: z.enum(['supported', 'refuted', 'stale']),
+            tree: z.literal('practice'),
+            source: z
+              .object({
+                agent: z.literal('WorkflowEvidence'),
+                invocation: z.literal(original.source.invocation),
+                call_id: z.literal(original.source.call_id),
+              })
+              .strict(),
+          })
+          .passthrough(),
+      })
+      .strict()
+      .parse(response);
   }
   private executionShape(input: WorkflowExecutionInput) {
     return this.identity(input.context)

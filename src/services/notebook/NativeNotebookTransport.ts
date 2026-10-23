@@ -18,6 +18,7 @@ type NativeNotebookRoute =
   | 'workflow/resume'
   | 'workflow/assess'
   | 'workflow/publish'
+  | 'workflow/evidence'
   | 'model-assignment'
   | 'model-comparison'
   | 'command'
