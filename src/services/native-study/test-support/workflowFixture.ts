@@ -36,7 +36,7 @@ export function workflowFixture() {
     const route = url.split('/').pop()!;
     const body = JSON.parse(init.body as string);
     calls.push({ route, body });
-    const execution = route === 'resume' ? body.execution : body;
+    const execution = ['resume', 'assess'].includes(route) ? body.execution : body;
     const context = route === 'draft' ? body : execution.context;
     const identity = {
       frontend_notebook_id: 'houses',
@@ -46,6 +46,29 @@ export function workflowFixture() {
       reference_id: 'reference-id',
       query_data_id: 'query-id',
     };
+    if (route === 'assess')
+      return {
+        ok: true,
+        json: async () => ({
+          ...identity,
+          assessment: {
+            contract: 'housing-neighbor-selection-v1',
+            status: suspended ? 'pending' : 'mismatched',
+            execution_id: context.invocation,
+            operation_id: body.continuation_invocation ?? context.invocation,
+            deployment: 'deployment:one',
+            fingerprint: execution.expected_fingerprint,
+            expected: {
+              reference_id: 'reference-id',
+              query_data_id: 'query-id',
+              selection: [{ query_row: 0, selected_rows: [0] }],
+              selected_count: 1,
+            },
+            observed: suspended ? null : { selected_count: 1 },
+            mismatches: suspended ? [] : ['query_data_id', 'reference_id', 'selection'],
+          },
+        }),
+      };
     if (
       (route === 'draft' && loseDraft) ||
       (route === 'execute' && loseExecution) ||

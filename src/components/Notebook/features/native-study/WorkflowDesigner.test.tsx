@@ -29,9 +29,13 @@ it('requires source review before explicit execution and shows frozen results', 
   await screen.findByLabelText('工作流执行结果');
   expect(screen.getByLabelText('工作流执行结果')).toHaveTextContent('selected_count');
   expect(fixture.calls.map((c) => c.route)).toEqual(['draft', 'execute']);
+  fireEvent.click(screen.getByRole('button', { name: '验收房屋筛选结果' }));
+  await screen.findByText('本次房屋筛选结果与原生测量不匹配。');
+  expect(screen.getByLabelText('工作流数值验收')).toHaveTextContent('差异字段');
   fireEvent.click(screen.getByRole('button', { name: '清除本地记录，准备新草稿' }));
   expect(screen.getByLabelText('工作流类名')).not.toHaveValue('HousingWorkflow');
-  expect(fixture.calls).toHaveLength(2);
+  expect(fixture.calls).toHaveLength(3);
+  expect(screen.queryByLabelText('工作流数值验收')).not.toBeInTheDocument();
 });
 it('restores a lost response only after an explicit retry and resets scope on revision changes', async () => {
   const fixture = workflowFixture();

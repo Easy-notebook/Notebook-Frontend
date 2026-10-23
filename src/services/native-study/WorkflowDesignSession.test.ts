@@ -223,3 +223,36 @@ it('retains a pending continuation when persisting its completed response fails'
   expect(fixture.calls[3].body).toEqual(fixture.calls[2].body);
   expect(current.getSnapshot().record?.phase).toBe('completed');
 });
+
+it('assesses retained results without persisting authority, and clears assessment on continuation/reload', async () => {
+  const fixture = workflowFixture();
+  const storage = memoryStorage();
+  let current = session(storage);
+  fixture.suspend();
+  await current.prepare(input);
+  await current.execute(hash);
+  const before = [...storage.map];
+  await current.assess();
+  expect(current.getSnapshot().assessment?.assessment.status).toBe('pending');
+  expect([...storage.map]).toEqual(before);
+  fixture.release();
+  await current.continue();
+  expect(current.getSnapshot().assessment).toBeUndefined();
+  const continuation = current.getSnapshot().record!.continuation!;
+  await current.assess();
+  expect(fixture.calls[fixture.calls.length - 1]?.body.continuation_invocation).toBe(
+    continuation.execution.context.invocation
+  );
+  expect(current.getSnapshot().assessment?.assessment.status).toBe('mismatched');
+  const calls = fixture.calls.length;
+  current.dispose();
+  current = session(storage);
+  expect(current.getSnapshot().assessment).toBeUndefined();
+  expect(fixture.calls).toHaveLength(calls);
+  fixture.fetch.mockRejectedValueOnce(new Error('lost assessment'));
+  await current.assess();
+  expect(current.getSnapshot().error).toContain('lost assessment');
+  await current.assess();
+  expect(current.getSnapshot().assessment?.assessment.status).toBe('mismatched');
+  expect(fixture.calls.filter((c) => c.route === 'execute')).toHaveLength(1);
+});

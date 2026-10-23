@@ -176,6 +176,39 @@ export function WorkflowDesigner({
               </pre>
             </details>
           )}
+          {['completed', 'suspended'].includes(record.phase) && (
+            <button
+              type="button"
+              className={button}
+              disabled={unavailable}
+              onClick={() => void session.current?.assess()}
+            >
+              验收房屋筛选结果
+            </button>
+          )}
+          {state?.assessment && (
+            <section aria-label="工作流数值验收" className="space-y-2 rounded border p-3">
+              <p role="status">
+                {state.assessment.assessment.status === 'matched'
+                  ? '本次房屋筛选结果与原生测量匹配。'
+                  : state.assessment.assessment.status === 'pending'
+                    ? '工作流仍挂起，尚无完成结果可验收。'
+                    : '本次房屋筛选结果与原生测量不匹配。'}
+              </p>
+              {state.assessment.assessment.mismatches.length > 0 && (
+                <p>差异字段：{state.assessment.assessment.mismatches.join('、')}</p>
+              )}
+              <p className="text-xs">
+                仅检查本次筛选的来源、顺序、阈值和数量；不代表任意目标或其他输入已验证。
+              </p>
+              <details>
+                <summary>查看期望值与实际值</summary>
+                <pre className="max-h-64 overflow-auto text-xs">
+                  {JSON.stringify(state.assessment.assessment, null, 2)}
+                </pre>
+              </details>
+            </section>
+          )}
           {['review', 'completed'].includes(record.phase) && (
             <button
               type="button"

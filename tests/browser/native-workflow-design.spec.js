@@ -26,7 +26,7 @@ let source = `agent HousingWorkflow is Agent
           for query in selection
             count = count + query.selected_rows.len()
           memory.store("completed", memory.require("completed") + 1)
-          return {selection: selection, selected_count: count, completed: memory.require("completed")}
+          return {reference_id: comparison.reference_id, query_data_id: comparison.query_data_id, selection: selection, selected_count: count, completed: memory.require("completed")}
 `;
 const selectionSource = source;
 test.skip(!binary || !target, 'Set native Rust server and loopback target');
@@ -110,6 +110,19 @@ test('reviews source and recovers a completed native workflow after response los
   const recovering = page.waitForResponse((r) => r.url().endsWith('/workflow/execute') && r.ok());
   await panel.getByRole('button', { name: '恢复原工作流操作', exact: true }).click();
   expect(await (await recovering).json()).toEqual(completed);
+  await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 1');
+  await page.route('**/workflow/assess', async (route) => {
+    await route.fetch();
+    await route.abort('failed');
+  });
+  await panel.getByRole('button', { name: '验收房屋筛选结果', exact: true }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  await expect(panel.getByLabel('工作流数值验收')).toHaveCount(0);
+  await page.unroute('**/workflow/assess');
+  await panel.getByRole('button', { name: '验收房屋筛选结果', exact: true }).click();
+  await expect(panel.getByLabel('工作流数值验收')).toContainText(
+    '本次房屋筛选结果与原生测量匹配。'
+  );
   await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 1');
   expect(captured).toHaveLength(1);
   expect(errors).toEqual([]);
@@ -211,6 +224,18 @@ test('continues a suspended native child and recovers the same continuation afte
   expect(await recovered.json()).toEqual(completed);
   await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 2');
   await expect(panel.getByRole('button', { name: '继续挂起工作流', exact: true })).toHaveCount(0);
+  const assessmentResponse = page.waitForResponse(
+    (r) => r.url().endsWith('/workflow/assess') && r.ok()
+  );
+  await panel.getByRole('button', { name: '验收房屋筛选结果', exact: true }).click();
+  const assessed = await assessmentResponse;
+  expect(assessed.request().postDataJSON().continuation_invocation).toBe(
+    intent.execution.context.invocation
+  );
+  await expect(panel.getByLabel('工作流数值验收')).toContainText(
+    '本次房屋筛选结果与原生测量不匹配。'
+  );
+  await expect(panel.getByLabel('工作流数值验收')).toContainText('差异字段');
   expect(captured).toHaveLength(1);
   expect(errors).toEqual([]);
 });

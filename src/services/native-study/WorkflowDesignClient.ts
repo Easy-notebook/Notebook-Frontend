@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isEqual } from 'lodash-es';
 import { NativeNotebookTransport } from '@Services/notebook/NativeNotebookTransport';
 
 const boundedText = (bytes: number) =>
@@ -35,6 +36,13 @@ export const workflowContinuationInput = z
   })
   .strict()
   .refine((input) => input.execution.context.invocation !== input.execution_invocation);
+export const workflowAssessmentInput = z
+  .object({
+    execution: workflowExecutionInput,
+    continuation_invocation: boundedText(128).nullable().optional(),
+  })
+  .strict();
+export type WorkflowAssessmentInput = z.infer<typeof workflowAssessmentInput>;
 export type WorkflowContinuationInput = z.infer<typeof workflowContinuationInput>;
 export type WorkflowContext = z.infer<typeof workflowContext>;
 export type WorkflowDraftInput = z.infer<typeof workflowDraftInput>;
@@ -74,7 +82,7 @@ export class WorkflowDesignClient {
     });
   }
   private async send(
-    route: 'workflow/draft' | 'workflow/execute' | 'workflow/resume',
+    route: 'workflow/draft' | 'workflow/execute' | 'workflow/resume' | 'workflow/assess',
     input: unknown,
     signal: AbortSignal
   ) {
@@ -132,6 +140,93 @@ export class WorkflowDesignClient {
       })
       .strict()
       .parse(response);
+  }
+  async assess(
+    raw: WorkflowAssessmentInput,
+    recorded: ReturnType<WorkflowDesignClient['parseExecution']>,
+    signal: AbortSignal
+  ) {
+    const input = workflowAssessmentInput.parse(raw);
+    const original = structuredClone(recorded);
+    return this.parseAssessment(await this.send('workflow/assess', input, signal), input, original);
+  }
+  parseAssessment(
+    response: unknown,
+    input: WorkflowAssessmentInput,
+    recorded: ReturnType<WorkflowDesignClient['parseExecution']>
+  ) {
+    const operation = input.continuation_invocation ?? input.execution.context.invocation;
+    if (
+      recorded.invocation !== operation ||
+      recorded.frontend_notebook_id !== this.notebookId ||
+      recorded.workspace !== input.execution.context.workspace ||
+      recorded.revision !== input.execution.context.expected_revision ||
+      recorded.result.fingerprint !== input.execution.expected_fingerprint
+    )
+      throw new Error('验收目标与执行记录不一致。');
+    const expected = z
+      .object({
+        reference_id: z.literal(recorded.reference_id),
+        query_data_id: z.literal(recorded.query_data_id),
+        selection: z.array(
+          z
+            .object({
+              query_row: z.number().int().nonnegative().safe(),
+              selected_rows: z.array(z.number().int().nonnegative().safe()),
+            })
+            .strict()
+        ),
+        selected_count: z.number().int().nonnegative().safe(),
+      })
+      .strict();
+    const parsed = this.identity(input.execution.context)
+      .extend({
+        reference_id: z.literal(recorded.reference_id),
+        query_data_id: z.literal(recorded.query_data_id),
+        assessment: z
+          .object({
+            contract: z.literal('housing-neighbor-selection-v1'),
+            status: z.enum(['pending', 'matched', 'mismatched']),
+            execution_id: z.literal(input.execution.context.invocation),
+            operation_id: z.literal(operation),
+            deployment: z.literal(recorded.result.deployment),
+            fingerprint: z.literal(input.execution.expected_fingerprint),
+            expected,
+            observed: z.unknown(),
+            mismatches: z.array(
+              z.enum(['reference_id', 'query_data_id', 'selection', 'selected_count'])
+            ),
+          })
+          .strict(),
+      })
+      .strict()
+      .parse(response);
+    const assessment = parsed.assessment;
+    const outcome = recorded.result.execution;
+    const observed = outcome.status === 'suspended' ? null : outcome.value;
+    const differences =
+      outcome.status === 'suspended'
+        ? []
+        : Object.keys(assessment.expected)
+            .filter(
+              (key) =>
+                !isEqual(
+                  (observed as Record<string, unknown> | null)?.[key],
+                  assessment.expected[key as keyof typeof assessment.expected]
+                )
+            )
+            .sort();
+    const status =
+      outcome.status === 'suspended' ? 'pending' : differences.length ? 'mismatched' : 'matched';
+    if (
+      !isEqual(observed, assessment.observed) ||
+      assessment.status !== status ||
+      !isEqual([...assessment.mismatches].sort(), differences) ||
+      assessment.expected.selected_count !==
+        assessment.expected.selection.reduce((n, row) => n + row.selected_rows.length, 0)
+    )
+      throw new Error('验收结果与原生执行记录不一致。');
+    return parsed;
   }
   private executionShape(input: WorkflowExecutionInput) {
     return this.identity(input.context)

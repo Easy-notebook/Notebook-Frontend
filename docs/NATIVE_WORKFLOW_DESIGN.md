@@ -138,3 +138,35 @@ existing diagnostics elsewhere and none in the modified workflow/transport files
 this is not a full-project type-check pass. Logs:
 `/tmp/aal-front-continuation-lint.log`, `/tmp/aal-front-continuation-final-lint.log`,
 `/tmp/aal-front-continuation-types.log`. No paid model or online EasyNet calls occurred.
+
+## Assess a retained numerical result
+
+**验收房屋筛选结果** reads the confirmed original execution or latest confirmed
+continuation through `/workflow/assess`. It uses the original frozen execution input
+and explicit continuation operation ID; no generated child or model is invoked.
+Unknown execution/continuation outcomes must first recover their existing operation.
+The UI displays pending, matched or mismatched, differing field names and the native
+expected/observed values. This only assesses the housing-neighbor-selection-v1
+contract for this measured instance, not arbitrary goals or unseen inputs.
+
+The client validates workspace/revision, original and continuation IDs, deployment,
+fingerprint, reference/query identities and equality with the retained execution
+value. It also checks status/difference consistency and the expected selection count.
+A response with invented provenance or a forged matched status is rejected. Expected
+neighbor selection itself comes from the Rust oracle, not another browser algorithm.
+
+Assessment is a transient read, not persisted acceptance authority. Reload requires
+an explicit new check. New continuation, clear, scope change and disposal invalidate
+its display; busy operations cannot overlap. Response loss can retry the read without
+new execution. No PCS adoption, FoKn publication or deployment follows a match.
+
+Validation: 27 scoped client/session/component tests pass. Two actual Chromium/Rust
+scenarios pass (24.0s): matched selection after provider shutdown/server restart and
+lost assessment response; mismatched incomplete output from a specific completed
+continuation after restart. Each uses one scripted drafting request. The original
+execution counters remain unchanged. Logs: /tmp/aal-front-assessment-tests-final.log
+and /tmp/aal-front-assessment-browser-final.log. Scoped ESLint passes.
+Scoped formatting and ESLint pass, including the final session-test correction.
+Full tsc --noEmit exits 2 with diagnostics elsewhere (for example ImageView and
+LaTeXExtension), with none in the changed workflow/transport files. This is not a
+full-project type-check pass. Log: /tmp/aal-front-assessment-types-final.log.

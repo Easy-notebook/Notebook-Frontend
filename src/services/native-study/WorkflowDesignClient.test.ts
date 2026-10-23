@@ -210,3 +210,64 @@ it('binds continuation response to both parent attempt and original execution id
   ).rejects.toThrow();
   expect(denied).not.toHaveBeenCalled();
 });
+
+it('binds numerical assessment to exact recorded data and rejects inconsistent status or provenance', async () => {
+  const client = new WorkflowDesignClient('houses');
+  const recorded = client.parseExecution(completed, executionInput);
+  const request = { execution: executionInput };
+  const value = {
+    ...identity,
+    assessment: {
+      contract: 'housing-neighbor-selection-v1',
+      status: 'mismatched',
+      execution_id: context.invocation,
+      operation_id: context.invocation,
+      deployment: 'deployment:one',
+      fingerprint: hash,
+      expected: {
+        reference_id: identity.reference_id,
+        query_data_id: identity.query_data_id,
+        selection: [{ query_row: 0, selected_rows: [1] }],
+        selected_count: 1,
+      },
+      observed: { selected_count: 1 },
+      mismatches: ['query_data_id', 'reference_id', 'selection'],
+    },
+  };
+  const fetch = response(value);
+  expect(await client.assess(request, recorded, signal())).toEqual(value);
+  expect(fetch.mock.calls[0][0]).toBe('/aal-api/workspaces/houses/workflow/assess');
+  for (const patch of [
+    { status: 'matched' },
+    { operation_id: 'wrong' },
+    { deployment: 'wrong' },
+    { fingerprint: 'b'.repeat(64) },
+    { observed: { selected_count: 2 } },
+    { mismatches: [] },
+    { mismatches: ['selection', 'selection', 'reference_id', 'query_data_id'] },
+  ]) {
+    expect(() =>
+      client.parseAssessment(
+        { ...value, assessment: { ...value.assessment, ...patch } },
+        request,
+        recorded
+      )
+    ).toThrow();
+  }
+  expect(() =>
+    client.parseAssessment({ ...value, reference_id: 'foreign' }, request, recorded)
+  ).toThrow();
+  for (const patch of [
+    { workspace: 'foreign' },
+    { revision: 999 },
+    { frontend_notebook_id: 'foreign' },
+    { result: { ...recorded.result, fingerprint: 'b'.repeat(64) } },
+  ]) {
+    expect(() => client.parseAssessment(value, request, { ...recorded, ...patch })).toThrow();
+  }
+  const continued = { ...recorded, invocation: 'continue-2' };
+  const continuation = { ...request, continuation_invocation: 'continue-2' };
+  const checked = { ...value, assessment: { ...value.assessment, operation_id: 'continue-2' } };
+  expect(client.parseAssessment(checked, continuation, continued)).toEqual(checked);
+  expect(() => client.parseAssessment(checked, request, continued)).toThrow();
+});

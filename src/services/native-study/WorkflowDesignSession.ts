@@ -39,6 +39,7 @@ export interface WorkflowSnapshot {
   busy: boolean;
   blocked: boolean;
   error: string | null;
+  assessment?: ReturnType<WorkflowDesignClient['parseAssessment']>;
 }
 type StoragePort = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 function freeze<T>(value: T): T {
@@ -158,7 +159,7 @@ export class WorkflowDesignSession {
     const checked = this.validate(JSON.parse(JSON.stringify(record)));
     if (!this.storage) throw new Error('浏览器存储不可用，未发送工作流请求。');
     this.storage.setItem(this.key, JSON.stringify(checked));
-    this.publish({ record: checked, error: null });
+    this.publish({ record: checked, error: null, assessment: undefined });
   }
   private available() {
     return !this.abort.signal.aborted && !this.snapshot.busy && !this.snapshot.blocked;
@@ -216,6 +217,37 @@ export class WorkflowDesignSession {
       this.publish({ error: String(error) });
     }
   }
+  /** Read-only assessment is transient: reload requires a fresh native check. */
+  async assess() {
+    const record = this.snapshot.record;
+    const result = record?.continuationResult ?? record?.result;
+    if (
+      !this.available() ||
+      !record?.execution ||
+      !result ||
+      !['completed', 'suspended'].includes(record.phase)
+    )
+      return;
+    this.publish({ busy: true, error: null, assessment: undefined });
+    try {
+      const assessment = await this.client.assess(
+        {
+          execution: record.execution,
+          continuation_invocation: record.continuationResult
+            ? record.continuation?.execution.context.invocation
+            : undefined,
+        },
+        result,
+        this.abort.signal
+      );
+      this.abort.signal.throwIfAborted();
+      this.publish({ assessment });
+    } catch (error) {
+      this.publish({ error: String(error) });
+    } finally {
+      this.publish({ busy: false });
+    }
+  }
   async resume() {
     const record = this.snapshot.record;
     if (
@@ -262,7 +294,7 @@ export class WorkflowDesignSession {
     try {
       if (!this.storage) throw new Error('浏览器存储不可用。');
       this.storage.removeItem(this.key);
-      this.publish({ record: null, error: null });
+      this.publish({ record: null, error: null, assessment: undefined });
     } catch (error) {
       this.publish({ error: String(error) });
     }
