@@ -162,3 +162,37 @@ Validation: 23 session/component tests, scoped ESLint and diff checks passed. Ch
 1 passed, 35.6 s test / 39.1 s total (`/tmp/aal-historical-ui-browser.log`). No paid
 model requests or online EasyNet validation. Full repository type checking is not
 claimed by these scoped checks.
+
+## Reviewed archive upload
+
+The imported-model panel now accepts a ZIP/tar.gz skill archive (maximum 2 MiB)
+through a separate review section. Enter the skill name, inspect the archive,
+review the complete candidate and scan, then supply reviewer/note and explicitly
+confirm the content before acceptance. Dangerous scan verdicts disable acceptance;
+the Rust service enforces the same gate independently. Acceptance alone does not
+execute skill instructions or grant model/tool access.
+
+After acceptance, choose “使用档案中的房屋模型” to populate the existing explicit
+model picker, or download the reviewed lock JSON for later/offline import. No model
+is selected automatically. The API owns archive decoding, native model validation
+and exact-content acceptance; the client checks response workspace/revision/name,
+archive SHA-256/byte length and content identity. Inputs and late responses are
+scoped to the notebook, workspace, revision and selected file. The returned lock
+is not automatically persisted; download it to retain it across page reloads.
+
+The Chromium integration test now packages an actual native binary housing model,
+deletes the source directory, uploads the ZIP through this UI, reviews it and
+downloads the lock. It compares native assignments against the standalone Rust
+CLI, rejects altered binary lock contents and continues through separately approved
+skill execution and lost-response/server-restart recovery. Inspection and acceptance
+make no model requests; the later explicit execution uses two scripted provider
+requests. These are local protocol tests, not online EasyNet or model-quality tests.
+
+Validation: 12 scoped component tests, scoped ESLint and the real Chromium workflow
+passed (38.1 seconds, 40.4 seconds total). Logs: `/tmp/aal-archive-ui-tests.log`,
+`/tmp/aal-archive-ui-lint.log`, `/tmp/aal-archive-ui-browser.log`.
+
+The full-project TypeScript check exits 2 with errors outside this change (for
+example missing UI imports and stream action types); it reports no diagnostics in
+the changed archive/import/transport files. Full-project type checking is therefore
+not claimed green. See `/tmp/aal-archive-ui-types.log`.

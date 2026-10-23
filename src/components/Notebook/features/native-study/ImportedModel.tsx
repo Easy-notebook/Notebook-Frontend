@@ -1,3 +1,4 @@
+import { SkillArchiveImport } from './SkillArchiveImport';
 import { SkillReviewExecution } from './SkillReviewExecution';
 import { SkillReviewSession, type ReviewSnapshot } from '@Services/native-study/SkillReviewSession';
 import { SkillReviewExecutionClient } from '@Services/native-study/SkillReviewExecutionClient';
@@ -129,6 +130,22 @@ function ImportedModelSession({
       <p className="text-sm text-muted-foreground">
         也可上传技能资源锁 JSON（最多 5 MiB），从冻结包中选择房屋模型；不会执行包内指令。
       </p>
+      <SkillArchiveImport
+        notebookId={notebookId}
+        workspace={workspace}
+        revision={revision}
+        busy={busy}
+        onImported={(acceptedLock, entries, archiveName) => {
+          selection.current += 1;
+          pending.current?.abort();
+          setModel('');
+          setError('');
+          setResourceIndex('');
+          setResources(entries);
+          setLock(acceptedLock);
+          setName(archiveName);
+        }}
+      />
       {name && <p>已加载：{name}</p>}
       {resources.length > 0 && (
         <label className="block">
