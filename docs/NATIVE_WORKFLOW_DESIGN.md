@@ -1,7 +1,7 @@
 # Native workflow design client
 
 `src/services/native-study/WorkflowDesignClient.ts` is the typed browser boundary for
-AAL's workspace-scoped `/workflow/draft` and `/workflow/execute` routes. It uses the
+AAL's workspace-scoped `/workflow/draft`, `/workflow/execute` and `/workflow/resume` routes. It uses the
 existing `NativeNotebookTransport` and Vite `/aal-api` proxy. No browser compiler,
 Python executor or numerical implementation is introduced.
 
@@ -20,7 +20,7 @@ requires a `value` field, including a valid null value; suspension requires nati
 workflow/state/invocation fields and is never promoted to completion. Generated output
 is arbitrary business data, not automatically accepted housing evidence or FoKn facts.
 
-Both operations validate inputs and copy them before awaiting the server. Caller edits
+All operations validate inputs and copy them before awaiting the server. Caller edits
 cannot change which identity or fingerprint the response must match. Requests over the
 server's 5 MiB body bound reject locally. The caller's abort signal reaches the shared
 transport, and even a late response after cancellation is rejected. HTTP rejection or
@@ -60,6 +60,7 @@ saved-input disclosure or clear an unexecuted review to prepare another draft.
 
 ```text
 drafting -> review -> executing -> completed | suspended
+suspended -> continuing -> completed | suspended
 ```
 
 Each request intent is saved in sessionStorage before dispatch. Browser response loss
@@ -80,8 +81,8 @@ or global operation history is claimed.
 Only unexecuted reviews and completed records can be cleared. Clearing local state
 does not delete native drafts/deployments, so the panel proposes a fresh unique class
 name for the next draft. Unknown outcomes and suspended workflows cannot be cleared
-through this control. Suspended output is labeled incomplete; child-workflow resume
-is not implemented here. Results are displayed as generated output and are never
+through this control. Suspended output is labeled incomplete; the explicit continuation
+control below reevaluates its native wait condition. Results are displayed as generated output and are never
 automatically published as Notebook/FoKn evidence. PCS automatic acceptance and
 EasyNet product deployment remain separate work.
 
@@ -105,3 +106,35 @@ AAL_NATIVE_SERVER=/path/to/aal-notebook-server \
 AAL_NOTEBOOK_TARGET=http://127.0.0.1:8798 \
 npx playwright test tests/browser/native-workflow-design.spec.js
 ```
+
+## Continue a suspended child without replacing its identity
+
+**继续挂起工作流** is available only for a confirmed suspended record. It freezes a
+new continuation attempt ID and the original execution ID, preserving the reviewed
+artifact and measurement input. This intent is saved before `/workflow/resume` is
+sent. A failed/unknown continuation remains `continuing`; **恢复原工作流操作** reuses
+that exact attempt after reload or response loss. The UI cannot create a replacement
+attempt while an outcome is unknown. A confirmed still-suspended response permits a
+new explicit attempt; completed work cannot be continued through this control.
+
+The record keeps the original execution response and the latest continuation response
+separately. The latter must match both invocation IDs, reviewed fingerprint, original
+deployment and measured reference/query IDs. Restored and live responses share these
+checks. Original result history is unchanged; the UI displays the latest continuation
+result when present. Previous continuation attempts remain in the native journal, not
+in an unbounded browser history. No wait predicate is bypassed or new child authority
+granted. Revision changes retain the existing isolation rules.
+
+Validation: 34 client/session/component tests passed. Two actual Chromium/Rust tests
+passed (25.9 seconds total): the original measured selection recovery, and suspension,
+an attempt that remains waiting, a distinct native fixture call that opens its shared
+gate, completion with a lost response, then server restart/browser reload and recovery
+of the identical attempt. Native preparation/completion counters remain two; recovery
+adds no writes. Each browser case uses one scripted model request. The gate is a
+lifecycle fixture, not evidence of real-model workflow quality or a user approval flow.
+Logs: `/tmp/aal-front-continuation-tests.log`, `/tmp/aal-front-continuation-browser.log`.
+Scoped ESLint and formatting checks passed. Full `tsc --noEmit` still exits 2 with
+existing diagnostics elsewhere and none in the modified workflow/transport files;
+this is not a full-project type-check pass. Logs:
+`/tmp/aal-front-continuation-lint.log`, `/tmp/aal-front-continuation-final-lint.log`,
+`/tmp/aal-front-continuation-types.log`. No paid model or online EasyNet calls occurred.

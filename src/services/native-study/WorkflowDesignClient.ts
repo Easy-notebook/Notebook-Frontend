@@ -28,6 +28,14 @@ export const workflowExecutionInput = z
     expected_fingerprint: fingerprint,
   })
   .strict();
+export const workflowContinuationInput = z
+  .object({
+    execution: workflowExecutionInput,
+    execution_invocation: boundedText(128),
+  })
+  .strict()
+  .refine((input) => input.execution.context.invocation !== input.execution_invocation);
+export type WorkflowContinuationInput = z.infer<typeof workflowContinuationInput>;
 export type WorkflowContext = z.infer<typeof workflowContext>;
 export type WorkflowDraftInput = z.infer<typeof workflowDraftInput>;
 export type WorkflowExecutionInput = z.infer<typeof workflowExecutionInput>;
@@ -66,7 +74,7 @@ export class WorkflowDesignClient {
     });
   }
   private async send(
-    route: 'workflow/draft' | 'workflow/execute',
+    route: 'workflow/draft' | 'workflow/execute' | 'workflow/resume',
     input: unknown,
     signal: AbortSignal
   ) {
@@ -111,7 +119,22 @@ export class WorkflowDesignClient {
     return this.parseExecution(await this.send('workflow/execute', input, signal), input);
   }
   parseExecution(response: unknown, input: WorkflowExecutionInput) {
-    const shape = this.identity(input.context)
+    return this.executionShape(input).parse(response);
+  }
+  async continue(raw: WorkflowContinuationInput, signal: AbortSignal) {
+    const input = workflowContinuationInput.parse(raw);
+    return this.parseContinuation(await this.send('workflow/resume', input, signal), input);
+  }
+  parseContinuation(response: unknown, input: WorkflowContinuationInput) {
+    return this.executionShape(input.execution)
+      .extend({
+        execution_invocation: z.literal(input.execution_invocation),
+      })
+      .strict()
+      .parse(response);
+  }
+  private executionShape(input: WorkflowExecutionInput) {
+    return this.identity(input.context)
       .extend({
         result: z
           .object({
@@ -122,6 +145,5 @@ export class WorkflowDesignClient {
           .strict(),
       })
       .strict();
-    return shape.parse(response);
   }
 }

@@ -15,6 +15,7 @@ type NativeNotebookRoute =
   | 'skill-review/execute'
   | 'workflow/draft'
   | 'workflow/execute'
+  | 'workflow/resume'
   | 'model-assignment'
   | 'model-comparison'
   | 'command'

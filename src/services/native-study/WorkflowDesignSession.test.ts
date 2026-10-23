@@ -131,3 +131,95 @@ it('freezes saved inputs and ignores responses after disposal', async () => {
   await pending;
   expect(session(storage).getSnapshot().record?.phase).toBe('drafting');
 });
+it('persists continuation intent and recovers the same attempt after response loss and reload', async () => {
+  const fixture = workflowFixture();
+  fixture.suspend();
+  const storage = memoryStorage();
+  let current = session(storage);
+  await current.prepare(input);
+  await current.execute(hash);
+  const original = current.getSnapshot().record!.execution!;
+  await current.continue();
+  expect(current.getSnapshot().record?.phase).toBe('suspended');
+  const firstAttempt = current.getSnapshot().record!.continuation!;
+  fixture.release();
+  fixture.loseContinuation();
+  await current.continue();
+  expect(current.getSnapshot().record?.phase).toBe('continuing');
+  const pending = current.getSnapshot().record!.continuation!;
+  expect(pending.execution_invocation).toBe(original.context.invocation);
+  expect(pending.execution.context.invocation).not.toBe(firstAttempt.execution.context.invocation);
+  expect(pending.execution.context.invocation).not.toBe(original.context.invocation);
+  current.clear();
+  current.dispose();
+  current = session(storage);
+  expect(current.getSnapshot().blocked).toBe(false);
+  expect(fixture.calls).toHaveLength(4);
+  await current.continue();
+  expect(fixture.calls).toHaveLength(4);
+  await current.resume();
+  expect(fixture.calls[4].body).toEqual(fixture.calls[3].body);
+  expect(current.getSnapshot().record?.phase).toBe('completed');
+  expect(current.getSnapshot().record?.result?.result.execution.status).toBe('suspended');
+  expect(current.getSnapshot().record?.continuationResult?.result.execution.status).toBe(
+    'completed'
+  );
+  current.dispose();
+  current = session(storage);
+  expect(current.getSnapshot().record?.phase).toBe('completed');
+  await current.continue();
+  expect(fixture.calls).toHaveLength(5);
+  current.clear();
+  expect(current.getSnapshot().record).toBeNull();
+});
+it('does not dispatch an unpersisted continuation and rejects tampered restored continuation identity', async () => {
+  const fixture = workflowFixture();
+  fixture.suspend();
+  const storage = memoryStorage();
+  const current = session(storage);
+  await current.prepare(input);
+  await current.execute(hash);
+  const save = storage.setItem;
+  storage.setItem = () => {
+    throw new Error('quota');
+  };
+  await current.continue();
+  expect(fixture.calls).toHaveLength(2);
+  expect(current.getSnapshot().record?.phase).toBe('suspended');
+  storage.setItem = save;
+  fixture.release();
+  await current.continue();
+  const [key, raw] = [...storage.map][0];
+  for (const mutation of ['child', 'input', 'deployment', 'reference', 'attempt', 'phase']) {
+    const record = JSON.parse(raw);
+    if (mutation === 'child') record.continuation.execution_invocation = 'foreign';
+    else if (mutation === 'input') record.continuation.execution.context.maximum = 999;
+    else if (mutation === 'deployment') record.continuationResult.result.deployment = 'foreign';
+    else if (mutation === 'reference') record.continuationResult.reference_id = 'foreign';
+    else if (mutation === 'attempt') record.continuationResult.invocation = 'foreign';
+    else record.phase = 'continuing';
+    storage.map.set(key, JSON.stringify(record));
+    expect(session(storage).getSnapshot().blocked).toBe(true);
+  }
+  expect(fixture.calls).toHaveLength(3);
+});
+it('retains a pending continuation when persisting its completed response fails', async () => {
+  const fixture = workflowFixture();
+  fixture.suspend();
+  const storage = memoryStorage();
+  const current = session(storage);
+  await current.prepare(input);
+  await current.execute(hash);
+  fixture.release();
+  const save = storage.setItem;
+  let writes = 0;
+  storage.setItem = (key, value) => {
+    if (++writes === 2) throw new Error('quota');
+    save(key, value);
+  };
+  await current.continue();
+  expect(current.getSnapshot().record?.phase).toBe('continuing');
+  await current.resume();
+  expect(fixture.calls[3].body).toEqual(fixture.calls[2].body);
+  expect(current.getSnapshot().record?.phase).toBe('completed');
+});

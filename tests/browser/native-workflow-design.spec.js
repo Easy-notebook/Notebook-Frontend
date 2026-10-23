@@ -6,7 +6,7 @@ const binary = process.env.AAL_NATIVE_SERVER;
 const target = process.env.AAL_NOTEBOOK_TARGET;
 let native, provider, endpoint;
 const captured = [];
-const source = `agent HousingWorkflow is Agent
+let source = `agent HousingWorkflow is Agent
   memory scope "housing_workflow" strict
     completed: Int = 0
   public
@@ -28,8 +28,11 @@ const source = `agent HousingWorkflow is Agent
           memory.store("completed", memory.require("completed") + 1)
           return {selection: selection, selected_count: count, completed: memory.require("completed")}
 `;
+const selectionSource = source;
 test.skip(!binary || !target, 'Set native Rust server and loopback target');
-test.beforeAll(async () => {
+test.beforeEach(async () => {
+  captured.length = 0;
+  source = selectionSource;
   provider = createServer(async (request, response) => {
     let body = '';
     for await (const chunk of request) body += chunk;
@@ -57,7 +60,7 @@ test.beforeAll(async () => {
   native = new NativeTestServer(binary, target);
   await native.start(endpoint);
 });
-test.afterAll(async () => {
+test.afterEach(async () => {
   await native?.dispose();
   if (provider?.listening) await new Promise((resolve) => provider.close(resolve));
 });
@@ -67,18 +70,7 @@ test('reviews source and recovers a completed native workflow after response los
   test.setTimeout(90000);
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
-  await page.getByRole('button', { name: '新建房屋研究', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '房屋特征研究', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
-  await page
-    .getByLabel('参考 CSV 内容')
-    .fill(
-      'area,rooms\n40,2\n41,2\n42,2\n43,2\n90,4\n91,4\n92,4\n93,4\n180,7\n181,7\n182,7\n183,7\n'
-    );
-  await page.getByRole('button', { name: '保存研究输入', exact: true }).click();
-  await page.getByLabel('新样本 CSV', { exact: true }).fill('area,rooms\n40,2\n180,7\n');
-  const panel = page.getByLabel('生成原生工作流', { exact: true });
+  const panel = await openWorkflow(page);
   await panel.getByRole('button', { name: '生成工作流草稿', exact: true }).click();
   await expect(page.getByLabel('工作流源码', { exact: true })).toHaveText(source);
   const execute = panel.getByRole('button', { name: '执行已审阅工作流', exact: true });
@@ -119,6 +111,106 @@ test('reviews source and recovers a completed native workflow after response los
   await panel.getByRole('button', { name: '恢复原工作流操作', exact: true }).click();
   expect(await (await recovering).json()).toEqual(completed);
   await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 1');
+  expect(captured).toHaveLength(1);
+  expect(errors).toEqual([]);
+});
+
+async function openWorkflow(page) {
+  await page.goto('/');
+  await page.getByRole('button', { name: '新建房屋研究', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '房屋特征研究', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await page
+    .getByLabel('参考 CSV 内容')
+    .fill(
+      'area,rooms\n40,2\n41,2\n42,2\n43,2\n90,4\n91,4\n92,4\n93,4\n180,7\n181,7\n182,7\n183,7\n'
+    );
+  await page.getByRole('button', { name: '保存研究输入', exact: true }).click();
+  await page.getByLabel('新样本 CSV', { exact: true }).fill('area,rooms\n40,2\n180,7\n');
+  const panel = page.getByLabel('生成原生工作流', { exact: true });
+  return panel;
+}
+
+test('continues a suspended native child and recovers the same continuation after restart', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  source = `agent HousingWorkflow is Agent
+  memory scope "gated_housing" strict
+    started: Int = 0
+    completed: Int = 0
+  public
+    ability analyze(comparison: Any, maximum: Float) -> Any effects(workflow, memory.read, memory.write)
+      workflow "gated" persist "gated"
+        state prepare
+          memory.store("started", memory.require("started") + 1)
+          -> review
+        state review
+          wait until memory.require("started") >= 2
+          memory.store("completed", memory.require("completed") + 1)
+          return {started: memory.require("started"), completed: memory.require("completed"), reference_id: comparison.reference_id}
+`;
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const panel = await openWorkflow(page);
+  await panel.getByRole('button', { name: '生成工作流草稿', exact: true }).click();
+  await expect(page.getByLabel('工作流源码', { exact: true })).toHaveText(source);
+  await panel.getByRole('checkbox').check();
+  const request = page.waitForRequest((r) => r.url().endsWith('/workflow/execute'));
+  await panel.getByRole('button', { name: '执行已审阅工作流', exact: true }).click();
+  const originalRequest = await request;
+  const original = originalRequest.postDataJSON();
+  await expect(panel.getByRole('button', { name: '继续挂起工作流', exact: true })).toBeVisible();
+  const waitingResponse = page.waitForResponse(
+    (r) => r.url().endsWith('/workflow/resume') && r.ok()
+  );
+  await panel.getByRole('button', { name: '继续挂起工作流', exact: true }).click();
+  const waiting = await (await waitingResponse).json();
+  expect(waiting.result.execution.status).toBe('suspended');
+  await expect(panel.getByRole('button', { name: '继续挂起工作流', exact: true })).toBeEnabled();
+  // A distinct native call opens this fixture's shared gate; it is not a UI bypass.
+  const release = structuredClone(original);
+  release.context.invocation = 'fixture-release';
+  const opened = await page.evaluate(
+    async ({ url, body }) => {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      return response.json();
+    },
+    { url: originalRequest.url(), body: release }
+  );
+  expect(opened.result.execution.value.completed).toBe(1);
+  let completed, intent;
+  await page.route('**/workflow/resume', async (route) => {
+    intent = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    completed = await response.json();
+    await route.abort('failed');
+  });
+  await panel.getByRole('button', { name: '继续挂起工作流', exact: true }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  expect(completed.result.execution.value).toMatchObject({ started: 2, completed: 2 });
+  expect(intent.execution_invocation).toBe(original.context.invocation);
+  expect(intent.execution.context.invocation).not.toBe(waiting.invocation);
+  await page.unroute('**/workflow/resume');
+  await native.stop();
+  await new Promise((resolve) => provider.close(resolve));
+  await native.start(endpoint);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '房屋特征研究', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  const recovering = page.waitForResponse((r) => r.url().endsWith('/workflow/resume') && r.ok());
+  await panel.getByRole('button', { name: '恢复原工作流操作', exact: true }).click();
+  const recovered = await recovering;
+  expect(recovered.request().postDataJSON()).toEqual(intent);
+  expect(await recovered.json()).toEqual(completed);
+  await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 2');
+  await expect(panel.getByRole('button', { name: '继续挂起工作流', exact: true })).toHaveCount(0);
   expect(captured).toHaveLength(1);
   expect(errors).toEqual([]);
 });

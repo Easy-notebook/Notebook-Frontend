@@ -41,6 +41,7 @@ export function WorkflowDesigner({
   }, [notebookId, context.workspace, context.expected_revision, scope]);
   const state = owned?.scope === scope ? owned.state : null;
   const record = state?.record;
+  const result = record?.continuationResult ?? record?.result;
   const fingerprint = record?.draft?.draft.checked.fingerprint;
   useEffect(() => setConfirmed(false), [scope, fingerprint]);
   const unavailable = disabled || !state || state.busy || state.blocked;
@@ -119,7 +120,7 @@ export function WorkflowDesigner({
             </>
           )}
           {state?.busy && <p role="status">正在处理工作流操作…</p>}
-          {['drafting', 'executing'].includes(record.phase) && !state?.busy && (
+          {['drafting', 'executing', 'continuing'].includes(record.phase) && !state?.busy && (
             <button
               type="button"
               className={button}
@@ -153,17 +154,25 @@ export function WorkflowDesigner({
             </>
           )}
           {record.phase === 'suspended' && (
-            <p role="status">
-              工作流已挂起，尚未完成。此界面暂不支持恢复子工作流，请保留本次记录。
-            </p>
+            <>
+              <p role="status">工作流已挂起。继续会重新检查等待条件，并使用原来的代码和输入。</p>
+              <button
+                type="button"
+                className={button}
+                disabled={unavailable}
+                onClick={() => void session.current?.continue()}
+              >
+                继续挂起工作流
+              </button>
+            </>
           )}
-          {record.result && (
+          {result && (
             <details open>
               <summary>
                 工作流执行结果（{record.phase === 'completed' ? '已完成' : '已挂起'}）
               </summary>
               <pre aria-label="工作流执行结果" className="max-h-96 overflow-auto text-xs">
-                {JSON.stringify(record.result.result.execution, null, 2)}
+                {JSON.stringify(result.result.execution, null, 2)}
               </pre>
             </details>
           )}

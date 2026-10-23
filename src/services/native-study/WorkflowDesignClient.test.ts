@@ -192,3 +192,21 @@ it('rejects oversized serialized bodies and already-cancelled requests without t
   await expect(client.draft(input, abort.signal)).rejects.toThrow();
   expect(fetch).not.toHaveBeenCalled();
 });
+it('binds continuation response to both parent attempt and original execution identity', async () => {
+  const continuation = { execution: executionInput, execution_invocation: 'original-execution' };
+  const continued = { ...completed, execution_invocation: 'original-execution' };
+  const fetch = response(continued);
+  const client = new WorkflowDesignClient('houses');
+  expect(await client.continue(continuation, signal())).toEqual(continued);
+  expect(fetch.mock.calls[0][0]).toBe('/aal-api/workspaces/houses/workflow/resume');
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual(continuation);
+  for (const field of ['execution_invocation', 'invocation', 'workspace']) {
+    response({ ...continued, [field]: 'foreign' });
+    await expect(client.continue(continuation, signal())).rejects.toThrow();
+  }
+  const denied = response(continued);
+  await expect(
+    client.continue({ ...continuation, execution_invocation: context.invocation }, signal())
+  ).rejects.toThrow();
+  expect(denied).not.toHaveBeenCalled();
+});

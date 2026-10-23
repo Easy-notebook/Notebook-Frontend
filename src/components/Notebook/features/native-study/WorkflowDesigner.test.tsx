@@ -62,3 +62,28 @@ it('restores a lost response only after an explicit retry and resets scope on re
   expect(screen.queryByRole('button', { name: '执行已审阅工作流' })).not.toBeInTheDocument();
   expect(fixture.calls).toHaveLength(2);
 });
+it('continues suspended work explicitly and recovers a lost continuation response', async () => {
+  const fixture = workflowFixture();
+  fixture.suspend();
+  const rendered = render(
+    <WorkflowDesigner notebookId="houses" context={context} disabled={false} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: '生成工作流草稿' }));
+  await screen.findByLabelText('工作流源码');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: '执行已审阅工作流' }));
+  await screen.findByRole('button', { name: '继续挂起工作流' });
+  expect(fixture.calls).toHaveLength(2);
+  fixture.release();
+  fixture.loseContinuation();
+  fireEvent.click(screen.getByRole('button', { name: '继续挂起工作流' }));
+  await screen.findByText('Error: lost response');
+  rendered.unmount();
+  render(<WorkflowDesigner notebookId="houses" context={context} disabled={false} />);
+  expect(fixture.calls).toHaveLength(3);
+  expect(screen.queryByRole('button', { name: '继续挂起工作流' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: '恢复原工作流操作' }));
+  await screen.findByRole('button', { name: '清除本地记录，准备新草稿' });
+  expect(screen.getByLabelText('工作流执行结果')).toHaveTextContent('selected_count');
+  expect(fixture.calls[3].body).toEqual(fixture.calls[2].body);
+});

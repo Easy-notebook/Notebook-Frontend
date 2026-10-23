@@ -30,12 +30,14 @@ export function workflowFixture() {
   let loseDraft = false;
   let loseExecution = false;
   let suspended = false;
+  let loseContinuation = false;
   const calls: { route: string; body: Record<string, unknown> }[] = [];
   const fetch = vi.fn(async (url: string, init: RequestInit) => {
     const route = url.split('/').pop()!;
     const body = JSON.parse(init.body as string);
     calls.push({ route, body });
-    const context = route === 'draft' ? body : body.context;
+    const execution = route === 'resume' ? body.execution : body;
+    const context = route === 'draft' ? body : execution.context;
     const identity = {
       frontend_notebook_id: 'houses',
       workspace: context.workspace,
@@ -44,9 +46,14 @@ export function workflowFixture() {
       reference_id: 'reference-id',
       query_data_id: 'query-id',
     };
-    if ((route === 'draft' && loseDraft) || (route === 'execute' && loseExecution)) {
+    if (
+      (route === 'draft' && loseDraft) ||
+      (route === 'execute' && loseExecution) ||
+      (route === 'resume' && loseContinuation)
+    ) {
       loseDraft = false;
       loseExecution = false;
+      loseContinuation = false;
       throw new Error('lost response');
     }
     return {
@@ -71,9 +78,10 @@ export function workflowFixture() {
             }
           : {
               ...identity,
+              ...(route === 'resume' ? { execution_invocation: body.execution_invocation } : {}),
               result: {
                 deployment: 'deployment:one',
-                fingerprint: body.expected_fingerprint,
+                fingerprint: execution.expected_fingerprint,
                 execution: suspended
                   ? { status: 'suspended', workflow: 'work', state: 'wait', invocation: 'child' }
                   : { status: 'completed', value: { selected_count: 1 } },
@@ -90,6 +98,12 @@ export function workflowFixture() {
     },
     loseExecution: () => {
       loseExecution = true;
+    },
+    loseContinuation: () => {
+      loseContinuation = true;
+    },
+    release: () => {
+      suspended = false;
     },
     suspend: () => {
       suspended = true;

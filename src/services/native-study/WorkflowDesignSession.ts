@@ -4,19 +4,24 @@ import {
   workflowContext,
   workflowDraftInput,
   workflowExecutionInput,
+  workflowContinuationInput,
+  type WorkflowContinuationInput,
   type WorkflowDraftInput,
   type WorkflowExecutionInput,
 } from './WorkflowDesignClient';
 type DraftResponse = ReturnType<WorkflowDesignClient['parseDraft']>;
+type ContinuationResponse = ReturnType<WorkflowDesignClient['parseContinuation']>;
 type ExecutionResponse = ReturnType<WorkflowDesignClient['parseExecution']>;
 const saved = z
   .object({
     version: z.literal(1),
     input: workflowDraftInput,
-    phase: z.enum(['drafting', 'review', 'executing', 'completed', 'suspended']),
+    phase: z.enum(['drafting', 'review', 'executing', 'continuing', 'completed', 'suspended']),
     draft: z.unknown().optional(),
     execution: workflowExecutionInput.optional(),
     result: z.unknown().optional(),
+    continuation: workflowContinuationInput.optional(),
+    continuationResult: z.unknown().optional(),
   })
   .strict();
 export interface WorkflowRecord {
@@ -26,6 +31,8 @@ export interface WorkflowRecord {
   draft?: DraftResponse;
   execution?: WorkflowExecutionInput;
   result?: ExecutionResponse;
+  continuation?: WorkflowContinuationInput;
+  continuationResult?: ContinuationResponse;
 }
 export interface WorkflowSnapshot {
   record: WorkflowRecord | null;
@@ -80,6 +87,11 @@ export class WorkflowDesignSession {
     if (r.input.workspace !== this.workspace || r.input.expected_revision !== this.revision)
       throw new Error('保存的工作流操作不属于当前工作区版本。');
     const record: WorkflowRecord = { version: 1, input: r.input, phase: r.phase };
+    if (
+      ['drafting', 'review', 'executing'].includes(r.phase) &&
+      (r.continuation !== undefined || r.continuationResult !== undefined)
+    )
+      throw new Error('工作流阶段不能包含继续操作。');
     if (r.phase === 'drafting') {
       if (r.draft !== undefined || r.execution !== undefined || r.result !== undefined)
         throw new Error('工作流草稿阶段数据不一致。');
@@ -104,7 +116,38 @@ export class WorkflowDesignSession {
           if (r.result !== undefined) throw new Error('未确认的执行不能包含结果。');
         } else {
           record.result = this.client.parseExecution(r.result, execution);
-          if (record.result.result.execution.status !== r.phase)
+          if (r.continuation !== undefined) {
+            const continuation = workflowContinuationInput.parse(r.continuation);
+            const original = workflowExecutionInput.parse(continuation.execution);
+            original.context.invocation = execution.context.invocation;
+            if (
+              record.result.result.execution.status !== 'suspended' ||
+              continuation.execution_invocation !== execution.context.invocation ||
+              continuation.execution.context.invocation === r.input.invocation ||
+              JSON.stringify(original) !== JSON.stringify(execution)
+            )
+              throw new Error('继续操作与原始挂起执行不一致。');
+            record.continuation = continuation;
+            if (r.phase === 'continuing') {
+              if (r.continuationResult !== undefined)
+                throw new Error('未确认的继续操作不能包含结果。');
+            } else {
+              record.continuationResult = this.client.parseContinuation(
+                r.continuationResult,
+                continuation
+              );
+              if (
+                record.continuationResult.result.deployment !== record.result.result.deployment ||
+                record.continuationResult.reference_id !== record.result.reference_id ||
+                record.continuationResult.query_data_id !== record.result.query_data_id ||
+                record.continuationResult.result.execution.status !== r.phase
+              )
+                throw new Error('继续操作的执行身份或状态不一致。');
+            }
+          } else if (
+            r.continuationResult !== undefined ||
+            record.result.result.execution.status !== r.phase
+          )
             throw new Error('工作流结果状态不一致。');
         }
       }
@@ -156,15 +199,48 @@ export class WorkflowDesignSession {
       this.publish({ error: String(error) });
     }
   }
+  async continue() {
+    const record = this.snapshot.record;
+    if (!this.available() || record?.phase !== 'suspended' || !record.execution) return;
+    try {
+      const execution = workflowExecutionInput.parse(record.execution);
+      execution.context.invocation = crypto.randomUUID();
+      this.save({
+        ...record,
+        phase: 'continuing',
+        continuationResult: undefined,
+        continuation: { execution, execution_invocation: record.execution.context.invocation },
+      });
+      await this.resume();
+    } catch (error) {
+      this.publish({ error: String(error) });
+    }
+  }
   async resume() {
     const record = this.snapshot.record;
-    if (!this.available() || !record || !['drafting', 'executing'].includes(record.phase)) return;
+    if (
+      !this.available() ||
+      !record ||
+      !['drafting', 'executing', 'continuing'].includes(record.phase)
+    )
+      return;
     this.publish({ busy: true, error: null });
     try {
       if (record.phase === 'drafting') {
         const draft = await this.client.draft(record.input, this.abort.signal);
         this.abort.signal.throwIfAborted();
         this.save({ ...record, draft, phase: 'review' });
+      } else if (record.phase === 'continuing') {
+        const continuationResult = await this.client.continue(
+          record.continuation!,
+          this.abort.signal
+        );
+        this.abort.signal.throwIfAborted();
+        this.save({
+          ...record,
+          continuationResult,
+          phase: continuationResult.result.execution.status,
+        });
       } else {
         const result = await this.client.execute(record.execution!, this.abort.signal);
         this.abort.signal.throwIfAborted();
