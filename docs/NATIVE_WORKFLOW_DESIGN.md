@@ -229,3 +229,33 @@ Full TypeScript checking still exits 2 on diagnostics outside these changed file
 none mention WorkflowDesign, workflowFixture or NativeNotebookTransport.
 Logs: `/tmp/aal-front-current-tests.log`, `/tmp/aal-front-current-browser.log`,
 `/tmp/aal-front-current-lint.log`, `/tmp/aal-front-current-types.log`.
+
+## Evidence operations with the model disabled
+
+The housing panel now retains `WorkflowDesigner` when its native workspace is loaded
+but `model_enabled` is false. A separate `modelEnabled` capability gates drafting,
+execution, continuation and recovery of those operations. Assessment, publication,
+publication recovery and current-evidence refresh use the ordinary workspace/session
+availability gate, so closed workspaces, in-flight operations and invalid local
+records still disable them. The UI explains which operations remain available.
+No draft or child execution is automatically resumed on reconnect.
+
+This requires the Rust retained-history implementation (`f7b712d` or later). It
+validates the original execution binding without constructing a model client.
+Historical stores without the new identity record must first be opened with their
+original configured controller. Publication still records one checked instance in
+the separate WorkflowEvidence owner; it does not merge the Notebook study forest.
+
+Validation: 31 scoped client/session/component tests and scoped ESLint pass. Both
+actual Chromium/Rust scenarios pass in 37.3 seconds. The first disables the model
+before initial assessment/publication, loses a publication response, then recovers
+the same publication after another model-free restart. It later refreshes stale
+state without a model. Original execution counters and immutable publication bodies
+remain checked. The fixture server strips model endpoint/routes/key environment
+variables. No paid model request, online EasyNet verification or push occurred.
+Logs: `/tmp/aal-front-offline-workflow-tests.log`,
+`/tmp/aal-front-offline-workflow-browser.log`,
+`/tmp/aal-front-offline-workflow-lint.log`.
+Full `tsc --noEmit` exits 2 with diagnostics in other project files; none identify
+WorkflowDesign, HousingStudyPanel or the changed browser fixtures. This is not a
+full-project type-check pass. Log: `/tmp/aal-front-offline-workflow-types.log`.

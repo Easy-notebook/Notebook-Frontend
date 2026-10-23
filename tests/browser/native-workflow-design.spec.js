@@ -111,6 +111,11 @@ test('reviews source and recovers a completed native workflow after response los
   await panel.getByRole('button', { name: '恢复原工作流操作', exact: true }).click();
   expect(await (await recovering).json()).toEqual(completed);
   await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 1');
+  await native.stop();
+  await native.start();
+  await page.reload();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await expect(panel).toContainText('当前服务未启用模型');
   await page.route('**/workflow/assess', async (route) => {
     await route.fetch();
     await route.abort('failed');
@@ -139,7 +144,7 @@ test('reviews source and recovers a completed native workflow after response los
   ).toBeDisabled();
   await page.unroute('**/workflow/publish');
   await native.stop();
-  await native.start(endpoint);
+  await native.start();
   await page.reload();
   await page.getByRole('button', { name: '房屋研究', exact: true }).click();
   const publicationRecovery = page.waitForResponse(
@@ -154,6 +159,8 @@ test('reviews source and recovers a completed native workflow after response los
   );
   await panel.getByRole('button', { name: '刷新当前证据状态', exact: true }).click();
   await expect(panel.getByLabel('当前工作流证据状态')).toContainText('当前查询：支持本次实例。');
+  await native.stop();
+  await native.start(endpoint);
   // A distinct native execution/publication changes the shared assessment dependency.
   const secondInput = structuredClone(publicationIntent.assessment.execution);
   secondInput.context.invocation = 'browser-second-execution';
@@ -177,7 +184,7 @@ test('reviews source and recovers a completed native workflow after response los
   await expect(panel.getByLabel('当前工作流证据状态')).toContainText('尚未读取当前状态');
   await page.unroute('**/workflow/evidence');
   await native.stop();
-  await native.start(endpoint);
+  await native.start();
   await page.reload();
   await page.getByRole('button', { name: '房屋研究', exact: true }).click();
   await expect(panel.getByLabel('当前工作流证据状态')).toContainText('尚未读取当前状态');

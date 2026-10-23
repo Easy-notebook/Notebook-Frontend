@@ -23,6 +23,7 @@ export class NativeTestServer {
     for (const name of [
       'AAL_MODEL_ROUTES',
       'AAL_MODEL_API_KEY_ENV',
+      'AAL_MODEL_API_KEY',
       'AAL_MODEL_ENDPOINT',
       'AAL_MODEL',
     ])

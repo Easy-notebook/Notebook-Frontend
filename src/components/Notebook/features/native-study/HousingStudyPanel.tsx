@@ -518,8 +518,9 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
           </fieldset>
         </form>
       )}
-      {view?.frontend_notebook_id === notebookId && view.model_enabled && (
+      {view?.frontend_notebook_id === notebookId && (
         <WorkflowDesigner
+          modelEnabled={view.model_enabled}
           notebookId={notebookId}
           context={{
             workspace: view.document.id,

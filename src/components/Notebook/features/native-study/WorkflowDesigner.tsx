@@ -12,10 +12,12 @@ export function WorkflowDesigner({
   notebookId,
   context,
   disabled,
+  modelEnabled,
 }: {
   notebookId: string;
   context: Omit<WorkflowContext, 'invocation'>;
   disabled: boolean;
+  modelEnabled: boolean;
 }) {
   const scope = JSON.stringify([notebookId, context.workspace, context.expected_revision]);
   const session = useRef<WorkflowDesignSession | null>(null);
@@ -45,6 +47,7 @@ export function WorkflowDesigner({
   const fingerprint = record?.draft?.draft.checked.fingerprint;
   useEffect(() => setConfirmed(false), [scope, fingerprint]);
   const unavailable = disabled || !state || state.busy || state.blocked;
+  const authoringUnavailable = unavailable || !modelEnabled;
   const button = 'rounded border px-3 py-2 text-sm disabled:opacity-50';
   return (
     <section aria-label="生成原生工作流" className="space-y-3 rounded border p-3">
@@ -52,6 +55,11 @@ export function WorkflowDesigner({
       <p className="text-sm">
         生成草稿会调用模型。代码由 Rust 编译，审阅后另行执行；输出不会自动写入研究结论。
       </p>
+      {!modelEnabled && (
+        <p className="text-sm">
+          当前服务未启用模型。可验收已记录的执行结果、保存实例证据并刷新状态；生成和执行需启用模型。
+        </p>
+      )}
       {state?.error && <p role="alert">{state.error}</p>}
       {!record && (
         <>
@@ -61,7 +69,7 @@ export function WorkflowDesigner({
               aria-label="工作流目标"
               className="block w-full rounded border p-2"
               value={goal}
-              disabled={unavailable}
+              disabled={authoringUnavailable}
               onChange={(e) => setGoal(e.target.value)}
             />
           </label>
@@ -71,7 +79,7 @@ export function WorkflowDesigner({
               aria-label="工作流类名"
               className="block w-full rounded border p-2"
               value={name}
-              disabled={unavailable}
+              disabled={authoringUnavailable}
               onChange={(e) => setName(e.target.value)}
             />
           </label>
@@ -79,7 +87,7 @@ export function WorkflowDesigner({
             type="button"
             className={button}
             disabled={
-              unavailable ||
+              authoringUnavailable ||
               !goal.trim() ||
               !name.trim() ||
               !context.reference_csv.trim() ||
@@ -124,7 +132,7 @@ export function WorkflowDesigner({
             <button
               type="button"
               className={button}
-              disabled={unavailable}
+              disabled={authoringUnavailable}
               onClick={() => void session.current?.resume()}
             >
               恢复原工作流操作
@@ -136,7 +144,7 @@ export function WorkflowDesigner({
                 <input
                   type="checkbox"
                   checked={confirmed}
-                  disabled={unavailable}
+                  disabled={authoringUnavailable}
                   onChange={(e) => setConfirmed(e.target.checked)}
                 />
                 我已查看源码和冻结输入，确认执行此版本
@@ -144,7 +152,7 @@ export function WorkflowDesigner({
               <button
                 type="button"
                 className={button}
-                disabled={unavailable || !confirmed || !fingerprint}
+                disabled={authoringUnavailable || !confirmed || !fingerprint}
                 onClick={() => {
                   if (confirmed && fingerprint) void session.current?.execute(fingerprint);
                 }}
@@ -159,7 +167,7 @@ export function WorkflowDesigner({
               <button
                 type="button"
                 className={button}
-                disabled={unavailable}
+                disabled={authoringUnavailable}
                 onClick={() => void session.current?.continue()}
               >
                 继续挂起工作流
