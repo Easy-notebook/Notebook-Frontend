@@ -80,6 +80,9 @@ export class WorkflowDesignClient {
   async draft(raw: WorkflowDraftInput, signal: AbortSignal) {
     // Parsing copies inputs before awaiting; caller edits cannot rebind a response.
     const input = workflowDraftInput.parse(raw);
+    return this.parseDraft(await this.send('workflow/draft', input, signal), input);
+  }
+  parseDraft(response: unknown, input: WorkflowDraftInput) {
     const shape = this.identity(input)
       .extend({
         execution_authorized: z.literal(false),
@@ -101,10 +104,13 @@ export class WorkflowDesignClient {
           .strict(),
       })
       .strict();
-    return shape.parse(await this.send('workflow/draft', input, signal));
+    return shape.parse(response);
   }
   async execute(raw: WorkflowExecutionInput, signal: AbortSignal) {
     const input = workflowExecutionInput.parse(raw);
+    return this.parseExecution(await this.send('workflow/execute', input, signal), input);
+  }
+  parseExecution(response: unknown, input: WorkflowExecutionInput) {
     const shape = this.identity(input.context)
       .extend({
         result: z
@@ -116,6 +122,6 @@ export class WorkflowDesignClient {
           .strict(),
       })
       .strict();
-    return shape.parse(await this.send('workflow/execute', input, signal));
+    return shape.parse(response);
   }
 }

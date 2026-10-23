@@ -1,4 +1,5 @@
 import { ImportedModel } from './ImportedModel';
+import { WorkflowDesigner } from './WorkflowDesigner';
 import { useEffect, useRef, useState } from 'react';
 import { NativeStudyClient } from '@Services/native-study/NativeStudyClient';
 import { NativeStudySession, type StudySnapshot } from '@Services/native-study/NativeStudySession';
@@ -516,6 +517,22 @@ export function HousingStudyPanel({ notebookId }: { notebookId: string }) {
             </p>
           </fieldset>
         </form>
+      )}
+      {view?.frontend_notebook_id === notebookId && view.model_enabled && (
+        <WorkflowDesigner
+          notebookId={notebookId}
+          context={{
+            workspace: view.document.id,
+            expected_revision: view.document.revision,
+            reference_csv: csv || savedInput?.configuration.csv || '',
+            query_csv: query,
+            columns: selectedColumns,
+            clusters,
+            neighbors,
+            maximum,
+          }}
+          disabled={busy || closed || publishing || datasetBusy}
+        />
       )}
       {view?.frontend_notebook_id === notebookId && (
         <ImportedModel

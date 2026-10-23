@@ -26,11 +26,9 @@ server's 5 MiB body bound reject locally. The caller's abort signal reaches the 
 transport, and even a late response after cancellation is rejected. HTTP rejection or
 schema mismatch is surfaced without an automatic retry or a fresh operation ID.
 
-This commit supplies the client boundary only. A source-review/execution panel,
-persistent operation/session ownership, and browser recovery controls still need to
-be connected. A caller must retain the exact inputs and operation ID for a retry;
-generating a fresh ID after an unknown response would represent new work. No UI or
-end-to-end browser workflow is claimed by the unit tests.
+The model-enabled housing panel now connects this client through
+`WorkflowDesignSession` and `WorkflowDesigner`. Source review and explicit execution
+are separate controls. The session lifecycle and browser evidence are described below.
 
 Validation covers request serialization/scope, source inspection, exact fingerprints,
 completed and suspended outcomes, missing result values, invalid input, identity
@@ -46,3 +44,64 @@ passed. Scoped ESLint, Prettier and diff checks passed. Full `tsc --noEmit` stil
 check success is claimed. Logs: `/tmp/aal-workflow-client-tests.log`,
 `/tmp/aal-workflow-client-lint.log`, `/tmp/aal-workflow-client-types.log`.
 No real provider or online EasyNet requests were made.
+
+
+## Review and recover in the housing panel
+
+With a model-enabled native server, **生成并审阅房屋工作流** uses the reference/query
+CSV, feature columns, clustering/neighbor parameters and maximum from the housing
+form. **生成工作流草稿** freezes those values with a new operation ID. The response
+shows the source, public contracts and artifact fingerprint. The user must check
+**我已查看源码和冻结输入，确认执行此版本** before **执行已审阅工作流** becomes enabled.
+Form edits after generation do not change the frozen execution input; inspect the
+saved-input disclosure or clear an unexecuted review to prepare another draft.
+
+`WorkflowDesignSession` owns this explicit lifecycle:
+
+```text
+drafting -> review -> executing -> completed | suspended
+```
+
+Each request intent is saved in sessionStorage before dispatch. Browser response loss
+or failure to save a received result retains the pending stage and exact operation
+ID. Reload performs no network request: **恢复原工作流操作** explicitly reuses that
+stage/input. Execution uses a distinct ID and binds the reviewed draft/fingerprint.
+Storage failure before saving intent prevents dispatch. Restored records are validated
+with the same response parsers as live calls; inconsistent scope, phase, input or
+fingerprint blocks the session. Disposing a panel aborts its request and ignores late
+responses. Nested saved input is frozen against accidental mutation.
+
+Records are keyed by frontend notebook, native workspace and revision. Switching
+revision shows that revision's separate record; older records are retained in the
+tab but are not automatically resumed. Backend historical cross-revision access is
+still unsupported. Closing the tab loses this browser retention. No cross-tab recovery
+or global operation history is claimed.
+
+Only unexecuted reviews and completed records can be cleared. Clearing local state
+does not delete native drafts/deployments, so the panel proposes a fresh unique class
+name for the next draft. Unknown outcomes and suspended workflows cannot be cleared
+through this control. Suspended output is labeled incomplete; child-workflow resume
+is not implemented here. Results are displayed as generated output and are never
+automatically published as Notebook/FoKn evidence. PCS automatic acceptance and
+EasyNet product deployment remain separate work.
+
+Validation: 29 client/session/component tests passed, including the existing housing
+panel regression suite. Chromium exercised the actual Rust server: measured neighbor
+selection and counts match the captured native comparison, source review gates the
+execution control, a deliberately lost success response is recovered after server
+restart with the provider shut down, and the exact result returns with one total
+fixture model request. The browser test passed in 12.9 seconds (15.3 seconds total).
+Scoped ESLint, formatting and diff checks passed. Full TypeScript checking still fails
+outside the modified workflow/panel files, with no diagnostics in those files.
+Logs: `/tmp/aal-workflow-session-tests.log`, `/tmp/aal-workflow-session-lint.log`,
+`/tmp/aal-workflow-session-types.log`, `/tmp/aal-workflow-browser.log`.
+No paid model or online EasyNet calls were made.
+
+Run the browser regression with a built model/web Rust server and an unused loopback
+port (the existing Playwright configuration starts Vite itself):
+
+```sh
+AAL_NATIVE_SERVER=/path/to/aal-notebook-server \
+AAL_NOTEBOOK_TARGET=http://127.0.0.1:8798 \
+npx playwright test tests/browser/native-workflow-design.spec.js
+```
