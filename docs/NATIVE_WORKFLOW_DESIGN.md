@@ -259,3 +259,40 @@ Logs: `/tmp/aal-front-offline-workflow-tests.log`,
 Full `tsc --noEmit` exits 2 with diagnostics in other project files; none identify
 WorkflowDesign, HousingStudyPanel or the changed browser fixtures. This is not a
 full-project type-check pass. Log: `/tmp/aal-front-offline-workflow-types.log`.
+
+## Discuss the latest input-matched evidence
+
+After confirmed publication, the panel exposes an explicit model-backed discussion
+of the latest WorkflowEvidence snapshot matching the frozen measured inputs. This
+can refer to a newer publication than the historical receipt shown above it. The
+answer displays its actual claim ID and supported/refuted status. It is explicitly
+an interpretation, never a new FoKn fact. The saved answer only reports whether the
+snapshot was still current when the response completed, not at page load or now.
+
+The client validates workspace/revision/request identity, reference/query IDs,
+threshold, applicability, assessment/status consistency, and equality of snapshots
+against the response's freshness flag. The session persists pending input before
+sending `/workflow/discuss`, retaining the exact invocation/message on response loss.
+Reload performs no model call. Explicit recovery uses the original request; changed
+server evidence may reject that old invocation rather than silently reinterpret it.
+An explicit local discard permits a new question and invocation; discard does not
+cancel a server operation. Storage failure prevents dispatch. Model-disabled servers
+allow viewing saved replies and clearing local records, but not generating/recovering
+a discussion. This requires AAL `d61e844` or later.
+
+This is the workflow evidence discussion path, not automatic injection into every
+Notebook conversation or a cross-owner FoKn inference dependency.
+
+Validation: 35 scoped client/session/component tests pass, including persistence
+failure, exact request recovery, restored-input rejection and contradictory response
+validation. Scoped ESLint and Prettier checks pass. Both existing Chromium/Rust
+scenarios passed in the first browser run. The new discussion scenario passed after
+correcting an ambiguous test locator (16.6 seconds): it loses the response, shuts down
+the fixture provider, restarts Rust, explicitly recovers the same request/result, and
+views the saved answer with models disabled. Exactly two fixture calls occur (draft
+and discussion). No paid model or online EasyNet calls.
+Logs: `/tmp/aal-front-discussion-tests.log`, `/tmp/aal-front-discussion-browser.log`,
+`/tmp/aal-front-discussion-browser-recovery.log`, `/tmp/aal-front-discussion-lint.log`.
+Full `tsc --noEmit` exits 2 with diagnostics outside these changed files; none name
+WorkflowDesign, workflowFixture or NativeNotebookTransport. This is not a full-project
+type-check pass. Log: `/tmp/aal-front-discussion-types.log`.

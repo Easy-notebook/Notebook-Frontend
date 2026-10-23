@@ -140,3 +140,33 @@ it('keeps evidence operations available without models while blocking authoring 
   expect(screen.getByRole('button', { name: '刷新当前证据状态' })).toBeDisabled();
   expect(fixture.calls.map((c) => c.route)).toEqual(['draft', 'execute', 'assess', 'publish']);
 });
+
+it('shows historical evidence discussion and gates recovery on model availability', async () => {
+  const fixture = workflowFixture();
+  const mounted = render(
+    <WorkflowDesigner modelEnabled={true} notebookId="houses" context={context} disabled={false} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: '生成工作流草稿' }));
+  await screen.findByLabelText('工作流源码');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: '执行已审阅工作流' }));
+  await screen.findByLabelText('工作流执行结果');
+  fireEvent.click(screen.getByRole('button', { name: '验收房屋筛选结果' }));
+  await screen.findByText('本次房屋筛选结果与原生测量不匹配。');
+  fireEvent.click(screen.getByRole('button', { name: '保存本次验收为 FoKn 实例证据' }));
+  await screen.findByLabelText('工作流证据讨论');
+  fixture.loseDiscussion();
+  fireEvent.click(screen.getByRole('button', { name: '讨论最新工作流证据' }));
+  await screen.findByText('Error: lost response');
+  mounted.rerender(
+    <WorkflowDesigner modelEnabled={false} notebookId="houses" context={context} disabled={false} />
+  );
+  expect(screen.getByRole('button', { name: '恢复原证据讨论' })).toBeDisabled();
+  mounted.rerender(
+    <WorkflowDesigner modelEnabled={true} notebookId="houses" context={context} disabled={false} />
+  );
+  fireEvent.click(screen.getByRole('button', { name: '恢复原证据讨论' }));
+  await screen.findByLabelText('工作流证据讨论回答');
+  expect(screen.getByText('回答完成时证据未变化；这不是当前状态保证。')).toBeInTheDocument();
+  expect(fixture.calls.filter((c) => c.route === 'discuss')).toHaveLength(2);
+});

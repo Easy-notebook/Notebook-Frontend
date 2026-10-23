@@ -45,7 +45,7 @@ test.beforeEach(async () => {
         schema.type === 'array' ? [] : 'Local fixture',
       ])
     );
-    slots.source = source;
+    if ('source' in properties) slots.source = source;
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(
       JSON.stringify({
@@ -310,4 +310,63 @@ test('continues a suspended native child and recovers the same continuation afte
   );
   expect(captured).toHaveLength(1);
   expect(errors).toEqual([]);
+});
+
+test('recovers evidence discussion without repeating the model call after response loss', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const panel = await openWorkflow(page);
+  await panel.getByRole('button', { name: '生成工作流草稿', exact: true }).click();
+  await expect(page.getByLabel('工作流源码', { exact: true })).toHaveText(source);
+  await panel.getByRole('checkbox').check();
+  await panel.getByRole('button', { name: '执行已审阅工作流', exact: true }).click();
+  await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 1');
+  await panel.getByRole('button', { name: '验收房屋筛选结果', exact: true }).click();
+  await expect(panel.getByLabel('工作流数值验收')).toContainText(
+    '本次房屋筛选结果与原生测量匹配。'
+  );
+  await panel.getByRole('button', { name: '保存本次验收为 FoKn 实例证据', exact: true }).click();
+  await expect(panel.getByLabel('工作流证据讨论', { exact: true })).toBeVisible();
+  let result, intent;
+  await page.route('**/workflow/discuss', async (route) => {
+    intent = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    result = await response.json();
+    await route.abort('failed');
+  });
+  await panel.getByRole('button', { name: '讨论最新工作流证据', exact: true }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  expect(captured).toHaveLength(2);
+  const subjects = JSON.parse(captured[1].messages[1].content).subjects;
+  expect(subjects[1].workflow_evidence).toEqual(result.discussion.evidence_snapshot);
+  await page.unroute('**/workflow/discuss');
+  await native.stop();
+  await new Promise((resolve) => provider.close(resolve));
+  await native.start(endpoint);
+  await page.reload();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '恢复原证据讨论', exact: true })).toBeVisible();
+  expect(captured).toHaveLength(2);
+  const recovery = page.waitForResponse((r) => r.url().endsWith('/workflow/discuss') && r.ok());
+  await panel.getByRole('button', { name: '恢复原证据讨论', exact: true }).click();
+  const recovered = await recovery;
+  expect(recovered.request().postDataJSON()).toEqual(intent);
+  expect(await recovered.json()).toEqual(result);
+  await expect(panel.getByLabel('工作流证据讨论回答')).toHaveText('Local fixture');
+  await expect(panel.getByLabel('工作流证据讨论', { exact: true })).toContainText(
+    '这不是当前状态保证'
+  );
+  // Loading saved interpretation with models disabled never calls a provider or labels it current.
+  await native.stop();
+  await native.start();
+  await page.reload();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  await expect(panel.getByLabel('工作流证据讨论回答')).toHaveText('Local fixture');
+  await panel.getByRole('button', { name: '清除本地讨论记录', exact: true }).click();
+  await expect(
+    panel.getByRole('button', { name: '讨论最新工作流证据', exact: true })
+  ).toBeDisabled();
+  expect(captured).toHaveLength(2);
 });

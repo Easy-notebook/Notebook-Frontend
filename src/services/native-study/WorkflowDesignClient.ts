@@ -52,6 +52,57 @@ export type WorkflowContext = z.infer<typeof workflowContext>;
 export type WorkflowDraftInput = z.infer<typeof workflowDraftInput>;
 export type WorkflowExecutionInput = z.infer<typeof workflowExecutionInput>;
 
+export const workflowDiscussionInput = z
+  .object({ context: workflowContext, message: boundedText(8192) })
+  .strict();
+export type WorkflowDiscussionInput = z.infer<typeof workflowDiscussionInput>;
+const evidenceContext = z
+  .object({
+    owner: z.literal('WorkflowEvidence'),
+    scope: z.literal('measured_instance_only'),
+    claim_id: boundedText(4096),
+    status: z.enum(['supported', 'refuted', 'stale']),
+    source: z
+      .object({
+        agent: z.literal('WorkflowEvidence'),
+        invocation: boundedText(128),
+        call_id: boundedText(4096),
+      })
+      .strict(),
+    applicable: z.boolean(),
+    input_mismatches: z.array(
+      z.enum([
+        'reference_id',
+        'query_data_id',
+        'selection',
+        'selected_count',
+        'maximum_distance_squared',
+      ])
+    ),
+    contract: z.literal('housing-neighbor-selection-v1'),
+    execution_id: boundedText(128),
+    operation_id: boundedText(128),
+    deployment: boundedText(256),
+    fingerprint,
+    reference_id: boundedText(256),
+    query_data_id: boundedText(256),
+    maximum_distance_squared: z.number().finite().nonnegative(),
+    assessment_status: z.enum(['matched', 'mismatched']),
+    assessment_mismatches: z.array(
+      z.enum(['reference_id', 'query_data_id', 'selection', 'selected_count'])
+    ),
+  })
+  .strict()
+  .superRefine((v, ctx) => {
+    if (
+      v.applicable !== (v.input_mismatches.length === 0) ||
+      (v.assessment_status === 'matched') !== (v.assessment_mismatches.length === 0) ||
+      (v.status !== 'stale' &&
+        v.status !== (v.assessment_status === 'matched' ? 'supported' : 'refuted'))
+    )
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: '证据状态不一致。' });
+  });
+
 const outcome = z
   .discriminatedUnion('status', [
     z.object({ status: z.literal('completed'), value: z.unknown() }).strict(),
@@ -92,7 +143,8 @@ export class WorkflowDesignClient {
       | 'workflow/resume'
       | 'workflow/assess'
       | 'workflow/publish'
-      | 'workflow/evidence',
+      | 'workflow/evidence'
+      | 'workflow/discuss',
     input: unknown,
     signal: AbortSignal
   ) {
@@ -310,6 +362,41 @@ export class WorkflowDesignClient {
         evidence: publication.evidence,
       },
     };
+  }
+  async discuss(raw: WorkflowDiscussionInput, signal: AbortSignal) {
+    const input = workflowDiscussionInput.parse(raw);
+    return this.parseDiscussion(await this.send('workflow/discuss', input, signal), input);
+  }
+  parseDiscussion(response: unknown, input: WorkflowDiscussionInput) {
+    const parsed = this.identity(input.context)
+      .extend({
+        discussion: z
+          .object({
+            answer: boundedText(65536),
+            evidence_snapshot: evidenceContext,
+            evidence_current: z.boolean(),
+            current_evidence: evidenceContext,
+            interpretation_only: z.literal(true),
+          })
+          .strict(),
+      })
+      .strict()
+      .parse(response);
+    const {
+      evidence_snapshot: used,
+      current_evidence: current,
+      evidence_current: fresh,
+    } = parsed.discussion;
+    if (
+      !used.applicable ||
+      used.status === 'stale' ||
+      used.reference_id !== parsed.reference_id ||
+      used.query_data_id !== parsed.query_data_id ||
+      used.maximum_distance_squared !== input.context.maximum ||
+      fresh !== isEqual(used, current)
+    )
+      throw new Error('讨论结果与证据快照不一致。');
+    return parsed;
   }
   async inspectEvidence(
     publication: ReturnType<WorkflowDesignClient['parsePublication']>,

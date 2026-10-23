@@ -22,6 +22,7 @@ export function WorkflowDesigner({
   const scope = JSON.stringify([notebookId, context.workspace, context.expected_revision]);
   const session = useRef<WorkflowDesignSession | null>(null);
   const [owned, setOwned] = useState<{ scope: string; state: WorkflowSnapshot } | null>(null);
+  const [question, setQuestion] = useState('解释这次工作流的数值验收结果及其适用范围。');
   const [goal, setGoal] = useState('筛选指定距离内的房屋近邻，并汇总数量，保留测量标识。');
   const [name, setName] = useState('HousingWorkflow');
   const [confirmed, setConfirmed] = useState(false);
@@ -265,6 +266,84 @@ export function WorkflowDesigner({
               <p className="text-xs">
                 这是发布时的历史回执；新实例可能使旧证据过期，不代表通用能力已经验证。
               </p>
+              <section aria-label="工作流证据讨论" className="space-y-2 rounded border p-3">
+                <p>
+                  讨论会调用模型，并读取与冻结输入匹配的最新证据；模型解释不会成为新的 FoKn 事实。
+                </p>
+                {!record.discussion && (
+                  <>
+                    <label>
+                      证据讨论问题
+                      <textarea
+                        aria-label="证据讨论问题"
+                        className="block w-full rounded border p-2"
+                        value={question}
+                        disabled={authoringUnavailable}
+                        onChange={(e) => setQuestion(e.target.value)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className={button}
+                      disabled={authoringUnavailable || !question.trim()}
+                      onClick={() => void session.current?.discuss(question)}
+                    >
+                      讨论最新工作流证据
+                    </button>
+                  </>
+                )}
+                {record.discussion?.state === 'pending' && (
+                  <>
+                    <p>待恢复问题：{record.discussion.input.message}</p>
+                    <button
+                      type="button"
+                      className={button}
+                      disabled={authoringUnavailable}
+                      onClick={() => void session.current?.resumeDiscussion()}
+                    >
+                      恢复原证据讨论
+                    </button>
+                  </>
+                )}
+                {record.discussion?.state === 'confirmed' && (
+                  <>
+                    <p>{record.discussion.input.message}</p>
+                    <p aria-label="工作流证据讨论回答" className="whitespace-pre-wrap">
+                      {record.discussion.result.discussion.answer}
+                    </p>
+                    <p>
+                      {record.discussion.result.discussion.evidence_current
+                        ? '回答完成时证据未变化；这不是当前状态保证。'
+                        : '回答期间证据已变化；此回答仅解释旧快照。'}
+                    </p>
+                    <p className="break-all text-xs">
+                      引用 claim：{record.discussion.result.discussion.evidence_snapshot.claim_id}
+                    </p>
+                    <p>
+                      快照状态：
+                      {record.discussion.result.discussion.evidence_snapshot.status === 'supported'
+                        ? '支持'
+                        : '反驳'}
+                      ；仅适用于本次测量。
+                    </p>
+                  </>
+                )}
+                {record.discussion && (
+                  <button
+                    type="button"
+                    className={button}
+                    disabled={unavailable}
+                    onClick={() => session.current?.clearDiscussion()}
+                  >
+                    清除本地讨论记录
+                  </button>
+                )}
+                {record.discussion?.state === 'pending' && (
+                  <p className="text-xs">
+                    清除记录不会取消已发送的服务端操作；再次讨论会创建新操作。
+                  </p>
+                )}
+              </section>
               <details>
                 <summary>查看实例证据</summary>
                 <pre className="max-h-64 overflow-auto text-xs">
@@ -277,7 +356,11 @@ export function WorkflowDesigner({
             <button
               type="button"
               className={button}
-              disabled={unavailable || record.publication?.state === 'pending'}
+              disabled={
+                unavailable ||
+                record.publication?.state === 'pending' ||
+                record.discussion?.state === 'pending'
+              }
               onClick={() => {
                 session.current?.clear();
                 setName(`HousingWorkflow_${crypto.randomUUID().replace(/-/g, '')}`);

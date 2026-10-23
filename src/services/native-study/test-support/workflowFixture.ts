@@ -30,6 +30,7 @@ export function workflowFixture() {
   let publicationId = '';
   let evidenceStatus = 'refuted';
   let loseDraft = false;
+  let loseDiscussion = false;
   let loseExecution = false;
   let suspended = false;
   let loseContinuation = false;
@@ -82,6 +83,44 @@ export function workflowFixture() {
       observed: suspended ? null : { selected_count: 1 },
       mismatches: suspended ? [] : ['query_data_id', 'reference_id', 'selection'],
     };
+    if (route === 'discuss') {
+      if (loseDiscussion) {
+        loseDiscussion = false;
+        throw new Error('lost response');
+      }
+      const evidence = {
+        owner: 'WorkflowEvidence',
+        scope: 'measured_instance_only',
+        claim_id: 'claim:one',
+        status: 'refuted',
+        source: { agent: 'WorkflowEvidence', invocation: publicationId, call_id: 'call:one' },
+        applicable: true,
+        input_mismatches: [],
+        contract: 'housing-neighbor-selection-v1',
+        execution_id: 'execute',
+        operation_id: 'execute',
+        deployment: 'deployment:one',
+        fingerprint: hash,
+        reference_id: identity.reference_id,
+        query_data_id: identity.query_data_id,
+        maximum_distance_squared: context.maximum,
+        assessment_status: 'mismatched',
+        assessment_mismatches: ['selection'],
+      };
+      return {
+        ok: true,
+        json: async () => ({
+          ...identity,
+          discussion: {
+            answer: '这是实例反驳，不是普遍结论。',
+            evidence_snapshot: evidence,
+            evidence_current: true,
+            current_evidence: evidence,
+            interpretation_only: true,
+          },
+        }),
+      };
+    }
     if (route === 'assess') return { ok: true, json: async () => ({ ...identity, assessment }) };
     if (route === 'publish')
       return {
@@ -162,6 +201,9 @@ export function workflowFixture() {
     fetch,
     stale: () => {
       evidenceStatus = 'stale';
+    },
+    loseDiscussion: () => {
+      loseDiscussion = true;
     },
     loseDraft: () => {
       loseDraft = true;

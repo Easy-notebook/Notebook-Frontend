@@ -354,3 +354,101 @@ it('reads current evidence transiently, clears failed reads, and binds claim pro
   expect(fixture.calls.filter((c) => c.route === 'execute')).toHaveLength(1);
   expect(fixture.calls.filter((c) => c.route === 'publish')).toHaveLength(1);
 });
+
+it('retains discussion intent across loss, validates restored scope, and does not dispatch on reload', async () => {
+  const fixture = workflowFixture();
+  const storage = memoryStorage();
+  let current = session(storage);
+  await current.prepare(input);
+  await current.execute(hash);
+  await current.assess();
+  await current.publishEvidence();
+  fixture.loseDiscussion();
+  await current.discuss('Explain the refutation');
+  const pending = current.getSnapshot().record?.discussion;
+  expect(pending?.state).toBe('pending');
+  expect(fixture.calls).toHaveLength(5);
+  await current.discuss('Replacement');
+  current.clear();
+  expect(current.getSnapshot().record?.discussion).toEqual(pending);
+  current.dispose();
+  current = session(storage);
+  expect(fixture.calls).toHaveLength(5);
+  await current.resumeDiscussion();
+  expect(fixture.calls[5].body).toEqual(fixture.calls[4].body);
+  expect(current.getSnapshot().record?.discussion?.state).toBe('confirmed');
+  current.dispose();
+  current = session(storage);
+  expect(current.getSnapshot().blocked).toBe(false);
+  expect(fixture.calls).toHaveLength(6);
+  const [key, raw] = [...storage.map][0];
+  const altered = JSON.parse(raw);
+  altered.discussion.input.context.maximum = 999;
+  storage.setItem(key, JSON.stringify(altered));
+  expect(session(storage).getSnapshot().blocked).toBe(true);
+  storage.setItem(key, raw);
+  current.clearDiscussion();
+  await current.discuss('New explicit question');
+  expect(fixture.calls[6].body).not.toEqual(fixture.calls[5].body);
+});
+it('persists a discussion request before any dispatch', async () => {
+  const fixture = workflowFixture();
+  const storage = memoryStorage();
+  const current = session(storage);
+  await current.prepare(input);
+  await current.execute(hash);
+  await current.assess();
+  await current.publishEvidence();
+  storage.setItem = () => {
+    throw new Error('quota');
+  };
+  await current.discuss('Explain');
+  expect(fixture.calls).toHaveLength(4);
+  expect(current.getSnapshot().record?.discussion).toBeUndefined();
+});
+it('rejects discussion envelopes that contradict scope, measured inputs, status or freshness', async () => {
+  workflowFixture();
+  const current = session();
+  await current.prepare(input);
+  await current.execute(hash);
+  await current.assess();
+  await current.publishEvidence();
+  await current.discuss('Explain');
+  const record = current.getSnapshot().record?.discussion;
+  if (record?.state !== 'confirmed') throw new Error('missing discussion');
+  const client = new WorkflowDesignClient('houses');
+  for (const mutate of [
+    (r: typeof record.result) => {
+      r.workspace = 'other';
+    },
+    (r: typeof record.result) => {
+      r.invocation = 'other';
+    },
+    (r: typeof record.result) => {
+      r.discussion.evidence_snapshot.query_data_id = 'other';
+    },
+    (r: typeof record.result) => {
+      r.discussion.evidence_snapshot.maximum_distance_squared = 99;
+    },
+    (r: typeof record.result) => {
+      r.discussion.evidence_snapshot.status = 'supported';
+    },
+    (r: typeof record.result) => {
+      r.discussion.evidence_snapshot.applicable = false;
+    },
+    (r: typeof record.result) => {
+      r.discussion.current_evidence.claim_id = 'new-claim';
+    },
+    (r: typeof record.result) => {
+      r.discussion.evidence_current = false;
+    },
+  ]) {
+    const changed = structuredClone(record.result);
+    mutate(changed);
+    expect(() => client.parseDiscussion(changed, record.input)).toThrow();
+  }
+  const changed = structuredClone(record.result);
+  changed.discussion.current_evidence.claim_id = 'new-claim';
+  changed.discussion.evidence_current = false;
+  expect(client.parseDiscussion(changed, record.input).discussion.evidence_current).toBe(false);
+});
