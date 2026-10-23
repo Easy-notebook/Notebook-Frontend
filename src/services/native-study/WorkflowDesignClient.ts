@@ -1,0 +1,121 @@
+import { z } from 'zod';
+import { NativeNotebookTransport } from '@Services/notebook/NativeNotebookTransport';
+
+const boundedText = (bytes: number) =>
+  z.string().refine((s) => s.trim().length > 0 && new TextEncoder().encode(s).length <= bytes);
+const fingerprint = z.string().regex(/^[a-f0-9]{64}$/);
+export const workflowContext = z
+  .object({
+    workspace: boundedText(256),
+    expected_revision: z.number().int().nonnegative().safe(),
+    invocation: boundedText(128),
+    reference_csv: boundedText(4 * 1024 * 1024),
+    query_csv: boundedText(4 * 1024 * 1024),
+    columns: z.array(boundedText(256)).min(1),
+    clusters: z.number().int().positive().safe(),
+    neighbors: z.number().int().min(1).max(8),
+    maximum: z.number().finite().nonnegative(),
+  })
+  .strict();
+export const workflowDraftInput = workflowContext.extend({
+  goal: boundedText(8192),
+  name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/),
+});
+export const workflowExecutionInput = z
+  .object({
+    context: workflowContext,
+    draft: boundedText(256),
+    expected_fingerprint: fingerprint,
+  })
+  .strict();
+export type WorkflowContext = z.infer<typeof workflowContext>;
+export type WorkflowDraftInput = z.infer<typeof workflowDraftInput>;
+export type WorkflowExecutionInput = z.infer<typeof workflowExecutionInput>;
+
+const outcome = z
+  .discriminatedUnion('status', [
+    z.object({ status: z.literal('completed'), value: z.unknown() }).strict(),
+    z
+      .object({
+        status: z.literal('suspended'),
+        workflow: boundedText(1024),
+        state: boundedText(1024),
+        invocation: boundedText(1024),
+      })
+      .strict(),
+  ])
+  .superRefine((value, ctx) => {
+    if (value.status === 'completed' && !Object.prototype.hasOwnProperty.call(value, 'value'))
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Completed workflow has no value' });
+  });
+
+/** Validates native envelopes; generated outputs remain untrusted business data. */
+export class WorkflowDesignClient {
+  private readonly transport: NativeNotebookTransport;
+  constructor(readonly notebookId: string) {
+    this.transport = new NativeNotebookTransport(notebookId);
+  }
+  private identity(input: WorkflowContext) {
+    return z.object({
+      frontend_notebook_id: z.literal(this.notebookId),
+      workspace: z.literal(input.workspace),
+      revision: z.literal(input.expected_revision),
+      invocation: z.literal(input.invocation),
+      reference_id: boundedText(256),
+      query_data_id: boundedText(256),
+    });
+  }
+  private async send(
+    route: 'workflow/draft' | 'workflow/execute',
+    input: unknown,
+    signal: AbortSignal
+  ) {
+    signal.throwIfAborted();
+    if (new TextEncoder().encode(JSON.stringify(input)).length > 5 * 1024 * 1024)
+      throw new Error('工作流请求超过 5 MiB。');
+    const result = await this.transport.send(route, input, signal);
+    signal.throwIfAborted();
+    return result;
+  }
+  async draft(raw: WorkflowDraftInput, signal: AbortSignal) {
+    // Parsing copies inputs before awaiting; caller edits cannot rebind a response.
+    const input = workflowDraftInput.parse(raw);
+    const shape = this.identity(input)
+      .extend({
+        execution_authorized: z.literal(false),
+        draft: z
+          .object({
+            draft: boundedText(256),
+            source: boundedText(65536),
+            checked: z.object({ valid: z.literal(true), fingerprint }).strict(),
+            inspection: z
+              .object({
+                name: z.literal(input.name),
+                owned: z.literal(true),
+                public: z.record(z.string(), z.unknown()),
+                state: z.null(),
+                revision: z.number().int().nonnegative().safe(),
+              })
+              .strict(),
+          })
+          .strict(),
+      })
+      .strict();
+    return shape.parse(await this.send('workflow/draft', input, signal));
+  }
+  async execute(raw: WorkflowExecutionInput, signal: AbortSignal) {
+    const input = workflowExecutionInput.parse(raw);
+    const shape = this.identity(input.context)
+      .extend({
+        result: z
+          .object({
+            deployment: boundedText(256),
+            fingerprint: z.literal(input.expected_fingerprint),
+            execution: outcome,
+          })
+          .strict(),
+      })
+      .strict();
+    return shape.parse(await this.send('workflow/execute', input, signal));
+  }
+}
