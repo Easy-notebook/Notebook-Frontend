@@ -170,3 +170,37 @@ Scoped formatting and ESLint pass, including the final session-test correction.
 Full tsc --noEmit exits 2 with diagnostics elsewhere (for example ImageView and
 LaTeXExtension), with none in the changed workflow/transport files. This is not a
 full-project type-check pass. Log: /tmp/aal-front-assessment-types-final.log.
+
+## Publish checked instances to native FoKn
+
+After a fresh assessment of a confirmed completed execution, **保存本次验收为 FoKn
+实例证据** explicitly publishes the original execution or latest continuation through
+`/workflow/publish`. Both matched and mismatched instances can be saved: the service
+recomputes assessment from its retained result and publishes supported or refuted
+practice evidence. The browser never sends an assessment body as evidence authority.
+The existing numerical instance boundary remains unchanged; no PCS adoption follows.
+
+The session saves a frozen request and UUID before dispatch. Pending publication is a
+separate state within the completed workflow record. Response loss or a failed local
+result save leaves that exact intent pending; **恢复原证据发布** reuses it after reload.
+A pending publication cannot be cleared or replaced by another publication ID. Only
+confirmed receipts may be cleared locally. Current workspace/revision rules still
+apply, and disposal aborts delivery into a superseded component.
+
+Receipt validation reuses numerical assessment checks and additionally binds publication
+ID, WorkflowEvidence owner/invocation, threshold and field-match flags. Supported and
+refuted status must agree with the checked numerical outcome. Saved records undergo
+the same validation on reload. The UI labels the result as a historical publication
+receipt: another instance may stale the claim, so replay does not imply current support.
+The separate evidence owner is not yet merged into the study-workspace context view.
+
+Validation: 29 scoped client/session/component tests, scoped ESLint and formatting pass.
+Two Chromium/Rust scenarios pass in 29.7 seconds: lost supported-publication response,
+server restart/browser reload and identical-ID receipt recovery; and publication of
+a refuted completed continuation. Child execution counters remain one/two respectively,
+with one scripted drafting request per case and the provider already shut down.
+Logs: /tmp/aal-front-publication-tests.log, /tmp/aal-front-publication-browser.log,
+and /tmp/aal-front-publication-lint.log. No paid model, online EasyNet or push.
+Full tsc --noEmit still exits 2 on existing editor diagnostics, with none in the
+changed workflow/transport files; this is not a full-project type-check pass.
+Log: /tmp/aal-front-publication-types.log.

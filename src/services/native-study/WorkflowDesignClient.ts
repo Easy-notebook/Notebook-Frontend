@@ -42,6 +42,10 @@ export const workflowAssessmentInput = z
     continuation_invocation: boundedText(128).nullable().optional(),
   })
   .strict();
+export const workflowPublicationInput = z
+  .object({ assessment: workflowAssessmentInput, invocation: boundedText(128) })
+  .strict();
+export type WorkflowPublicationInput = z.infer<typeof workflowPublicationInput>;
 export type WorkflowAssessmentInput = z.infer<typeof workflowAssessmentInput>;
 export type WorkflowContinuationInput = z.infer<typeof workflowContinuationInput>;
 export type WorkflowContext = z.infer<typeof workflowContext>;
@@ -82,7 +86,12 @@ export class WorkflowDesignClient {
     });
   }
   private async send(
-    route: 'workflow/draft' | 'workflow/execute' | 'workflow/resume' | 'workflow/assess',
+    route:
+      | 'workflow/draft'
+      | 'workflow/execute'
+      | 'workflow/resume'
+      | 'workflow/assess'
+      | 'workflow/publish',
     input: unknown,
     signal: AbortSignal
   ) {
@@ -227,6 +236,79 @@ export class WorkflowDesignClient {
     )
       throw new Error('验收结果与原生执行记录不一致。');
     return parsed;
+  }
+  async publish(
+    raw: WorkflowPublicationInput,
+    recorded: ReturnType<WorkflowDesignClient['parseExecution']>,
+    signal: AbortSignal
+  ) {
+    const input = workflowPublicationInput.parse(raw);
+    const original = structuredClone(recorded);
+    return this.parsePublication(
+      await this.send('workflow/publish', input, signal),
+      input,
+      original
+    );
+  }
+  parsePublication(
+    response: unknown,
+    input: WorkflowPublicationInput,
+    recorded: ReturnType<WorkflowDesignClient['parseExecution']>
+  ) {
+    const parsed = this.identity(input.assessment.execution.context)
+      .extend({
+        publication_invocation: z.literal(input.invocation),
+        publication: z
+          .object({
+            assessment: z.record(z.string(), z.unknown()),
+            evidence: z
+              .object({
+                id: boundedText(4096),
+                status: z.enum(['supported', 'refuted']),
+                tree: z.literal('practice'),
+                source: z
+                  .object({
+                    agent: z.literal('WorkflowEvidence'),
+                    invocation: z.literal(input.invocation),
+                    call_id: boundedText(4096),
+                  })
+                  .strict(),
+              })
+              .passthrough(),
+          })
+          .strict(),
+      })
+      .strict()
+      .parse(response);
+    const { publication, publication_invocation, ...identity } = parsed;
+    const { maximum_distance_squared, field_matches, ...numerical } = publication.assessment;
+    const checked = this.parseAssessment(
+      { ...identity, assessment: numerical },
+      input.assessment,
+      recorded
+    );
+    const matches = Object.fromEntries(
+      ['reference_id', 'query_data_id', 'selection', 'selected_count'].map((key) => [
+        key,
+        !checked.assessment.mismatches.some((m) => m === key),
+      ])
+    );
+    if (
+      checked.assessment.status === 'pending' ||
+      publication.evidence.status !==
+        (checked.assessment.status === 'matched' ? 'supported' : 'refuted') ||
+      maximum_distance_squared !== input.assessment.execution.context.maximum ||
+      !isEqual(field_matches, matches)
+    )
+      throw new Error('证据发布与原生验收不一致。');
+    return {
+      ...identity,
+      publication_invocation,
+      publication: {
+        assessment: { ...checked.assessment, maximum_distance_squared, field_matches: matches },
+        evidence: publication.evidence,
+      },
+    };
   }
   private executionShape(input: WorkflowExecutionInput) {
     return this.identity(input.context)

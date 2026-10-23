@@ -32,9 +32,13 @@ it('requires source review before explicit execution and shows frozen results', 
   fireEvent.click(screen.getByRole('button', { name: '验收房屋筛选结果' }));
   await screen.findByText('本次房屋筛选结果与原生测量不匹配。');
   expect(screen.getByLabelText('工作流数值验收')).toHaveTextContent('差异字段');
+  fireEvent.click(screen.getByRole('button', { name: '保存本次验收为 FoKn 实例证据' }));
+  await screen.findByText('已保存：本次结果反驳数值契约。');
+
   fireEvent.click(screen.getByRole('button', { name: '清除本地记录，准备新草稿' }));
   expect(screen.getByLabelText('工作流类名')).not.toHaveValue('HousingWorkflow');
-  expect(fixture.calls).toHaveLength(3);
+  expect(fixture.calls).toHaveLength(4);
+  expect(screen.queryByLabelText('已保存的工作流证据')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('工作流数值验收')).not.toBeInTheDocument();
 });
 it('restores a lost response only after an explicit retry and resets scope on revision changes', async () => {

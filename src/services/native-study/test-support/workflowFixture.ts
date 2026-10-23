@@ -36,7 +36,8 @@ export function workflowFixture() {
     const route = url.split('/').pop()!;
     const body = JSON.parse(init.body as string);
     calls.push({ route, body });
-    const execution = ['resume', 'assess'].includes(route) ? body.execution : body;
+    const request = route === 'publish' ? body.assessment : body;
+    const execution = ['resume', 'assess', 'publish'].includes(route) ? request.execution : body;
     const context = route === 'draft' ? body : execution.context;
     const identity = {
       frontend_notebook_id: 'houses',
@@ -46,26 +47,50 @@ export function workflowFixture() {
       reference_id: 'reference-id',
       query_data_id: 'query-id',
     };
-    if (route === 'assess')
+    const assessment = {
+      contract: 'housing-neighbor-selection-v1',
+      status: suspended ? 'pending' : 'mismatched',
+      execution_id: context.invocation,
+      operation_id: request.continuation_invocation ?? context.invocation,
+      deployment: 'deployment:one',
+      fingerprint: execution.expected_fingerprint,
+      expected: {
+        reference_id: 'reference-id',
+        query_data_id: 'query-id',
+        selection: [{ query_row: 0, selected_rows: [0] }],
+        selected_count: 1,
+      },
+      observed: suspended ? null : { selected_count: 1 },
+      mismatches: suspended ? [] : ['query_data_id', 'reference_id', 'selection'],
+    };
+    if (route === 'assess') return { ok: true, json: async () => ({ ...identity, assessment }) };
+    if (route === 'publish')
       return {
         ok: true,
         json: async () => ({
           ...identity,
-          assessment: {
-            contract: 'housing-neighbor-selection-v1',
-            status: suspended ? 'pending' : 'mismatched',
-            execution_id: context.invocation,
-            operation_id: body.continuation_invocation ?? context.invocation,
-            deployment: 'deployment:one',
-            fingerprint: execution.expected_fingerprint,
-            expected: {
-              reference_id: 'reference-id',
-              query_data_id: 'query-id',
-              selection: [{ query_row: 0, selected_rows: [0] }],
-              selected_count: 1,
+          publication_invocation: body.invocation,
+          publication: {
+            assessment: {
+              ...assessment,
+              maximum_distance_squared: context.maximum,
+              field_matches: {
+                reference_id: false,
+                query_data_id: false,
+                selection: false,
+                selected_count: true,
+              },
             },
-            observed: suspended ? null : { selected_count: 1 },
-            mismatches: suspended ? [] : ['query_data_id', 'reference_id', 'selection'],
+            evidence: {
+              id: 'claim:one',
+              status: 'refuted',
+              tree: 'practice',
+              source: {
+                agent: 'WorkflowEvidence',
+                invocation: body.invocation,
+                call_id: 'call:one',
+              },
+            },
           },
         }),
       };

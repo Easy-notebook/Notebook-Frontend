@@ -256,3 +256,50 @@ it('assesses retained results without persisting authority, and clears assessmen
   expect(current.getSnapshot().assessment?.assessment.status).toBe('mismatched');
   expect(fixture.calls.filter((c) => c.route === 'execute')).toHaveLength(1);
 });
+
+it('saves publication intent, recovers the same ID after loss, and validates saved provenance', async () => {
+  const fixture = workflowFixture();
+  const storage = memoryStorage();
+  let current = session(storage);
+  await current.prepare(input);
+  await current.execute(hash);
+  await current.publishEvidence();
+  expect(current.getSnapshot().record?.publication).toBeUndefined();
+  await current.assess();
+  fixture.fetch.mockRejectedValueOnce(new Error('publication reply lost'));
+  await current.publishEvidence();
+  const pending = current.getSnapshot().record!.publication!;
+  expect(pending.state).toBe('pending');
+  current.clear();
+  expect(current.getSnapshot().record).not.toBeNull();
+  current.dispose();
+  current = session(storage);
+  expect(current.getSnapshot().record?.publication).toEqual(pending);
+  await current.resumePublication();
+  expect(fixture.calls[fixture.calls.length - 1].body).toEqual(pending.input);
+  expect(current.getSnapshot().record?.publication?.state).toBe('confirmed');
+  expect(fixture.calls.filter((c) => c.route === 'execute')).toHaveLength(1);
+  current.dispose();
+  current = session(storage);
+  expect(current.getSnapshot().record?.publication?.state).toBe('confirmed');
+  current.dispose();
+  const [key, raw] = [...storage.map][0];
+  const changed = JSON.parse(raw);
+  changed.publication.result.publication.evidence.source.invocation = 'forged';
+  storage.setItem(key, JSON.stringify(changed));
+  expect(session(storage).getSnapshot().blocked).toBe(true);
+});
+it('does not dispatch a publication if its frozen intent cannot be saved', async () => {
+  const fixture = workflowFixture();
+  const storage = memoryStorage();
+  const current = session(storage);
+  await current.prepare(input);
+  await current.execute(hash);
+  await current.assess();
+  storage.setItem = () => {
+    throw new Error('quota');
+  };
+  await current.publishEvidence();
+  expect(fixture.calls.filter((c) => c.route === 'publish')).toHaveLength(0);
+  expect(current.getSnapshot().record?.publication).toBeUndefined();
+});

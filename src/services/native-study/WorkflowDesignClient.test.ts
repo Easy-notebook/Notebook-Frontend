@@ -265,6 +265,77 @@ it('binds numerical assessment to exact recorded data and rejects inconsistent s
   ]) {
     expect(() => client.parseAssessment(value, request, { ...recorded, ...patch })).toThrow();
   }
+  const publicationInput = { assessment: request, invocation: 'publish-1' };
+  const publication = {
+    ...identity,
+    publication_invocation: 'publish-1',
+    publication: {
+      assessment: {
+        ...value.assessment,
+        maximum_distance_squared: context.maximum,
+        field_matches: {
+          reference_id: false,
+          query_data_id: false,
+          selection: false,
+          selected_count: true,
+        },
+      },
+      evidence: {
+        id: 'claim:one',
+        status: 'refuted',
+        tree: 'practice',
+        source: { agent: 'WorkflowEvidence', invocation: 'publish-1', call_id: 'call:one' },
+      },
+    },
+  };
+  expect(client.parsePublication(publication, publicationInput, recorded)).toEqual(publication);
+  for (const patch of [
+    { status: 'supported' },
+    { source: { ...publication.publication.evidence.source, invocation: 'foreign' } },
+    { source: { ...publication.publication.evidence.source, agent: 'foreign' } },
+  ]) {
+    expect(() =>
+      client.parsePublication(
+        {
+          ...publication,
+          publication: {
+            ...publication.publication,
+            evidence: { ...publication.publication.evidence, ...patch },
+          },
+        },
+        publicationInput,
+        recorded
+      )
+    ).toThrow();
+  }
+  expect(() =>
+    client.parsePublication(
+      { ...publication, publication_invocation: 'wrong' },
+      publicationInput,
+      recorded
+    )
+  ).toThrow();
+  expect(() =>
+    client.parsePublication(
+      {
+        ...publication,
+        publication: {
+          ...publication.publication,
+          assessment: {
+            ...publication.publication.assessment,
+            field_matches: {
+              reference_id: true,
+              query_data_id: false,
+              selection: false,
+              selected_count: true,
+            },
+          },
+        },
+      },
+      publicationInput,
+      recorded
+    )
+  ).toThrow();
   const continued = { ...recorded, invocation: 'continue-2' };
   const continuation = { ...request, continuation_invocation: 'continue-2' };
   const checked = { ...value, assessment: { ...value.assessment, operation_id: 'continue-2' } };

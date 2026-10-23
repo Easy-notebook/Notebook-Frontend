@@ -209,11 +209,50 @@ export function WorkflowDesigner({
               </details>
             </section>
           )}
-          {['review', 'completed'].includes(record.phase) && (
+          {state?.assessment && record.phase === 'completed' && !record.publication && (
             <button
               type="button"
               className={button}
               disabled={unavailable}
+              onClick={() => void session.current?.publishEvidence()}
+            >
+              保存本次验收为 FoKn 实例证据
+            </button>
+          )}
+          {record.publication?.state === 'pending' && (
+            <button
+              type="button"
+              className={button}
+              disabled={unavailable}
+              onClick={() => void session.current?.resumePublication()}
+            >
+              恢复原证据发布
+            </button>
+          )}
+          {record.publication?.state === 'confirmed' && (
+            <section aria-label="已保存的工作流证据" className="space-y-2 rounded border p-3">
+              <p>
+                {record.publication.result.publication.evidence.status === 'supported'
+                  ? '已保存：本次结果符合数值契约。'
+                  : '已保存：本次结果反驳数值契约。'}
+              </p>
+              <p className="text-xs break-all">发布 ID：{record.publication.input.invocation}</p>
+              <p className="text-xs">
+                这是发布时的历史回执；新实例可能使旧证据过期，不代表通用能力已经验证。
+              </p>
+              <details>
+                <summary>查看实例证据</summary>
+                <pre className="max-h-64 overflow-auto text-xs">
+                  {JSON.stringify(record.publication.result.publication, null, 2)}
+                </pre>
+              </details>
+            </section>
+          )}
+          {['review', 'completed'].includes(record.phase) && (
+            <button
+              type="button"
+              className={button}
+              disabled={unavailable || record.publication?.state === 'pending'}
               onClick={() => {
                 session.current?.clear();
                 setName(`HousingWorkflow_${crypto.randomUUID().replace(/-/g, '')}`);

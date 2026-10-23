@@ -124,6 +124,35 @@ test('reviews source and recovers a completed native workflow after response los
     '本次房屋筛选结果与原生测量匹配。'
   );
   await expect(page.getByLabel('工作流执行结果', { exact: true })).toContainText('"completed": 1');
+  let publication, publicationIntent;
+  await page.route('**/workflow/publish', async (route) => {
+    publicationIntent = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    publication = await response.json();
+    await route.abort('failed');
+  });
+  await panel.getByRole('button', { name: '保存本次验收为 FoKn 实例证据', exact: true }).click();
+  await expect(panel.getByRole('button', { name: '恢复原证据发布', exact: true })).toBeEnabled();
+  await expect(
+    panel.getByRole('button', { name: '清除本地记录，准备新草稿', exact: true })
+  ).toBeDisabled();
+  await page.unroute('**/workflow/publish');
+  await native.stop();
+  await native.start(endpoint);
+  await page.reload();
+  await page.getByRole('button', { name: '房屋研究', exact: true }).click();
+  const publicationRecovery = page.waitForResponse(
+    (r) => r.url().endsWith('/workflow/publish') && r.ok()
+  );
+  await panel.getByRole('button', { name: '恢复原证据发布', exact: true }).click();
+  const published = await publicationRecovery;
+  expect(published.request().postDataJSON()).toEqual(publicationIntent);
+  expect(await published.json()).toEqual(publication);
+  await expect(panel.getByLabel('已保存的工作流证据')).toContainText(
+    '已保存：本次结果符合数值契约。'
+  );
+  expect(publication.publication.assessment.observed.completed).toBe(1);
   expect(captured).toHaveLength(1);
   expect(errors).toEqual([]);
 });
@@ -236,6 +265,10 @@ test('continues a suspended native child and recovers the same continuation afte
     '本次房屋筛选结果与原生测量不匹配。'
   );
   await expect(panel.getByLabel('工作流数值验收')).toContainText('差异字段');
+  await panel.getByRole('button', { name: '保存本次验收为 FoKn 实例证据', exact: true }).click();
+  await expect(panel.getByLabel('已保存的工作流证据')).toContainText(
+    '已保存：本次结果反驳数值契约。'
+  );
   expect(captured).toHaveLength(1);
   expect(errors).toEqual([]);
 });

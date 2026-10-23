@@ -5,6 +5,8 @@ import {
   workflowDraftInput,
   workflowExecutionInput,
   workflowContinuationInput,
+  workflowPublicationInput,
+  type WorkflowPublicationInput,
   type WorkflowContinuationInput,
   type WorkflowDraftInput,
   type WorkflowExecutionInput,
@@ -12,6 +14,13 @@ import {
 type DraftResponse = ReturnType<WorkflowDesignClient['parseDraft']>;
 type ContinuationResponse = ReturnType<WorkflowDesignClient['parseContinuation']>;
 type ExecutionResponse = ReturnType<WorkflowDesignClient['parseExecution']>;
+type PublicationResponse = ReturnType<WorkflowDesignClient['parsePublication']>;
+const publication = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('pending'), input: workflowPublicationInput }).strict(),
+  z
+    .object({ state: z.literal('confirmed'), input: workflowPublicationInput, result: z.unknown() })
+    .strict(),
+]);
 const saved = z
   .object({
     version: z.literal(1),
@@ -22,6 +31,7 @@ const saved = z
     result: z.unknown().optional(),
     continuation: workflowContinuationInput.optional(),
     continuationResult: z.unknown().optional(),
+    publication: publication.optional(),
   })
   .strict();
 export interface WorkflowRecord {
@@ -33,6 +43,9 @@ export interface WorkflowRecord {
   result?: ExecutionResponse;
   continuation?: WorkflowContinuationInput;
   continuationResult?: ContinuationResponse;
+  publication?:
+    | { state: 'pending'; input: WorkflowPublicationInput }
+    | { state: 'confirmed'; input: WorkflowPublicationInput; result: PublicationResponse };
 }
 export interface WorkflowSnapshot {
   record: WorkflowRecord | null;
@@ -153,6 +166,29 @@ export class WorkflowDesignSession {
         }
       }
     }
+    if (r.publication) {
+      if (record.phase !== 'completed' || !record.execution || !record.result)
+        throw new Error('只有已确认完成的执行可以包含证据发布。');
+      const expected = {
+        execution: record.execution,
+        continuation_invocation: record.continuationResult
+          ? record.continuation?.execution.context.invocation
+          : undefined,
+      };
+      if (JSON.stringify(r.publication.input.assessment) !== JSON.stringify(expected))
+        throw new Error('保存的发布输入与执行记录不一致。');
+      record.publication =
+        r.publication.state === 'pending'
+          ? r.publication
+          : {
+              ...r.publication,
+              result: this.client.parsePublication(
+                r.publication.result,
+                r.publication.input,
+                record.continuationResult ?? record.result
+              ),
+            };
+    }
     return freeze(record);
   }
   private save(record: WorkflowRecord) {
@@ -248,6 +284,59 @@ export class WorkflowDesignSession {
       this.publish({ busy: false });
     }
   }
+  async publishEvidence() {
+    const record = this.snapshot.record;
+    if (
+      !this.available() ||
+      record?.phase !== 'completed' ||
+      !record.execution ||
+      record.publication ||
+      !this.snapshot.assessment ||
+      this.snapshot.assessment.assessment.status === 'pending'
+    )
+      return;
+    try {
+      this.save({
+        ...record,
+        publication: {
+          state: 'pending',
+          input: {
+            assessment: {
+              execution: record.execution,
+              continuation_invocation: record.continuationResult
+                ? record.continuation?.execution.context.invocation
+                : undefined,
+            },
+            invocation: crypto.randomUUID(),
+          },
+        },
+      });
+      await this.resumePublication();
+    } catch (error) {
+      this.publish({ error: String(error) });
+    }
+  }
+  async resumePublication() {
+    const record = this.snapshot.record;
+    if (!this.available() || record?.publication?.state !== 'pending' || !record.result) return;
+    this.publish({ busy: true, error: null });
+    try {
+      const result = await this.client.publish(
+        record.publication.input,
+        record.continuationResult ?? record.result,
+        this.abort.signal
+      );
+      this.abort.signal.throwIfAborted();
+      this.save({
+        ...record,
+        publication: { state: 'confirmed', input: record.publication.input, result },
+      });
+    } catch (error) {
+      this.publish({ error: String(error) });
+    } finally {
+      this.publish({ busy: false });
+    }
+  }
   async resume() {
     const record = this.snapshot.record;
     if (
@@ -288,7 +377,8 @@ export class WorkflowDesignSession {
     if (
       !this.available() ||
       !this.snapshot.record ||
-      !['review', 'completed'].includes(this.snapshot.record.phase)
+      !['review', 'completed'].includes(this.snapshot.record.phase) ||
+      this.snapshot.record.publication?.state === 'pending'
     )
       return;
     try {
