@@ -2,9 +2,129 @@ import { expect, it } from 'vitest';
 import type { Cell } from '@Store/models';
 import { NotebookSourceDocument } from './NotebookSourceDocument';
 
+it('restores boundary tokens and added cell identities across JSON checkpoints', () => {
+  const original = new NotebookSourceDocument([
+    { id: 'base', type: 'markdown', content: '# 中文🐍' },
+  ]);
+  let source = original.source;
+  for (const type of ['code', 'raw', 'markdown'] as const)
+    source = original.appendCell(source, type).source;
+  const restored = NotebookSourceDocument.restore(
+    JSON.parse(JSON.stringify(original.checkpoint()))
+  );
+  expect(restored.source).toBe(original.source);
+  expect(restored.decode(source)).toEqual(original.decode(source));
+  expect(restored.decode(original.source)).toEqual(original.decode(original.source));
+  const next = restored.appendCell(source, 'code');
+  expect(next.source).toContain(':4:start');
+  const decoded = restored.decode(next.source);
+  expect(new Set(decoded.map((cell) => cell.id)).size).toBe(5);
+  expect(decoded[4].language).toBe('python');
+});
+
+it('restored source merges live metadata but rejects deletion of changed records', () => {
+  const original = new NotebookSourceDocument([
+    { id: 'base', type: 'code', language: 'python', content: 'old' },
+  ]);
+  const restored = NotebookSourceDocument.restore(
+    JSON.parse(JSON.stringify(original.checkpoint()))
+  );
+  const live: Cell[] = [
+    {
+      id: 'base',
+      type: 'code',
+      language: 'python',
+      content: 'old',
+      outputs: [{ type: 'text', content: 'latest' }],
+      metadata: { custom: 'live' },
+    },
+  ];
+  const result = restored.reconcile(original.source.replace('old', 'new'), live);
+  expect(result[0].content).toBe('new');
+  expect(result[0].outputs).toBe(live[0].outputs);
+  expect(result[0].metadata?.custom).toBe('live');
+  expect(() => restored.reconcile('', live)).toThrow('Deleted cell');
+});
+
+it('permits deletion of unchanged serialized records but protects every changed field', () => {
+  const base: Cell = {
+    id: 'base',
+    type: 'code',
+    content: 'print(1)',
+    language: 'python',
+    outputs: [{ type: 'text', content: { nested: ['original'] } }],
+    metadata: { custom: { enabled: true } },
+    phaseId: 'phase',
+    description: 'description',
+  };
+  const original = new NotebookSourceDocument([base]);
+  const restored = NotebookSourceDocument.restore(
+    JSON.parse(JSON.stringify(original.checkpoint()))
+  );
+  expect(restored.reconcile('', [JSON.parse(JSON.stringify(base))])).toEqual([]);
+  const changes: Partial<Cell>[] = [
+    { content: 'print(2)' },
+    { language: 'javascript' },
+    { type: 'raw' },
+    { outputs: [{ type: 'text', content: { nested: ['new'] } }] },
+    { metadata: { custom: { enabled: false } } },
+    { phaseId: 'other' },
+    { description: 'new' },
+    { newField: true },
+  ];
+  for (const change of changes) {
+    expect(() => restored.reconcile('', [{ ...base, ...change }])).toThrow('Deleted cell changed');
+  }
+});
+
+it('does not inspect unchanged retained output payloads during deletion conflict checks', () => {
+  const retained: Cell = {
+    id: 'retained',
+    type: 'raw',
+    content: 'keep',
+    get outputs(): never {
+      throw new Error('retained outputs must not be inspected');
+    },
+  };
+  const removed: Cell = { id: 'removed', type: 'raw', content: 'remove' };
+  const document = new NotebookSourceDocument([retained, removed]);
+  const source = document.source.split('\n\n')[0];
+  expect(document.reconcile(source, [retained, { ...removed }])).toEqual([retained]);
+});
+
+it('rejects invalid checkpoint identities before constructing a source document', () => {
+  const checkpoint = new NotebookSourceDocument([
+    { id: 'base', type: 'markdown', content: '' },
+  ]).checkpoint();
+  expect(() => NotebookSourceDocument.restore({ ...checkpoint, version: 2 } as never)).toThrow(
+    'Unsupported'
+  );
+  expect(() => NotebookSourceDocument.restore({ ...checkpoint, token: '.*' })).toThrow('token');
+  expect(() =>
+    NotebookSourceDocument.restore({ ...checkpoint, addedCells: [{ id: 'base', type: 'raw' }] })
+  ).toThrow('Duplicate');
+  expect(() =>
+    NotebookSourceDocument.restore({ ...checkpoint, addedCells: [{ id: '', type: 'raw' }] })
+  ).toThrow('Invalid');
+  expect(() =>
+    NotebookSourceDocument.restore({
+      ...checkpoint,
+      cells: [
+        { id: 'base', type: 'markdown', content: `<!-- notebook:${checkpoint.token}:0:start -->` },
+      ],
+    })
+  ).toThrow('collides');
+});
+
 it('validates before append without decoding edited bodies or reading output payloads', () => {
-  const cell: Cell = { id: 'code', type: 'code', language: 'python', content: 'old',
-    get outputs(): never { throw new Error('outputs must not be visited for validation'); },
+  const cell: Cell = {
+    id: 'code',
+    type: 'code',
+    language: 'python',
+    content: 'old',
+    get outputs(): never {
+      throw new Error('outputs must not be visited for validation');
+    },
   };
   const document = new NotebookSourceDocument([cell]);
   const edited = document.source.replace('old', 'new');
@@ -75,6 +195,20 @@ it('creates stable new cell identities and defaults new code cells to Python', (
   expect(new Set(first.map((cell) => cell.id)).size).toBe(first.length);
   expect(cells).toHaveLength(4);
 });
+
+it('does not reuse undone append identities when a different source branch is created', () => {
+  const document = new NotebookSourceDocument(cells);
+  const codeSource = document.appendCell(document.source, 'code').source;
+  const code = document.decode(codeSource)[cells.length];
+  const rawSource = document.appendCell(document.source, 'raw').source;
+  const raw = document.decode(rawSource)[cells.length];
+  expect(raw.id).not.toBe(code.id);
+  expect(raw.type).toBe('raw');
+  expect(document.decode(codeSource)[cells.length]).toBe(code);
+  expect(document.decode(rawSource)[cells.length]).toBe(raw);
+  expect(document.reconcile(codeSource, cells)[cells.length]).toBe(code);
+  expect(document.reconcile(rawSource, cells)[cells.length]).toBe(raw);
+});
 it.each(['\r\n', '\r'])(
   'preserves original %j line endings for untouched cells after textarea projection',
   (newline) => {
@@ -111,7 +245,9 @@ it('edits code while retaining outputs, metadata and hybrid identity', () => {
   expect(restored[1].metadata).toBe(cells[1].metadata);
 });
 it('preserves broken fences as literal source instead of completing them', () => {
-  const document = new NotebookSourceDocument(cells.map(cell => cell.id === 'code' ? { ...cell, type: 'code' as const } : cell));
+  const document = new NotebookSourceDocument(
+    cells.map((cell) => (cell.id === 'code' ? { ...cell, type: 'code' as const } : cell))
+  );
   const restored = document.decode(document.source.replace('````python', '``python'));
   expect(restored[1].type).toBe('markdown');
   expect(restored[1].content).toContain('``python');
@@ -119,7 +255,12 @@ it('preserves broken fences as literal source instead of completing them', () =>
 });
 it('projects mixed hybrid source without outer fences and retains hybrid identity after edits', () => {
   const content = 'Before\n```python\n  print(1)\n```\nAfter\n```mermaid\ngraph TD; A-->B\n```';
-  const cell: Cell = { id: 'mixed', type: 'hybrid', content, outputs: [{ type: 'text', content: 'kept' }] };
+  const cell: Cell = {
+    id: 'mixed',
+    type: 'hybrid',
+    content,
+    outputs: [{ type: 'text', content: 'kept' }],
+  };
   const document = new NotebookSourceDocument([cell]);
   expect(document.source).toContain(`:0:start -->\n${content}\n`);
   const [edited] = document.decode(document.source.replace('print(1)', 'print(2)'));

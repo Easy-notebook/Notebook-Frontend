@@ -7,16 +7,29 @@ import { EXTERNAL_CELL_SYNC } from './documentSync';
 import { DOMParser } from '@tiptap/pm/model';
 import { TextSelection } from '@tiptap/pm/state';
 import { convertCellsToHtml, serializeMarkdownBlock } from '../../utils/cellConverters';
-import { formatCodeFence, standaloneFence, firstExecutableFence } from '@Utils/markdown/fencedMarkdown';
+import {
+  formatCodeFence,
+  standaloneFence,
+  firstExecutableFence,
+} from '@Utils/markdown/fencedMarkdown';
 import { parseSourceCellType } from '../../utils/sourceCellAttributes';
+
+/** Replacing nodes must never detach the DOM owned by an active composition. */
+function canChangeSourceMode(editor: Editor): boolean {
+  return !editor.isDestroyed && editor.isEditable && !editor.view.composing;
+}
+
+/** Delayed NodeView actions may retain positions beyond a shortened document. */
+function nodeAtSourcePosition(editor: Editor, pos: number) {
+  const doc = editor.state.doc;
+  return Number.isInteger(pos) && pos >= 0 && pos < doc.content.size ? doc.nodeAt(pos) : null;
+}
 
 /** Convert only the owning cell; unrelated cells are neither projected nor replaced. */
 export function breakNestedCodeFence(editor: Editor): boolean {
-  // Replacing the owning cell would detach the DOM currently owned by IME.
-  if (editor.isDestroyed || editor.view.composing) return false;
+  if (!canChangeSourceMode(editor)) return false;
   const { $from, empty } = editor.state.selection;
   if (
-    !editor.isEditable ||
     !empty ||
     $from.parentOffset !== 0 ||
     $from.parent.type.name !== 'fencedCodeBlock' ||
@@ -70,12 +83,11 @@ export function editCodeBlockSource(editor: Editor, pos: number, cell: Cell): bo
 }
 
 function enterCodeSource(editor: Editor, pos: number, cell: Cell, breakFence: boolean): boolean {
-  const current = editor.state.doc.nodeAt(pos);
+  if (!canChangeSourceMode(editor)) return false;
+  const current = nodeAtSourcePosition(editor, pos);
   // A NodeView callback can outlive a move/replacement. Position alone is not
   // ownership: never replace the different cell now occupying that position.
   if (
-    editor.isDestroyed ||
-    !editor.isEditable ||
     current?.type.name !== 'executableCodeBlock' ||
     current.attrs.cellId !== cell.id ||
     (cell.type !== 'code' && cell.type !== 'hybrid')
@@ -95,14 +107,17 @@ function enterCodeSource(editor: Editor, pos: number, cell: Cell, breakFence: bo
       .setMeta('addToHistory', false)
       .setMeta(EXTERNAL_CELL_SYNC, true)
   );
-  const completeSource = cell.type === 'hybrid' ? cell.content : formatCodeFence(cell.content, language);
+  const completeSource =
+    cell.type === 'hybrid' ? cell.content : formatCodeFence(cell.content, language);
   let source = completeSource;
   let caret = 0;
-  const segment = cell.type === 'hybrid'
-    ? firstExecutableFence(completeSource) : standaloneFence(completeSource);
+  const segment =
+    cell.type === 'hybrid' ? firstExecutableFence(completeSource) : standaloneFence(completeSource);
   if (segment) {
     const edge = segment.start + segment.indent.length + segment.length;
-    caret = breakFence ? edge - 1 : segment.start + segment.source.indexOf(segment.newline) + segment.newline.length;
+    caret = breakFence
+      ? edge - 1
+      : segment.start + segment.source.indexOf(segment.newline) + segment.newline.length;
     if (breakFence) source = completeSource.slice(0, edge - 1) + completeSource.slice(edge);
   }
   const replacement = editor.schema.nodes.markdownSourceCell.create({
@@ -119,8 +134,9 @@ function enterCodeSource(editor: Editor, pos: number, cell: Cell, breakFence: bo
 }
 
 export function previewMarkdownSource(editor: Editor, pos: number): boolean {
-  const node = editor.state.doc.nodeAt(pos);
-  if (!editor.isEditable || node?.type.name !== 'markdownSourceCell') return false;
+  if (!canChangeSourceMode(editor)) return false;
+  const node = nodeAtSourcePosition(editor, pos);
+  if (node?.type.name !== 'markdownSourceCell') return false;
   const source = node.attrs.source as string;
   const fence = standaloneFence(source);
   let replacement;
@@ -163,7 +179,7 @@ export function previewMarkdownSource(editor: Editor, pos: number): boolean {
 }
 
 export function canEditSelectedCellSource(editor: Editor): boolean {
-  if (editor.isDestroyed || !editor.isEditable) return false;
+  if (!canChangeSourceMode(editor)) return false;
   const { $from } = editor.state.selection;
   const pos = $from.depth ? $from.before(1) : $from.pos;
   return editor.state.doc.nodeAt(pos)?.type.name === 'markdownCell';

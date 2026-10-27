@@ -3,16 +3,68 @@ import type { Cell } from '@Store/models';
 import { NotebookSourceSession } from './NotebookSourceSession';
 
 const cells: Cell[] = [{ id: 'note', type: 'markdown', content: 'Before' }];
+it('restores an edited session with stable added identities and live publication checks', () => {
+  const original = new NotebookSourceSession('a', cells);
+  original.appendCell('code');
+  original.edit(original.source.replace('Before', 'After'));
+  const checkpoint = JSON.parse(JSON.stringify(original.checkpoint()));
+  const restored = NotebookSourceSession.restore(checkpoint);
+  const unsaved = vi.fn();
+  restored.subscribeUnsavedChanges(unsaved);
+  expect(unsaved).toHaveBeenLastCalledWith(true);
+  const publish = vi.fn();
+  expect(restored.apply('other', cells, publish)).toBe(false);
+  expect(publish).not.toHaveBeenCalled();
+  expect(restored.apply('a', cells, publish)).toBe(true);
+  expect(publish.mock.calls[0][0][1].id).toBe(checkpoint.document.addedCells[0].id);
+  expect(publish.mock.calls[0][0][0].content).toBe('After');
+  expect(unsaved).toHaveBeenLastCalledWith(false);
+  expect(() => restored.checkpoint()).toThrow('closed');
+});
+
+it('retains malformed source for repair and rechecks conflicts instead of restoring stale status', () => {
+  const original = new NotebookSourceSession('a', cells);
+  const valid = original.source;
+  original.edit(valid.replace(':0:end', ':9:end'));
+  expect(original.apply('a', cells, vi.fn())).toBe(false);
+  const restored = NotebookSourceSession.restore(JSON.parse(JSON.stringify(original.checkpoint())));
+  expect(restored.source).toBe(original.source);
+  expect(restored.state).toBe('editing');
+  expect(restored.error).toBeNull();
+  const publish = vi.fn();
+  expect(restored.apply('a', cells, publish)).toBe(false);
+  expect(publish).not.toHaveBeenCalled();
+  restored.edit(valid.replace('Before', 'Recovered'));
+  expect(restored.apply('a', cells, publish)).toBe(true);
+});
+
+it('does not checkpoint cancelled sessions or accept invalid session envelopes', () => {
+  const session = new NotebookSourceSession('a', cells);
+  const checkpoint = session.checkpoint();
+  expect(() => NotebookSourceSession.restore({ ...checkpoint, version: 2 } as never)).toThrow(
+    'Unsupported'
+  );
+  expect(() => NotebookSourceSession.restore({ ...checkpoint, source: null } as never)).toThrow(
+    'Invalid'
+  );
+  expect(() => NotebookSourceSession.restore({ ...checkpoint, notebookId: 5 } as never)).toThrow(
+    'Invalid'
+  );
+  session.cancel();
+  expect(() => session.checkpoint()).toThrow('closed');
+});
 it('owns publication exclusively until the synchronous publisher returns', () => {
   const session = new NotebookSourceSession('a', cells);
   session.edit(session.source.replace('Before', 'After'));
   const nestedPublish = vi.fn();
-  expect(session.apply('a', cells, () => {
-    expect(session.state).toBe('applying');
-    expect(() => session.edit('reentrant')).toThrow('being applied');
-    expect(() => session.cancel()).toThrow('being applied');
-    expect(() => session.apply('a', cells, nestedPublish)).toThrow('being applied');
-  })).toBe(true);
+  expect(
+    session.apply('a', cells, () => {
+      expect(session.state).toBe('applying');
+      expect(() => session.edit('reentrant')).toThrow('being applied');
+      expect(() => session.cancel()).toThrow('being applied');
+      expect(() => session.apply('a', cells, nestedPublish)).toThrow('being applied');
+    })
+  ).toBe(true);
   expect(nestedPublish).not.toHaveBeenCalled();
   expect(session.state).toBe('applied');
 });

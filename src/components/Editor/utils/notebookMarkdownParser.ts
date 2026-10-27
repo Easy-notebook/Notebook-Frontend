@@ -3,6 +3,7 @@ import { createMarkdownParser, escapeHtml } from './inlineMarkdown';
 import { iterateFencedMarkdown, standaloneFence } from '@Utils/markdown/fencedMarkdown';
 import { sanitizeTableSource } from './tableSource';
 import { tableSourceTokenizer } from '@Utils/markdown/tableBoundary';
+import { nextHeadingIdentity } from '@Utils/markdown/headingIdentity';
 
 type HeadingCounters = Map<string, Map<string, number>>;
 export type CellIdentity = Partial<Pick<Cell, 'id' | 'phaseId'>>;
@@ -42,20 +43,13 @@ export function renderNotebookMarkdown(
         const base = cell?.phaseId || cell?.id || '';
         if (depth < 3)
           return `<h${depth} data-level="${depth}"${base ? ` id="${escapeHtml(base)}" data-base-id="${escapeHtml(base)}" data-heading-key="${escapeHtml(base)}"` : ''}>${body}</h${depth}>`;
-        const rawSlug = text
-          .toLowerCase()
-          .replace(/<[^>]+>/g, '')
-          .replace(/[^a-z0-9\s-]/gi, '')
-          .replace(/\s+/g, '-')
-          .slice(0, 80);
-        let occurrence = 1;
         if (counters && base) {
           if (!counters.has(base)) counters.set(base, new Map());
-          const map = counters.get(base)!;
-          occurrence = (map.get(rawSlug) || 0) + 1;
-          map.set(rawSlug, occurrence);
         }
-        const slug = occurrence > 1 ? `${rawSlug}-${occurrence}` : rawSlug;
+        const { key: slug, occurrence } = nextHeadingIdentity(
+          text,
+          base ? counters?.get(base) : undefined
+        );
         const id = base ? `${base}--${slug}` : slug;
         return `<h${depth} id="${escapeHtml(id)}" data-level="${depth}" data-base-id="${escapeHtml(base)}" data-heading-key="${escapeHtml(slug)}" data-occurrence="${occurrence}">${body}</h${depth}>`;
       },

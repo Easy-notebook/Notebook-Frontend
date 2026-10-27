@@ -2859,3 +2859,838 @@ typing; a regression reproduced it. Unchanged selection notifications still retu
 so continuous typing remains grouped. History/dialog suites pass 46 cases; an additional no-op
 selection test passes with all ten history cases. No full-buffer scan or extra text snapshot is
 introduced, and this has not yet been rechecked with native browser selection events.
+
+### Source node revision ownership
+
+MarkdownSourceCellView now checks the actual immutable document node, not just cell ID/type,
+before accepting source writes, history commands or preview transitions. A same-ID external
+revision made the old callback overwrite new source; that regression failed before the change.
+Rendering the new revision re-enables editing. Six node-view and nine source-input history tests
+pass (`/tmp/notebook-source-revision-final.log`). After an interrupted turn, the completed log
+was inspected rather than restarting that test process.
+
+An isolated headless Chromium run then passed `/tmp/notebook-fence-browser.mjs` against the
+current dev server: native Backspace breaks a tilde fence and an empty quoted fence, native text
+insertion repairs the delimiter, Preview restores the code block, and original cell IDs/content
+round-trip without changing neighboring cells. This verifies actual input is not rejected by the
+revision check in those cases; it is not a multi-browser or native-IME certification.
+
+### Prefix-only caret indentation
+
+Collapsed-selection indentation now produces a line-prefix change (zero to two removed characters,
+at most two inserted spaces) instead of slicing, splitting and rebuilding the entire caret line.
+The shared whitespace-width helper handles tabs and spaces for both caret and multi-line paths.
+A 100,000-character line regression failed against the old whole-line descriptor; indentation,
+input-history and source-dialog suites now pass 53 tests. Line-start discovery may still scan the
+prefix, and callers that publish a full textarea string still reconstruct that string; only the
+change descriptor's copied text and intermediate allocation are constant-size in this case.
+
+Single-cell Markdown/Mermaid source indentation now consumes that same change descriptor and
+calls native setRangeText only for its range. It no longer constructs a separate full-buffer
+replacement before updating the textarea. A real textarea spy test first failed on the old
+100,000-character replacement, then passed with only two inserted spaces. The obsolete
+indentSourceLines production adapter/type was removed after confirming no remaining callers;
+tests apply descriptors locally to verify resulting text/selection. Source view/input/indentation
+tests passed 23 cases before removing the adapter, and the final utility rerun passes 17 cases.
+Controlled source publication still reads the complete textarea value; no O(1) end-to-end claim.
+
+### Source shortcut composition lifecycle
+
+Markdown and Mermaid source views now pass their composition-session state to the shared shortcut
+handler, in addition to checking native isComposing/keyCode flags. Previously an unflagged Ctrl+Z
+between compositionstart and compositionend invoked document undo. Both node-view regressions
+failed before the change; the node-view and input-history suites now pass 26 tests. The common
+guard also protects indentation and redo. These are synthetic lifecycle tests, not OS-IME tests.
+
+Mermaid source restoration is additionally tested after an external update shortens source while
+preview is open. Empty, Chinese single-character and shorter diagram text all reopen with a
+valid clamped caret and no document write or unsolicited source opening. The existing native
+textarea range clamping handles these cases unchanged; all 12 Mermaid controls tests pass
+(`/tmp/notebook-mermaid-shrunk-source.log`). Real scroll geometry remains outside this DOM test.
+
+Mermaid clipboard feedback now belongs to a source revision and copy-request sequence. Source
+changes/unmount invalidate outstanding feedback; newer requests supersede older success/failure
+messages. Two delayed-promise regressions failed before the fix and all 14 controls tests pass
+(`/tmp/notebook-mermaid-copy-final.log`). The request counter uses constant space. This governs
+UI feedback only, not cancellation or ordering of the browser's clipboard writes; tests mock the
+clipboard and do not access the user's system clipboard.
+
+Queued Markdown-source focus now has explicit regression coverage for editor destruction,
+same-cell external revision, unmount and the valid post-transaction focus case. The current
+ownership/cleanup checks pass unchanged; all 11 source node-view tests pass
+(`/tmp/notebook-source-focus-owner.log`). These tests drain the actual queued microtask and assert
+focus ownership, rather than only checking the synchronous input handlers.
+
+### Current full integration gate
+
+The complete current suite passes: 685 tests across 85 files, exit 0, in 133.80s
+(`npx vitest run --maxWorkers=2`, `/tmp/notebook-current-integration.log`). No build ran alongside
+this gate and existing test timeouts were unchanged. It includes the latest source revision,
+composition, indentation, focus, Mermaid feedback and file-routing work. This is a full-suite
+green result, unlike the earlier isolated retries; it still does not establish native OS-IME,
+crash-durable drafts, cross-tab conflict safety or full document virtualization. Type checking
+and production build were not rerun as part of this gate.
+
+Code-editor scroll restoration now runs only when a suspended serialized snapshot exists.
+Fresh mounts and repeated restoration calls no longer enqueue unnecessary CodeMirror measure
+callbacks. Two regressions failed before the guard and pass after it; session and activation
+suites pass together (20 tests). Restoring still retains measured placeholder height and releases
+the serialized snapshot, while undo/folds remain covered. This removes one callback per fresh
+mount, not the O(document size) snapshot serialization or full-document rendering costs. The
+full integration gate above predates this small follow-up; no new full-suite/build claim is made.
+
+### Unapplied source draft page-exit protection
+
+Source sessions now publish dirty/clean transitions to their registry. The registry maintains
+a dirty-owner set and installs one `beforeunload` listener only while unapplied edits exist;
+page-exit checks are O(1) rather than scanning all retained drafts. Applying, cancelling, or
+undoing to the original buffer removes protection when the last dirty owner becomes clean.
+Named drafts remain protected across route detachment; anonymous drafts are protected while
+attached and released on detachment because they cannot be reopened by notebook identity.
+Released owners cannot re-register through later edits. Registry bookkeeping is O(drafts),
+and detecting equality with the original source still has worst-case O(source length) cost.
+
+The dialog explicitly states that unapplied drafts remain memory-only. This is a browser exit
+warning, not persistence or crash recovery: mobile lifecycle termination and browser policies
+can bypass the prompt (see https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event).
+No database migration or writes were introduced. Session, registry and real dialog-event tests
+pass together: 57 tests (`/tmp/notebook-draft-unload-final.log`), including dirty undo/redo,
+multiple notebooks, rejected apply, effect replay, stale owners and cancellation. The tests
+dispatch DOM events, not native browser confirmation dialogs. Typecheck remains at 307
+diagnostics with none matching the changed source-session/registry/dialog files
+(`/tmp/notebook-draft-unload-types.log`); the whole project typecheck is still not green.
+
+### Source draft viewport restoration
+
+Reopening a retained named-notebook draft now restores its caret/range (including backward
+selection) and both scroll offsets, in addition to text and undo history. Previously all three
+selection regression cases reopened at position zero. Layout cleanup captures the textarea
+before detachment; layout setup restores selection and scroll after opening/focusing the modal.
+Trigger focus restoration stays in passive cleanup so the button has first been re-enabled.
+Only two numeric viewport offsets are added per draft (O(1) storage); no DOM nodes or extra
+document snapshots are retained, and no per-scroll React updates are introduced.
+
+The dialog and registry suites pass: 52 tests, including three remount selection directions
+and fresh viewport/history after both Apply and Cancel (`/tmp/notebook-source-viewport-final.log`).
+These are DOM tests with assigned scroll offsets, not native browser layout/scroll validation.
+No production build or whole-project typecheck was rerun for this follow-up.
+
+### Composition ownership across source transitions
+
+All source-mode node replacement entry points now share one lifecycle predicate: the editor
+must be live, editable, and outside ProseMirror composition. This extends the existing nested
+fence protection to executable fence breaking, executable source editing, source preview, and
+selected Markdown source editing. Rejected transitions dispatch no transaction or preliminary
+store-backed attribute synchronization; the same operation works after composition ends.
+The guard is O(1) and executes before serialization/conversion.
+
+Four new transition regressions failed before the change. Source transitions, the fence scanner,
+and wrapper-preserving replacement pass together (96 tests, `/tmp/notebook-transition-ime-final.log`).
+Existing coverage includes broken/repaired empty and nested fences, delimiter growth, mixed
+newlines, Unicode and 1000-cell source selection. Composition tests control the editor's reported
+composition state; native OS input-method behavior remains unverified. This is not a completion
+claim for source fidelity, diagram support, or the broader optimization goal.
+
+### Full source-lifecycle integration gate
+
+The current whole suite passes: 701 tests across 85 files in 117.62s, exit 0
+(`npx vitest run --maxWorkers=2`, `/tmp/notebook-integration-source-lifecycle.log`). This includes
+the source-draft exit protection, viewport restoration, editor suspension and unified composition
+transition guards. Existing timeouts were unchanged and no build ran concurrently. This replaces
+the earlier 685-test gate as the latest full-suite evidence; it does not establish native OS-IME,
+crash recovery, cross-tab conflict handling or full document virtualization.
+
+The subsequent production build also passes, exit 0 in 1m 1s
+(`/tmp/notebook-source-lifecycle-build.log`). NotebookApp is 2099.61 kB minified / 669.24 kB gzip;
+CodeDisplay and HighlightedSource still emit separate chunks. Vite still reports oversized
+chunks and the mixed dynamic/static notebookStore import warning; build success is not a
+bundle-size or startup-latency target being achieved. TypeScript checking is a separate gate
+and was not rerun in this integration pass.
+
+### Browser Mermaid family and recovery audit
+
+An isolated headless Chrome 151 profile exercised the actual MermaidRenderService and Mermaid
+library against the current development server. Flowchart (Chinese labels), sequence (Chinese
+labels), state, class, Gantt and pie examples were queued together with alternating light/dark
+themes. All six returned parseable SVG with the expected semantic label and graphical elements;
+no `dfamily-audit-*` temporary render containers remained. The separate configuration audit
+also passed: per-diagram custom color did not leak to following diagrams, theme transitions
+initialized three times as expected, and a malformed diagram rejected without blocking a
+subsequent valid diagram. Scripts: `/tmp/notebook-mermaid-family-audit.mjs` and
+`/tmp/notebook-mermaid-config-browser.mjs` (both exit 0).
+
+The isolated browser was closed after verification; the user's browser and development server
+were left running. No production code changes were needed. This verifies real library rendering
+and queue recovery, not screenshot-level visual quality, every Mermaid grammar, or full editor
+interaction for each diagram family.
+
+### Appended source identities and history retention
+
+Two new regressions establish the ownership constraint for future draft-memory compaction:
+appending Python, undoing, redoing, then branching to an appended raw cell must preserve each
+source boundary's original identity and type. The document model still decodes old source
+branches to their original cell objects, while the session/history path invalidates redo when
+the branch changes and publishes only the selected branch. All 38 document/registry/history
+tests pass (`/tmp/notebook-source-branch-identities.log`). Production behavior was unchanged.
+
+Append metadata cannot safely be recycled based only on the currently visible source: undo/redo
+can still reference it. Entries currently grow with total append operations during a source
+session, not just the visible cell count. Bounding this memory therefore remains unfinished and
+must coordinate history retention with document-boundary ownership rather than reusing indices.
+
+### Transaction-consistent file reads
+
+FileRepository.getFile now reads metadata, updates access statistics and reads local content in
+one readwrite transaction spanning the metadata/content stores. Previously three independently
+scheduled transactions could read one revision, overwrite newer metadata with stale access
+statistics, and return another revision's content. All dependent requests are scheduled directly
+from IndexedDB callbacks; results are returned only after the provider acknowledges completion.
+Missing records still return null, remote/missing content still requests remote fetch, and
+synchronous statistics-write errors reject rather than leaving the callback unresolved.
+
+Repository/provider/autosave tests pass together: 34 tests
+(`/tmp/notebook-file-read-transaction.log`). Six new repository cases verify single-transaction
+usage, delayed completion, abort propagation and existing read semantics using controlled store
+requests. Native concurrent IndexedDB transactions are not covered by this mocked test harness.
+This reduces local getFile from three transactions to one, but does not make autosave's separate
+notebook-list metadata and snapshot writes atomic; that larger write-side gap remains open.
+
+### Indexed notebook file loading
+
+FileRepository.getFilesForNotebook now queries the existing `notebookId` index instead of
+materializing and filtering every file's metadata. Application-side metadata work/storage is
+O(k) for the selected notebook's k files rather than O(N) for all files in the database. When
+content is requested, local-content reads are scheduled from the index request's callback in
+the same readonly transaction; metadata-only queries do not include the content store at all.
+This removes per-file transaction overhead and keeps each list result within a transaction's
+view of the metadata/content records. Content materialization still costs O(selected bytes),
+and pending requests/results scale with k; this is not pagination or constant-space loading.
+
+Three index/transaction tests failed before the change. All 39 repository/provider/autosave
+tests now pass, including 1000 local files, empty indexed results, missing local content, remote
+entries and preserved result ordering (`/tmp/notebook-file-index-final.log`). No schema upgrade
+or compatibility scan fallback was introduced. Native database contention and wall-clock
+loading benchmarks remain separate validation work.
+
+### Transaction-owned content updates
+
+FileRepository.updateFileContent now performs its existence check, metadata update and content
+write in one readwrite transaction. A delete that commits before the update's read therefore
+leaves the file absent (false result), instead of a previously read metadata snapshot recreating
+it. Payload-size calculation happens before acquiring the transaction, and successful results
+are acknowledged only after transaction completion. This reduces the update from a separate
+read plus write transaction to one transaction; payload-size work remains O(content bytes).
+
+Three regressions failed before the change and now pass, covering transaction-local metadata,
+missing records despite a stale external read, and commit failure propagation. All 42
+repository/provider/autosave tests pass (`/tmp/notebook-file-update-final.log`), with a clean
+`git diff --check`. These controlled-request tests do not replace native concurrency validation.
+Cross-tab edit conflict resolution and notebook snapshot/list-metadata atomicity remain open.
+
+### Native IndexedDB transaction verification
+
+The current repository/provider implementations passed an isolated Chrome IndexedDB audit
+(`/tmp/notebook-native-idb-audit.mjs`, exit 0). A uniquely named temporary database containing
+only the file metadata/content stores was injected into the real provider; no app/user database
+was opened by the audit. Twenty interleaved update/read pairs, queued without awaiting each
+operation, returned revisions 0 through 19 respectively with matching content sizes. The indexed
+list returned only the requested notebook and its final revision, excluding another notebook.
+A queued delete followed by update returned false for the update and null for the subsequent
+read. Injecting a callback failure after scheduling both metadata and content writes rejected
+the transaction and left neither record persisted.
+
+The temporary database was deleted after each run and the isolated browser closed. This is
+native same-connection transaction ordering/rollback evidence, not a cross-tab optimistic
+conflict protocol or timing benchmark. The separate autosave notebook-list metadata transaction
+is outside this audit and remains a write-side atomicity gap.
+
+### Remote-reference cache retention
+
+FileRepository.saveFile now selects metadata-only storage for an oversized file only when the
+caller supplies a nonblank remote reference and forceLocal is false. Without that reference,
+the body remains local instead of silently omitting the only supplied content. Switching a file
+to remote storage deletes its obsolete local body in the same transaction as the metadata
+update, so cache reclamation and the hasLocalContent flag cannot commit independently.
+Forced-local notebook snapshots retain their existing behavior. A supplied URL is a reference,
+not a verified availability/durability guarantee; no network probe or migration was introduced.
+
+Four policy/eviction regressions failed before the fix. The final 47 repository/provider/autosave
+tests pass, including a forceLocal case with a remote reference
+(`/tmp/notebook-remote-retention-final.log`). Tests use controlled stores; no user's stored data
+was deleted by this verification. Native rollback of this specific remote transition remains
+to be checked, beyond the preceding generic two-store rollback audit.
+
+### Native long-source draft restoration
+
+An isolated Chrome run verified the source dialog with a 500-line Python cell. After a native
+Input.insertText edit, a backward range around line 350 and a real scrollTop of 6000 were set.
+Navigating away through the app router and returning, then reopening Notebook source, restored
+the exact source string, selection endpoints/direction and scrollTop after two animation frames.
+The live stored cell content remained equal to the pre-draft value. The test then cancelled the
+draft and closed the isolated browser (`/tmp/notebook-source-viewport-audit.mjs`, exit 0).
+
+This strengthens the earlier DOM-only viewport tests with actual textarea layout and route
+lifecycle evidence. It tests vertical scrolling in Chrome, not horizontal overflow, other
+browser engines, OS input-method composition, or recovery after a full page refresh.
+
+### Sparse external synchronization
+
+External store-to-editor synchronization now uses the same changed-run/LIS range planner as
+source application. Previously two separated external changes produced a single replacement
+spanning unchanged middle cells. Ranges are now applied right-to-left using one prefix-offset
+table; single-cell runs retain fine-grained text-diff selection mapping, while structurally moved
+selected cells retain ID-based relocation. The unused single-span planner and its private
+comparator were removed after verifying there were no remaining consumers.
+
+The new regression failed before migration and now verifies two local steps, no deleted mapping
+for the middle cell, retained node identity and unchanged caret offset. Synchronization, source
+transitions and source application pass together: 92 tests
+(`/tmp/notebook-sync-ranges-final.log`), including 500/1000-cell cases. Stable-order range planning
+and offset construction are O(n); structural range planning is O(n log n), with O(n) auxiliary
+storage. Projection still traverses the document and ProseMirror step costs depend on the number
+and shape of changed runs; this is not an O(1) typing or globally optimal rendering claim.
+
+### Selection endpoints after external reordering
+
+Structural synchronization now records both text-selection endpoints, not just the anchor.
+Endpoints in retained blocks use transaction mapping; endpoints in replaced/moved blocks are
+relocated by cell ID and clamped intra-block offset. TextSelection.between reconstructs a valid
+range rather than collapsing it through Selection.near. The endpoint records are constant-size;
+restoration scans the next blocks once and does not build another document-sized lookup map.
+
+Four forward/backward cases cover both sides of a two-cell reorder (retained and moved cell),
+and all 36 synchronization/source-application tests pass (`/tmp/notebook-moved-selection-final.log`).
+The initial two cases selected only the retained cell and passed before the change; those alone
+were insufficient evidence, so coverage was expanded to the other cell. This is model-level
+selection evidence, not native drag-selection or cross-cell range verification.
+
+Cross-cell forward/backward reorder cases now verify both endpoints retain their original cell
+ownership and offsets. A further regression exposed that moving and editing a cell in the same
+external update restored the old offset without accounting for inserted text. The shared
+same-markup block-content diff now drives both ordinary text replacement and a relative StepMap
+for relocated endpoints. Prefix insertion, prefix deletion and empty-body cases pass; the
+insertion case failed before the change. All 41 synchronization/source-application tests pass
+(`/tmp/notebook-moved-text-final.log`). This strengthens model coverage, not native drag-selection
+coverage. Multiple disjoint edits within one block still use one contiguous content diff, as the
+existing single-cell synchronization does; exact intent-aware mapping between those edits is
+not claimed.
+
+### Full storage/selection integration gate
+
+The complete current test suite passes: 732 tests across 86 files, exit 0 in 238.62s
+(`npx vitest run --maxWorkers=2`, `/tmp/notebook-storage-selection-integration.log`). This includes
+the indexed file repository, transaction-owned reads/updates, remote cache policy, sparse
+external synchronization, moved/edited selection mapping and source history branch regressions.
+No build ran concurrently and test timeouts were unchanged. This supersedes the 701-test gate
+as current full-suite evidence; production build/typecheck were not rerun in this pass.
+The concise use-case audit and outstanding risks are in `docs/EDITOR_OPTIMIZATION_STATUS.md`.
+
+### Shared prepared file records for aggregate saves
+
+FileRepository.saveFile now delegates record construction and transaction-local requests to
+FileRecordSet. This separates pure preparation (metadata, optional content, bounded preview,
+local/remote policy) from ownership of the transaction. A future notebook aggregate save can
+reuse the same record preparation/write logic inside its wider transaction rather than invoke
+saveFile, which opens a transaction of its own. The existing repository already uses the new
+class; its former record-building body and unused compression-option local were removed.
+No alternate save path or compatibility implementation was retained.
+
+All 49 record/repository/provider/autosave tests pass (`/tmp/notebook-file-records-final.log`),
+including explicit metadata/body identity and remote-eviction preparation tests. Public saveFile
+behavior and record format remain unchanged. This is a prerequisite refactor, not completed
+notebook aggregate atomicity: AutoSaveService still invokes the separate metadata/file saves.
+
+### Atomic notebook snapshot migration
+
+AutoSaveService now calls NotebookRepository.saveNotebookSnapshot instead of independently
+calling saveNotebook and FileRepository.saveFile. The repository reads createdAt and writes
+notebook metadata, activity, file metadata and forced-local content within one transaction over
+all four stores. FileRecordSet supplies the existing file format/policy. Ordinary saveNotebook
+uses the same private transaction implementation with only notebook/activity stores; the old
+separate activity-write helper was removed. Snapshot identity mismatches fail before opening
+a transaction, and success is acknowledged only after commit.
+
+All 54 targeted autosave/record/repository/provider tests pass
+(`/tmp/notebook-atomic-snapshot-tests.log`). Autosave tests now mock the aggregate entry point,
+exercise its retry/single-writer behavior, and explicitly ensure the old separate save methods
+are not called. Typecheck remains at 307 diagnostics with none matching the changed persistence
+interfaces/record/repository/autosave files (`/tmp/notebook-atomic-snapshot-types.log`).
+
+The real IndexedDB audit was extended to all four stores. After seeding a complete snapshot,
+injecting a failure at content put left a serialized readback of all four stores unchanged.
+The save rejected; a subsequent normal retry committed the new notebook title and body together
+(`/tmp/notebook-native-idb-audit.mjs`, exit 0). The initial script attempt preceded the browser's
+debug port readiness and exited with ECONNREFUSED; after confirming the same browser was live
+and listening, the audit ran successfully. Its uniquely named database was deleted and isolated
+browser closed; user data was untouched.
+
+This closes the separate notebook-list metadata/snapshot write gap noted in earlier entries.
+It does not implement stale-revision conflict checks across tabs, crash-durable unapplied source
+drafts, quota-specific fault tests or incremental O(changes) persistence. Full-suite/build gates
+have not yet been rerun after this migration.
+
+### Post-atomic-save integration gate
+
+The complete suite now passes after the aggregate snapshot migration: 739 tests / 88 files,
+exit 0 in 71.73s (`npx vitest run --maxWorkers=2`, `/tmp/notebook-atomic-full.log`). The subsequent
+production build passes in 38.02s, exit 0 (`/tmp/notebook-atomic-build.log`), with NotebookApp at
+2099.82 kB minified / 669.31 kB gzip. Test timeouts were unchanged; build and tests ran sequentially.
+Oversized-chunk warnings remain. `git diff --check` is clean. These gates supersede the earlier
+pre-migration full-suite/build results, but do not close the outstanding draft durability,
+cross-tab conflict or complete virtualization requirements.
+
+### Transaction-owned notebook access statistics
+
+NotebookRepository.getNotebook and updateAccessTime now share one transaction-owned access
+operation. It reads the latest notebook, updates its count/time and acknowledges completion
+under one readwrite transaction. This removes getNotebook's redundant second read and prevents
+an old access-statistics snapshot from overwriting a newly saved title or recreating a deleted
+notebook. getNotebook returns the accessed record, including the newly incremented count;
+missing records still return null and updateAccessTime remains a no-op for them.
+
+The stale-title/deleted-notebook regressions failed before the change; all 37 notebook/provider/
+autosave tests pass (`/tmp/notebook-access-final.log`), including single-read access and absent
+records. No full suite/build or native concurrency audit was rerun for this follow-up. Logical
+cross-tab editing conflicts still require revision checks independently of access-statistics
+transaction safety.
+
+### Composition-safe source cancellation
+
+The source dialog now checks composition in its shared cancel operation, rather than only in
+the native dialog cancel handler. Previously the Cancel button bypassed that protection and
+unmounted the textarea while its composition flag was active. The new button regression failed
+before the change and confirms the draft remains mounted until composition ends; a subsequent
+Cancel closes it without applying text. All 54 dialog/registry tests pass
+(`/tmp/notebook-source-cancel-final.log`). This uses component composition events, not a native
+OS input-method audit. The existing native dialog path delegates to the same guarded operation.
+
+### Clean source buffers with retained edit history
+
+Detaching a named source draft now releases it as untouched only when its source is unchanged
+and neither undo nor redo is available. Previously undoing back to the original source made
+hasEdits false, so route detachment discarded the remaining redo branch. A new regression
+failed before the change and now resumes the same draft, redoes its edit, and verifies explicit
+Cancel still releases it. All 65 registry/history/dialog tests pass
+(`/tmp/notebook-clean-redo-final.log`).
+
+Completely untouched drafts and anonymous detached drafts retain their existing release rules.
+Unchanged text alone does not trigger the unload warning even when history is retained. This
+deliberately preserves meaningful history in memory; it is not bounded retention or durable
+draft persistence, and can retain more memory than the former incorrect early-release rule.
+
+### Preserve node selections during external reordering
+
+External synchronization now restores NodeSelection when the same cell ID survives at the
+mapped position and its node is selectable. Previously generic Selection.near converted a
+moved image selection into a nearby text caret. The image-reorder regression failed before
+the change; the synchronization suite now passes all 38 tests, including removal of the
+selected image without incorrectly selecting the following text cell as a node. Restoration
+uses the existing endpoint scan and adds constant work; projection and structural planning
+complexities are unchanged. This is model-level coverage, not a native drag-selection audit.
+
+Full regression after this and the access-statistics/source cancellation/redo follow-ups:
+747 tests across 88 files pass in 58.88s, exit 0 (`/tmp/notebook-selection-full.log`,
+`npx vitest run --maxWorkers=2`). No concurrent build or timeout changes. `git diff --check`
+passes. The earlier production build/typecheck results predate these follow-ups.
+
+### Generated-content append semantics
+
+Markdown append now uses the same lexer-based heading recognition as notebook title ownership,
+covering ATX H1–H6 and Setext headings without treating hashtags or indented/fenced code as
+headings. Markdown and code append create a new cell with its complete incoming content,
+removing the intermediate empty-cell publication and subsequent updateCell traversal. Existing
+body append still uses updateCell. The shared leading-heading function replaces the independent
+trim/hash-prefix rule; it lexes source and is not a constant-time operation.
+
+Six new regression cases failed before this change (hashtags, indented code, two Setext forms,
+and intermediate publication for both cell types). All 58 identity/structure tests pass after
+the change (`/tmp/notebook-append-after.log`). The subscription checks verify every observed new
+body already contains its text; they do not claim all store notifications are eliminated.
+The broader store/Markdown gate also passes: 116 tests across 11 files, exit 0 in 5.11s
+(`/tmp/notebook-append-integration.log`). `git diff --check` is clean. The 747-test full-suite
+result predates this append change; no production build was rerun for this follow-up.
+
+### Whole-document selection is not cell-owned
+
+An AllSelection now bypasses cell-endpoint relocation during external synchronization and
+uses ProseMirror's own whole-document mapping. Replacing the first cell previously relocated
+its anchor as if it belonged to that cell and collapsed the selection to a text caret. The
+new regression failed before the change and verifies both selection class and full bounds
+after replacing the title and appending a cell. No extra document scan or retained data was
+introduced. All 99 synchronization/source-transition tests pass in 14.59s, exit 0
+(`/tmp/notebook-all-selection-after.log`), and `git diff --check` passes. This is model-level
+coverage, not a native keyboard/clipboard audit; full-suite/build gates predate this follow-up.
+
+### Selected-range source indentation without copying the unselected tail
+
+The shared indentation descriptor now stops at the selection endpoint instead of searching
+for and copying the remainder of its last line. Outdent extends only as far as necessary to
+remove that line's complete indentation prefix. This avoids processing/allocating an arbitrarily
+large unselected suffix; finding the first line boundary and processing the selected region
+still cost work, and textarea value publication still materializes the full result.
+
+Two 100,000-character short-selection regressions failed before the change. They now assert
+small exact replacement ranges for indent and outdent. Additional coverage checks cross-line
+endpoint mapping when outdent consumes beyond the selected prefix. All 61 indentation,
+input-history and source-dialog tests pass in 18.27s (`/tmp/notebook-indent-range-final.log`);
+`git diff --check` passes. Full-suite/build results predate this follow-up.
+
+### Integrated regression gate after append, selection and indentation changes
+
+The full suite passes 761 tests across 88 files, exit 0 in 102.87s
+(`/tmp/notebook-editor-integrated-final.log`). The subsequent production build passes in
+59.68s (`/tmp/notebook-editor-integrated-build.log`), retaining oversized-chunk warnings:
+NotebookApp is 2100.08 kB minified / 669.41 kB gzip. Tests and build ran sequentially with
+unchanged test timeouts. Typecheck then exits 2 with 307 diagnostics
+(`/tmp/notebook-editor-integrated-types.log`); an exact diff of its `error TS` lines against
+`/tmp/notebook-atomic-snapshot-types.log` is empty. These are integration gates, not latency
+benchmarks or proof of draft durability, full virtualization, or cross-tab conflict safety.
+
+### Mermaid error-state geometry
+
+A failed preview now retains the last measured diagram height as a minimum, just like the
+loading placeholder retains its height. Previously a valid large diagram followed by invalid
+source collapsed into the small error message, moving following cells during editing. Minimum
+height leaves long diagnostic text free to grow; successful rendering and explicitly empty
+source do not retain the error-style minimum. No SVG cache or extra render was introduced.
+
+The new ready→failed→retry→ready regression failed before the change and checks geometry style
+through each transition. All 31 Mermaid preview, NodeView and render-service tests pass
+(`/tmp/notebook-mermaid-error-height-after.log`); `git diff --check` passes. Height is mocked in
+this component test, so it does not establish native browser layout-shift measurements.
+The 761-test full suite and integrated production build predate this follow-up.
+
+Native follow-up: an isolated headless Chrome profile mounted the actual MermaidPreview,
+ThemeProvider and loaded editor styles with real Mermaid rendering, plus a following-content
+sentinel. A five-node vertical flowchart measured 443.203125px tall. Its following-content top
+remained exactly 463.203125px through valid→invalid→repaired source; the error and recovered
+states retained the same measured height. `/tmp/notebook-mermaid-layout-audit.mjs` passed and
+unmounted its temporary component. The first harness attempt failed on Vite's CommonJS default
+export shape; correcting that harness import allowed the same live browser to complete the
+audit. This verifies one real layout transition, not cumulative layout shift for all diagrams,
+all themes, or multiple browser engines. The user's browser/notebook was not modified.
+
+### Apply known indentation ranges in the notebook source dialog
+
+The notebook-wide source dialog now passes the indentation descriptor into its shared native
+input/selection restoration operation. Previously it computed a small replacement but then
+called setRangeText with the entire draft, losing the benefit at the DOM boundary. Undo/redo
+still restores its complete history result because no changed-range descriptor is exposed
+there; this is not a constant-time history claim.
+
+The new component regression failed before the change and now verifies a one-character
+backward selection replaces only that character plus indentation, retains direction and
+mapped endpoints, and undoes to the original source. All 52 dialog/indentation tests pass
+(`/tmp/notebook-source-local-after.log`, exit 0 in 8.14s). The draft/history still materialize
+full strings, and this targeted gate does not replace the earlier full-suite/build evidence.
+
+### Native history ownership for source NodeViews
+
+Markdown source and Mermaid source inputs now share a native beforeinput history subscription.
+Cancelable historyUndo/historyRedo events route to the same ProseMirror commands as keyboard
+shortcuts, rather than leaving browser-local textarea history as a second owner. Composition,
+read-only, destroyed-editor and current-node ownership checks precede routing; noncancelable
+events remain browser-owned. Listener cleanup follows the mounted source input, including
+Mermaid preview/source transitions.
+
+Both Markdown native-history regressions failed before implementation. The targeted suite
+passes 42 tests across source NodeView, Mermaid controls and keyboard history, including
+composition/read-only guards and proving a detached Mermaid input no longer runs history
+while the new input runs exactly once (`/tmp/notebook-native-history-final.log`). These are
+dispatched InputEvents in component tests, not an OS Edit-menu audit. Full-suite/build gates
+predate this follow-up.
+
+### Linear ordered-survivor structural planning
+
+The LIS planner directly extends its tail when a retained block follows the previous tail in
+the original order. Common sparse insertions/deletions therefore do not binary-search every
+surviving block: subsequence planning is O(n) for ordered survivors, while arbitrary reorders
+remain O(n log n) worst case and O(n) auxiliary space. These bounds concern block planning;
+node equality may traverse content when references differ, and applying ProseMirror steps has
+its own cost. No claim of constant-time document synchronization follows.
+
+Added a 10,000-block sparse insertion/deletion case with exact minimal ranges and a mixed-order
+case exercising transitions between direct extension and binary search against an LCS oracle.
+The existing randomized reconstruction/optimal retained-count checks remain. All 43 planner
+and document synchronization tests pass (`/tmp/notebook-ordered-structure.log`, 9.06s), and
+`git diff --check` passes. This is an algorithmic improvement, not a measured UI latency budget.
+
+### Stable code-output projection and DOM ownership
+
+CodeCellViewModel now owns an OutputProjection that caches the current immutable output array
+and weakly caches each source object's normalized result. Repeated getter reads, hover and
+toolbar changes reuse the same array in O(1). A new array still needs O(n) traversal, but retained
+objects keep their normalized payloads and keys rather than repeatedly stringifying images or
+generating random identities. Weak keys do not strongly retain obsolete source output objects.
+This relies on the store's immutable output updates; it does not support in-place mutation.
+
+OutputDisplay no longer keys its whole subtree by output count/update counters. Existing rows
+remain mounted when another result is appended. Removed the unused output-update counter path
+and the unreferenced useOutputProcessing hook (including its 100ms timer and duplicate
+projection), after confirming no remaining source callers. These tracked removals are recoverable
+through Git. The active view-model path had no caller of its increment method; this is not a
+claim that the active path previously polled every 100ms.
+
+All 35 CodeCell tests across 8 files pass (`/tmp/notebook-output-stability.log`, 7.55s), including
+single image normalization across append, stable getter identity and preserved existing output
+DOM across unrelated rerenders/append. `git diff --check` passes. Actual rendering may still
+visit all output rows, so this is not output virtualization or constant-time streamed append.
+Typecheck still reports 307 diagnostics (`/tmp/notebook-output-types.log`), with none naming
+OutputProjection, OutputDisplay or sourceInputHistory. An additional boundary remains:
+updateCellOutputsHelper currently clones every output during serialization, so weak identity
+reuse benefits retained objects but does not yet stabilize anonymous keys across those cloned
+store snapshots. The DOM append test uses retained source objects and must not be generalized
+to that cloning path. Full-suite/build gates predate this follow-up.
+
+### Canonical output reuse across serialized snapshots
+
+updateCellOutputsHelper now reconciles serialized output rows with the current canonical
+snapshot before publication. Same-position shallow-equal rows retain their immutable objects;
+identical snapshots retain the array and skip the store update. Changed/removed fields or
+changed nested object references are not hidden. Error/empty sentinel construction remains
+upstream of reconciliation, preserving its existing behavior. Equal duplicate rows remain
+separate identities; this is not a content-deduplication cache.
+
+The store identity regression failed before the change. The subsequent gate passes 90 tests
+across 10 files (`/tmp/notebook-output-store-final.log`, 8.88s), including a real store update→
+OutputProjection→OutputDisplay append case that retains the original DOM element. This closes
+the serialized-clone limitation noted above for unchanged rows at stable positions. Anonymous
+rows moved to different indices are not matched, and snapshot serialization plus field
+comparison remains linear in rows/fields (payload stringification has its own byte cost).
+`git diff --check` passes; full-suite/build gates predate this follow-up.
+
+### Skip unchanged output rendering and isolate ANSI state
+
+OutputRenderer now uses React.memo with the stable immutable output objects provided by
+OutputProjection. Unrelated parent updates no longer repeat ANSI conversion for unchanged
+rows. Parent list reconciliation still visits output entries; this is not list virtualization.
+TextOutput creates an ANSI parser for its own snapshot rather than sharing one mutable parser
+across all output cells. An unterminated color sequence in one output previously colored a
+different independent output, making presentation depend on rendering order.
+
+Both new regressions failed before the change: the unchanged output parsed twice, and the
+second plain output inherited red styling. The tests now verify one parse for an unchanged
+object, another parse after replacement, and isolated formatting. Full-suite/build gates
+predate this follow-up; the CodeCell gate is recorded in `/tmp/notebook-output-render-after.log`.
+
+### Image-output resource lifecycle
+
+Image output failures now render through React state, scoped to a URL-keyed resource component.
+The previous handler imperatively hid the image and appended error DOM on every error event;
+replacing the URL under a stable output key retained that hidden style and stale error nodes.
+The new lifecycle emits one error state, releases the failed image, and starts a fresh image
+when its URL changes (including changing back to an earlier URL). It adds no global cache.
+
+The new regression failed before the change and verifies repeated errors do not duplicate the
+message, replacement images remain visible, old detached image events cannot poison the new
+state, and changing back permits another attempt. The CodeCell suite passes 39 tests across
+9 files (`/tmp/notebook-image-output-after.log`); `git diff --check` passes. These dispatched
+image events do not establish real network/decode behavior. Full-suite/build gates predate this
+follow-up.
+
+### Output value fidelity and a single generated-key owner
+
+Text/error normalization and text/HTML rendering now use nullish empty-value handling, so
+numeric zero and boolean false remain visible rather than becoming empty strings. Explicit
+numeric-zero and empty-string output keys are retained. Automatic key generation now belongs
+only to OutputProjection; processOutput preserves provided keys and no longer independently
+allocates timestamp/random keys, including conversion failures.
+
+All six added falsy-value/key regressions failed before the change. The CodeCell gate passes
+45 tests across 9 files (`/tmp/notebook-output-values-after.log`), covering text, error and HTML
+both at projection and rendering boundaries. `git diff --check` passes. The preceding 785-test
+integration result/build predates this follow-up; arbitrary HTML trust policy is unchanged.
+
+### Integrated gate including output rendering and native source history
+
+All 785 tests across 92 files pass in 61.01s, exit 0
+(`/tmp/notebook-output-integrated-tests.log`). Sequential production build passes in 31.47s
+(`/tmp/notebook-output-integrated-build.log`); NotebookApp is 2100.17 kB minified / 669.38 kB gzip
+and oversized-chunk warnings remain. Typecheck exits 2 with 307 diagnostics
+(`/tmp/notebook-output-integrated-types.log`). Compared to the previous integrated typecheck,
+ignoring source-coordinate shifts leaves only the displayed ordering of one union type in
+the existing chart.tsx constraint error. `git diff --check` passes. These checks include the
+latest output identity, ANSI, image lifecycle, native source history and LIS fast-path changes;
+they do not prove latency budgets, durable drafts or cross-tab conflict safety.
+
+### Apply source undo/redo as native input ranges
+
+SourceDraftHistory.step can publish the actual transaction replacement ranges after advancing
+its model. The source dialog applies old-coordinate ranges in descending order and restores
+history selection through the same operation used by indentation. Keyboard, native history
+events and toolbar buttons use this path; the full-text setRangeText history path was removed.
+The existing boolean step result and callers without a range observer are unchanged.
+
+Three new component regressions failed before integration. They verify undo of one inserted
+character writes only its deletion range and redo writes only its insertion range across all
+three entry points. All 55 source-history/dialog tests pass in 7.81s
+(`/tmp/notebook-history-range-after.log`); `git diff --check` passes. History still materializes
+its current string and textarea internals have their own costs, so this reduces native write
+payloads, not total undo to O(1). Full-suite/build gates predate this follow-up.
+
+Incremental-history follow-up: a deterministic seeded test generates 30 histories of 30
+replacement attempts, including Unicode, multiline insertions, deletions and directional
+selections. It maintains a separate string mirror using only the published replacement ranges,
+then undoes and redoes every actual edit against saved expected snapshots. It also checks range
+bounds, selection bounds and that exhausted undo/redo emits no callback. All 56 history/dialog
+tests pass (`/tmp/notebook-history-random-ranges.log`, 8.71s). This adds broader model evidence
+for range application; it is not an exhaustive Unicode/IME or native-browser history proof.
+
+### Plain Backspace owns structural conversion
+
+Code-cell fence interception and standalone empty-code conversion now share a plain-Backspace
+predicate excluding Ctrl/Meta/Alt/Shift modifiers. Standalone conversion additionally requires
+an empty CodeMirror selection; a backward selection ending at offset zero no longer converts
+the whole whitespace cell instead of deleting selected text. Existing IME guards remain.
+
+All five modified-key/selection regressions failed before the change. The CodeCell gate passes
+67 tests (`/tmp/notebook-backspace-boundary-after.log`); `git diff --check` passes. The existing
+plain empty-Backspace conversion test also remains green. Full-suite/build gates predate this
+follow-up; platform-specific deletion shortcut behavior was not separately browser-audited.
+
+### Empty-code conversion publishes its editing target synchronously
+
+The standalone code-cell empty-Backspace path now sets editingCellId immediately after its
+type transition, removing a 50ms delayed store write that could overwrite a newer editing
+target after navigation. This is state publication, not imperative DOM focus; the destination
+view still owns focusing after mount. The Tiptap fence-break interception remains unchanged.
+
+The new regression failed before the change. It verifies immediate Markdown type/editing
+target publication, no new timer, and that a subsequent editing target survives advancing time.
+All 62 CodeCell tests pass (`/tmp/notebook-conversion-focus-after.log`); `git diff --check` passes.
+Native focus after this standalone conversion has not been separately audited. Full-suite/build
+gates predate this follow-up.
+
+### Collapse-scroll ownership and cancellation
+
+The code-cell view model owns at most one pending collapse scroll. Expanding again, scheduling
+a newer collapse or unmounting cancels it; execution checks that the captured DOM element is
+still connected, still owned by the same ref and still collapsed. This removes the old callback
+that looked up whichever element happened to occupy the ref later.
+
+The expand-before-timeout regression failed before the change. Coverage now includes removed
+and replaced targets, unmount timer cancellation, and the normal collapsed target scrolling once
+even after repeated collapse requests. The broad CodeCell gate passed 60 tests before the last
+positive-path case (`/tmp/notebook-collapse-scroll-after.log`); the final model/hook gate is
+`/tmp/notebook-collapse-scroll-final.log`. `git diff --check` passes. Native animated scroll
+behavior was not re-audited; full-suite/build gates predate this follow-up.
+
+### Focus/composition owns the expanded editing surface
+
+Height publication still updates geometry while CodeMirror is focused or composing, but no
+longer changes automatic expansion state during that interaction. Previously crossing the
+height threshold could collapse an actively edited surface and hide the caret. The guard reads
+the existing editor ref rather than introducing another independently synchronized focus flag.
+Manual expansion policy remains authoritative, and subsequent measurements outside interaction
+can resume automatic sizing.
+
+Both focus/composition regressions failed before the change. The CodeCell gate passes 56 tests
+(`/tmp/notebook-focused-height-after.log`); `git diff --check` passes. These tests use editor
+interaction flags; native IME and threshold-crossing typing still require browser evidence.
+Full-suite/build gates predate this follow-up.
+
+### Active code-height ownership and lossless initial subscription
+
+CodeEditor now sends active, non-detached content measurements to CodeCellViewModel through
+useCodeContentHeight. The observer watches the wrapper and its editor child so constrained
+viewports still report content growth; suspension/unmount disconnects observation and rejects
+late callbacks. The view model ignores zero/non-finite hidden measurements, publishes actual
+height changes once, and preserves manual expansion. Detached views remain unconstrained.
+Removed the unreferenced useCodeExpansion hook and barrel export; Git can recover that tracked
+file, but no parallel expansion policy remains in production.
+
+CodeCell's subscription now uses useSyncExternalStore with a revision snapshot from the base
+view model. This detects a child layout measurement that occurs between render and subscription,
+which the former passive forceUpdate listener could miss. The base revision increments before
+notifying subscribers; existing subscribers remain supported.
+
+All 116 cell tests across 20 files pass (`/tmp/notebook-code-height-final.log`, 18.68s), including
+observer cleanup, height publication and initial child-layout notification. Two old CodeEditor
+fixtures initially omitted required refs via casts; supplying the actual ref/callback contract
+fixed those fixtures. Typecheck remains at 307 diagnostics (`/tmp/notebook-code-height-types.log`)
+with none naming the changed height/view-model modules. `git diff --check` passes. Real-browser
+CodeMirror height growth, collapse and suspension geometry still require a dedicated audit;
+full-suite/build gates predate this follow-up.
+
+Native code-height follow-up: `/tmp/notebook-code-height-audit.mjs` passes in isolated headless
+Chrome with the actual notebook and CodeMirror. A 120-line Python cell collapsed to 200px,
+expanded to 2023.625px (2024px measured max), grew to 2057px after two appended lines, and
+returned to 24.796875px with max-height:none after shortening to one line. Metadata updates
+preserved manual collapse. The harness waits for the expansion animation to settle before
+comparing growth.
+
+Initial harness attempts hit CDP Promise-collected errors while awaiting a dynamic import.
+Importing a query-free module also produced a separate development-store instance, so that
+attempt's timeout was not valid evidence about shortening behavior. Retaining the timestamped
+module import on window, resolving it separately, then using that active store fixed the
+harness. The final measured transitions use the real mounted cell. No user browser/profile
+was touched. This does not cover suspension/resumption geometry or multiple browser engines.
+
+### Expansion responds to output transitions, not output presence
+
+CodeCellViewModel now requires a changed output array before auto-expanding a collapsed tall
+cell. Previously existing outputs caused unrelated text/metadata updates to reopen it. The
+new regression failed before the change and verifies manual collapse survives unrelated
+updates while genuinely new outputs preserve the existing auto-expansion behavior. All 51
+CodeCell tests pass (`/tmp/notebook-collapse-after.log`); `git diff --check` passes.
+
+This is model-level evidence with an assigned measured height. The audit also found that the
+active CodeCell view-model hook currently does not wire setContentHeight; the old unreferenced
+useCodeExpansion hook still contains resize observation. Restoring a single active measurement
+owner and removing that obsolete hook remains necessary before claiming complete browser
+collapse/resize behavior. Full-suite/build gates predate this follow-up.
+
+### Atomic CodeCell view-model prop publication
+
+CodeCellViewModel.updateProps now completes content synchronization, expansion and output
+visibility before notifying subscribers once. Previously several branches notified separately,
+exposing partial view state and repeating subscriber work within a single prop update. Replaying
+identical props emits nothing; changing demo mode alone now emits an update even when the cell
+object is unchanged. Output availability is read once from the cached projection.
+
+Both new regressions failed before the change: one observed multiple partial snapshots and the
+other missed the demo-only update. All 50 CodeCell tests pass
+(`/tmp/notebook-vm-atomic-after.log`); `git diff --check` passes. This reduces model notification
+work; it does not measure React's own batching or browser frame latency. Full-suite/build gates
+predate this follow-up.
+
+### Single-owner thinking/output toggle
+
+The thinking-status branch no longer binds its toggle on both the visible control and its
+ancestor. The visible status owns the action while displayed; the existing output-container
+action remains on the output branch. The status control is now a native type=button instead
+of a click-only div. No event-propagation suppression is needed to mask a duplicate handler.
+
+The regression observed two callback invocations before the change and now verifies one
+invocation plus native button semantics. All 48 CodeCell tests pass
+(`/tmp/notebook-thinking-toggle-final.log`); `git diff --check` passes. Actual OS keyboard
+activation was not separately audited. Full-suite/build gates predate this follow-up.
+
+### Per-output render-failure isolation
+
+Replaced OutputRenderer's ineffective JSX-construction try/catch with a React error boundary
+around each output's child renderer. Failures now remain local to one output revision; changing
+that immutable output object resets the failed state and retries. The boundary retains only
+the output reference and failure flag, not another payload snapshot. Stable output memoization
+still avoids rerendering unchanged rows. No extra DOM wrapper is added on successful renders.
+
+A regression with a child-render conversion failure escaped render() before this change. It
+now verifies the neighboring output survives, the failure has a local alert, and replacing the
+bad output recovers. All 46 CodeCell tests pass across 9 files
+(`/tmp/notebook-output-boundary-after.log`); `git diff --check` passes. This isolates synchronous
+React rendering errors, not event-handler/network failures or arbitrary HTML execution.
+Full-suite/build gates predate this follow-up.
+
+### Separate output-list ownership from execution chrome
+
+OutputDisplay now places only immutable output rows behind a memoized OutputRows boundary.
+Elapsed-time, running-badge, surrounding layout and callback changes no longer traverse the
+unchanged output array, while execution chrome remains responsive. This extends the earlier
+per-row memoization: it avoids building the row element list itself when outputs are unchanged.
+Changed output arrays still require O(n) row reconciliation and all visible output DOM remains
+mounted; no virtualization claim follows.
+
+A 1000-row regression failed before the change because clock/status updates called the array
+map twice. It now observes no further row traversal while confirming the Running badge updates.
+All 47 CodeCell tests pass (`/tmp/notebook-output-list-after.log`); `git diff --check` passes.
+Full-suite/build gates predate this follow-up.

@@ -1,5 +1,66 @@
 import { expect, it } from 'vitest';
-import { indentSourceChange, indentSourceLines } from './sourceIndentation';
+import { indentSourceChange } from './sourceIndentation';
+
+// Apply the descriptor to verify text and selection together without a production snapshot adapter.
+function indentSourceLines(value: string, start: number, end: number, outdent: boolean) {
+  const edit = indentSourceChange(value, start, end, outdent);
+  return {
+    value: value.slice(0, edit.from) + edit.insert + value.slice(edit.to),
+    start: edit.start,
+    end: edit.end,
+  };
+}
+
+it('represents caret indentation as a prefix-only edit even on a very long line', () => {
+  const value = 'prefix\n' + 'x'.repeat(100000);
+  expect(indentSourceChange(value, 7, 7, false)).toEqual({
+    from: 7,
+    to: 7,
+    insert: '  ',
+    start: 9,
+    end: 9,
+  });
+  expect(indentSourceChange('  ' + value, 1, 1, true)).toEqual({
+    from: 0,
+    to: 2,
+    insert: '',
+    start: 0,
+    end: 0,
+  });
+});
+
+it('does not copy the unselected tail of a long line when indenting a short selection', () => {
+  expect(indentSourceChange('x'.repeat(100000), 0, 1, false)).toEqual({
+    from: 0,
+    to: 1,
+    insert: '  x',
+    start: 2,
+    end: 3,
+  });
+});
+
+it('removes the full indentation when the selection ends inside it without copying the line tail', () => {
+  expect(indentSourceChange('  ' + 'x'.repeat(100000), 0, 1, true)).toEqual({
+    from: 0,
+    to: 2,
+    insert: '',
+    start: 0,
+    end: 0,
+  });
+});
+
+it('maps both endpoints across lines when outdent extends past the selected final prefix', () => {
+  expect(indentSourceLines('  a\n  tail', 1, 5, true)).toEqual({
+    value: 'a\ntail',
+    start: 0,
+    end: 2,
+  });
+  expect(indentSourceLines('a\ntail', 0, 3, false)).toEqual({
+    value: '  a\n  tail',
+    start: 2,
+    end: 7,
+  });
+});
 
 it('returns only the selected line range for transaction-based editing', () => {
   const prefix = 'unchanged\n'.repeat(10000);

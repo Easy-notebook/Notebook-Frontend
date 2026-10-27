@@ -56,3 +56,35 @@ it('moves one block across 10000 others using one insertion and one deletion', (
   expect(ranges).toHaveLength(2);
   expect(ranges.reduce((sum, range) => sum + range.oldEnd - range.start, 0)).toBe(1);
 });
+
+it('retains ordered survivors across large sparse insertions and deletions', () => {
+  const current = Array.from({ length: 10000 }, (_, index) => block(index));
+  const next = [
+    ...current.slice(0, 2000),
+    block(10001),
+    ...current.slice(2001, 8000),
+    block(10002),
+    ...current.slice(8000),
+  ];
+  expect(structuralBlockRanges(current, next)).toEqual([
+    { start: 2000, oldEnd: 2001, newStart: 2000, newEnd: 2001 },
+    { start: 8000, oldEnd: 8000, newStart: 8000, newEnd: 8001 },
+  ]);
+});
+
+it('switches between direct extension and binary search without losing optimal anchors', () => {
+  const current = Array.from({ length: 10 }, (_, index) => block(index));
+  const next = [4, 5, 1, 2, 6, 7, 0, 8, 3, 9].map((index) => current[index]);
+  const ranges = structuralBlockRanges(current, next);
+  expect(current.length - ranges.reduce((sum, range) => sum + range.oldEnd - range.start, 0)).toBe(
+    longestCommon(current, next)
+  );
+  const rebuilt = [...current];
+  for (const range of [...ranges].reverse())
+    rebuilt.splice(
+      range.start,
+      range.oldEnd - range.start,
+      ...next.slice(range.newStart, range.newEnd)
+    );
+  expect(rebuilt).toEqual(next);
+});
