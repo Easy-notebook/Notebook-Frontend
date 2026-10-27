@@ -89,7 +89,7 @@ export const TabSwitcher = memo<{
   className?: string;
 }>(({ activeTab, onTabChange, className = '' }) => {
   return (
-    <div className={`flex space-x-0.5 p-1 rounded-lg ${className}`}>
+    <div className={`flex flex-wrap justify-center gap-0.5 p-1 rounded-lg ${className}`}>
       {TAB_CONFIG.map((tab) => (
         <button
           key={tab.id}
@@ -117,7 +117,7 @@ export const TabSwitcherGeneric = memo<{
   className?: string;
 }>(({ items, activeId, onChange, className = '' }) => {
   return (
-    <div className={`flex space-x-0.5 p-1 rounded-lg ${className}`}>
+    <div className={`flex flex-wrap justify-center gap-0.5 p-1 rounded-lg ${className}`}>
       {items.map((tab) => (
         <button
           key={tab.id}

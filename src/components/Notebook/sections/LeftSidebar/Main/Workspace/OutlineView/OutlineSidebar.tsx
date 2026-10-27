@@ -1,3 +1,4 @@
+import { NotebookContextPanel } from '../Context/NotebookContextPanel';
 // moved to sections/LeftSideBar/Main/Workspace/OutlineView
 import { useState, useCallback, memo, useMemo, useEffect } from 'react';
 import useStore from '@Store/notebookStore';
@@ -47,7 +48,7 @@ const OutlineSidebar = ({
   const notebookId = useStore((state) => state.notebookId);
   const previewMode = usePreviewStore((s) => s.previewMode);
 
-  const [activeTab, setActiveTab] = useState<'file' | 'outline' | 'agents'>(
+  const [activeTab, setActiveTab] = useState<'file' | 'outline' | 'agents' | 'context'>(
     previewMode === 'file' ? 'file' : 'outline'
   );
   const [isHovered, setIsHovered] = useState(false);
@@ -135,7 +136,7 @@ const OutlineSidebar = ({
   }, [previewMode]);
 
   // Handle tab change and keep preview mode in sync
-  const handleTabChange = useCallback((tab: 'file' | 'outline' | 'agents') => {
+  const handleTabChange = useCallback((tab: 'file' | 'outline' | 'agents' | 'context') => {
     setActiveTab(tab);
     const ps: any = usePreviewStore.getState();
     if (tab === 'file') {
@@ -164,7 +165,9 @@ const OutlineSidebar = ({
 
       {/* 中间内容：根据 activeTab 切换显示 */}
       <SidebarContent>
-        {activeTab === 'file' ? (
+        {activeTab === 'context' ? (
+          <NotebookContextPanel key={notebookId} readOnly={viewMode === 'demo'} />
+        ) : activeTab === 'file' ? (
           // 文件视图：使用 FileTree 组件，简化容器支持换行
           <div className="py-0">
             <FileTree notebookId={notebookId || ''} projectName={projectName} />

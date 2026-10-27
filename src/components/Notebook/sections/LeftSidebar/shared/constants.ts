@@ -34,7 +34,7 @@ export const SHARED_STYLES = {
   // Obsidian风格容器样式
   container: {
     base: 'relative h-full flex flex-col bg-transparent shadow-none',
-    header: 'h-14 flex items-center justify-between px-4 shrink-0',
+    header: 'min-h-14 flex items-center justify-between px-2 py-2 shrink-0',
     content: 'flex-1 overflow-y-auto scrollbar-thin scrollbar-track-transparent',
   },
 
@@ -126,6 +126,7 @@ export const TAB_CONFIG = [
   { id: 'outline', label: 'Outline', icon: null },
   { id: 'file', label: 'Files', icon: null },
   { id: 'agents', label: 'Agents', icon: null },
+  { id: 'context', label: '上下文', icon: null },
 ] as const;
 
 export type TabId = (typeof TAB_CONFIG)[number]['id'];

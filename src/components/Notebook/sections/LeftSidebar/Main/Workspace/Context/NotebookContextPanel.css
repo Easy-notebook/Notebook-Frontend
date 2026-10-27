@@ -1,0 +1,103 @@
+.notebook-context {
+  color: rgb(var(--foreground));
+  font-size: 13px;
+  line-height: 1.65;
+  min-width: 0;
+}
+.notebook-context__header {
+  padding: 12px;
+  border-bottom: 1px solid var(--card-border);
+}
+.notebook-context__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.notebook-context__toolbar select,
+.notebook-context__toolbar button {
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 4px 7px;
+  background: rgb(var(--background));
+  color: inherit;
+  font-size: 12px;
+}
+.notebook-context button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.notebook-context button:focus-visible,
+.notebook-context summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.notebook-context__header > div:last-child button {
+  color: var(--color-primary);
+  font-size: 12px;
+}
+.notebook-context__directory {
+  padding: 12px;
+}
+.notebook-context__directory summary {
+  cursor: pointer;
+  padding: 6px 0;
+  font-weight: 500;
+}
+.notebook-context__directory button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.notebook-context__directory button:hover,
+.notebook-context__directory button[aria-current] {
+  background: var(--color-primary-100);
+}
+.notebook-context__document {
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.notebook-context__document h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.notebook-context__document h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 24px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--card-border);
+}
+.notebook-context__document h3 {
+  font-size: 13px;
+  font-weight: 500;
+  margin: 16px 0 8px;
+}
+.notebook-context__document p {
+  margin: 8px 0;
+}
+.notebook-context__document blockquote {
+  border-left: 2px solid var(--color-primary);
+  padding-left: 10px;
+  opacity: 0.8;
+  margin: 12px 0;
+}
+.notebook-context__document ul,
+.notebook-context__document ol {
+  padding-left: 18px;
+  list-style: revert;
+}
+.notebook-context__document button {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-align: left;
+}
+.notebook-context__empty {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--color-primary-100);
+}
