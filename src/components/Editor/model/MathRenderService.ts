@@ -1,4 +1,4 @@
-import { PreviewEngineLoadError } from './PreviewEngineLoadError';
+import { PreviewEngineLoadError } from '@/services/rendering/PreviewEngineLoadError';
 
 type Renderer = typeof import('./mathRenderer');
 

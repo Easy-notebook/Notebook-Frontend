@@ -223,7 +223,12 @@ export class CellExecutionSession {
       const owner = this.ports.notebookId();
       if (attempt.phase === 'initializing' && attempt.notebookId === null && owner !== null)
         attempt.notebookId = owner;
-      if (owner !== attempt.notebookId || !this.ports.cell(cellId))
+      const current = this.ports.cell(cellId);
+      if (
+        owner !== attempt.notebookId ||
+        !current ||
+        normalizeCodeLanguage(current.language) !== attempt.language
+      )
         this.finish(attempt, failure('execution_context_changed'));
     });
     if (this.current === attempt) void this.run(attempt);

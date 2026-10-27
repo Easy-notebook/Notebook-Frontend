@@ -1,3 +1,4 @@
+import { MermaidCellExecution } from '@/services/notebook/MermaidCellExecution';
 // store/codeStore.ts
 import { create } from 'zustand';
 import useStore from '@Store/notebookStore';
@@ -115,27 +116,31 @@ const useCodeStore = create<CodeStore>((set, get) => {
     cell: (id) => useStore.getState().cells.find((cell) => cell.id === id),
     watch: (check) => useStore.subscribe(check),
     initialize: (language) =>
-      language === 'aal'
+      language === 'aal' || language === 'mermaid'
         ? Promise.resolve(useStore.getState().notebookId || false)
         : get().initializeKernel(),
     execute: (code, owner, signal, language, cellId) =>
-      language === 'aal'
-        ? new NativeCellExecution(owner, cellId).execute(code, signal)
-        : CodeExecutionService.executeCode(code, owner, signal),
+      language === 'mermaid'
+        ? new MermaidCellExecution().execute(code, signal)
+        : language === 'aal'
+          ? new NativeCellExecution(owner, cellId).execute(code, signal)
+          : CodeExecutionService.executeCode(code, owner, signal),
     cancel: (owner, signal, language) =>
-      language === 'aal'
-        ? Promise.resolve({
-            status: 'error',
-            message:
-              'AAL cells finish within a 10 second worker deadline; server cancellation is unavailable',
-          })
-        : CodeExecutionService.cancelExecution(owner, signal),
+      language === 'mermaid'
+        ? Promise.resolve({ status: 'ok' })
+        : language === 'aal'
+          ? Promise.resolve({
+              status: 'error',
+              message:
+                'AAL cells finish within a 10 second worker deadline; server cancellation is unavailable',
+            })
+          : CodeExecutionService.cancelExecution(owner, signal),
     update: (id, state) => get().setCellExecState(id, state),
     clear: (id) => useStore.getState().clearCellOutputs(id),
     outputs: (id, outputs) => useStore.getState().updateCellOutputs(id, outputs),
     save: () => useStore.getState().triggerAutoSave(),
     startPolling: (id, language) => {
-      if (language !== 'aal') polling.start(id);
+      if (language === 'python') polling.start(id);
     },
     stopPolling: (id) => polling.stop(id),
     batchState: (batchExecution) => set({ batchExecution }),

@@ -1,8 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { observePreview } from './utils/previewVisibility';
 import { useTheme } from '@/contexts/ThemeContext';
-import { mermaidRenderService } from './model/MermaidRenderService';
-import { PreviewEngineLoadError } from './model/PreviewEngineLoadError';
+import { mermaidRenderService } from '@/services/rendering/MermaidRenderService';
+import { PreviewEngineLoadError } from '@/services/rendering/PreviewEngineLoadError';
 
 type RenderResult = { source: string; theme: string } & (
   | { status: 'ready'; svg: string }

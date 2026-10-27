@@ -80,7 +80,7 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
           disabledReason={
             canExecuteCodeLanguage(language)
               ? undefined
-              : 'Execution is available for Python and AAL'
+              : 'Execution is available for Python, AAL and Mermaid'
           }
         />
         <CodeLanguageSelect
@@ -93,9 +93,13 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
           <>
             <button
               onClick={onRestart}
-              disabled={language === 'aal'}
+              disabled={language !== 'python'}
               className="p-2 hover:bg-theme-600 rounded"
-              title={language === 'aal' ? 'AAL uses fresh state on every run' : 'Restart kernel'}
+              title={
+                language === 'python'
+                  ? 'Restart kernel'
+                  : 'This language does not use a persistent kernel'
+              }
             >
               <RefreshCw className="w-4 h-4" />
             </button>

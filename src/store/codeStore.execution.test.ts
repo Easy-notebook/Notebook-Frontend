@@ -411,3 +411,19 @@ it('preserves partial output supplied with a backend execution failure', async (
   expect(io.outputs).toHaveBeenCalledExactlyOnceWith('a', outputs);
   expect(io.save).toHaveBeenCalledOnce();
 });
+
+it('discards an in-flight result after the cell language changes', async () => {
+  const response = deferred<unknown>();
+  io.execute.mockReturnValue(response.promise);
+  const pending = state().executeCell('a');
+  await vi.advanceTimersByTimeAsync(0);
+  useNotebookStore.setState({
+    cells: useNotebookStore
+      .getState()
+      .cells.map((cell) => (cell.id === 'a' ? { ...cell, language: 'mermaid' } : cell)),
+  });
+  expect(await pending).toMatchObject({ error: 'execution_context_changed' });
+  response.resolve({ status: 'ok', outputs: [{ type: 'text', content: 'stale' }] });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(io.outputs).not.toHaveBeenCalled();
+});

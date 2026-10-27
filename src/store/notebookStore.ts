@@ -1168,6 +1168,10 @@ const useStore = create(
         const replacement = {
           ...cell,
           ...updates,
+          // Outputs belong to the language that produced them, never its replacement.
+          ...(updates.language !== undefined && updates.language !== cell.language
+            ? { outputs: [] }
+            : {}),
           ...(updates.metadata ? { metadata: { ...cell.metadata, ...updates.metadata } } : {}),
         };
         const cells = state.cells.slice();
