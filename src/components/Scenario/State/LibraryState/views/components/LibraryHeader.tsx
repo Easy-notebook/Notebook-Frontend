@@ -7,8 +7,6 @@ import { RefreshCw, Grid, List, Search as SearchIcon, TreePine } from 'lucide-re
 import { formatSize } from '../../utils';
 import type { LibraryHeaderProps } from '../../types';
 
-const { Search: AntSearch } = Input;
-
 const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
   ({
     totalNotebooks,
@@ -21,7 +19,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
     onRefresh,
   }) => (
     <div className="px-6 py-4">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -44,11 +42,13 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
           </Button>
           <Button
             type={viewMode === 'grid' ? 'primary' : 'default'}
+            aria-label="Grid view"
             icon={<Grid className="w-4 h-4" />}
             onClick={() => onViewModeChange('grid')}
           />
           <Button
             type={viewMode === 'list' ? 'primary' : 'default'}
+            aria-label="List view"
             icon={<List className="w-4 h-4" />}
             onClick={() => onViewModeChange('list')}
           />
@@ -56,11 +56,13 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
       </div>
 
       {/* Search Bar */}
-      <AntSearch
+      <Input
         placeholder="Search Notebook..."
+        aria-label="Search notebooks"
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
         style={{ maxWidth: 420 }}
+        size="large"
         prefix={<SearchIcon className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
         allowClear
       />

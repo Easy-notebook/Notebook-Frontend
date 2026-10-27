@@ -1,0 +1,95 @@
+/* The shell owns the surface and focus ring; its textarea is only a text layer. */
+.ai-command-input {
+  --composer-surface: #fff;
+  --composer-text: #202124;
+  --composer-muted: #667085;
+  --composer-border: #d1d5db;
+  --composer-disabled: #f0f2f5;
+  color: var(--composer-text);
+  background: var(--composer-surface);
+  border: 1px solid var(--composer-border);
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 4%);
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
+}
+.dark .ai-command-input {
+  --composer-surface: #232329;
+  --composer-text: #e5e5e7;
+  --composer-muted: #a4adbd;
+  --composer-border: #474750;
+  --composer-disabled: #34343d;
+}
+.ai-command-input:focus-within,
+.ai-command-input[data-dragging] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(65 184 131 / 15%);
+}
+.ai-command-input__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px;
+}
+.ai-command-input__attachments {
+  padding: 12px 12px 0;
+}
+.ai-command-input .ai-command-input__textarea {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  font-size: 15px;
+  line-height: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--composer-text);
+  caret-color: var(--color-primary);
+  resize: none;
+}
+.ai-command-input .ai-command-input__textarea:focus {
+  box-shadow: none;
+  outline: none;
+}
+.ai-command-input .ai-command-input__textarea::placeholder {
+  color: var(--composer-muted);
+  opacity: 1;
+}
+.ai-command-input__upload,
+.ai-command-input__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 36px;
+  border-radius: 12px;
+}
+.ai-command-input__upload {
+  width: 36px;
+  color: var(--composer-muted);
+}
+.ai-command-input__upload:hover:not(:disabled) {
+  background: var(--composer-disabled);
+  color: var(--composer-text);
+}
+.ai-command-input__send {
+  gap: 6px;
+  padding: 0 14px;
+  background: #187d6d;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ai-command-input__send:hover:not(:disabled) {
+  background: #0f5246;
+}
+.ai-command-input__send:disabled {
+  background: var(--composer-disabled);
+  color: var(--composer-muted);
+  cursor: not-allowed;
+}
+.ai-command-input__upload:focus-visible,
+.ai-command-input__send:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

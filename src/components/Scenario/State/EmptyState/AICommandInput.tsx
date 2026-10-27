@@ -1,12 +1,12 @@
 // AICommandInput.ant.responsive.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useMemo, useRef, useState, useCallback, useLayoutEffect, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { Input, Button, Tooltip } from 'antd';
+import { Input, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { SendHorizontal } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
+import { SendHorizontal, LoaderCircle } from 'lucide-react';
+import './AICommandInput.css';
 import {
   usePipelineStore,
   PIPELINE_STAGES,
@@ -31,33 +31,17 @@ const ACCEPT = '.csv,.xlsx,.xls,.pdf,.txt,.md,.jpg,.png,.jpeg,.doc,.docx,.ppt,.p
 
 const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const { t, i18n } = useTranslation();
-  const { resolvedTheme } = useTheme();
 
   // -------- UI refs / state --------
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const notebookId = useStore((state) => state.notebookId);
   const { commandDraft, input, setInput } = useCommandDraft(notebookId);
-  const [isFocused, setIsFocused] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
-  const [isMultiline, setIsMultiline] = useState<boolean>(false);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
 
   // -------- Biz state --------
   const [isVDSMode, setIsVDSMode] = useState<boolean>(false);
-
-  // Safely extract the underlying HTMLTextAreaElement from AntD's TextArea instance
-  const extractHtmlTextArea = useCallback((node: unknown): HTMLTextAreaElement | null => {
-    if (!node) return null;
-    // AntD v5 wraps the native textarea inside resizableTextArea
-    const anyNode = node as { resizableTextArea?: { textArea?: unknown } } | HTMLTextAreaElement;
-    const inner = (anyNode as { resizableTextArea?: { textArea?: unknown } })?.resizableTextArea
-      ?.textArea;
-    if (inner instanceof HTMLTextAreaElement) return inner;
-    if (anyNode instanceof HTMLTextAreaElement) return anyNode;
-    return null;
-  }, []);
 
   const defaultPresetQuestions = useMemo<VDSQuestion[]>(
     () => [
@@ -82,48 +66,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     currentCellId,
     setIsRightSidebarCollapsed,
   } = useStore();
-
-  // ---------- autosize 行数计算（控制单行/多行布局切换） ----------
-  const calcIsMultiline = useCallback(() => {
-    const el = taRef.current;
-    if (!el) return;
-
-    // 如果有文件，强制多行模式
-    if (files.length > 0) {
-      setIsMultiline(true);
-      return;
-    }
-
-    const style = window.getComputedStyle(el);
-    const lineHeight = parseFloat(style.lineHeight || '22');
-    const paddingTop = parseFloat(style.paddingTop || '0');
-    const paddingBottom = parseFloat(style.paddingBottom || '0');
-    const contentHeight = el.scrollHeight - paddingTop - paddingBottom;
-    const rows = Math.round(contentHeight / lineHeight);
-    setIsMultiline(rows > 1 || input.includes('\n'));
-  }, [input, files.length]);
-
-  useLayoutEffect(() => {
-    calcIsMultiline();
-  }, [input, files.length, calcIsMultiline]);
-
-  // Keep the resize handler typed to satisfy AntD's onResize signature
-  const handleTextAreaResize = useCallback(() => {
-    calcIsMultiline();
-  }, [calcIsMultiline]);
-
-  // Force dark mode text color via DOM manipulation
-  useEffect(() => {
-    const textarea = taRef.current;
-    if (textarea && resolvedTheme === 'dark') {
-      textarea.style.color = '#4a5568';
-      textarea.style.setProperty('color', '#4a5568', 'important');
-      textarea.style.webkitTextFillColor = '#4a5568';
-    } else if (textarea) {
-      textarea.style.color = '';
-      textarea.style.webkitTextFillColor = '';
-    }
-  }, [resolvedTheme, input]);
 
   // ---------- 根据 VDS 模式和文件变化重置预设问题 ----------
   useEffect(() => {
@@ -394,285 +336,69 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
 
   return (
     <div className="relative mb-6">
-      {/* 胶囊外框 */}
       <div
-        className="ai-bar"
+        className="ai-command-input"
+        data-dragging={isDragOver || undefined}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        style={{
-          position: 'relative',
-          borderRadius: 28,
-          border: `1px solid ${
-            isDragOver
-              ? resolvedTheme === 'dark'
-                ? 'rgba(255,255,255,0.5)'
-                : 'rgba(0,0,0,0.2)'
-              : isFocused
-                ? resolvedTheme === 'dark'
-                  ? 'rgba(255,255,255,0.2)'
-                  : 'rgba(0,0,0,0.15)'
-                : resolvedTheme === 'dark'
-                  ? 'rgba(255,255,255,0.1)'
-                  : 'rgba(0,0,0,0.06)'
-          }`,
-          boxShadow:
-            isDragOver || isFocused ? '0 4px 18px rgba(0,0,0,0.08)' : '0 1px 6px rgba(0,0,0,0.04)',
-          transition: 'transform .18s, box-shadow .18s, border-color .18s',
-          transform: isFocused || isDragOver ? 'scale(1.01)' : 'none',
-          isolation: 'isolate',
-          overflow: 'hidden',
-        }}
       >
-        {/* Backdrop blur layer */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            borderRadius: 28,
-            backdropFilter: isFocused ? 'blur(30px) saturate(180%)' : 'blur(20px) saturate(160%)',
-            WebkitBackdropFilter: isFocused
-              ? 'blur(30px) saturate(180%)'
-              : 'blur(20px) saturate(160%)',
-            transition: 'backdrop-filter .18s',
-          }}
-        />
-
-        {/* Tint overlay */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            borderRadius: 28,
-            backgroundColor: isFocused ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 255, 255, 0.6)',
-            transition: 'background-color .18s',
-          }}
-        />
-
-        {/* Luminosity layer for depth */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            borderRadius: 28,
-            background:
-              'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%)',
-            mixBlendMode: 'overlay',
-          }}
-        />
-
-        {/* 文件预览列表 - 显示在输入框内部顶部 */}
         {files.length > 0 && (
-          <div
-            style={{
-              position: 'relative',
-              zIndex: 10,
-              padding: '12px 12px 0 12px',
-            }}
-          >
+          <div className="ai-command-input__attachments">
             <FilePreviewList files={files} onRemove={handleRemoveFile} />
           </div>
         )}
-
-        {/* 顶部主行（单行：含左右按钮；多行：仅输入） */}
-        <div
-          style={{
-            position: 'relative',
-            zIndex: 10,
-            padding: isMultiline ? '10px 10px 0px 10px' : '10px 70px 10px 32px',
-            border: 'none !important',
-            outline: 'none !important',
-          }}
-        >
-          {/* 单行：左侧 + */}
-          {!isMultiline && (
-            <div
-              style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }}
+        <div className="ai-command-input__row">
+          <Tooltip title={isUploading ? t('emptyState.uploading') : t('emptyState.upload')}>
+            <button
+              type="button"
+              className="ai-command-input__upload"
+              aria-label={t('emptyState.upload')}
+              disabled={isUploading}
+              onClick={onFileUpload}
             >
-              <Tooltip title={isUploading ? t('emptyState.uploading') : t('emptyState.upload')}>
-                <Button
-                  type="text"
-                  shape="circle"
-                  icon={<PlusOutlined />}
-                  onClick={() => !isUploading && onFileUpload()}
-                  loading={isUploading}
-                  style={{
-                    color: resolvedTheme === 'dark' ? '#4a5568' : undefined,
-                  }}
-                />
-              </Tooltip>
-              {/* 文件 input —— 沿用原 handleFileChange */}
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept={ACCEPT}
-                multiple
-              />
-            </div>
-          )}
-
-          {/* TextArea —— 无边框、autosize、自适应行数 */}
+              {isUploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <PlusOutlined />}
+            </button>
+          </Tooltip>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept={ACCEPT}
+            multiple
+          />
           <Input.TextArea
-            ref={(node) => {
-              taRef.current = extractHtmlTextArea(node);
-            }}
-            className="ai-bar-textarea ai-bar borderless-textarea"
+            className="ai-command-input__textarea"
             variant="borderless"
-            styles={{
-              textarea: {
-                border: 'none',
-                outline: 'none',
-                boxShadow: 'none',
-                background: 'transparent',
-                caretColor: resolvedTheme === 'dark' ? '#1e6048' : '#2d7a5c',
-                color: resolvedTheme === 'dark' ? '#4a5568' : 'inherit',
-              },
-            }}
+            aria-label={t('emptyState.questionPlaceholder')}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                if (input.trim()) {
-                  submitInput();
-                }
+                if (input.trim()) submitInput();
               }
-              // 延迟执行以获取最新 scrollHeight
-              setTimeout(calcIsMultiline, 0);
             }}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            onResize={handleTextAreaResize}
             autoSize={{ minRows: 1, maxRows: 12 }}
             placeholder={
               isVDSMode
                 ? 'VDS模式 - 描述您想对数据进行的分析...'
-                : input && input.startsWith('/')
+                : input.startsWith('/')
                   ? t('emptyState.commandPlaceholder')
                   : t('emptyState.questionPlaceholder')
             }
           />
-
-          {/* 单行：右侧 发送 */}
-          {!isMultiline && (
-            <div
-              style={{
-                position: 'absolute',
-                right: 12,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
-              {/* <Button
-                disabled={!hasContent}
-                style={{
-                  width: 48,
-                  height: 24,
-                  borderRadius: 12,
-                  boxShadow: hasContent ? '0 6px 18px rgba(0,0,0,0.12)' : 'none',
-                  // color: hasContent ? '#fff' : 'rgba(0,0,0,0.45)',
-                }}
-                className={`${
-                  input.trim()
-                    ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'
-                }`}
-                onClick={() => {
-                  if (input.trim()) {
-                    submitInput();
-                  }
-                }}
-              >
-                {input && input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
-              </Button> */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (input.trim()) {
-                    submitInput();
-                  }
-                }}
-                disabled={!input.trim()}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition-all duration-300 ease-in-out text-sm font-medium transform ${
-                  input.trim()
-                    ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
-                    : resolvedTheme === 'dark'
-                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed scale-95'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'
-                }`}
-              >
-                <SendHorizontal className="w-4 h-4" />
-                {input && input.startsWith('/')
-                  ? t('emptyState.executeBtnText')
-                  : t('emptyState.askBtnText')}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 多行：底部操作栏（左：+；右：发送） */}
-        {isMultiline && (
-          <div
-            style={{
-              position: 'relative',
-              zIndex: 10,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '6px 12px 10px',
-            }}
+          <button
+            type="button"
+            className="ai-command-input__send"
+            onClick={submitInput}
+            disabled={!input.trim()}
           >
-            {/* 底栏左：+ */}
-            <Tooltip title={isUploading ? t('emptyState.uploading') : t('emptyState.upload')}>
-              <Button
-                type="text"
-                shape="circle"
-                icon={<PlusOutlined />}
-                onClick={() => !isUploading && onFileUpload()}
-                loading={isUploading}
-                style={{
-                  color: resolvedTheme === 'dark' ? '#4a5568' : undefined,
-                }}
-              />
-            </Tooltip>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept={ACCEPT}
-              multiple
-            />
-
-            <div style={{ flex: 1 }} />
-            <button
-              type="button"
-              onClick={() => {
-                if (input.trim()) {
-                  submitInput();
-                }
-              }}
-              disabled={!input.trim()}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition-all duration-300 ease-in-out text-sm font-medium transform ${
-                input.trim()
-                  ? 'bg-theme-600 hover:bg-theme-700 text-white cursor-pointer hover:scale-105 active:scale-95 shadow-lg'
-                  : resolvedTheme === 'dark'
-                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed scale-95'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-95'
-              }`}
-            >
-              <SendHorizontal className="w-4 h-4" />
-              {input && input.startsWith('/')
-                ? t('emptyState.executeBtnText')
-                : t('emptyState.askBtnText')}
-            </button>
-          </div>
-        )}
+            <SendHorizontal className="h-4 w-4" />
+            {input.startsWith('/') ? t('emptyState.executeBtnText') : t('emptyState.askBtnText')}
+          </button>
+        </div>
       </div>
 
       {/* 模式提示（保留） */}
