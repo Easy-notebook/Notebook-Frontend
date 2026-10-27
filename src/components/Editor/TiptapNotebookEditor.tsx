@@ -8,8 +8,6 @@ import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import useStore from '@Store/notebookStore';
 import type { Cell } from '@Store/models';
 import { convertCellsToHtml } from './utils/cellConverters';
-import { CellSourceButton } from './TipTap/components/CellSourceButton';
-import { NotebookSourceButton } from './TipTap/components/NotebookSourceButton';
 import { EditorReadOnlyContext } from './EditorAccessContext';
 import '@Utils/logger'; // Initialize debug tools
 
@@ -291,10 +289,6 @@ const TiptapNotebookEditor = forwardRef<TiptapNotebookEditorRef, TiptapNotebookE
             <EditorCover editor={currentEditor} />
 
             <div className="w-full max-w-screen-lg mx-auto px-8 lg:px-18 flex flex-col flex-1">
-                <div className="flex justify-end">
-                  {!readOnly && <CellSourceButton editor={editor} />}
-                  <NotebookSourceButton editor={editor} />
-                </div>
               <div onClick={handleEditorClick} className="w-full h-full">
                 <EditorBubbleMenu editor={currentEditor} />
                 <EditorContent
