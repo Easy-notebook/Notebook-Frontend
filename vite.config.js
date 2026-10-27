@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import process from 'node:process';
+import { agentBridgePlugin } from './server/agent/vitePlugin';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'AAL_');
@@ -37,7 +38,7 @@ export default defineConfig(({ mode }) => {
     },
   };
   return {
-    plugins: [react(), nativeOriginGuard],
+    plugins: [react(), nativeOriginGuard, agentBridgePlugin()],
     server: {
       port: 3000,
       proxy: {

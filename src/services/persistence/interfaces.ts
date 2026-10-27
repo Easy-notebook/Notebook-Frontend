@@ -34,6 +34,8 @@ export interface FileSaveData {
 }
 
 export interface FileSaveOptions {
+  /** User-authored artifacts must not be evicted as cached notebook files. */
+  protectNotebook?: boolean;
   maxFileSize?: number;
   forceLocal?: boolean;
 }
@@ -111,7 +113,18 @@ export interface FileReadRecord {
   needsRemoteFetch?: boolean;
 }
 
+export interface FileSetCondition {
+  notebookId: string;
+  filePath: string;
+  expectedContent: string | null;
+}
 export interface IFileRepository {
+  saveFileSet(
+    files: FileSaveData[],
+    options?: FileSaveOptions,
+    condition?: FileSetCondition,
+    signal?: AbortSignal
+  ): Promise<FileMetadataEntity[]>;
   saveFile<T extends FileSaveData>(
     fileData: T,
     options?: FileSaveOptions

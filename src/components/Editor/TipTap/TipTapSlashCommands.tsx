@@ -285,6 +285,16 @@ const TipTapSlashCommands: React.FC<TipTapSlashCommandsProps> = ({
       },
     },
     {
+      id: 'agent',
+      title: 'Agent Cell',
+      description: 'Codex / Claude · 回答、修改与运行 cell',
+      icon: <Brain size={16} />,
+      keywords: ['agent', 'codex', 'claude', '助手', '智能体'],
+      action: (editor) => {
+        editor.chain().focus().insertAgentCell(uuidv4()).run();
+      },
+    },
+    {
       id: 'thinking',
       title: 'AI思考',
       description: '插入AI思考块',

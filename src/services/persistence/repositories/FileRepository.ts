@@ -10,6 +10,7 @@ import {
   type FileSaveData,
   type FileSaveOptions,
   type FileReadRecord,
+  type FileSetCondition,
 } from '../interfaces';
 import {
   FileMetadataEntity,
@@ -35,11 +36,34 @@ export class FileRepository implements IFileRepository {
     fileData: T,
     options: FileSaveOptions = {}
   ): Promise<FileMetadataEntity> {
-    const data: FileSaveData = { ...fileData };
+    return (await this.saveFileSet([fileData], options))[0];
+  }
+
+  /** Publish a file set and its revision marker under one transaction. */
+  async saveFileSet(
+    files: FileSaveData[],
+    options: FileSaveOptions = {},
+    condition?: FileSetCondition,
+    signal?: AbortSignal
+  ): Promise<FileMetadataEntity[]> {
+    const data = files.map((file) => ({ ...file }));
     const settings = { ...options };
-    if (!data.notebookId || !data.filePath || !data.fileName)
-      throw new Error('Invalid file data: notebook identity, path and name are required');
-    let records!: FileRecordSet;
+    const expected = condition ? { ...condition } : undefined;
+    if (
+      !data.length ||
+      data.some(
+        (file) =>
+          !file.notebookId ||
+          !file.filePath ||
+          !file.fileName ||
+          file.notebookId !== data[0].notebookId
+      ) ||
+      new Set(data.map((file) => file.filePath)).size !== data.length ||
+      (expected && expected.notebookId !== data[0].notebookId)
+    )
+      throw new Error('Invalid file data: one notebook and distinct paths are required');
+    const saved: FileMetadataEntity[] = [];
+    signal?.throwIfAborted();
     await this.storage.transaction(
       [...this.mutationStores, DB_CONFIG.STORES.CONFIG],
       'readwrite',
@@ -48,30 +72,57 @@ export class FileRepository implements IFileRepository {
           stores[DB_CONFIG.STORES.CONFIG].get('config')
         );
         const config = new StorageConfiguration(stored).toRecord();
-        records = new FileRecordSet(data, {
-          ...settings,
-          maxFileSize: settings.maxFileSize ?? config.maxFileSize,
-        });
-        const existing = await this.read<FileMetadataEntity | undefined>(
-          stores[DB_CONFIG.STORES.FILES_METADATA].get(records.metadata.id)
-        );
-        if (existing != null)
-          new FileRecordOwnership(data.notebookId, data.filePath).verify(existing);
-        records.writeTo(
-          stores[DB_CONFIG.STORES.FILES_METADATA],
-          stores[DB_CONFIG.STORES.FILES_CONTENT]
-        );
-        await this.recordMutation(
-          stores,
-          data.notebookId,
-          data.filePath,
-          existing ? 0 : 1,
-          records.metadata.size - (existing == null ? 0 : NotebookFileTotals.size(existing.size)),
-          'file_create'
-        );
+        if (expected) {
+          const id = makeFileId(expected.notebookId, expected.filePath);
+          const metadata = await this.read<FileMetadataEntity | undefined>(
+            stores[DB_CONFIG.STORES.FILES_METADATA].get(id)
+          );
+          if (metadata)
+            new FileRecordOwnership(expected.notebookId, expected.filePath).verify(metadata);
+          const content = metadata
+            ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], id)
+            : null;
+          if (content !== expected.expectedContent)
+            throw new Error('VERSION_CONFLICT: files changed since they were read');
+        }
+        for (const file of data) {
+          signal?.throwIfAborted();
+          const records = new FileRecordSet(file, {
+            ...settings,
+            maxFileSize: settings.maxFileSize ?? config.maxFileSize,
+          });
+          const existing = await this.read<FileMetadataEntity | undefined>(
+            stores[DB_CONFIG.STORES.FILES_METADATA].get(records.metadata.id)
+          );
+          signal?.throwIfAborted();
+          if (existing != null)
+            new FileRecordOwnership(file.notebookId, file.filePath).verify(existing);
+          records.writeTo(
+            stores[DB_CONFIG.STORES.FILES_METADATA],
+            stores[DB_CONFIG.STORES.FILES_CONTENT]
+          );
+          await this.recordMutation(
+            stores,
+            file.notebookId,
+            file.filePath,
+            existing ? 0 : 1,
+            records.metadata.size - (existing == null ? 0 : NotebookFileTotals.size(existing.size)),
+            'file_create'
+          );
+          saved.push(records.metadata);
+        }
+        if (settings.protectNotebook) {
+          const notebook = await this.read<NotebookEntity | undefined>(
+            stores[DB_CONFIG.STORES.NOTEBOOKS].get(data[0].notebookId)
+          );
+          signal?.throwIfAborted();
+          if (!notebook) throw new Error('Notebook disappeared during artifact publication');
+          stores[DB_CONFIG.STORES.NOTEBOOKS].put({ ...notebook, retention: 'persistent' });
+        }
+        signal?.throwIfAborted();
       }
     );
-    return records.metadata;
+    return saved;
   }
 
   async getFile(notebookId: string, filePath: string): Promise<FileReadRecord | null> {

@@ -1,3 +1,4 @@
+import { AgentCellExtension } from '@Editor/extensions/AgentCellExtension';
 /**
  * TipTap Editor Extensions Configuration
  * Centralizes all extension setup for the TiptapNotebookEditor
@@ -138,6 +139,7 @@ export function getTipTapExtensions(placeholder: string) {
     ImageExtension,
     LaTeXExtension,
     RawCellExtension,
+    AgentCellExtension,
     UploadDropExtension,
 
     // Placeholder

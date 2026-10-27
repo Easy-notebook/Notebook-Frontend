@@ -37,7 +37,12 @@ export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
       };
     }
 
-    if (cell.type === 'code' || cell.type === 'hybrid' || cell.type === 'thinking') {
+    if (
+      cell.type === 'code' ||
+      cell.type === 'hybrid' ||
+      cell.type === 'thinking' ||
+      cell.type === 'agent'
+    ) {
       return previous;
     }
 
