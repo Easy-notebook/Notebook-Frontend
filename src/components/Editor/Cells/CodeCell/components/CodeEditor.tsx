@@ -8,6 +8,8 @@ import { codeLanguageExtensions } from '../utils/languageSupport';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useEditorReadOnly } from '../../../EditorAccessContext';
 import { useCodeEditorActivation } from '../model/useCodeEditorActivation';
+import { useCodeContentHeight } from '../model/useCodeContentHeight';
+import './CodeEditor.css';
 
 /**
  * Code editor component with CodeMirror
@@ -20,6 +22,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   dslcMode,
   isInDetachedView,
   contentHeight,
+  onContentHeightChange,
   isExpanded,
   isHovering,
   editorRef,
@@ -33,7 +36,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 }) => {
   const { resolvedTheme } = useTheme();
   const readOnly = useEditorReadOnly();
+  const mutationBlocked = readOnly || isExecuting || dslcMode;
   const activation = useCodeEditorActivation(cell.id, !!isCurrentCell || !!isInDetachedView);
+  useCodeContentHeight(
+    codeBlockWrapperRef,
+    activation.active && !isInDetachedView,
+    onContentHeightChange
+  );
   const value =
     content ?? (typeof cell.content === 'string' ? cell.content : String(cell.content || ''));
   return (
@@ -41,7 +50,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
       ref={activation.container}
       onBlurCapture={activation.onInputSettled}
       onCompositionEndCapture={activation.onInputSettled}
-      className={`relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
+      className={`notebook-code-editor relative ${isInDetachedView ? 'flex-1 min-h-0' : ''}`}
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
     >
@@ -97,15 +106,15 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
               onUpdate={activation.onUpdate}
               height={isInDetachedView ? '100%' : 'auto'}
               extensions={codeLanguageExtensions(cell.language)}
-              onChange={readOnly ? undefined : onChange}
-              onKeyDown={readOnly ? undefined : onKeyDown}
+              onChange={mutationBlocked ? undefined : onChange}
+              onKeyDown={mutationBlocked ? undefined : onKeyDown}
               theme={resolvedTheme === 'dark' ? dracula : 'light'}
               style={{
-                fontSize: '16px',
-                lineHeight: '1.5',
+                fontSize: '13px',
+                lineHeight: '22px',
                 height: isInDetachedView ? '100%' : 'auto',
               }}
-              readOnly={readOnly || isExecuting || dslcMode}
+              readOnly={mutationBlocked}
               autoFocus={isCurrentCell && !dslcMode && !readOnly}
               ref={editorRef}
             />
@@ -113,8 +122,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             <pre
               className="m-0 px-3 py-1 font-mono whitespace-pre overflow-hidden"
               style={{
-                fontSize: 16,
-                lineHeight: '24px',
+                fontSize: 13,
+                lineHeight: '22px',
                 minHeight: activation.placeholderHeight ?? 32,
                 height: activation.placeholderHeight,
               }}
@@ -143,7 +152,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             {!isExpanded ? (
               <button
                 onClick={onExpand}
-                className="px-4 py-1.5 text-sm text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
+                className="px-4 py-1.5 text-sm text-gray-700 dark:text-white bg-white/95 dark:bg-gray-800/95 rounded-t-lg shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
                 title="Expand"
               >
                 <span>Expand</span>
@@ -152,7 +161,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
             ) : (
               <button
                 onClick={onCollapse}
-                className="px-4 py-1.5 text-sm text-white rounded-t-lg shadow-lg hover:bg-gray-800 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
+                className="px-4 py-1.5 text-sm text-gray-700 dark:text-white bg-white/95 dark:bg-gray-800/95 rounded-t-lg shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-theme-500 flex items-center gap-1"
                 title="Collapse"
               >
                 <span>Collapse</span>
@@ -164,7 +173,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
 
         {/* Gradient overlay for collapsed state */}
         {!isInDetachedView && !isExpanded && contentHeight > EXPAND_THRESHOLD && (
-          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-gray-800 to-transparent pointer-events-none"></div>
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white dark:from-gray-800 to-transparent pointer-events-none"></div>
         )}
       </div>
     </div>
