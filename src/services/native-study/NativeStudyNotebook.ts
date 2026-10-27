@@ -46,6 +46,9 @@ export class NativeStudyNotebook {
     });
     await this.persistence.initialize();
     await this.persistence.notebooks.saveNotebookSnapshot(document.file, document.notebook);
+    // A newly created native workspace has no open file previews.
+    // Persist that confirmed state so opening Files does not discover a legacy Python workspace.
+    await this.persistence.tabs.saveTabState(this.id, [], null);
     return this.id;
   }
 }

@@ -10,19 +10,23 @@ vi.mock('./NativeStudyClient', () => ({
 beforeEach(() => native.state.mockReset().mockResolvedValue({}));
 function persistence() {
   const save = vi.fn(async () => ({}));
+  const tabs = vi.fn(async () => ({}));
   return {
     save,
+    tabs,
     service: {
       initialize: vi.fn(async () => {}),
       notebooks: { saveNotebookSnapshot: save },
+      tabs: { saveTabState: tabs },
     } as unknown as IPersistenceService,
   };
 }
 it('creates one persisted editor document for concurrent create clicks', async () => {
-  const { save, service } = persistence();
+  const { save, service, tabs } = persistence();
   const creator = new NativeStudyNotebook(service);
   const [first, second] = await Promise.all([creator.create(), creator.create()]);
   expect(first).toBe(second);
+  expect(tabs).toHaveBeenCalledExactlyOnceWith(first, [], null);
   expect(save).toHaveBeenCalledTimes(1);
   expect(native.state).toHaveBeenCalledTimes(1);
   const [file, notebook] = save.mock.calls[0] as unknown as [
