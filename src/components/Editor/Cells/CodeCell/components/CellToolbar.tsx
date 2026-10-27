@@ -18,11 +18,8 @@ import useStore from '@Store/notebookStore';
 import { CellToolbarProps } from '../utils/types';
 import { ExecuteButton } from './ExecuteButton';
 import { DisplayModeButton } from './DisplayModeButton';
-import {
-  CODE_LANGUAGES,
-  canExecuteCodeLanguage,
-  normalizeCodeLanguage,
-} from '@Store/models/codeLanguage';
+import { CodeLanguageSelect } from './CodeLanguageSelect';
+import { canExecuteCodeLanguage, normalizeCodeLanguage } from '@Store/models/codeLanguage';
 
 /**
  * Cell toolbar with all control buttons
@@ -52,7 +49,6 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
   const setCurrentCell = useStore((state) => state.setCurrentCell);
   const updateCellObject = useStore((state) => state.updateCellObject);
   const language = normalizeCodeLanguage(cell.language);
-  const unsupportedLanguage = !CODE_LANGUAGES.some((option) => option.value === language);
 
   const handleAIDebug = () => {
     console.log('AI Debug clicked!');
@@ -87,25 +83,11 @@ export const CellToolbar: React.FC<CellToolbarProps> = ({
               : 'Execution is available for Python and AAL'
           }
         />
-        <select
-          aria-label="Code language"
-          title={
-            canExecuteCodeLanguage(language)
-              ? 'Code language'
-              : 'Syntax highlighting only; no execution backend for this language'
-          }
+        <CodeLanguageSelect
           value={language}
           disabled={isExecuting}
-          onChange={(event) => updateCellObject(cell.id, { language: event.target.value })}
-          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:[color-scheme:dark]"
-        >
-          {CODE_LANGUAGES.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-          {unsupportedLanguage && <option value={language}>{language} (plain text)</option>}
-        </select>
+          onChange={(language) => updateCellObject(cell.id, { language })}
+        />
 
         {!isInDetachedView && (
           <>

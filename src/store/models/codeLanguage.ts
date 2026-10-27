@@ -1,6 +1,6 @@
 export const CODE_LANGUAGES = [
   { value: 'python', label: 'Python', executable: true },
-  { value: 'aal', label: 'AAL · Rust', executable: true },
+  { value: 'aal', label: 'AAL', executable: true },
   { value: 'javascript', label: 'JavaScript', executable: false },
   { value: 'typescript', label: 'TypeScript', executable: false },
 ] as const;
