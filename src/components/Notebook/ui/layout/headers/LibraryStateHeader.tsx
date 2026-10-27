@@ -9,14 +9,15 @@ interface EmptyStateHeaderProps {
 
 const LibraryStateHeader: React.FC<EmptyStateHeaderProps> = ({ onToggleRightSidebar }) => {
   return (
-    <div className="w-full h-18 mt-4 flex items-center justify-end px-4">
+    <div className="w-full h-full flex items-center justify-end px-2">
       <div className="flex items-center gap-2">
         <NotificationCenter />
         <button
           onClick={onToggleRightSidebar}
-          className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:scale-105 text-primary bg-primary/10 hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20"
+          aria-label="Toggle right sidebar"
+          className="app-chrome-button"
         >
-          <BarChartHorizontalBig size={18} />
+          <BarChartHorizontalBig className="app-navigation-icon" />
         </button>
       </div>
     </div>

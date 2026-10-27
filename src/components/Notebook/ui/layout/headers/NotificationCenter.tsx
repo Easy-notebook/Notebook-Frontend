@@ -54,9 +54,10 @@ const NotificationCenter: React.FC = () => {
     <div className="relative" ref={containerRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+        className="app-chrome-button relative"
+        aria-label="Notifications"
       >
-        <Bell size={20} />
+        <Bell className="app-navigation-icon" />
         {unreadCount > 0 && (
           <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900" />
         )}

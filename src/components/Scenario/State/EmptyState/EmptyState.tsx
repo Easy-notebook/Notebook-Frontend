@@ -500,7 +500,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
 
         {/* 主体 */}
         <div
-          className="w-full max-w-4xl mx-auto px-4 py-6 text-center transition-all duration-500 ease-out"
+          className="w-full max-w-[640px] mx-auto px-6 sm:px-10 py-6 text-center transition-all duration-500 ease-out"
           style={{
             transform: `translateY(${-Math.min(swipeDistance * 0.2, 20)}px)`,
             marginTop: '0',

@@ -1,5 +1,5 @@
 // Moved to sections/LeftSidebar/LeftSideBar.tsx
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { MiniSidebar } from './Mini';
 import { navigateToHome, navigateToLibrary, navigateToWorkspace } from '@Utils/navigation';
 import useSettingsStore from '@Store/settingsStore';
@@ -25,12 +25,6 @@ const LeftSideBar: React.FC<LeftSideBarProps> = ({
   onSidebarToggle,
   isMainSidebarExpanded,
 }: LeftSideBarProps) => {
-  // Update CSS variable - always 80px (w-20)
-  useEffect(() => {
-    const miniWidth = 80; // w-20 = 80px
-    document.documentElement.style.setProperty('--nb-mini-sidebar-width', `${miniWidth}px`);
-  }, []);
-
   // Get stores
   const settingsStore = useSettingsStore();
   const { currentView } = useRouteStore();

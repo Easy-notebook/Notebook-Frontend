@@ -295,9 +295,9 @@ const NotebookApp = () => {
       {/* Global background layers now live at App level */}
 
       {/* Content Layer on top of background */}
-      <div className="relative z-10 h-screen flex">
-        {/* Left: MiniSidebar (80px wide, full height) */}
-        <div className="w-20 shrink-0">
+      <div className="relative z-10 h-screen flex box-border pt-[4px]">
+        {/* Left: fixed-width icon rail */}
+        <div className="w-[var(--sidebar-mini-width)] shrink-0">
           <LeftSideBar
             tasks={tasks}
             currentPhaseId={currentPhaseId}
@@ -309,9 +309,11 @@ const NotebookApp = () => {
         </div>
 
         {/* Right: Header + MainContainer */}
-        <div className="flex-1 flex flex-col">
-          {/* Top: Header (56px height) */}
-          <div className="h-14 shrink-0">{isRouteReady && renderHeader()}</div>
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* Top: shared height with the sidebar logo row */}
+          <div className="h-[var(--notebook-header-height)] shrink-0">
+            {isRouteReady && renderHeader()}
+          </div>
 
           {/* Bottom: Main Content */}
           <main className="flex-1 min-h-0">
@@ -321,41 +323,47 @@ const NotebookApp = () => {
                   {routeError ? (
                     <>
                       <p role="alert">{routeError}</p>
-                      <button type="button" onClick={retryRoute}>Retry loading</button>
+                      <button type="button" onClick={retryRoute}>
+                        Retry loading
+                      </button>
                     </>
-                  ) : <p role="status">Loading notebook...</p>}
+                  ) : (
+                    <p role="status">Loading notebook...</p>
+                  )}
                 </div>
-              ) : <MainContentArea
-                routeView={routeView}
-                viewMode={viewMode}
-                isCollapsed={isCollapsed}
-                cells={cells}
-                isExecuting={isExecuting}
-                isRightSidebarCollapsed={isRightSidebarCollapsed}
-                error={error}
-                tasks={tasks}
-                currentPhaseId={currentPhaseId}
-                currentStepId={
-                  currentStepIndex !== null
-                    ? (tasks.flatMap((task) => task.phases).find((p) => p.id === currentPhaseId)
-                        ?.steps[currentStepIndex]?.id ?? null)
-                    : null
-                }
-                currentStepIndex={currentStepIndex}
-                activeSidebarItem={activeSidebarItem}
-                onModeChange={handleModeChange}
-                onRunAll={handleRunAll}
-                onExportJson={handleExportJson}
-                onExportDocx={exportDocx}
-                onExportPdf={exportPdf}
-                onExportMarkdown={exportMarkdown}
-                onToggleRightSidebar={handleRightSidebarToggle}
-                onSetError={setError}
-                onPhaseSelect={handlePhaseSelect}
-                onAgentSelect={handleAgentSelect}
-              >
-                {resolveMainContent().component}
-              </MainContentArea>}
+              ) : (
+                <MainContentArea
+                  routeView={routeView}
+                  viewMode={viewMode}
+                  isCollapsed={isCollapsed}
+                  cells={cells}
+                  isExecuting={isExecuting}
+                  isRightSidebarCollapsed={isRightSidebarCollapsed}
+                  error={error}
+                  tasks={tasks}
+                  currentPhaseId={currentPhaseId}
+                  currentStepId={
+                    currentStepIndex !== null
+                      ? (tasks.flatMap((task) => task.phases).find((p) => p.id === currentPhaseId)
+                          ?.steps[currentStepIndex]?.id ?? null)
+                      : null
+                  }
+                  currentStepIndex={currentStepIndex}
+                  activeSidebarItem={activeSidebarItem}
+                  onModeChange={handleModeChange}
+                  onRunAll={handleRunAll}
+                  onExportJson={handleExportJson}
+                  onExportDocx={exportDocx}
+                  onExportPdf={exportPdf}
+                  onExportMarkdown={exportMarkdown}
+                  onToggleRightSidebar={handleRightSidebarToggle}
+                  onSetError={setError}
+                  onPhaseSelect={handlePhaseSelect}
+                  onAgentSelect={handleAgentSelect}
+                >
+                  {resolveMainContent().component}
+                </MainContentArea>
+              )}
             </div>
           </main>
         </div>

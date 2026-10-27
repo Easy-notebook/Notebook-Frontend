@@ -23,7 +23,11 @@ export function RunAllButton({
       title={active ? t('fileOperations.stopRunAllHint') : t('fileOperations.runAll')}
       className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed bg-primary/10 text-primary hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20"
     >
-      {active ? <Square size={16} /> : <Play size={16} />}
+      {active ? (
+        <Square className="app-navigation-icon" />
+      ) : (
+        <Play className="app-navigation-icon" />
+      )}
       <span className="hidden sm:inline">
         {t(
           phase === 'stopping'

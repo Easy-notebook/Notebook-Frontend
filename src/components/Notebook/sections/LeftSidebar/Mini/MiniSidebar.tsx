@@ -57,25 +57,9 @@ const ItemButton: React.FC<
   <button
     {...props}
     aria-current={active ? 'page' : undefined}
-    className={[
-      'w-10 h-10',
-      'relative rounded-xl',
-      'flex items-center justify-center',
-      'transition-all duration-200',
-      'group',
-      active
-        ? 'light:bg-white dark:bg-gradient-to-br dark:from-primary/20 dark:to-primary/10 text-primary shadow-md shadow-primary/20 scale-105'
-        : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:scale-105',
-      className,
-    ].join(' ')}
+    className={`app-chrome-button ${className}`}
   >
-    {active && (
-      <div
-        className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary/30 to-transparent animate-pulse"
-        style={{ animationDuration: '2s' }}
-      />
-    )}
-    <div className="relative z-10">{children}</div>
+    {children}
   </button>
 );
 
@@ -118,19 +102,19 @@ const MiniSidebar = memo(function MiniSidebar({
   // const shouldShowFolderIcon = hasPhases && ((isMainSidebarExpanded && activeItemId === 'workspace') || activeItemId !== 'workspace');
 
   return (
-    <div className={['w-20 h-full', 'flex flex-col', 'relative'].join(' ')}>
+    <div className={['w-full h-full', 'flex flex-col', 'relative'].join(' ')}>
       {/* Logo - only controls expand/collapse */}
-      <div className="h-20 flex items-center justify-center shrink-0 mt-2 pb-3">
+      <div className="h-[var(--notebook-header-height)] flex items-center justify-center shrink-0">
         <button
           onClick={handleExpandClick}
-          className="rounded-lg transition-all hover:scale-110 hover:rotate-3"
+          className="app-chrome-button translate-y-[2px]"
           title="Expand/Collapse Sidebar"
         >
-          <img src="/icon.svg" className="w-10 h-10" />
+          <img src="/icon.svg" alt="Easy Notebook" className="w-8 h-8" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-visible">
+      <div className="flex-1 overflow-y-auto overflow-x-visible pt-[4px]">
         {/* Phases area - only show when workspace is active and sidebar is collapsed */}
         {/* {shouldShowPhases && (
           <div className="relative -mr-2 my-0">
@@ -168,7 +152,7 @@ const MiniSidebar = memo(function MiniSidebar({
         {shouldShowFolderIcon &&
         ( */}
         {/* Primary items - show workspace only if notebookId exists */}
-        <ul className="space-y-3">
+        <ul className="space-y-1">
           {PRIMARY_ITEMS.filter((item) => item.id !== 'workspace' || notebookId).map((item) => {
             const Icon = item.icon;
             const isActive = activeItemId === item.id;
@@ -181,7 +165,7 @@ const MiniSidebar = memo(function MiniSidebar({
                     onClick={() => handleItemClick(item.id)}
                     title={item.title}
                   >
-                    <Icon size={24} />
+                    <Icon className="app-navigation-icon" />
                   </ItemButton>
                 </div>
               </li>
@@ -191,7 +175,7 @@ const MiniSidebar = memo(function MiniSidebar({
       </div>
 
       {/* Bottom items - always show */}
-      <div className="py-3 shrink-0">
+      <div className="py-2 shrink-0">
         <ul className="space-y-1">
           {BOTTOM_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -205,7 +189,7 @@ const MiniSidebar = memo(function MiniSidebar({
                     onClick={() => handleItemClick(item.id)}
                     title={item.title}
                   >
-                    <Icon size={20} />
+                    <Icon className="app-navigation-icon" />
                   </ItemButton>
                 </div>
               </li>

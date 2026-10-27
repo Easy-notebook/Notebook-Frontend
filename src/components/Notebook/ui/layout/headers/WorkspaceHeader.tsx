@@ -48,7 +48,7 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full h-18 mt-2 flex items-center justify-between px-4">
+    <div className="w-full h-full flex items-center justify-between px-2">
       <div className="flex items-center gap-3">
         <ModeToggle viewMode={viewMode} onModeChange={onModeChange} />
       </div>
@@ -73,11 +73,8 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
           </>
         )}
 
-        <button
-          onClick={onTriggerFileInput}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 hover:scale-105 text-gray-700 dark:text-gray-200 hover:bg-gray-100/50 dark:hover:bg-gray-800/50"
-        >
-          <Upload size={16} />
+        <button onClick={onTriggerFileInput} className="app-chrome-button app-chrome-button--label">
+          <Upload className="app-navigation-icon" />
           <span className="hidden sm:inline">{t('fileOperations.import')}</span>
         </button>
 
@@ -93,9 +90,10 @@ const WorkspaceHeader: React.FC<WorkspaceHeaderProps> = ({
         <div className="flex items-center gap-1">
           <button
             onClick={onToggleRightSidebar}
-            className="flex items-center gap-2 p-2 rounded-lg transition-all duration-200 hover:scale-105 text-primary bg-primary/10 hover:bg-primary/20 hover:shadow-md hover:shadow-primary/20"
+            aria-label="Toggle right sidebar"
+            className="app-chrome-button"
           >
-            <BarChartHorizontalBig size={18} />
+            <BarChartHorizontalBig className="app-navigation-icon" />
           </button>
         </div>
       </div>
