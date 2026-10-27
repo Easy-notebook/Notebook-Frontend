@@ -15,29 +15,74 @@ function capture(state: EditorState, height = 120) {
   return session;
 }
 describe('suspended code editor state', () => {
-  it.each(['', '短', 'new\ntext'])('maps multiple selections and folds safely when suspended source shrinks to %j', value => {
-    const state = EditorState.create({
-      doc: 'alpha\nbeta\ngamma',
-      extensions: [history(), codeFolding(), EditorState.allowMultipleSelections.of(true)],
-      selection: EditorSelection.create([EditorSelection.range(1, 4), EditorSelection.range(12, 16)], 1),
-    }).update({ effects: foldEffect.of({ from: 5, to: 16 }) }).state;
-    const session = capture(state);
-    const snapshot = session.initialState(value)!;
-    const restored = EditorState.fromJSON(snapshot.json, {
-      extensions: [history(), codeFolding(), EditorState.allowMultipleSelections.of(true)],
-    }, snapshot.fields);
-    expect(restored.doc.toString()).toBe(value);
-    for (const range of restored.selection.ranges) {
-      expect(range.from).toBeGreaterThanOrEqual(0);
-      expect(range.to).toBeLessThanOrEqual(value.length);
-    }
-    expect(undoDepth(restored)).toBe(0);
-    expect(session.initialState(value)!.json).toBe(snapshot.json);
+  it('does not schedule scroll measurements without a suspended snapshot', () => {
+    const session = new CodeEditorSession();
+    const view = {
+      requestMeasure: () => {
+        throw new Error('Unexpected scroll measurement');
+      },
+    } as unknown as EditorView;
+    session.restoreScroll(view);
+    const suspended = capture(EditorState.create({ doc: 'print(1)' }));
+    suspended.release();
+    suspended.restoreScroll(view);
   });
+
+  it('restores suspended scroll once and releases the serialized state', () => {
+    const session = capture(EditorState.create({ doc: 'print(1)' }));
+    let measurements = 0;
+    const scrollDOM = { scrollTop: 0, scrollLeft: 0 };
+    const view = {
+      scrollDOM,
+      requestMeasure: (request: {
+        read: () => { top: number; left: number };
+        write: (value: { top: number; left: number }) => void;
+      }) => {
+        measurements++;
+        request.write(request.read());
+      },
+    } as unknown as EditorView;
+    session.restoreScroll(view);
+    session.restoreScroll(view);
+    expect(measurements).toBe(1);
+    expect(scrollDOM).toEqual({ scrollTop: 20, scrollLeft: 10 });
+    expect(session.initialState('print(1)')).toBeUndefined();
+    expect(session.height).toBe(120);
+  });
+  it.each(['', '短', 'new\ntext'])(
+    'maps multiple selections and folds safely when suspended source shrinks to %j',
+    (value) => {
+      const state = EditorState.create({
+        doc: 'alpha\nbeta\ngamma',
+        extensions: [history(), codeFolding(), EditorState.allowMultipleSelections.of(true)],
+        selection: EditorSelection.create(
+          [EditorSelection.range(1, 4), EditorSelection.range(12, 16)],
+          1
+        ),
+      }).update({ effects: foldEffect.of({ from: 5, to: 16 }) }).state;
+      const session = capture(state);
+      const snapshot = session.initialState(value)!;
+      const restored = EditorState.fromJSON(
+        snapshot.json,
+        {
+          extensions: [history(), codeFolding(), EditorState.allowMultipleSelections.of(true)],
+        },
+        snapshot.fields
+      );
+      expect(restored.doc.toString()).toBe(value);
+      for (const range of restored.selection.ranges) {
+        expect(range.from).toBeGreaterThanOrEqual(0);
+        expect(range.to).toBeLessThanOrEqual(value.length);
+      }
+      expect(undoDepth(restored)).toBe(0);
+      expect(session.initialState(value)!.json).toBe(snapshot.json);
+    }
+  );
   it('keeps the last usable height when a hidden ancestor produces zero geometry', () => {
     const state = EditorState.create({ doc: 'print(1)' });
     const session = capture(state, 180);
-    session.capture({ state,
+    session.capture({
+      state,
       dom: { getBoundingClientRect: () => ({ height: 0 }) },
       scrollDOM: { scrollTop: 0, scrollLeft: 0 },
     } as unknown as EditorView);

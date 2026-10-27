@@ -18,27 +18,38 @@ interface ExportHandlers {
   exportMarkdown: () => Promise<void>;
 }
 
+/** Capture one invocation before its exporter can yield for lazy module loading. */
+function snapshotExport(exporter: ExportHandler): ExportHandler {
+  return async (cells, tasks) => {
+    const snapshot = structuredClone({ cells, tasks });
+    await exporter(snapshot.cells, snapshot.tasks);
+  };
+}
+
 export const exportTypes: Record<string, ExportType> = {
   json: {
     title: 'Export as JSON',
     description: 'Save notebook with all metadata as JSON file',
-    handler: async (cells: Cell[], tasks?: Task[]) =>
-      (await import('./exportToJson')).exportToJson(cells, tasks),
+    handler: snapshotExport(async (cells, tasks) =>
+      (await import('./exportToJson')).exportToJson(cells, tasks)
+    ),
   },
   docx: {
     title: 'Export as DOCX',
     description: 'Export as Microsoft Word document',
-    handler: async (cells: Cell[]) => (await import('./exportToDocx')).exportToDocx(cells),
+    handler: snapshotExport(async (cells) => (await import('./exportToDocx')).exportToDocx(cells)),
   },
   pdf: {
     title: 'Export as PDF',
     description: 'Export as PDF document',
-    handler: async (cells: Cell[]) => (await import('./exportToPDF')).exportToPdf(cells),
+    handler: snapshotExport(async (cells) => (await import('./exportToPDF')).exportToPdf(cells)),
   },
   markdown: {
     title: 'Export as Markdown',
     description: 'Export as Markdown document',
-    handler: async (cells: Cell[]) => (await import('./exportToMarkdown')).exportToMarkdown(cells),
+    handler: snapshotExport(async (cells) =>
+      (await import('./exportToMarkdown')).exportToMarkdown(cells)
+    ),
   },
 };
 

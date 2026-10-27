@@ -26,20 +26,6 @@ const TabbedPreviewApp: React.FC = () => {
   const activeFile = usePreviewStore((state) => state.activeFile);
   const setTabDirty = usePreviewStore((state) => state.setTabDirty);
 
-  // 键盘快捷键：⌘/Ctrl+S 清理当前 tab 的 dirty（不阻断你已有的保存逻辑）
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const isSave = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's';
-      if (!isSave) return;
-      e.preventDefault();
-      if (activeFile) {
-        setTabDirty(activeFile.id, false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeFile, setTabDirty]);
-
   // --- 当切走 HTML 文件时，自动关闭源码视图 ---
   useEffect(() => {
     if (activeFile?.type !== 'html' && showSource) {
@@ -97,7 +83,9 @@ const TabbedPreviewApp: React.FC = () => {
             fileContent={activeFile.content}
             onContentChange={async (newContent: string) => {
               setTabDirty(activeFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newContent);
+              await usePreviewStore
+                .getState()
+                .updatePreviewFileContent(newContent, { surface: 'normal', fileId: activeFile.id });
             }}
             showControls
           />
@@ -116,7 +104,9 @@ const TabbedPreviewApp: React.FC = () => {
             fileName={activeFile.name}
             onContentChange={async (newContent: string) => {
               setTabDirty(activeFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newContent);
+              await usePreviewStore
+                .getState()
+                .updatePreviewFileContent(newContent, { surface: 'normal', fileId: activeFile.id });
             }}
             showControls
           />
@@ -131,7 +121,9 @@ const TabbedPreviewApp: React.FC = () => {
             language="jsx"
             onCodeChange={async (newCode: string) => {
               setTabDirty(activeFile.id, true);
-              await usePreviewStore.getState().updateActiveFileContent(newCode);
+              await usePreviewStore
+                .getState()
+                .updatePreviewFileContent(newCode, { surface: 'normal', fileId: activeFile.id });
             }}
           />
         );

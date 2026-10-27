@@ -6,12 +6,14 @@ export class OperationService extends BaseService {
   // Send operation to backend (Unified Interface)
   static async sendOperation(
     notebookId: string,
-    operation: Operation
+    operation: Operation,
+    signal?: AbortSignal
   ): Promise<ReadableStream<Uint8Array> | null> {
     try {
       const response = await fetch(`${this.baseUrl}/send_operation`, {
         // Unified endpoint
         method: 'POST',
+        signal,
         headers: {
           'Content-Type': 'application/json',
         },
@@ -21,18 +23,7 @@ export class OperationService extends BaseService {
         }),
       });
 
-      // Assuming backend responds with a stream of updates
-      if (!response.ok) {
-        let errorMessage = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-          apiLog.error('API error', { errorData });
-        } catch (jsonError) {
-          apiLog.error('Failed to parse error response', { jsonError });
-        }
-        throw new Error(errorMessage);
-      }
+      await this.assertSuccessfulResponse(response);
 
       // Return the response body as a stream
       return response.body;

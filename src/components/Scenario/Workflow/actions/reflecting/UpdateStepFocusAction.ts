@@ -26,15 +26,12 @@ export class UpdateStepFocusAction extends ActionBase {
 
     // Use WorkflowStateMachine as the single source of truth
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
+    stateMachine.updateState((stateJSON) => {
+      // Update steps.focus
+      stateJSON.observation.location.progress.steps.focus = focus;
 
-    // Update steps.focus
-    stateJSON.observation.location.progress.steps.focus = focus;
-
-    console.log(`[UpdateStepFocusAction] ✅ Updated step focus: ${focus}`);
-
-    // Update workflow state machine with modified stateJSON
-    stateMachine.setState(stateJSON);
+      console.log(`[UpdateStepFocusAction] ✅ Updated step focus: ${focus}`);
+    });
   }
 }
 

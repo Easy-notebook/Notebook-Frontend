@@ -12,14 +12,17 @@ export class TiptapUpdateAction extends StreamAction {
     const { payload } = context;
     const cellId = payload?.cellId;
     const content = payload?.content;
-    const replace = payload?.replace ?? false;
+    const replace = payload.replace;
+    if (replace !== undefined && typeof replace !== 'boolean')
+      throw new Error('Rich-text replace mode must be a boolean');
 
     if (cellId && typeof content === 'string') {
       const state = useStore.getState();
+      if (context.notebookId !== undefined && context.notebookId !== state.notebookId) return;
       const target = state.cells.find((c) => c.id === cellId);
 
       if (target) {
-        if (replace) {
+        if (replace === true) {
           state.updateCell(cellId, content);
         } else {
           state.updateCell(cellId, (target.content || '') + content);

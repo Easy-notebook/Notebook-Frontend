@@ -23,7 +23,7 @@ export class SetCurrentCellAction extends StreamAction {
     const cell = state.cells.find((c) => c.id === cellId);
 
     if (cell) {
-      state.setCurrentCellId(cellId);
+      state.setCurrentCell(cellId);
       console.log('✅ [SetCurrentCellAction] 当前cell已设置:', {
         cellId,
         type: cell.type,

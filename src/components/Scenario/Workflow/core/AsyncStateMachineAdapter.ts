@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Async State Machine Adapter
  * =============================
@@ -22,21 +23,15 @@ import { StateJSON, ExecutionStep } from '@Store/models';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
 import { WorkflowState } from '../observation/WorkflowState';
 
-import streamingLogger from '../__tests__/streaming-debug-logger';
+import { WorkflowStreamTrace, type StreamOutcome } from './WorkflowStreamTrace';
 import { StateFactory } from '../states/StateFactory';
 
 export interface APIType {
   value: string;
 }
 
-interface APIClient {
-  callPlanningAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
-  callGeneratingAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
-  callReflectingAPI: (stateJSON: StateJSON) => AsyncGenerator<unknown>;
-}
-
 interface ScriptStore {
-  execAction: (step: ExecutionStep) => Promise<void>;
+  execAction: (step: ExecutionStep, signal?: AbortSignal) => Promise<void>;
 }
 
 /**
@@ -49,27 +44,23 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 export class AsyncStateMachineAdapter {
   private lastTransitionName: string | null = null;
 
-  constructor(apiClient?: APIClient, scriptStore?: ScriptStore) {
+  constructor(apiClient?: WorkflowAPIClientPort, scriptStore?: ScriptStore) {
     console.log('[AsyncFSM] Initialized AsyncStateMachineAdapter');
 
-    // Inject dependencies into TransitionCoordinator
-    if (scriptStore || apiClient) {
-      const coordinator = getTransitionCoordinator();
-      // We need to pass notebookStore as well, but it's not in the constructor args yet.
-      // However, we can import it dynamically or assume it's available globally if needed.
-      // For now, let's just pass what we have.
-      coordinator.setContext({
-        scriptStore,
-        apiClient,
-      });
-      console.log('[AsyncFSM] Injected context into TransitionCoordinator');
+    // Omitted dependencies preserve the installed context. API injection must also
+    // reach cached and future states, which own the handlers that make requests.
+    if (scriptStore) {
+      getTransitionCoordinator().setContext({ scriptStore });
+    }
+    if (apiClient) {
+      this.setApiClient(apiClient);
     }
   }
 
   /**
    * Set or update the API client
    */
-  setApiClient(apiClient: APIClient): void {
+  setApiClient(apiClient: WorkflowAPIClientPort): void {
     // Inject into TransitionCoordinator
     const coordinator = getTransitionCoordinator();
     coordinator.setContext({ apiClient });
@@ -100,7 +91,8 @@ export class AsyncStateMachineAdapter {
    * @param stateJSON - Current state JSON
    * @returns Tuple of (updated state JSON, transition name)
    */
-  async step(stateJSON: StateJSON): Promise<[StateJSON, string | null]> {
+  async step(stateJSON: StateJSON, signal?: AbortSignal): Promise<[StateJSON, string | null]> {
+    signal?.throwIfAborted();
     // Reset transition name tracking
     this.lastTransitionName = null;
 
@@ -135,11 +127,15 @@ export class AsyncStateMachineAdapter {
 
       // Attempt auto-trigger for logic-only states (like STAGE_COMPLETED)
       const coordinator = getTransitionCoordinator();
-      const { state: newState, transitionName } =
-        await coordinator.autoTriggerNextTransition(workflowState);
+      const { state: newState, transitionName } = await coordinator.autoTriggerNextTransition(
+        workflowState,
+        signal
+      );
+      signal?.throwIfAborted();
 
       if (transitionName) {
         console.log(`[AsyncFSM] Auto-triggered transition: ${transitionName}`);
+        signal?.throwIfAborted();
         this.lastTransitionName = transitionName;
         return [newState.toJSON(), transitionName];
       }
@@ -157,7 +153,8 @@ export class AsyncStateMachineAdapter {
 
       // Call the API via the State object
       // The State object uses its internal handlers which are initialized with apiClient
-      let apiResponse = await state.callAPI(workflowState, predictedTransitionName);
+      let apiResponse = await state.callAPI(workflowState, predictedTransitionName, signal);
+      signal?.throwIfAborted();
 
       // Get TransitionCoordinator
       const coordinator = getTransitionCoordinator();
@@ -170,28 +167,31 @@ export class AsyncStateMachineAdapter {
         const actions = [];
         console.log(`[AsyncFSM] Starting streaming action execution...`);
 
-        // Start streaming debug session
-        streamingLogger.startSession(`${apiType}-${Date.now()}`);
-        streamingLogger.streamingStarted();
+        const streamingLogger = new WorkflowStreamTrace(apiType);
+        let streamOutcome: StreamOutcome = 'failed';
 
         // Get scriptStore from TransitionCoordinator context
         const scriptStore = coordinator.getContext().scriptStore;
 
-        for await (const rawAction of apiResponse) {
-          const actionIndex = actions.length;
+        try {
+          for await (const rawAction of apiResponse) {
+            signal?.throwIfAborted();
+            const actionIndex = actions.length;
 
-          // IMPORTANT: Backend returns {"action": {...}} format, need to unwrap
-          const action = (rawAction as Record<string, unknown>).action || rawAction;
-          const actionType = (action as Record<string, unknown>).type || 'unknown';
+            // IMPORTANT: Backend returns {"action": {...}} format, need to unwrap
+            const action = (rawAction as Record<string, unknown>).action || rawAction;
+            const actionType = (action as Record<string, unknown>).type || 'unknown';
 
-          console.log(`[AsyncFSM] Raw action received:`, JSON.stringify(rawAction, null, 2));
-          console.log(`[AsyncFSM] Parsed action type: ${actionType}, executing immediately...`);
+            console.log(`[AsyncFSM] Raw action received:`, JSON.stringify(rawAction, null, 2));
+            console.log(`[AsyncFSM] Parsed action type: ${actionType}, executing immediately...`);
 
-          // Log action received
-          streamingLogger.actionReceived(actionIndex, actionType as string);
+            // Log action received
+            streamingLogger.actionReceived(actionIndex, actionType as string);
 
-          // Execute action immediately using scriptStore
-          if (scriptStore) {
+            // Execute action immediately using scriptStore
+            if (typeof scriptStore?.execAction !== 'function') {
+              throw new Error('Workflow action executor is not configured');
+            }
             try {
               streamingLogger.actionExecutionStart(actionIndex);
 
@@ -201,27 +201,28 @@ export class AsyncStateMachineAdapter {
               );
 
               console.log(`[AsyncFSM] Executing action step:`, executionStep);
-              await scriptStore.execAction(executionStep);
+              await scriptStore.execAction(executionStep, signal);
+              signal?.throwIfAborted();
 
               streamingLogger.actionExecutionEnd(actionIndex);
               console.log(`[AsyncFSM] Action ${actionIndex + 1} executed: ${actionType}`);
             } catch (error) {
+              signal?.throwIfAborted();
               const errorMsg = error instanceof Error ? error.message : String(error);
               streamingLogger.actionExecutionEnd(actionIndex, errorMsg);
               console.error(`[AsyncFSM] Failed to execute action ${actionType}:`, error);
+              throw error;
             }
-          } else {
-            console.warn('[AsyncFSM] No scriptStore available, action will be executed by handler');
-            streamingLogger.actionExecutionEnd(actionIndex, 'No scriptStore available');
+
+            // Still collect actions for transition handler (store the unwrapped action)
+            actions.push(action as Record<string, unknown>);
           }
 
-          // Still collect actions for transition handler (store the unwrapped action)
-          actions.push(action as Record<string, unknown>);
+          streamOutcome = 'completed';
+        } finally {
+          streamingLogger.finish(signal?.aborted ? 'cancelled' : streamOutcome);
+          streamingLogger.printReport();
         }
-
-        streamingLogger.streamingEnded();
-        streamingLogger.endSession();
-        streamingLogger.printReport();
 
         console.log(`[AsyncFSM] Streaming execution complete: ${actions.length} actions`);
 
@@ -230,6 +231,7 @@ export class AsyncStateMachineAdapter {
 
         // Update stateJSON to latest from store as actions might have changed it
         const { useWorkflowStateMachine } = await import('../store/workflowStateMachine');
+        signal?.throwIfAborted();
         const latestStateJSON = useWorkflowStateMachine.getState().stateJSON;
         // Re-wrap in WorkflowState
         workflowState = new WorkflowState(latestStateJSON);
@@ -238,6 +240,7 @@ export class AsyncStateMachineAdapter {
         parsedResponse = this.parseAPIResponse(apiResponse);
       }
 
+      signal?.throwIfAborted();
       // Apply transition (TransitionCoordinator selects appropriate handler)
       // Note: For generating/reflecting, actions are already executed above, but we pass them
       // to the coordinator so handlers like NextBehaviorHandler can inspect them.
@@ -245,17 +248,20 @@ export class AsyncStateMachineAdapter {
         workflowState,
         parsedResponse,
         apiType,
-        true // auto-trigger enabled
+        true, // auto-trigger enabled
+        signal
       );
 
+      signal?.throwIfAborted();
       this.lastTransitionName = transitionName;
       console.log(`[AsyncFSM] Transition applied: ${transitionName}`);
 
       return [updatedState.toJSON(), transitionName];
     } catch (error) {
+      signal?.throwIfAborted();
       console.error(`[AsyncFSM] API call error for ${normalized}:`, error);
-      // TODO: Trigger FAIL event
-      return [stateJSON, null];
+      // The owning run session publishes FAILED; a transport failure is not a no-op step.
+      throw error;
     }
   }
 
@@ -313,7 +319,8 @@ export class AsyncStateMachineAdapter {
       metadata: action.metadata || {},
     };
 
-    // Map snake_case fields to camelCase
+    // Map UI-facing aliases only. Domain identifiers such as stage_id must
+    // retain the names consumed by ExecutionStep and the planning actions.
     const fieldMapping: Record<string, string> = {
       shot_type: 'shotType',
       codecell_id: 'codecell_id', // Keep as is
@@ -324,7 +331,6 @@ export class AsyncStateMachineAdapter {
       text_array: 'textArray',
       thinking_text: 'thinkingText',
       step_id: 'stepId',
-      stage_id: 'stageId',
       phase_id: 'phaseId',
       total_steps: 'totalSteps',
       total_stages: 'totalStages',
@@ -350,44 +356,63 @@ export class AsyncStateMachineAdapter {
 // ==============================================
 // Singleton Instance
 // ==============================================
-let asyncStateMachineInstance: AsyncStateMachineAdapter | null = null;
+let asyncStateMachineInitialization: Promise<AsyncStateMachineAdapter> | null = null;
+let initializationGeneration = 0;
+let readyAsyncStateMachine: AsyncStateMachineAdapter | null = null;
 
-/**
- * Get or create the AsyncStateMachine singleton instance
- *
- * This ensures we reuse the same instance with the same apiClient and scriptStore
- */
-export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> {
-  if (!asyncStateMachineInstance) {
-    // Dynamic import to avoid circular dependencies
-    const { WorkflowAPIClient } = await import('../api/WorkflowAPIClient');
-    const { useScriptStore } = await import('../store/useScriptStore');
-
-    const apiClient = new WorkflowAPIClient();
-    const scriptStore = useScriptStore.getState();
-    const notebookStore = (await import('@Store/notebookStore')).default.getState();
-
-    asyncStateMachineInstance = new AsyncStateMachineAdapter(apiClient, scriptStore);
-
-    // Inject notebookStore into TransitionCoordinator
-    const coordinator = getTransitionCoordinator();
-    coordinator.setContext({
-      notebookStore,
-    });
-
-    // Initialize StateFactory with apiClient
-    StateFactory.setApiClient(apiClient);
-
-    console.log('[AsyncFSM] Created singleton instance');
-  }
-
-  return asyncStateMachineInstance;
+/** Publish a synchronously initialized adapter to the same owner used by lazy callers. */
+export function installAsyncStateMachine(adapter: AsyncStateMachineAdapter): void {
+  initializationGeneration++;
+  readyAsyncStateMachine = adapter;
+  asyncStateMachineInitialization = Promise.resolve(adapter);
 }
 
-/**
- * Reset the singleton instance (useful for testing)
- */
+export function peekAsyncStateMachine(): AsyncStateMachineAdapter | null {
+  return readyAsyncStateMachine;
+}
+
+/** Share one initialization across concurrent callers, including dynamic imports. */
+export async function getAsyncStateMachine(): Promise<AsyncStateMachineAdapter> {
+  if (!asyncStateMachineInitialization) {
+    const generation = initializationGeneration;
+    const initialization = (async () => {
+      const [{ getWorkflowAPIClient }, { useScriptStore }, { default: useNotebookStore }] =
+        await Promise.all([
+          import('../api/WorkflowAPIClient'),
+          import('../store/useScriptStore'),
+          import('@Store/notebookStore'),
+        ]);
+
+      // Reset revokes publication before any global dependency is installed.
+      if (generation !== initializationGeneration) {
+        if (readyAsyncStateMachine) return readyAsyncStateMachine;
+        throw new DOMException('Workflow initialization was reset', 'AbortError');
+      }
+
+      const adapter = new AsyncStateMachineAdapter(
+        getTransitionCoordinator().getContext().apiClient ?? getWorkflowAPIClient(),
+        useScriptStore.getState()
+      );
+      getTransitionCoordinator().setContext({ notebookStore: useNotebookStore.getState() });
+      readyAsyncStateMachine = adapter;
+      console.log('[AsyncFSM] Created singleton instance');
+      return adapter;
+    })();
+    asyncStateMachineInitialization = initialization;
+    // A failed older attempt must not clear a replacement installed after reset.
+    void initialization.catch(() => {
+      if (asyncStateMachineInitialization === initialization) {
+        asyncStateMachineInitialization = null;
+      }
+    });
+  }
+  return asyncStateMachineInitialization;
+}
+
+/** Revoke pending initialization and let the next caller create a fresh instance. */
 export function resetAsyncStateMachine(): void {
-  asyncStateMachineInstance = null;
+  initializationGeneration++;
+  readyAsyncStateMachine = null;
+  asyncStateMachineInitialization = null;
   console.log('[AsyncFSM] Reset singleton instance');
 }

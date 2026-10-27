@@ -1,30 +1,23 @@
-export interface SourceSelectionEdit {
-  value: string;
-  start: number;
-  end: number;
-}
+const indentationLength = (value: string, offset = 0) =>
+  value[offset] === '\t' ? 1 : value[offset] === ' ' ? (value[offset + 1] === ' ' ? 2 : 1) : 0;
 
-/** Touch selected lines only. A selection ending at the next line's start excludes that line. */
-export function indentSourceLines(
-  value: string,
-  start: number,
-  end: number,
-  outdent: boolean
-): SourceSelectionEdit {
-  const edit = indentSourceChange(value, start, end, outdent);
-  return {
-    value: value.slice(0, edit.from) + edit.insert + value.slice(edit.to),
-    start: edit.start,
-    end: edit.end,
-  };
-}
-
-/** Return the known replacement range for transaction-based source buffers. */
+/** Return the selected-line replacement; selection ending at a line start excludes that line. */
 export function indentSourceChange(value: string, start: number, end: number, outdent: boolean) {
   const first = start === 0 ? 0 : value.lastIndexOf('\n', start - 1) + 1;
+  if (start === end) {
+    const removed = outdent ? indentationLength(value, first) : 0;
+    const insert = outdent ? '' : '  ';
+    const caret = start + insert.length - Math.min(removed, start - first);
+    return { from: first, to: first + removed, insert, start: caret, end: caret };
+  }
   const limit = end > start && value[end - 1] === '\n' ? end - 1 : end;
-  const newline = value.indexOf('\n', limit);
-  const last = newline < 0 ? value.length : newline;
+  // Text after the selection needs no replacement. Outdent may consume the
+  // remainder of the final line's prefix when selection ends inside its spaces.
+  let last = limit;
+  if (outdent) {
+    const finalLine = limit === 0 ? 0 : value.lastIndexOf('\n', limit - 1) + 1;
+    last = Math.max(limit, finalLine + indentationLength(value, finalLine));
+  }
   let mappedStart = start;
   let mappedEnd = end;
   let position = first;
@@ -32,7 +25,7 @@ export function indentSourceChange(value: string, start: number, end: number, ou
     .slice(first, last)
     .split('\n')
     .map((line) => {
-      const removed = outdent ? (/^(?:\t| {1,2})/.exec(line)?.[0].length ?? 0) : 0;
+      const removed = outdent ? indentationLength(line) : 0;
       const added = outdent ? 0 : 2;
       const map = (point: number) =>
         point >= position ? added - Math.min(removed, point - position) : 0;

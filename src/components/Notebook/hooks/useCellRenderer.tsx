@@ -1,3 +1,4 @@
+import { AgentCell } from '@Editor/Cells/AgentCell/AgentCell';
 // src/components/Notebook/hooks/useCellRenderer.ts
 // Custom hook for rendering cells
 
@@ -62,6 +63,14 @@ export const useCellRenderer = ({
           return <MarkdownCell key={cell.id} {...props} />;
         case 'image':
           return <ImageCell key={cell.id} {...props} />;
+        case 'agent':
+          return (
+            <AgentCell
+              key={cell.id}
+              cellId={cell.id}
+              readOnly={viewMode === 'demo' || cell.enableEdit === false}
+            />
+          );
         case 'thinking':
           return <AIThinkingCell key={cell.id} {...props} />;
         case 'link':

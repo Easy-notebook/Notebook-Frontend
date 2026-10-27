@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { MermaidPreview } from '../MermaidPreview';
-import { handleSourceInputHistory } from '../utils/sourceInputHistory';
+import { handleSourceInputHistory, useSourceNativeHistory } from '../utils/sourceInputHistory';
 import { decodeTextAttribute } from '../utils/encodedText';
 
 export function MermaidBlockView({
@@ -16,6 +16,13 @@ export function MermaidBlockView({
   const code = node.attrs.code as string;
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
   const [copyStatus, setCopyStatus] = useState('');
+  const copySequence = useRef(0);
+  useLayoutEffect(() => {
+    setCopyStatus('');
+    return () => {
+      copySequence.current++;
+    };
+  }, [code]);
   const input = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
   const canEditSource = () => {
@@ -28,6 +35,7 @@ export function MermaidBlockView({
   const updateSource = (code: string) => {
     if (canEditSource()) updateAttributes({ code });
   };
+  useSourceNativeHistory(input, editor, canEditSource, composing, mode === 'source');
   useEffect(() => {
     // A newly confirmed empty diagram is selected by the insertion transaction.
     // Wait until after that transaction so ProseMirror cannot steal input focus.
@@ -68,11 +76,13 @@ export function MermaidBlockView({
   };
 
   const copySource = async () => {
+    const sequence = ++copySequence.current;
+    setCopyStatus('');
     try {
       await navigator.clipboard.writeText(code);
-      setCopyStatus('Source copied');
+      if (sequence === copySequence.current) setCopyStatus('Source copied');
     } catch {
-      setCopyStatus('Could not copy source');
+      if (sequence === copySequence.current) setCopyStatus('Could not copy source');
     }
   };
 
@@ -109,7 +119,8 @@ export function MermaidBlockView({
             updateSource(event.target.value);
           }}
           onKeyDown={(event) =>
-            canEditSource() && handleSourceInputHistory(event, editor, updateSource)
+            canEditSource() &&
+            handleSourceInputHistory(event, editor, updateSource, composing.current)
           }
           spellCheck={false}
           aria-label="Mermaid source"

@@ -1,141 +1,159 @@
-import { INotebookRepository, IStorageProvider } from '../interfaces';
-import { NotebookEntity, NotebookActivityEntity } from '../../../storage/schema';
+import { FileRecordOwnership } from './FileRecordOwnership';
+import { FileContentRecord } from './FileContentRecord';
+import { AccessHistory } from './AccessHistory';
+import { NotebookFileTotals } from './NotebookFileTotals';
+import { NotebookActivityRecord } from './NotebookActivityRecord';
+import {
+  INotebookRepository,
+  IStorageProvider,
+  type NotebookSaveData,
+  type FileSaveData,
+  type NotebookSnapshotCondition,
+} from '../interfaces';
+import {
+  NotebookEntity,
+  NotebookActivityEntity,
+  FileMetadataEntity,
+  FileContentEntity,
+} from '../../../storage/schema';
 import { DB_CONFIG } from '../../../storage/database';
+import { NotebookDeletion } from './NotebookDeletion';
+import { FileRecordSet } from './FileRecordSet';
+import { NotebookImport } from './NotebookImport';
+import { NotebookConflictError } from '../NotebookConflictError';
 
 export class NotebookRepository implements INotebookRepository {
   constructor(private storage: IStorageProvider) {}
 
-  async saveNotebook(
-    notebookData: Omit<NotebookEntity, 'createdAt' | 'updatedAt'>
+  async importNotebook(
+    notebook: NotebookSaveData,
+    files: FileSaveData[],
+    source?: string
+  ): Promise<number> {
+    return new NotebookImport(notebook, files, source).commit(this.storage);
+  }
+
+  async saveNotebook(notebookData: NotebookSaveData): Promise<NotebookEntity> {
+    return this.persistNotebook({ ...notebookData });
+  }
+
+  async saveNotebookSnapshot(
+    file: FileSaveData,
+    notebook: NotebookSaveData,
+    condition?: NotebookSnapshotCondition
+  ) {
+    if (file.notebookId !== notebook.id) throw new Error('Snapshot notebook identity mismatch');
+    const records = new FileRecordSet(file, { forceLocal: true });
+    await this.persistNotebook({ ...notebook }, records, condition && { ...condition });
+    return records.metadata;
+  }
+
+  private async persistNotebook(
+    data: NotebookSaveData,
+    file?: FileRecordSet,
+    condition?: NotebookSnapshotCondition
   ): Promise<NotebookEntity> {
-    const now = Date.now();
-    const existing = await this.storage.get<NotebookEntity>(
+    const inputHistory = new AccessHistory(data);
+    const names: string[] = [
       DB_CONFIG.STORES.NOTEBOOKS,
-      notebookData.id
-    );
-
-    const notebook: NotebookEntity = {
-      ...notebookData,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-
-    await this.storage.put(DB_CONFIG.STORES.NOTEBOOKS, notebook);
-    await this.logActivity(notebook.id, 'open');
-
+      DB_CONFIG.STORES.ACTIVITIES,
+      DB_CONFIG.STORES.FILES_METADATA,
+    ];
+    if (file) names.push(DB_CONFIG.STORES.FILES_CONTENT);
+    let notebook!: NotebookEntity;
+    await this.storage.transaction(names, 'readwrite', async (stores) => {
+      const notebooks = stores[DB_CONFIG.STORES.NOTEBOOKS];
+      const [existing, files] = await Promise.all([
+        this.read<NotebookEntity | undefined>(notebooks.get(data.id)),
+        this.read<FileMetadataEntity[]>(
+          stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(data.id)
+        ),
+      ]);
+      new FileRecordOwnership(data.id).verifyAll(files);
+      if (file && condition) {
+        const current = await this.read<FileContentEntity | undefined>(
+          stores[DB_CONFIG.STORES.FILES_CONTENT].get(file.metadata.id)
+        );
+        const metadata = files.find((record) => record.id === file.metadata.id);
+        const matches =
+          condition.expectedContent === null
+            ? !metadata && !current
+            : metadata != null &&
+              FileContentRecord.expectsLocalContent(metadata) &&
+              current?.content === condition.expectedContent;
+        if (!matches) throw new NotebookConflictError(data.id, file.metadata.filePath);
+      }
+      const retained = file ? files.filter((record) => record.id !== file.metadata.id) : files;
+      const now = Date.now();
+      let history =
+        existing == null ? inputHistory : inputHistory.merge(new AccessHistory(existing));
+      if (file) history = history.merge(inputHistory.observedAt(now));
+      notebook = {
+        ...data,
+        // Metadata inputs can be stale. File-derived counters belong to this transaction.
+        ...NotebookFileTotals.fromFiles(file ? [...retained, file.metadata] : retained).toRecord(),
+        ...history.toRecord(),
+        retention:
+          file || (existing && existing.retention !== 'evictable')
+            ? 'persistent'
+            : (data.retention ?? existing?.retention ?? 'persistent'),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      notebooks.put(notebook);
+      stores[DB_CONFIG.STORES.ACTIVITIES].add(new NotebookActivityRecord(data.id, 'open', now));
+      file?.writeTo(
+        stores[DB_CONFIG.STORES.FILES_METADATA],
+        stores[DB_CONFIG.STORES.FILES_CONTENT]
+      );
+    });
     return notebook;
   }
 
   async getNotebook(id: string): Promise<NotebookEntity | null> {
-    const notebook = await this.storage.get<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS, id);
-    if (notebook) {
-      await this.updateAccessTime(id);
-    }
-    return notebook || null;
+    return (await this.accessNotebook(id)) ?? null;
   }
 
   async getAllNotebooks(
     options: { orderBy?: string; limit?: number; offset?: number } = {}
   ): Promise<NotebookEntity[]> {
-    // Note: IndexedDB getAll doesn't support sorting/pagination natively in a simple way without cursors.
-    // The IStorageProvider interface I defined is simple.
-    // For now, I will fetch all and sort/filter in memory, or I would need to expand IStorageProvider.
-    // Given the scale (likely < 1000 notebooks), in-memory sorting is acceptable for this refactor.
-    // Ideally, IStorageProvider should expose openCursor.
-
-    const notebooks = await this.storage.getAll<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS);
-
-    if (options.orderBy) {
-      notebooks.sort((a, b) => {
-        const valA = (a as any)[options.orderBy!];
-        const valB = (b as any)[options.orderBy!];
-        return valB - valA; // Descending
-      });
-    } else {
-      // Default sort by lastAccessedAt
-      notebooks.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt);
-    }
-
+    // Query options belong to this invocation, even while the provider is opening.
+    const { orderBy, limit, offset } = options;
+    const field = orderBy || 'lastAccessedAt';
+    const numericValue = (notebook: NotebookEntity): number => {
+      const value: unknown = Reflect.get(notebook, field);
+      return Number(value);
+    };
+    const stored = await this.storage.getAll<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS);
+    const notebooks = [...stored].sort((a, b) => numericValue(b) - numericValue(a));
     let result = notebooks;
-    if (options.offset) {
-      result = result.slice(options.offset);
-    }
-    if (options.limit) {
-      result = result.slice(0, options.limit);
-    }
+    if (offset) result = result.slice(offset);
+    if (limit) result = result.slice(0, limit);
 
     return result;
   }
 
   async deleteNotebook(id: string): Promise<boolean> {
-    // This requires a transaction across multiple stores.
-    // I need to implement the complex deletion logic here.
-
-    await this.storage.transaction(
-      [
-        DB_CONFIG.STORES.NOTEBOOKS,
-        DB_CONFIG.STORES.FILES_METADATA,
-        DB_CONFIG.STORES.FILES_CONTENT,
-        DB_CONFIG.STORES.ACTIVITIES,
-      ],
-      'readwrite',
-      async (stores) => {
-        // 1. Delete notebook
-        stores[DB_CONFIG.STORES.NOTEBOOKS].delete(id);
-
-        // 2. Find and delete files
-        // We need to use an index to find files by notebookId.
-        // IDBObjectStore in the callback is the raw IDB object.
-        const filesMetaStore = stores[DB_CONFIG.STORES.FILES_METADATA];
-        const contentStore = stores[DB_CONFIG.STORES.FILES_CONTENT];
-        const index = filesMetaStore.index('notebookId');
-
-        // We can't await cursor iteration easily inside this callback structure if we want to be purely async.
-        // But we can use getAllKeys if available or just iterate.
-        // Let's try getAllKeys from the index if supported (modern browsers).
-
-        const fileKeysRequest = index.getAllKeys(id);
-
-        await new Promise<void>((resolve, reject) => {
-          fileKeysRequest.onsuccess = () => {
-            const keys = fileKeysRequest.result;
-            keys.forEach((key) => {
-              filesMetaStore.delete(key);
-              contentStore.delete(key);
-            });
-            resolve();
-          };
-          fileKeysRequest.onerror = () => reject(fileKeysRequest.error);
-        });
-
-        // 3. Delete activities
-        const activitiesStore = stores[DB_CONFIG.STORES.ACTIVITIES];
-        const actIndex = activitiesStore.index('notebookId');
-        const actKeysRequest = actIndex.getAllKeys(id);
-
-        await new Promise<void>((resolve, reject) => {
-          actKeysRequest.onsuccess = () => {
-            const keys = actKeysRequest.result;
-            keys.forEach((key) => {
-              activitiesStore.delete(key);
-            });
-            resolve();
-          };
-          actKeysRequest.onerror = () => reject(actKeysRequest.error);
-        });
-      }
-    );
-
+    await this.storage.transaction(NotebookDeletion.stores, 'readwrite', async (stores) => {
+      await new NotebookDeletion(stores).delete(id);
+    });
     return true;
   }
 
   async updateAccessTime(id: string): Promise<void> {
-    const notebook = await this.storage.get<NotebookEntity>(DB_CONFIG.STORES.NOTEBOOKS, id);
-    if (notebook) {
-      notebook.lastAccessedAt = Date.now();
-      notebook.accessCount += 1;
-      await this.storage.put(DB_CONFIG.STORES.NOTEBOOKS, notebook);
-    }
+    await this.accessNotebook(id);
+  }
+
+  private async accessNotebook(id: string): Promise<NotebookEntity | undefined> {
+    let notebook: NotebookEntity | undefined;
+    await this.storage.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite', async (stores) => {
+      const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+      const stored = await this.read<NotebookEntity | undefined>(store.get(id));
+      if (stored == null) return;
+      notebook = { ...stored, ...new AccessHistory(stored).accessedAt(Date.now()).toRecord() };
+      store.put(notebook);
+    });
+    return notebook;
   }
 
   async getNotebookStats(id: string): Promise<{
@@ -144,45 +162,107 @@ export class NotebookRepository implements INotebookRepository {
     lastActivity: number;
     activities: NotebookActivityEntity[];
   }> {
-    // This also requires querying by index.
-    // I'll implement a simplified version or extend IStorageProvider if needed.
-    // For now, I'll assume I can access the DB directly if I really need to,
-    // or just use getAll and filter (inefficient but works for now).
-
-    // Let's use getAll and filter for simplicity in this refactor step,
-    // optimizing later if performance is an issue.
-
-    const allFiles = await this.storage.getAll<any>(DB_CONFIG.STORES.FILES_METADATA);
-    const notebookFiles = allFiles.filter((f) => f.notebookId === id);
-
-    const fileCount = notebookFiles.length;
-    const totalSize = notebookFiles.reduce((sum, f) => sum + f.size, 0);
-
-    const allActivities = await this.storage.getAll<NotebookActivityEntity>(
-      DB_CONFIG.STORES.ACTIVITIES
+    let files: FileMetadataEntity[] = [];
+    let activities: NotebookActivityEntity[] = [];
+    await this.storage.transaction(
+      [DB_CONFIG.STORES.FILES_METADATA, DB_CONFIG.STORES.ACTIVITIES],
+      'readonly',
+      async (stores) => {
+        [files, activities] = await Promise.all([
+          this.read<FileMetadataEntity[]>(
+            stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(id)
+          ),
+          this.read<NotebookActivityEntity[]>(
+            stores[DB_CONFIG.STORES.ACTIVITIES].index('notebookId').getAll(id)
+          ),
+        ]);
+      }
     );
-    const notebookActivities = allActivities
-      .filter((a) => a.notebookId === id)
-      .sort((a, b) => b.timestamp - a.timestamp);
-
-    const lastActivity = notebookActivities.length > 0 ? notebookActivities[0].timestamp : 0;
-
+    new FileRecordOwnership(id).verifyAll(files);
+    activities.sort((a, b) => b.timestamp - a.timestamp);
     return {
-      fileCount,
-      totalSize,
-      lastActivity,
-      activities: notebookActivities.slice(0, 50),
+      ...NotebookFileTotals.fromFiles(files).toRecord(),
+      lastActivity: activities[0]?.timestamp ?? 0,
+      activities: activities.slice(0, 50),
     };
   }
 
-  private async logActivity(notebookId: string, activityType: string): Promise<void> {
-    const timestamp = Date.now();
-    const activity: NotebookActivityEntity = {
-      id: `${notebookId}::${timestamp}`,
+  async logActivity(
+    notebookId: string,
+    activityType: NotebookActivityEntity['activityType'],
+    filePath?: string,
+    metadata?: NotebookActivityEntity['metadata']
+  ): Promise<void> {
+    const activity = new NotebookActivityRecord(
       notebookId,
-      activityType: activityType as any,
-      timestamp,
-    };
-    await this.storage.put(DB_CONFIG.STORES.ACTIVITIES, activity);
+      activityType,
+      Date.now(),
+      filePath,
+      metadata
+    );
+    await this.storage.transaction([DB_CONFIG.STORES.ACTIVITIES], 'readwrite', async (stores) => {
+      stores[DB_CONFIG.STORES.ACTIVITIES].add(activity);
+    });
+  }
+
+  async getInactiveNotebooks(retentionPeriod: number): Promise<NotebookEntity[]> {
+    let notebooks: NotebookEntity[] = [];
+    await this.storage.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readonly', async (stores) => {
+      notebooks = await this.read<NotebookEntity[]>(
+        stores[DB_CONFIG.STORES.NOTEBOOKS]
+          .index('lastAccessedAt')
+          .getAll(IDBKeyRange.upperBound(Date.now() - retentionPeriod))
+      );
+    });
+    return notebooks;
+  }
+
+  async adjustNotebookStats(
+    notebookId: string,
+    deltaFileCount: number,
+    deltaBytes: number
+  ): Promise<void> {
+    await this.storage.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite', async (stores) => {
+      const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+      const notebook = await this.read<NotebookEntity | undefined>(store.get(notebookId));
+      if (!notebook) return;
+      store.put({
+        ...notebook,
+        ...new NotebookFileTotals(notebook.fileCount, notebook.totalSize)
+          .adjust(deltaFileCount, deltaBytes)
+          .toRecord(),
+        updatedAt: Date.now(),
+      });
+    });
+  }
+
+  async recalcNotebookStats(notebookId: string): Promise<void> {
+    await this.storage.transaction(
+      [DB_CONFIG.STORES.NOTEBOOKS, DB_CONFIG.STORES.FILES_METADATA],
+      'readwrite',
+      async (stores) => {
+        const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+        const [notebook, files] = await Promise.all([
+          this.read<NotebookEntity | undefined>(store.get(notebookId)),
+          this.read<FileMetadataEntity[]>(
+            stores[DB_CONFIG.STORES.FILES_METADATA].index('notebookId').getAll(notebookId)
+          ),
+        ]);
+        if (!notebook) return;
+        new FileRecordOwnership(notebookId).verifyAll(files);
+        store.put({
+          ...notebook,
+          ...NotebookFileTotals.fromFiles(files).toRecord(),
+          updatedAt: Date.now(),
+        });
+      }
+    );
+  }
+
+  private read<T>(request: IDBRequest<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
   }
 }

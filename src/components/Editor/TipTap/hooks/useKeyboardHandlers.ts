@@ -57,7 +57,9 @@ export function useKeyboardHandlers() {
 
         if (
           prevNode &&
-          ['executableCodeBlock', 'thinkingCell', 'rawBlock'].includes(prevNode.type.name)
+          ['executableCodeBlock', 'thinkingCell', 'rawBlock', 'agentCell'].includes(
+            prevNode.type.name
+          )
         ) {
           event.preventDefault();
 
@@ -98,7 +100,9 @@ export function useKeyboardHandlers() {
         const prevNode = $from.nodeBefore;
         if (
           prevNode &&
-          ['executableCodeBlock', 'thinkingCell', 'rawBlock'].includes(prevNode.type.name)
+          ['executableCodeBlock', 'thinkingCell', 'rawBlock', 'agentCell'].includes(
+            prevNode.type.name
+          )
         ) {
           // Logic to ensure we don't skip special blocks can be added here if needed.
           // For now, we trust default behavior but keep this hook ready.

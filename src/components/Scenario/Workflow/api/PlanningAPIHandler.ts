@@ -1,7 +1,6 @@
 /** Planning API Handler - Calls VDSAgents /planning endpoint (Streaming) */
 import { BaseAPIHandler } from './BaseAPIHandler';
 import { WorkflowState } from '../observation/WorkflowState';
-import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 
 export class PlanningAPIHandler extends BaseAPIHandler {
   /**
@@ -15,17 +14,15 @@ export class PlanningAPIHandler extends BaseAPIHandler {
     state: WorkflowState,
     stageId?: string,
     stepId?: string,
-    _kwargs?: Record<string, any>
+    _kwargs?: Record<string, any>,
+    signal?: AbortSignal
   ): AsyncGenerator<any> {
+    signal?.throwIfAborted();
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(state);
     }
 
-    // Get latest notebook state directly from notebookStore
-    const latestNotebook = globalUpdateInterface.getNotebookState();
-
-    // Update state with latest notebook data
-    state.state.notebook.update(latestNotebook);
+    const latestNotebook = await this.synchronizeNotebook(state, signal);
 
     console.log('[PlanningAPI] Injected latest notebook data:', {
       notebook_id: latestNotebook.notebook_id,
@@ -37,14 +34,18 @@ export class PlanningAPIHandler extends BaseAPIHandler {
       let actionCount = 0;
 
       // Call WorkflowAPIClient's streaming callPlanningAPI method
-      const actionStream = this.apiClient.callPlanningAPI(state.toJSON());
+      const actionStream = this.apiClient.callPlanningAPI(state.toJSON(), signal);
 
       // Stream actions without executing them
       // Execution will be handled by AsyncStateMachineAdapter for consistency
       for await (const actionData of actionStream) {
+        signal?.throwIfAborted();
         // Extract action object (format: {"action": {...}})
+        if (typeof actionData !== 'object' || actionData === null || !('action' in actionData)) {
+          continue;
+        }
         const action = actionData.action;
-        if (!action || !action.type) {
+        if (typeof action !== 'object' || action === null || !('type' in action) || !action.type) {
           continue;
         }
 

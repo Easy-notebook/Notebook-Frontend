@@ -5,43 +5,44 @@
 import { StreamAction, registerStreamAction } from '../base';
 import type { StreamActionContext } from '../../types';
 import useStore from '@Store/notebookStore';
+import { useAIAgentStore } from '@Store/AIAgentStore';
 import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 import { qaStreamManager } from '../../managers/QAStreamManager';
 import { AgentMemoryService } from '@Services/agentMemoryService';
 import { agentLog } from '@Utils/logger';
+import { QAViewPresenter } from './QAViewPresenter';
 
 export class InitStreamingAnswerAction extends StreamAction {
   async execute(context: StreamActionContext): Promise<void> {
+    context.signal?.throwIfAborted();
     const { payload, data } = context;
+    const notebookId = context.notebookId ?? useStore.getState().notebookId;
 
     agentLog.info('Initializing streaming response', { data });
     const qid = payload.QId;
 
     if (qid !== undefined && qid !== null) {
       const qidStr = Array.isArray(qid) ? qid[0] : qid.toString();
-      await globalUpdateInterface.initStreamingAnswer(qidStr);
-
-      // Record current streaming QA
-      qaStreamManager.setStreamingQaId(qidStr);
-
-      // Open right sidebar and switch to QA view
+      // Own cancellation before the answer update can notify synchronous subscribers.
+      const session = qaStreamManager.setStreamingQaId(qidStr, context.signal, () =>
+        useAIAgentStore.getState().cancelStreamingAnswer(qidStr)
+      );
+      context.signal?.throwIfAborted();
+      if (qaStreamManager.capture() !== session) return;
       try {
-        const notebookState = useStore.getState();
-        notebookState.setIsRightSidebarCollapsed(false);
-        console.log('✅ [InitStreamingAnswer] 打开右侧边栏显示 QA');
-
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        useAIAgentStore.getState().setActiveView('qa');
-        console.log('✅ [InitStreamingAnswer] 切换到 QA 视图');
+        await globalUpdateInterface.initStreamingAnswer(qidStr);
+        context.signal?.throwIfAborted();
       } catch (error) {
-        console.error('❌ [InitStreamingAnswer] 打开侧边栏失败:', error);
+        qaStreamManager.cancelStreamingQa(session);
+        throw error;
       }
+      if (qaStreamManager.capture() !== session) return;
+
+      await QAViewPresenter.show(context.signal);
+      context.signal?.throwIfAborted();
 
       // Record QA interaction start
       try {
-        const notebookState = (window as any).__notebookStore?.getState?.();
-        const notebookId = notebookState?.notebookId;
-
         if (notebookId) {
           agentLog.info('Recording QA interaction start', { qid: qidStr });
 
@@ -52,6 +53,7 @@ export class InitStreamingAnswerAction extends StreamAction {
           });
         }
       } catch (error) {
+        context.signal?.throwIfAborted();
         console.error('记录QA开始时出错:', error);
       }
     } else {

@@ -7,7 +7,9 @@ export interface BlockReplacementRange {
   newEnd: number;
 }
 
-/** Maximize retained equal, ID-addressed blocks using LIS; O(n log n) time and O(n) space. */
+/** Maximize retained equal, ID-addressed blocks using LIS.
+ * Ordered retained blocks take O(n); arbitrary reorders O(n log n); storage O(n).
+ */
 export function structuralBlockRanges(
   current: readonly Node[],
   next: readonly Node[]
@@ -32,6 +34,14 @@ export function structuralBlockRanges(
   const tails: number[] = [];
   const previous = new Int32Array(candidates.length).fill(-1);
   candidates.forEach((candidate, index) => {
+    // Insertions/deletions normally keep surviving cells ordered. Extend their
+    // increasing subsequence directly instead of binary-searching every block.
+    const last = tails[tails.length - 1];
+    if (last === undefined || candidates[last].old < candidate.old) {
+      if (last !== undefined) previous[index] = last;
+      tails.push(index);
+      return;
+    }
     let low = 0;
     let high = tails.length;
     while (low < high) {

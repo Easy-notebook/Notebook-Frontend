@@ -1,3 +1,4 @@
+import { CapturedQAEvent } from '../../CapturedQAEvent';
 /**
  * Communicate Agent Action - Handles communicate_with_agent stream type
  * Facilitates agent-to-agent communication
@@ -16,23 +17,10 @@ export class CommunicateAgentAction extends StreamAction {
     if (sourceAgent && targetAgent && message) {
       console.log(`[AgentCommunication] ${sourceAgent} → ${targetAgent}:`, message);
 
-      // Record communication to agent memory
-      try {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        const state = useAIAgentStore.getState();
-        const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
-
-        if (runningQA) {
-          state.addToolCallToQA(runningQA.id, {
-            type: 'agent-communication',
-            content: message,
-            agent: sourceAgent,
-            targetAgent: targetAgent,
-          });
-        }
-      } catch (error) {
-        console.error('Failed to record agent communication:', error);
-      }
+      new CapturedQAEvent(
+        { type: 'agent-communication', content: message, agent: sourceAgent, targetAgent },
+        payload.QId
+      ).record();
     }
   }
 }

@@ -2,6 +2,8 @@
 
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, ImageRun } from 'docx';
 import Prism from 'prismjs';
+import type { Cell, OutputItem as CellOutput } from '@Store/models';
+import { iterateFencedMarkdown } from '@Utils/markdown/fencedMarkdown';
 import type { Token } from 'prismjs';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
@@ -28,31 +30,12 @@ interface VSCodeTheme {
   punctuation: string;
 }
 
-interface CellOutput {
-  type: 'image' | 'error' | 'text';
-  content: string;
-}
-
-interface Cell {
-  id: string;
-  type: 'markdown' | 'code' | 'hybrid';
-  content: string;
-  outputs?: CellOutput[];
-  language?: string;
-  [key: string]: any;
-}
-
 interface ParagraphStyle {
   size?: number;
   color?: string;
   bold?: boolean;
   spacing?: { before?: number; after?: number };
   paragraph?: any;
-}
-
-interface PrismToken {
-  type: string;
-  content: string | PrismToken[];
 }
 
 // VSCode light theme colors
@@ -86,100 +69,28 @@ const createStyledParagraph = (text: string, style: ParagraphStyle): Paragraph =
   });
 };
 
-// 辅助函数：将 Prism tokens 转换为 TextRun 数组
+// Preserve every leaf of Prism's recursive token tree in source order.
 const parseCodeTokens = (tokens: (string | Token)[]): TextRun[] => {
   const runs: TextRun[] = [];
-  tokens.forEach((token: string | Token) => {
-    if (typeof token === 'string') {
-      // 处理纯文本
-      runs.push(
-        new TextRun({
-          text: token,
-          color: vsCodeTheme.text,
-          font: 'Consolas',
-          size: 20, // 10pt
-        })
-      );
-    } else if (typeof (token as Token).content === 'string') {
-      // 处理带类型的 token
-      const tokenObj = token as Token;
-      let color: string = vsCodeTheme.text;
-      switch (tokenObj.type) {
-        case 'keyword':
-          color = vsCodeTheme.keyword;
-          break;
-        case 'string':
-          color = vsCodeTheme.string;
-          break;
-        case 'function':
-          color = vsCodeTheme.function;
-          break;
-        case 'comment':
-          color = vsCodeTheme.comment;
-          break;
-        case 'number':
-          color = vsCodeTheme.number;
-          break;
-        case 'operator':
-          color = vsCodeTheme.operator;
-          break;
-        case 'punctuation':
-          color = vsCodeTheme.punctuation;
-          break;
-        default:
-          color = vsCodeTheme.text;
-      }
-
-      runs.push(
-        new TextRun({
-          text: tokenObj.content as string,
-          color: color,
-          font: 'Consolas',
-          size: 20, // 10pt
-        })
-      );
-    } else if (Array.isArray((token as Token).content)) {
-      // 处理嵌套的 token
-      const tokenObj = token as Token;
-      (tokenObj.content as Token[]).forEach((childToken: Token) => {
-        let color: string = vsCodeTheme.text;
-        switch (childToken.type) {
-          case 'keyword':
-            color = vsCodeTheme.keyword;
-            break;
-          case 'string':
-            color = vsCodeTheme.string;
-            break;
-          case 'function':
-            color = vsCodeTheme.function;
-            break;
-          case 'comment':
-            color = vsCodeTheme.comment;
-            break;
-          case 'number':
-            color = vsCodeTheme.number;
-            break;
-          case 'operator':
-            color = vsCodeTheme.operator;
-            break;
-          case 'punctuation':
-            color = vsCodeTheme.punctuation;
-            break;
-          default:
-            color = vsCodeTheme.text;
-        }
-
-        runs.push(
-          new TextRun({
-            text: childToken.content as string,
-            color: color,
-            font: 'Consolas',
-            size: 20, // 10pt
-          })
-        );
-      });
+  const tokenColors: Readonly<Record<string, string>> = {
+    keyword: vsCodeTheme.keyword,
+    string: vsCodeTheme.string,
+    function: vsCodeTheme.function,
+    comment: vsCodeTheme.comment,
+    number: vsCodeTheme.number,
+    operator: vsCodeTheme.operator,
+    punctuation: vsCodeTheme.punctuation,
+  };
+  const append = (content: string | Token | (string | Token)[], color: string): void => {
+    if (typeof content === 'string') {
+      runs.push(new TextRun({ text: content, color, font: 'Consolas', size: 20 }));
+    } else if (Array.isArray(content)) {
+      content.forEach((child) => append(child, color));
+    } else {
+      append(content.content, tokenColors[content.type] ?? color);
     }
-  });
+  };
+  append(tokens, vsCodeTheme.text);
   return runs;
 };
 
@@ -187,14 +98,18 @@ const parseCodeTokens = (tokens: (string | Token)[]): TextRun[] => {
 const createImageRun = (base64String: string, width = 600, height = 400): ImageRun | null => {
   // 移除 Base64 前缀
   const matches: RegExpMatchArray | null = base64String.match(
-    /^data:image\/([a-zA-Z]+);base64,(.+)$/
+    /^data:image\/([a-zA-Z]+);base64,(.+)$/i
   );
   if (!matches) {
     console.error('Invalid Base64 image string:', base64String);
     return null;
   }
 
-  const mimeType: string = matches[1];
+  const format = matches[1].toLowerCase();
+  const type = format === 'jpeg' ? 'jpg' : format;
+  if (type !== 'png' && type !== 'jpg' && type !== 'gif' && type !== 'bmp') {
+    throw new Error(`Unsupported DOCX image format: ${format}`);
+  }
   const imageData: string = matches[2];
   const binaryString: string = atob(imageData);
   const len: number = binaryString.length;
@@ -204,6 +119,7 @@ const createImageRun = (base64String: string, width = 600, height = 400): ImageR
   }
 
   return new ImageRun({
+    type,
     data: bytes,
     transformation: {
       width,
@@ -238,7 +154,7 @@ const createCodeBlock = (
 
   // 将代码分割成行
   const codeLines: string[] = code.split('\n');
-  codeLines.forEach((line: string, index: number) => {
+  codeLines.forEach((line: string) => {
     // Tokenize the line
     const tokens: (string | Token)[] = Prism.tokenize(line, Prism.languages[language]);
 
@@ -258,13 +174,30 @@ const createCodeBlock = (
     );
   });
 
+  paragraphs.push(...createOutputParagraphs(outputs));
+
+  // 添加代码块的下边距
+  paragraphs.push(
+    new Paragraph({
+      children: [new TextRun({ text: '', size: 20 })],
+      spacing: { after: 240 }, // 12pt
+    })
+  );
+
+  return paragraphs;
+};
+
+/** Output rendering is shared by code and hybrid cells. */
+const createOutputParagraphs = (outputs: CellOutput[] = []): Paragraph[] => {
+  const paragraphs: Paragraph[] = [];
   // 处理输出
   if (outputs && outputs.length > 0) {
     outputs.forEach((output: CellOutput) => {
-      if (!output.content) return;
+      if (output.content === undefined || output.content === null || output.content === '') return;
+      const content = String(output.content);
 
       if (output.type === 'image') {
-        const imageRun: ImageRun | null = createImageRun(output.content);
+        const imageRun: ImageRun | null = createImageRun(content);
         if (imageRun) {
           paragraphs.push(
             new Paragraph({
@@ -275,7 +208,7 @@ const createCodeBlock = (
         }
       } else {
         // 处理文本和错误输出
-        const outputLines: string[] = output.content.split('\n');
+        const outputLines: string[] = content.split('\n');
         outputLines.forEach((line: string, index: number) => {
           paragraphs.push(
             new Paragraph({
@@ -296,19 +229,11 @@ const createCodeBlock = (
     });
   }
 
-  // 添加代码块的下边距
-  paragraphs.push(
-    new Paragraph({
-      children: [new TextRun({ text: '', size: 20 })],
-      spacing: { after: 240 }, // 12pt
-    })
-  );
-
   return paragraphs;
 };
 
 // 转换 Markdown 内容
-const convertMarkdownToDocx = (content: string): Paragraph[] => {
+const convertMarkdownTextToDocx = (content: string): Paragraph[] => {
   const lines: string[] = content.split('\n');
   const docxParagraphs: Paragraph[] = [];
 
@@ -376,14 +301,28 @@ const convertMarkdownToDocx = (content: string): Paragraph[] => {
   return docxParagraphs;
 };
 
+/** Parse fences once, retaining prose and literal code in source order. */
+const convertMarkdownToDocx = (content: string): Paragraph[] => {
+  const paragraphs: Paragraph[] = [];
+  for (const segment of iterateFencedMarkdown(content)) {
+    paragraphs.push(
+      ...(segment.kind === 'fence'
+        ? createCodeBlock(segment.code, [], segment.language || 'plaintext')
+        : convertMarkdownTextToDocx(segment.source))
+    );
+  }
+  return paragraphs;
+};
+
 // 主导出函数
 export const exportToDocx = async (cells: Cell[]): Promise<void> => {
   try {
     // 收集所有段落
     const children: Paragraph[] = [];
     cells.forEach((cell: Cell) => {
-      if (cell.type === 'markdown') {
+      if (cell.type === 'markdown' || cell.type === 'hybrid') {
         children.push(...convertMarkdownToDocx(cell.content));
+        if (cell.type === 'hybrid') children.push(...createOutputParagraphs(cell.outputs));
       } else if (cell.type === 'code') {
         // 获取语言类型，默认为 python
         const language: string = cell.language || 'python';

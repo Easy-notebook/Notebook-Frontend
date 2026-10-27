@@ -55,6 +55,7 @@ export interface CodeEditorProps {
   dslcMode: boolean;
   isInDetachedView: boolean;
   contentHeight: number;
+  onContentHeightChange: (height: number) => void;
   isExpanded: boolean;
   isHovering: boolean;
   editorRef: React.RefObject<ReactCodeMirrorRef>;
@@ -72,7 +73,6 @@ export interface OutputDisplayProps {
   isExecuting: boolean;
   elapsedTime: number;
   outputVisible: boolean;
-  outputUpdateKey: number;
   cellMode: string;
   isInDetachedView: boolean;
   finished_thinking?: boolean;

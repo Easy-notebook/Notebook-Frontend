@@ -9,7 +9,8 @@ export interface ImageContext {
   deleteNode: () => void;
   cell?: StoreCell; // Store cell reference
   editor: Editor;
-  getPos: () => number;
+  getPos: () => number | undefined;
+  onSave?: (markdown: string) => void;
 }
 
 export class ImageModel {
@@ -53,40 +54,41 @@ export class ImageModel {
       handleEvent: (event, payload, ctx) => {
         switch (event) {
           case 'SAVE': {
-            // Payload should contain the new markdown
-            const { markdown } = payload || {};
-            if (markdown) {
-              // Validate markdown
-              const match = markdown.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
-              if (match) {
-                // Valid markdown, update attributes
-                const alt = match[1];
-                const src = match[2];
-                ctx.updateAttributes({ markdown, src, alt });
-                return 'focused'; // Return to focused after save
-              } else {
-                // Invalid markdown -> Downgrade to paragraph
-                const pos = ctx.getPos();
-                if (typeof pos === 'number') {
-                  // We need to replace the node.
-                  // Since we are inside the node view, we should be careful.
-                  // We can use a timeout to let the FSM transition complete or just do it.
-                  // But replacing the node will destroy this component, so the FSM will be destroyed.
-                  // That's fine.
-                  ctx.editor.commands.command(({ tr, dispatch, state }) => {
-                    if (dispatch) {
-                      const nodeSize = ctx.node.nodeSize;
-                      const textNode = state.schema.text(markdown);
-                      const paragraph = state.schema.nodes.paragraph.create(null, textNode);
-                      tr.replaceWith(pos, pos + nodeSize, paragraph);
-                    }
-                    return true;
-                  });
-                  return 'destroyed'; // Terminal state
-                }
-              }
+            const markdown: unknown = payload?.markdown;
+            if (typeof markdown !== 'string') return null;
+            const pos = ctx.getPos();
+            if (typeof pos !== 'number') return null;
+            const ownsNode = (node: ProseMirrorNode | null): boolean =>
+              !!node &&
+              node.type === ctx.node.type &&
+              (ctx.node.attrs.cellId
+                ? node.attrs.cellId === ctx.node.attrs.cellId
+                : node === ctx.node);
+            if (!ownsNode(ctx.editor.state.doc.nodeAt(pos))) return null;
+
+            const match = markdown.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+            if (match) {
+              ctx.updateAttributes({ markdown, src: match[2], alt: match[1] });
+              ctx.onSave?.(markdown);
+              return 'focused';
             }
-            return 'focused';
+
+            const replaced = ctx.editor.commands.command(({ tr, dispatch, state }) => {
+              const current = tr.doc.nodeAt(pos);
+              if (!ownsNode(current)) return false;
+              if (dispatch) {
+                // markdownImage is inline: retain the surrounding paragraph and text.
+                tr.replaceWith(
+                  pos,
+                  pos + current!.nodeSize,
+                  markdown ? state.schema.text(markdown) : []
+                );
+              }
+              return true;
+            });
+            if (!replaced) return null;
+            ctx.onSave?.(markdown);
+            return 'destroyed';
           }
           case 'CANCEL':
             return 'focused';
@@ -139,6 +141,7 @@ export class ImageModel {
     fsm.addState(editingState);
     fsm.addState(generatingState);
     fsm.addState(errorState);
+    fsm.addState({ name: 'destroyed' });
 
     // Initial state determination based on node/cell state
     let initialState = context.node.attrs.fsmState || 'idle';

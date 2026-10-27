@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * State Factory
  * =============
@@ -40,7 +41,7 @@ export class StateFactory {
   private static instances: Record<string, BaseState> = {};
 
   // Global API client (injected once, shared by all states)
-  private static apiClient: any = null;
+  private static apiClient: WorkflowAPIClientPort | null = null;
 
   /**
    * Get or create a state instance.
@@ -154,7 +155,7 @@ export class StateFactory {
    *
    * @param apiClient - WorkflowAPIClient instance
    */
-  static setApiClient(apiClient: any): void {
+  static setApiClient(apiClient: WorkflowAPIClientPort): void {
     this.apiClient = apiClient;
 
     // Inject into existing instances

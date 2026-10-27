@@ -9,7 +9,7 @@
  * - Managing session state transitions
  */
 
-import { AutoSaveService, AutoSaveStatus } from '@Services/autoSave';
+import { AutoSaveService } from '@Services/autoSave';
 import { notebookLog } from '@Utils/logger';
 import {
   SessionStatus,
@@ -29,8 +29,11 @@ export class NotebookSessionService implements ISessionService {
 
   private state: SessionState = { ...INITIAL_SESSION_STATE };
   private listeners: Set<SessionEventListener> = new Set();
+  private readonly notifications: SessionEvent[] = [];
+  private notifying = false;
   private autoSave: AutoSaveService;
   private isInitialized = false;
+  private transitionTail: Promise<void> = Promise.resolve();
   private readonly isDevelopment = import.meta.env.DEV === true;
 
   private constructor() {
@@ -50,7 +53,11 @@ export class NotebookSessionService implements ISessionService {
   /**
    * Initialize the session service
    */
-  public async initialize(): Promise<void> {
+  public initialize(): Promise<void> {
+    return this.enqueueTransition(() => this.initializeSession());
+  }
+
+  private async initializeSession(): Promise<void> {
     if (this.isInitialized) return;
 
     try {
@@ -60,9 +67,12 @@ export class NotebookSessionService implements ISessionService {
       await this.autoSave.initialize();
 
       this.isInitialized = true;
+      this.clearError();
       notebookLog.info('NotebookSessionService initialized');
     } catch (error) {
       notebookLog.error('Failed to initialize NotebookSessionService', { error });
+      this.state.error = error instanceof Error ? error.message : 'Initialization failed';
+      this.emit({ type: 'session_error', error: this.state.error, timestamp: Date.now() });
       throw error;
     }
   }
@@ -71,10 +81,12 @@ export class NotebookSessionService implements ISessionService {
    * Connect to a notebook session (load and activate)
    * Used when navigating to /workspace/:id
    */
-  public async connect(notebookId: string): Promise<NotebookSession | null> {
-    if (!notebookId?.trim()) {
-      throw new Error('Invalid notebook ID');
-    }
+  public connect(notebookId: string): Promise<NotebookSession | null> {
+    return this.enqueueTransition(() => this.connectNotebook(notebookId));
+  }
+
+  private async connectNotebook(notebookId: string): Promise<NotebookSession | null> {
+    this.validateNotebookId(notebookId);
 
     // If already connected to this notebook, skip
     if (
@@ -98,68 +110,39 @@ export class NotebookSessionService implements ISessionService {
       }
 
       // Check if notebook is already loaded in store (e.g., just created)
-      const notebookStore = await this.getNotebookStore();
+      let notebookStore = await this.getNotebookStore();
       const alreadyLoaded =
         notebookStore.notebookId === notebookId &&
         notebookStore.isLoaded &&
-        notebookStore.isInitialized;
+        notebookStore.isInitialized &&
+        !notebookStore.error;
 
-      if (alreadyLoaded) {
-        if (this.isDevelopment) {
-          console.log(
-            '🔍 [NotebookSessionService] Notebook already loaded in store, skipping load',
-            {
-              notebookId,
-            }
-          );
-        }
-        // Update session state without reloading
-        this.state.currentNotebookId = notebookId;
-        this.setStatus(SessionStatus.CONNECTED);
-        this.emit({
-          type: 'session_loaded',
-          notebookId,
-          timestamp: Date.now(),
-        });
-        return {
-          notebookId,
-          notebookTitle: notebookStore.notebookTitle,
-          cells: notebookStore.cells,
-          tasks: notebookStore.tasks,
-          lastAccessedAt: Date.now(),
-        };
+      if (!alreadyLoaded) {
+        this.setStatus(SessionStatus.LOADING);
+        this.emit({ type: 'session_started', notebookId, timestamp: Date.now() });
+
+        const loaded = await notebookStore.loadFromDatabase(notebookId);
+        // Zustand replaces its state object. The pre-load snapshot is no longer authoritative.
+        notebookStore = await this.getNotebookStore();
+        if (!loaded) throw new Error(notebookStore.error || 'Failed to load notebook');
+      }
+      if (notebookStore.notebookId !== notebookId) {
+        throw new Error('Loaded notebook identity does not match the requested session');
       }
 
-      this.setStatus(SessionStatus.LOADING);
-      this.emit({
-        type: 'session_started',
+      // Capture the validated result before publishing to reentrant observers.
+      const session: NotebookSession = {
         notebookId,
-        timestamp: Date.now(),
-      });
-
-      // Load notebook data into notebookStore
-      const loaded = await notebookStore.loadFromDatabase(notebookId);
-
-      // Update state
+        notebookTitle: notebookStore.notebookTitle,
+        cells: notebookStore.cells,
+        tasks: notebookStore.tasks,
+        lastAccessedAt: Date.now(),
+      };
       this.state.currentNotebookId = notebookId;
+      this.state.lastSessionTimestamp = session.lastAccessedAt;
+      this.state.error = null;
       this.setStatus(SessionStatus.CONNECTED);
-
-      this.emit({
-        type: 'session_loaded',
-        notebookId,
-        timestamp: Date.now(),
-      });
-
-      // Return session data from store
-      const session: NotebookSession | null = loaded
-        ? {
-            notebookId,
-            notebookTitle: notebookStore.notebookTitle,
-            cells: notebookStore.cells,
-            tasks: notebookStore.tasks,
-            lastAccessedAt: Date.now(),
-          }
-        : null;
+      this.emit({ type: 'session_loaded', notebookId, timestamp: Date.now() });
 
       if (this.isDevelopment) {
         console.log('✅ [NotebookSessionService] Connected to notebook', {
@@ -189,7 +172,11 @@ export class NotebookSessionService implements ISessionService {
    * Disconnect from current session (clear and pause)
    * Used when navigating to "/" route
    */
-  public async disconnect(): Promise<void> {
+  public disconnect(): Promise<void> {
+    return this.enqueueTransition(() => this.disconnectNotebook());
+  }
+
+  private async disconnectNotebook(): Promise<void> {
     const currentNotebookId = this.state.currentNotebookId;
 
     // Already disconnected
@@ -209,14 +196,18 @@ export class NotebookSessionService implements ISessionService {
       if (currentNotebookId) {
         // Get current notebook state from notebookStore for final save
         const notebookStore = await this.getNotebookStore();
-        const snapshot = {
-          notebookId: currentNotebookId,
-          notebookTitle: notebookStore.notebookTitle || '',
-          cells: notebookStore.cells || [],
-          tasks: notebookStore.tasks || [],
-          timestamp: Date.now(),
-        };
+        const snapshot =
+          notebookStore.notebookId === currentNotebookId
+            ? {
+                notebookId: currentNotebookId,
+                notebookTitle: notebookStore.notebookTitle || '',
+                cells: notebookStore.cells || [],
+                tasks: notebookStore.tasks || [],
+                timestamp: Date.now(),
+              }
+            : undefined;
 
+        // Queued snapshots retain their own identity when the editor has moved on.
         await this.autoSave.pause(snapshot);
       } else {
         await this.autoSave.pause();
@@ -240,9 +231,14 @@ export class NotebookSessionService implements ISessionService {
       }
     } catch (error) {
       notebookLog.error('Failed to disconnect', { error });
-      // Still transition to disconnected state
-      this.state.currentNotebookId = null;
-      this.setStatus(SessionStatus.DISCONNECTED);
+      // A failed pause leaves the accepted edits and active session available for retry.
+      this.state.error = error instanceof Error ? error.message : 'Disconnect failed';
+      this.emit({
+        type: 'session_error',
+        notebookId: currentNotebookId || undefined,
+        error: this.state.error,
+        timestamp: Date.now(),
+      });
       throw error;
     }
   }
@@ -251,12 +247,15 @@ export class NotebookSessionService implements ISessionService {
    * Switch to a different notebook session
    * Handles saving current state and loading new notebook
    */
-  public async switchSession(notebookId: string): Promise<NotebookSession | null> {
-    if (!notebookId?.trim()) {
-      throw new Error('Invalid notebook ID');
-    }
+  public switchSession(notebookId: string): Promise<NotebookSession | null> {
+    return this.enqueueTransition(() => this.switchNotebook(notebookId));
+  }
+
+  private async switchNotebook(notebookId: string): Promise<NotebookSession | null> {
+    this.validateNotebookId(notebookId);
 
     const previousNotebookId = this.state.currentNotebookId;
+    const previousStatus = this.state.status;
 
     // Same notebook, no switch needed
     if (previousNotebookId === notebookId) {
@@ -276,19 +275,14 @@ export class NotebookSessionService implements ISessionService {
         });
       }
 
-      // Wait for any pending auto-save operations
-      await this.autoSave.waitForComplete();
-
-      // Save current notebook state if connected
-      if (previousNotebookId && this.autoSave.getState().status !== AutoSaveStatus.DISCONNECTED) {
-        const notebookStore = await this.getNotebookStore();
-        if (notebookStore.notebookId === previousNotebookId) {
-          await this.autoSave.flush(previousNotebookId);
-        }
+      // The queue owns notebook identity. A different editor snapshot does not
+      // invalidate already accepted edits, and unrelated saves cannot gate navigation.
+      if (previousNotebookId && !this.autoSave.isPaused()) {
+        await this.autoSave.flush(previousNotebookId);
       }
 
       // Load new notebook
-      const session = await this.connect(notebookId);
+      const session = await this.connectNotebook(notebookId);
 
       this.emit({
         type: 'session_switched',
@@ -308,6 +302,7 @@ export class NotebookSessionService implements ISessionService {
     } catch (error) {
       notebookLog.error('Failed to switch notebooks', { notebookId, error });
       this.state.error = error instanceof Error ? error.message : 'Switch failed';
+      if (this.state.status === SessionStatus.SWITCHING) this.setStatus(previousStatus);
 
       this.emit({
         type: 'session_error',
@@ -389,14 +384,48 @@ export class NotebookSessionService implements ISessionService {
   /**
    * Emit event to all listeners
    */
-  private emit(event: SessionEvent): void {
-    this.listeners.forEach((listener) => {
-      try {
-        listener(event);
-      } catch (error) {
-        notebookLog.error('Session event listener error', { error });
+  private emit(event: Omit<SessionEvent, 'state'>): void {
+    this.notifications.push(Object.freeze({ ...event, state: Object.freeze({ ...this.state }) }));
+    if (this.notifying) return;
+    this.notifying = true;
+    try {
+      for (let index = 0; index < this.notifications.length; index++) {
+        for (const listener of [...this.listeners]) {
+          try {
+            listener(this.notifications[index]);
+          } catch (error) {
+            notebookLog.error('Session event listener error', { error });
+          }
+        }
       }
-    });
+    } finally {
+      this.notifications.length = 0;
+      this.notifying = false;
+    }
+  }
+
+  /** Serialize complete transitions, including their persistence and publication. */
+  private enqueueTransition<T>(operation: () => Promise<T>): Promise<T> {
+    const completion = this.transitionTail.then(operation);
+    // Failure belongs to the caller; the next accepted command still gets a turn.
+    this.transitionTail = completion.then(
+      () => undefined,
+      () => undefined
+    );
+    return completion;
+  }
+
+  private validateNotebookId(notebookId: string): void {
+    if (notebookId?.trim()) return;
+    const error = new Error('Invalid notebook ID');
+    this.state.error = error.message;
+    this.emit({ type: 'session_error', error: error.message, timestamp: Date.now() });
+    throw error;
+  }
+
+  public clearError(): void {
+    this.state.error = null;
+    this.emit({ type: 'error_cleared', timestamp: Date.now() });
   }
 
   /**

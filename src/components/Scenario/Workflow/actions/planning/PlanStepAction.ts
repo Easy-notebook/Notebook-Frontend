@@ -31,42 +31,42 @@ export class PlanStepAction extends ActionBase {
 
     // Use WorkflowStateMachine as the single source of truth
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
-    const observation = stateJSON.observation;
+    stateMachine.updateState((stateJSON) => {
+      const observation = stateJSON.observation;
 
-    // Initialize planned steps array if not exists
-    if (!observation.location.progress.steps.planned) {
-      observation.location.progress.steps.planned = [];
-    }
+      // Initialize planned steps array if not exists
+      if (!observation.location.progress.steps.planned) {
+        observation.location.progress.steps.planned = [];
+      }
 
-    // Check if step already exists
-    const existingIndex = observation.location.progress.steps.planned.findIndex(
-      (s: any) => s.step_id === stepId
-    );
+      // Check if step already exists
+      const existingIndex = observation.location.progress.steps.planned.findIndex(
+        (s: any) => s.step_id === stepId
+      );
 
-    const stepData = {
-      step_id: stepId,
-      title,
-      task,
-      acceptance,
-      planning_complete: false,
-    };
-
-    if (existingIndex >= 0) {
-      // Update existing step
-      observation.location.progress.steps.planned[existingIndex] = {
-        ...observation.location.progress.steps.planned[existingIndex],
-        ...stepData,
+      const stepData = {
+        step_id: stepId,
+        title,
+        task,
+        acceptance,
+        planning_complete: false,
       };
-      console.log(`[PlanStepAction] ✅ Updated step: ${stepId}`);
-    } else {
-      // Add new step
-      observation.location.progress.steps.planned.push(stepData);
-      console.log(`[PlanStepAction] ✅ Added new step: ${stepId}`);
-    }
 
-    // Update workflow state machine with modified stateJSON
-    stateMachine.setState(stateJSON);
+      if (existingIndex >= 0) {
+        // Update existing step
+        observation.location.progress.steps.planned[existingIndex] = {
+          ...observation.location.progress.steps.planned[existingIndex],
+          ...stepData,
+        };
+        console.log(`[PlanStepAction] ✅ Updated step: ${stepId}`);
+      } else {
+        // Add new step
+        observation.location.progress.steps.planned.push(stepData);
+        console.log(`[PlanStepAction] ✅ Added new step: ${stepId}`);
+      }
+
+      // Update workflow state machine with modified stateJSON
+    });
   }
 }
 

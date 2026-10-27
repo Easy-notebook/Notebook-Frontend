@@ -5,7 +5,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow, prism } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Eye, Code, Sun, Moon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { markdownRemarkPlugins, markdownRehypePlugins } from '@Editor/markdownPreviewPlugins';
+import { markdownRemarkPlugins } from '@Editor/markdownPreviewPlugins';
 import { markdownCodeComponents, markdownSoftLineComponents } from '@Editor/MarkdownCodePreview';
 import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
 
@@ -104,7 +104,7 @@ const CodeDisplay: React.FC<CodeDisplayProps> = ({
         {showPreview && language === 'markdown' ? (
           <div className="flex-1 p-4 bg-white dark:bg-gray-800 rounded-b-lg overflow-auto">
             <div className="prose dark:prose-invert max-w-none">
-              <ReactMarkdown remarkPlugins={markdownRemarkPlugins} rehypePlugins={markdownRehypePlugins} components={markdownComponents}>
+              <ReactMarkdown remarkPlugins={markdownRemarkPlugins} components={markdownComponents}>
                 {content}
               </ReactMarkdown>
             </div>

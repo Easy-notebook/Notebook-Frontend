@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 const lifecycle = vi.hoisted(() => ({ mount: vi.fn(), unmount: vi.fn() }));
@@ -12,16 +12,26 @@ vi.mock('../../MermaidPreview', () => ({
   },
 }));
 import { HybridMarkdown } from './HybridMarkdown';
-it('renders inline and display math while preserving literal code', () => {
-  const view = render(<HybridMarkdown source={'Inline $x^2$\n\n$$\ny = x + 1\n$$\n\n`$literal$`\n\n```python\nprint("$value$")\n```'} />);
-  expect(view.container.querySelectorAll('.katex')).toHaveLength(2);
+it('renders inline and display math while preserving literal code', async () => {
+  vi.stubGlobal('IntersectionObserver', undefined);
+  const view = render(
+    <HybridMarkdown
+      source={
+        'Inline $x^2$\n\n$$\ny = x + 1\n$$\n\n`$literal$`\n\n```python\nprint("$value$")\n```'
+      }
+    />
+  );
+  await waitFor(() => expect(view.container.querySelectorAll('.katex')).toHaveLength(2));
   expect(view.container.querySelectorAll('.katex-display')).toHaveLength(1);
-  expect(view.container.querySelector('code.language-python')?.textContent).toBe('print("$value$")\n');
+  expect(view.container.querySelector('code.language-python')?.textContent).toBe(
+    'print("$value$")\n'
+  );
   expect(screen.getByText('$literal$').tagName).toBe('CODE');
 });
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 it('retains diagram lifecycle while surrounding prose or diagram source changes', () => {
   const view = render(<HybridMarkdown source={'Before\n\n```mermaid\ngraph TD; A-->B\n```'} />);

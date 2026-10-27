@@ -8,14 +8,31 @@ export interface ToastMessage {
 }
 
 export interface StreamPayload {
+  replace?: boolean;
+  information?: string;
+  category?: string;
+  question?: string;
+  agentType?: string;
+  sourceAgent?: string;
+  targetAgent?: string;
+  taskName?: string;
+  task?: string;
+  result?: unknown;
+  reason?: string;
+  stage?: string;
+  stageId?: string;
+  previousStage?: string;
+  details?: unknown;
   mode?: 'create' | 'step';
   phaseId?: string;
   index?: number;
+  stepIndex?: number;
   allow?: boolean;
   cellId?: string;
   content?: string;
   outputs?: any[];
   cell?: any;
+  position?: 'start' | 'end' | number;
   error?: string;
   type?: string;
   description?: string;
@@ -38,6 +55,8 @@ export interface StreamPayload {
   status?: string;
   videoUrl?: string;
   href?: string;
+  url?: string;
+  filePath?: string;
   label?: string;
   notebook_id?: string;
   response?: string;
@@ -63,6 +82,8 @@ export type ShowToastFunction = (toast: ToastMessage) => Promise<void>;
  * Context passed to stream actions
  */
 export interface StreamActionContext {
+  /** Optional caller lifetime; asynchronous actions should check around their own effects. */
+  signal?: AbortSignal;
   data?: StreamData;
   payload: StreamPayload;
   showToast: ShowToastFunction;

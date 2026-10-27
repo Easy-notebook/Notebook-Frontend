@@ -60,3 +60,7 @@ Desktop.ini
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# Browser integration test output
+/test-results/
+/playwright-report/

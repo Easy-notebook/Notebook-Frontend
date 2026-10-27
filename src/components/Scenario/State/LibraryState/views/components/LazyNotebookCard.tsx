@@ -2,7 +2,7 @@
 // Lazy-loaded wrapper for NotebookCard with skeleton placeholder
 
 import React, { memo, Suspense, lazy, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useLazyLoad } from './useLazyLoad';
 import NotebookCardSkeleton from './NotebookCardSkeleton';
 import type { NotebookCardProps } from '../../types';
@@ -31,7 +31,7 @@ const cardVariants = {
       ease: 'easeOut',
     },
   },
-};
+} satisfies Variants;
 
 export const LazyNotebookCard: React.FC<LazyNotebookCardProps> = memo(
   ({ index = 0, priority = false, ...props }) => {

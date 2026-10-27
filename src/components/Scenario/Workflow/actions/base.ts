@@ -6,6 +6,7 @@
  */
 
 import type { ExecutionStep } from '@Store/models';
+import { NotebookActionScope } from '@/services/notebook/NotebookActionScope';
 
 /**
  * Base class for all action handlers.
@@ -32,7 +33,7 @@ export abstract class ActionBase {
    * @param step - The execution step containing action parameters
    * @returns Result of the action execution
    */
-  abstract execute(step: ExecutionStep): Promise<any> | any;
+  abstract execute(step: ExecutionStep, signal?: AbortSignal): Promise<any> | any;
 
   /**
    * Allow action to be called directly
@@ -126,37 +127,25 @@ export function getRegistry(): Map<string, typeof ActionBase> {
  * @param params - Parameters to pass to the action (can be a simple value or execution step)
  * @returns Result of the action execution
  */
-export async function executeAction(actionType: string, params?: any): Promise<any> {
-  const ActionClass = getActionClass(actionType);
-
-  if (!ActionClass) {
-    console.warn(`[executeAction] Unknown action type: ${actionType}`);
-    return;
+export async function executeAction(
+  actionType: string,
+  params?: unknown,
+  signal?: AbortSignal
+): Promise<any> {
+  signal?.throwIfAborted();
+  const step: ExecutionStep = structuredClone(
+    typeof params === 'string' || typeof params === 'number'
+      ? { action: actionType, content: String(params) }
+      : { ...(params && typeof params === 'object' ? params : {}), action: actionType }
+  );
+  const admission = new NotebookActionScope(signal);
+  try {
+    // Keep this boundary lazy; action registration and the Store depend on each other.
+    const { useScriptStore } = await import('../store/useScriptStore');
+    admission.signal.throwIfAborted();
+    // execAction acquires its own scope synchronously before its first await.
+    return useScriptStore.getState().execAction(step, signal);
+  } finally {
+    admission.dispose();
   }
-
-  // Dynamically import script store to avoid circular dependencies
-  const { useScriptStore } = await import('../store/useScriptStore');
-  const scriptStore = useScriptStore.getState();
-
-  // Create action instance
-  const action = new ActionClass(scriptStore);
-
-  // Convert params to ExecutionStep format if it's a simple value
-  let step: ExecutionStep;
-  if (typeof params === 'string' || typeof params === 'number') {
-    step = {
-      action: actionType,
-      content: String(params),
-    } as ExecutionStep;
-  } else if (params && typeof params === 'object' && 'action' in params) {
-    step = params as ExecutionStep;
-  } else {
-    step = {
-      action: actionType,
-      ...params,
-    } as ExecutionStep;
-  }
-
-  // Execute action
-  return await action.execute(step);
 }

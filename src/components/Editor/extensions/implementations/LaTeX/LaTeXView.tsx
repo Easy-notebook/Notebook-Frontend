@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BaseNodeView, BaseNodeViewProps } from '../../core/BaseNodeView';
 import { LaTeXModel, LaTeXContext } from './LaTeXModel';
 import { Edit3, X, Copy, Maximize2, Minimize2 } from 'lucide-react';
-import 'katex/dist/katex.min.css';
-import katex from 'katex';
+import { useMathPreview } from '../../../model/useMathPreview';
+import { MathPreviewError } from '../../../MathPreview';
+import { isCompositionInput } from '../../../utils/compositionInput';
+import { usePreviewStart } from '../../../model/usePreviewStart';
 
 // Inject styles
 const latexStyles = `
@@ -72,48 +74,23 @@ const LaTeXViewComponent = (props: any) => {
   const isEditing = currentState === 'editing';
 
   const [tempLatex, setTempLatex] = useState(latex || '');
-  const [renderedHtml, setRenderedHtml] = useState('');
-  const [error, setError] = useState('');
+  const { container: containerRef, active } = usePreviewStart<HTMLSpanElement>(isEditing);
+  const {
+    html: renderedHtml,
+    error,
+    retry,
+    reloadRequired,
+  } = useMathPreview(isEditing ? tempLatex : latex || '', !!displayMode, isEditing, active);
   const textareaRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isEditing) {
       setTempLatex(latex || '');
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          // textareaRef.current.setSelectionRange(latex?.length || 0, latex?.length || 0);
-        }
-      }, 0);
+      textareaRef.current?.focus();
     }
   }, [isEditing, latex]);
 
-  useEffect(() => {
-    const codeToRender = isEditing ? tempLatex : latex;
-    if (!codeToRender) {
-      setRenderedHtml('');
-      setError('');
-      return;
-    }
-
-    try {
-      const html = katex.renderToString(codeToRender, {
-        displayMode: displayMode,
-        throwOnError: false,
-        errorColor: '#dc2626',
-        strict: 'warn',
-        trust: false,
-      });
-      setRenderedHtml(html);
-      setError('');
-    } catch (err: any) {
-      setError(err.message || 'LaTeX rendering error');
-      setRenderedHtml('');
-    }
-  }, [tempLatex, latex, displayMode, isEditing]);
-
   const [showToolbar, setShowToolbar] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -131,8 +108,7 @@ const LaTeXViewComponent = (props: any) => {
   }, [showToolbar]);
 
   const handleSave = () => {
-    updateAttributes({ latex: tempLatex });
-    fsm.send('SAVE');
+    fsm.send('SAVE', { latex: tempLatex });
   };
 
   const handleCancel = () => {
@@ -141,6 +117,7 @@ const LaTeXViewComponent = (props: any) => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isCompositionInput(e.nativeEvent)) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSave();
@@ -190,7 +167,7 @@ const LaTeXViewComponent = (props: any) => {
             <span className="mt-2 block">
               {error ? (
                 <span className="p-2 bg-red-50 border border-red-200 rounded text-red-600 text-xs block">
-                  ⚠️ LaTeX Error: {error}
+                  <MathPreviewError error={error} reloadRequired={reloadRequired} retry={retry} />
                 </span>
               ) : (
                 <span
@@ -240,9 +217,14 @@ const LaTeXViewComponent = (props: any) => {
                   title="Click to show options"
                 />
               ) : error ? (
-                <span className="p-1 bg-red-100 text-red-600 text-xs rounded">⚠️ {error}</span>
+                <span className="p-1 bg-red-100 text-red-600 text-xs rounded">
+                  {latex}{' '}
+                  <MathPreviewError error={error} reloadRequired={reloadRequired} retry={retry} />
+                </span>
               ) : (
-                <span className="p-1 bg-gray-100 text-gray-600 text-xs rounded">Rendering...</span>
+                <span aria-busy="true" className="p-1 bg-gray-100 text-gray-600 text-xs rounded">
+                  {latex}
+                </span>
               )}
               <span
                 className={`absolute -top-8 left-1/2 transform -translate-x-1/2 flex gap-1 transition-all duration-200 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur shadow-sm rounded p-1 border border-gray-200 dark:border-gray-700

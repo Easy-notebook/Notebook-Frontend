@@ -1,7 +1,9 @@
+import { AttachmentRecordResources } from '@Services/ai-terminal/AttachmentRecordResources';
 // src/store/AIAgentStore.ts
 import { create } from 'zustand';
+import { StreamingAnswer } from './models/StreamingAnswer';
 import { agentLog } from '@Utils/logger';
-import { ActionItem, QAItem } from '@Store/models/agent';
+import { ActionItem, QAItem, QAEvent } from '@Store/models/agent';
 
 // 定义事件类型
 // 定义事件类型
@@ -30,6 +32,11 @@ export interface AIAgentState {
   qaList: QAItem[];
 }
 
+export type NewQAItem = Omit<QAItem, 'id' | 'timestamp' | 'onProcess'> & {
+  id?: string;
+  onProcess?: boolean;
+};
+
 // Store Actions 接口
 export interface AIAgentActions {
   // 设置当前视图
@@ -42,32 +49,24 @@ export interface AIAgentActions {
   // Actions CRUD
   addAction: (
     action: Omit<ActionItem, 'id' | 'timestamp' | 'onProcess'> & { onProcess?: boolean }
-  ) => void;
+  ) => string;
   removeAction: (actionId: string) => void;
   updateAction: (actionId: string, updates: Partial<ActionItem>) => void;
   setActionProcess: (actionId: string, onProcess: boolean) => void;
 
   // Q&A CRUD
-  addQA: (qa: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => void;
+  addQA: (qa: NewQAItem) => void;
   removeQA: (qaId: string) => void;
   updateQA: (qaId: string, updates: Partial<QAItem>) => void;
   setQAProcess: (qaId: string, onProcess: boolean) => void;
 
   // 流式回答相关
   initStreamingAnswer: (qaId: string) => void;
-  addContentToAnswer: (qaId: string, content: string) => void;
-  finishStreamingAnswer: (qaId: string, response?: string) => void;
+  addContentToAnswer: (qaId: string, content: string) => boolean;
+  finishStreamingAnswer: (qaId: string, response?: string) => boolean;
+  cancelStreamingAnswer: (qaId: string) => void;
   // Tool call logging for QA
-  addToolCallToQA: (
-    qaId: string,
-    toolCall: {
-      type?: string;
-      name?: string;
-      content?: string;
-      arguments?: string;
-      agent?: string;
-    }
-  ) => void;
+  addToolCallToQA: (qaId: string, toolCall: QAEvent) => void;
 }
 
 // 完整的 Store 类型
@@ -105,17 +104,19 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
       action.relatedQAIds = [];
     }
 
+    const id = `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     set((state) => ({
       actions: [
         {
           ...action,
-          id: `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id,
           timestamp: new Date().toTimeString().split(' ')[0],
           onProcess: action.onProcess || false,
         },
         ...state.actions,
       ],
     }));
+    return id;
   },
 
   removeAction: (actionId: string) => {
@@ -139,7 +140,7 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
   },
 
   // Q&A CRUD
-  addQA: (qa: Omit<QAItem, 'timestamp' | 'onProcess'> & { onProcess?: boolean }) => {
+  addQA: (qa: NewQAItem) => {
     set((state) => ({
       qaList: [
         {
@@ -175,31 +176,25 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
       const targetIndex = state.qaList.findIndex((qa) => qa.id === qaId);
       if (targetIndex === -1) {
         agentLog.warn('QA not found for streaming answer initialization', { qaId });
-        return {};
+        return state;
       }
       const targetQA = state.qaList[targetIndex];
 
-      // 2. 创建一个新的 QA，除了 id 之外其他信息都复制原 QA
-      const newQA: QAItem = {
-        ...targetQA,
-        id: `${targetQA.id}-[0]`,
-      };
+      // Preserve the original question once; a restarted answer is not a new question.
+      const questionId = `${qaId}-[0]`;
+      const questionSnapshot: QAItem[] =
+        targetQA.type === 'user' && !state.qaList.some((qa) => qa.id === questionId)
+          ? [{ ...targetQA, id: questionId }]
+          : [];
 
       // 3. 更新目标 QA：清空 content、设为未解决、设为正在处理
-      const updatedTargetQA: QAItem = {
-        ...targetQA,
-        content: '',
-        type: 'assistant',
-        resolved: false,
-        onProcess: true,
-        thinkingStartAtMs: Date.now(),
-      };
+      const updatedTargetQA = new StreamingAnswer(targetQA).restart(Date.now());
 
       // 4. 组装新的 qaList
       const newQaList = [
         ...state.qaList.slice(0, targetIndex),
         updatedTargetQA, // 更新后的原 QA
-        newQA, // 插入的新 QA
+        ...questionSnapshot,
         ...state.qaList.slice(targetIndex + 1),
       ];
 
@@ -207,41 +202,53 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
     });
   },
 
-  // 追加内容到答案
   addContentToAnswer: (qaId: string, content: string) => {
-    set((state) => ({
-      qaList: state.qaList.map((qa) =>
-        qa.id === qaId ? { ...qa, content: qa.content + content } : qa
-      ),
-    }));
+    let accepted = false;
+    set((state) => {
+      const answer = state.qaList.find((qa) => qa.id === qaId);
+      if (!answer) return state;
+      const next = new StreamingAnswer(answer).append(content);
+      if (next === answer) return state;
+      accepted = true;
+      return { qaList: state.qaList.map((qa) => (qa === answer ? next : qa)) };
+    });
+    return accepted;
   },
 
-  // 完成回答
+  cancelStreamingAnswer: (qaId: string) => {
+    set((state) => {
+      const answer = state.qaList.find((qa) => qa.id === qaId);
+      if (!answer) return state;
+      const endedAt = Date.now();
+      const next = new StreamingAnswer(answer).interrupt(endedAt);
+      if (next === answer) return state;
+      return {
+        qaList: state.qaList.map((qa) =>
+          qa === answer
+            ? next
+            : qa.id === `${qaId}-[0]`
+              ? { ...qa, onProcess: false, thinkingEndAtMs: endedAt }
+              : qa
+        ),
+      };
+    });
+  },
+
   finishStreamingAnswer: (qaId: string, response?: string) => {
-    set((state) => ({
-      qaList: state.qaList.map((qa) => {
-        if (qa.id === qaId) {
-          return {
-            ...qa,
-            // 如果没有在流式过程中追加内容，则在结束时写入最终响应
-            content:
-              response !== undefined && response !== null && qa.content === ''
-                ? response
-                : qa.content,
-            resolved: true,
-            onProcess: false,
-            thinkingEndAtMs: Date.now(),
-          };
-        }
-        if (qa.id === `${qaId}-[0]`) {
-          return {
-            ...qa,
-            resolved: true,
-          };
-        }
-        return qa;
-      }),
-    }));
+    let accepted = false;
+    set((state) => {
+      const answer = state.qaList.find((qa) => qa.id === qaId);
+      if (!answer) return state;
+      const next = new StreamingAnswer(answer).complete(response, Date.now());
+      if (next === answer) return state;
+      accepted = true;
+      return {
+        qaList: state.qaList.map((qa) =>
+          qa === answer ? next : qa.id === `${qaId}-[0]` ? { ...qa, resolved: true } : qa
+        ),
+      };
+    });
+    return accepted;
   },
 
   addToolCallToQA: (qaId: string, toolCall) => {
@@ -256,3 +263,11 @@ export const useAIAgentStore = create<AIAgentStore>((set) => ({
     }));
   },
 }));
+
+// Derive URL ownership from actual records, including bulk replacement and streaming copies.
+const attachmentRecords = new AttachmentRecordResources();
+useAIAgentStore.subscribe((state, previous) => {
+  if (state.actions !== previous.actions || state.qaList !== previous.qaList) {
+    attachmentRecords.update([...state.actions, ...state.qaList]);
+  }
+});

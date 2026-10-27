@@ -1,15 +1,17 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { observePreview } from './utils/previewVisibility';
 import { useTheme } from '@/contexts/ThemeContext';
 import { mermaidRenderService } from './model/MermaidRenderService';
+import { PreviewEngineLoadError } from './model/PreviewEngineLoadError';
 
 type RenderResult = { source: string; theme: string } & (
   | { status: 'ready'; svg: string }
-  | { status: 'failed'; message: string }
+  | { status: 'failed'; message: string; reloadRequired: boolean }
 );
 
 /** Reusable, derived preview; the caller retains the original source text. */
 export function MermaidPreview({ source }: { source: string }) {
+  const hasSource = useMemo(() => /\S/.test(source), [source]);
   const id = useId().replace(/:/g, '');
   const { resolvedTheme } = useTheme();
   const renderSequence = useRef(0);
@@ -75,7 +77,7 @@ export function MermaidPreview({ source }: { source: string }) {
   }, [visible, result]);
 
   useEffect(() => {
-    if (!source.trim()) {
+    if (!hasSource) {
       // Clearing source ends ownership of any derived SVG/error, even while visible.
       setResult(null);
       return;
@@ -96,6 +98,7 @@ export function MermaidPreview({ source }: { source: string }) {
             source,
             theme: resolvedTheme,
             status: 'failed',
+            reloadRequired: reason instanceof PreviewEngineLoadError,
             message: reason instanceof Error ? reason.message : 'Diagram could not be rendered.',
           });
         });
@@ -104,19 +107,29 @@ export function MermaidPreview({ source }: { source: string }) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [id, source, resolvedTheme, visible, currentResult]);
+  }, [id, source, hasSource, resolvedTheme, visible, currentResult]);
 
-  if (!source.trim() || currentResult?.status === 'failed')
+  if (!hasSource || currentResult?.status === 'failed')
     return (
-      <div ref={container} className="notebook-mermaid-error" role="status">
+      <div
+        ref={container}
+        className="notebook-mermaid-error"
+        role="status"
+        style={
+          currentResult?.status === 'failed' ? { minHeight: placeholderHeight.current } : undefined
+        }
+      >
         {currentResult?.status === 'failed'
           ? currentResult.message
           : 'Enter Mermaid source to preview the diagram.'}
-        {currentResult?.status === 'failed' && (
-          <button type="button" onClick={() => setResult(null)}>
-            Retry diagram
-          </button>
-        )}
+        {currentResult?.status === 'failed' &&
+          (currentResult.reloadRequired ? (
+            <span> Save your work, then reload the page to load Mermaid.</span>
+          ) : (
+            <button type="button" onClick={() => setResult(null)}>
+              Retry diagram
+            </button>
+          ))}
       </div>
     );
   if (currentResult?.status !== 'ready')

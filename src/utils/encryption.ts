@@ -4,41 +4,52 @@ const STORAGE_KEY = 'enc_key';
 const ALGORITHM: EncryptionAlgorithm = 'AES-GCM';
 const KEY_LENGTH = 256;
 
-/**
- * 生成加密密钥
- */
-const generateKey = async (): Promise<CryptoKey> => {
-  const key = await window.crypto.subtle.generateKey(
-    {
-      name: ALGORITHM,
-      length: KEY_LENGTH,
-    },
-    true, // 可导出
-    ['encrypt', 'decrypt']
-  );
+/** One in-flight key load per application instance; settled loads release ownership. */
+class EncryptionKeyProvider {
+  private inFlight: Promise<CryptoKey> | undefined;
 
-  // 导出密钥并存储
-  const exportedKey = await window.crypto.subtle.exportKey('raw', key);
-  const keyBase64 = btoa(String.fromCharCode(...new Uint8Array(exportedKey)));
-  localStorage.setItem(STORAGE_KEY, keyBase64);
+  get(): Promise<CryptoKey> {
+    if (this.inFlight) return this.inFlight;
+    const request = this.load();
+    this.inFlight = request;
+    const release = () => {
+      if (this.inFlight === request) this.inFlight = undefined;
+    };
+    void request.then(release, release);
+    return request;
+  }
 
-  return key;
-};
-
-/**
- * 获取或生成加密密钥
- */
-const getKey = async (): Promise<CryptoKey> => {
-  const storedKey: string | null = localStorage.getItem(STORAGE_KEY);
-  if (storedKey) {
-    const keyBuffer: Uint8Array = Uint8Array.from(atob(storedKey), (c: string) => c.charCodeAt(0));
-    return await window.crypto.subtle.importKey('raw', keyBuffer, ALGORITHM, true, [
+  private importStored(storedKey: string): Promise<CryptoKey> {
+    const keyBuffer = Uint8Array.from(atob(storedKey), (character) => character.charCodeAt(0));
+    return window.crypto.subtle.importKey('raw', keyBuffer, ALGORITHM, true, [
       'encrypt',
       'decrypt',
     ]);
   }
-  return await generateKey();
-};
+
+  private async load(): Promise<CryptoKey> {
+    const storedKey = localStorage.getItem(STORAGE_KEY);
+    if (storedKey) return this.importStored(storedKey);
+    if (!navigator.locks) throw new Error('Web Locks is required to initialize the encryption key');
+    return navigator.locks.request('easy-notebook:encryption-key', () => this.initialize());
+  }
+
+  private async initialize(): Promise<CryptoKey> {
+    // Another tab may have initialized the key while this request waited for ownership.
+    const storedKey = localStorage.getItem(STORAGE_KEY);
+    if (storedKey) return this.importStored(storedKey);
+    const key = await window.crypto.subtle.generateKey(
+      { name: ALGORITHM, length: KEY_LENGTH },
+      true,
+      ['encrypt', 'decrypt']
+    );
+    const exportedKey = await window.crypto.subtle.exportKey('raw', key);
+    localStorage.setItem(STORAGE_KEY, btoa(String.fromCharCode(...new Uint8Array(exportedKey))));
+    return key;
+  }
+}
+
+const encryptionKeys = new EncryptionKeyProvider();
 
 /**
  * 加密文本
@@ -49,8 +60,8 @@ export const encrypt = async (text: string): Promise<string> => {
   try {
     if (!text) return '';
 
-    const key: CryptoKey = await getKey();
-    const iv: Uint8Array = window.crypto.getRandomValues(new Uint8Array(12));
+    const key: CryptoKey = await encryptionKeys.get();
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
     const encoder: TextEncoder = new TextEncoder();
 
     const encryptedData: ArrayBuffer = await window.crypto.subtle.encrypt(
@@ -63,7 +74,7 @@ export const encrypt = async (text: string): Promise<string> => {
     );
 
     // 将 IV 和加密数据合并并转换为 Base64
-    const encryptedArray: Uint8Array = new Uint8Array(iv.length + encryptedData.byteLength);
+    const encryptedArray = new Uint8Array(iv.length + encryptedData.byteLength);
     encryptedArray.set(iv);
     encryptedArray.set(new Uint8Array(encryptedData), iv.length);
 
@@ -83,15 +94,13 @@ export const decrypt = async (encryptedText: string): Promise<string> => {
   try {
     if (!encryptedText) return '';
 
-    const key: CryptoKey = await getKey();
+    const key: CryptoKey = await encryptionKeys.get();
     const decoder: TextDecoder = new TextDecoder();
 
     // 解析 Base64 并分离 IV 和加密数据
-    const encryptedArray: Uint8Array = Uint8Array.from(atob(encryptedText), (c: string) =>
-      c.charCodeAt(0)
-    );
-    const iv: Uint8Array = encryptedArray.slice(0, 12);
-    const data: Uint8Array = encryptedArray.slice(12);
+    const encryptedArray = Uint8Array.from(atob(encryptedText), (c: string) => c.charCodeAt(0));
+    const iv = encryptedArray.slice(0, 12);
+    const data = encryptedArray.slice(12);
 
     const decryptedData: ArrayBuffer = await window.crypto.subtle.decrypt(
       {

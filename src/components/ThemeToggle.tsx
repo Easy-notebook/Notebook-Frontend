@@ -29,16 +29,13 @@ export function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
       <button
         onClick={toggleTheme}
         title={theme === 'light' ? 'Switch to Dark' : 'Switch to Light'}
-        className={[
-          'w-8 h-8',
-          'relative rounded-lg',
-          'flex items-center justify-center',
-          'sidebar-item-hover',
-          'text-theme-600 icon-glow-active',
-          'transition-all duration-200',
-        ].join(' ')}
+        className="app-chrome-button"
       >
-        {theme === 'light' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        {theme === 'light' ? (
+          <Sun className="app-navigation-icon" />
+        ) : (
+          <Moon className="app-navigation-icon" />
+        )}
       </button>
     );
   }
@@ -55,7 +52,7 @@ export function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
         }`}
         title="Light mode"
       >
-        <Sun className="w-4 h-4" />
+        <Sun className="app-navigation-icon" />
       </button>
       <button
         onClick={() => setTheme('dark')}
@@ -66,7 +63,7 @@ export function ThemeToggle({ collapsed = false }: ThemeToggleProps) {
         }`}
         title="Dark mode"
       >
-        <Moon className="w-4 h-4" />
+        <Moon className="app-navigation-icon" />
       </button>
     </div>
   );

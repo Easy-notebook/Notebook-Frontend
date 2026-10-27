@@ -46,3 +46,5 @@ export {
   useLastSavedAt,
   useAutoSaveError,
 } from './autoSaveStore';
+
+export type { NotebookSaveProgress, SavePhase } from './types';

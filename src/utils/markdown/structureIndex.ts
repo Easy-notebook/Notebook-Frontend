@@ -17,10 +17,15 @@ const parser = new Marked({ extensions: [tableSourceTokenizer] });
 const parseBlocks = (source: string) =>
   new Lexer(parser.defaults).blockTokens(source.replace(/\r\n?/g, '\n'));
 
+/** Leading headings follow Markdown syntax, including Setext and code boundaries. */
+export function leadingMarkdownHeadingDepth(source: string): number | undefined {
+  const first = parseBlocks(source).find((token) => token.type !== 'space');
+  return first?.type === 'heading' ? first.depth : undefined;
+}
+
 /** Title ownership follows Markdown syntax, not a hash-prefix heuristic. */
 export function startsWithNotebookTitle(source: string): boolean {
-  const first = parseBlocks(source).find(token => token.type !== 'space');
-  return first?.type === 'heading' && first.depth === 1;
+  return leadingMarkdownHeadingDepth(source) === 1;
 }
 
 /** Retains only the current document's source references and compact heading/content summaries. */
@@ -28,19 +33,30 @@ export class MarkdownStructureIndex {
   private entries = new Map<string, Entry>();
 
   hasSameStructure(previous: readonly SourceCell[], next: readonly SourceCell[]): boolean {
-    if (previous.length !== next.length || previous.some((cell, i) =>
-      cell.id !== next[i].id || cell.type !== next[i].type)) return false;
-    if (previous.every((cell, i) => cell.type !== 'markdown' || cell.content === next[i].content)) return true;
+    if (
+      previous.length !== next.length ||
+      previous.some((cell, i) => cell.id !== next[i].id || cell.type !== next[i].type)
+    )
+      return false;
+    if (previous.every((cell, i) => cell.type !== 'markdown' || cell.content === next[i].content))
+      return true;
     const before = this.project(previous);
     const after = this.project(next);
-    return before.every((blocks, i) => blocks === after[i] || (
-      blocks.length === after[i].length && blocks.every((block, j) => {
-        const other = after[i][j];
-        return block.type === other.type && (block.type !== 'heading' || (
-          other.type === 'heading' && block.depth === other.depth && block.text === other.text
-        ));
-      })
-    ));
+    return before.every(
+      (blocks, i) =>
+        blocks === after[i] ||
+        (blocks.length === after[i].length &&
+          blocks.every((block, j) => {
+            const other = after[i][j];
+            return (
+              block.type === other.type &&
+              (block.type !== 'heading' ||
+                (other.type === 'heading' &&
+                  block.depth === other.depth &&
+                  block.text === other.text))
+            );
+          }))
+    );
   }
 
   project(cells: readonly SourceCell[]): readonly StructuralBlock[][] {

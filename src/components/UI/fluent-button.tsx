@@ -80,53 +80,79 @@ const useRevealButtonStyles = makeStyles({
   },
 });
 
-export interface RevealButtonProps extends Omit<ButtonProps, 'appearance'> {
-  variant?: 'default' | 'primary' | 'subtle';
+type RevealVariant = { variant?: 'default' | 'primary' | 'subtle' };
+export type RevealButtonProps = RevealVariant &
+  (
+    | Omit<Extract<ButtonProps, { as: 'a' }>, 'appearance'>
+    | Omit<Exclude<ButtonProps, { as: 'a' }>, 'appearance'>
+  );
+
+function composeMouseHandlers<Element extends HTMLElement>(
+  internal: React.MouseEventHandler<Element>,
+  external?: React.MouseEventHandler<Element>
+): React.MouseEventHandler<Element> {
+  return (event) => {
+    internal(event);
+    external?.(event);
+  };
 }
 
 export function RevealButton({
   className,
   variant = 'default',
   children,
-  onMouseMove,
   ...props
 }: RevealButtonProps) {
   const styles = useRevealButtonStyles();
   const [glowPosition, setGlowPosition] = React.useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = React.useState(false);
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setGlowPosition({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
-    onMouseMove?.(e);
+  const move: React.MouseEventHandler<HTMLButtonElement | HTMLAnchorElement> = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setGlowPosition({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+  };
+  const enter = () => setIsHovering(true);
+  const leave = () => setIsHovering(false);
+  const shared = {
+    className: cn(styles.root, variant === 'primary' && styles.primary, className),
+    children: (
+      <>
+        {isHovering && (
+          <span
+            aria-hidden="true"
+            className={styles.revealGlow}
+            style={{
+              left: `${glowPosition.x}px`,
+              top: `${glowPosition.y}px`,
+              width: '100px',
+              height: '100px',
+            }}
+          />
+        )}
+        <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
+      </>
+    ),
   };
 
+  // Preserve the element discriminant through forwarding and event composition.
+  if (props.as === 'a') {
+    return (
+      <FluentButton
+        {...props}
+        {...shared}
+        onMouseMove={composeMouseHandlers(move, props.onMouseMove)}
+        onMouseEnter={composeMouseHandlers(enter, props.onMouseEnter)}
+        onMouseLeave={composeMouseHandlers(leave, props.onMouseLeave)}
+      />
+    );
+  }
   return (
     <FluentButton
-      className={cn(styles.root, variant === 'primary' && styles.primary, className)}
-      onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
       {...props}
-    >
-      {/* Reveal glow effect */}
-      {isHovering && (
-        <span
-          className={styles.revealGlow}
-          style={{
-            left: `${glowPosition.x}px`,
-            top: `${glowPosition.y}px`,
-            width: '100px',
-            height: '100px',
-          }}
-        />
-      )}
-
-      {/* Button content */}
-      <span style={{ position: 'relative', zIndex: 1 }}>{children}</span>
-    </FluentButton>
+      {...shared}
+      onMouseMove={composeMouseHandlers(move, props.onMouseMove)}
+      onMouseEnter={composeMouseHandlers(enter, props.onMouseEnter)}
+      onMouseLeave={composeMouseHandlers(leave, props.onMouseLeave)}
+    />
   );
 }

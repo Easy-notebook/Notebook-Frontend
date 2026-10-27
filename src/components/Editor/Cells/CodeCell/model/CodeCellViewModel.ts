@@ -1,14 +1,22 @@
-import { Cell, Output, ReactCodeMirrorRef } from '../utils/types';
+import { Cell, ReactCodeMirrorRef } from '../utils/types';
 import useStore from '@Store/notebookStore';
 import useCodeStore, { DISPLAY_MODES } from '@Store/codeStore';
-import { processOutput } from '../utils/outputProcessing';
+import { OutputProjection } from './OutputProjection';
 import { EXPAND_THRESHOLD } from '../utils';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
 import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
 import { showToast } from '@/components/UI/Toast';
 import { isCompositionInput } from '../../../utils/compositionInput';
+import { isPlainBackspace } from '../../../utils/editorShortcuts';
 
 export class CodeCellViewModel extends BaseCellViewModel {
+  private readonly outputProjection = new OutputProjection();
+  private collapseScroll?: ReturnType<typeof setTimeout>;
+
+  public cancelPendingScroll = () => {
+    if (this.collapseScroll !== undefined) clearTimeout(this.collapseScroll);
+    this.collapseScroll = undefined;
+  };
   // Properties from props
   private isDemoMode: boolean;
 
@@ -19,7 +27,6 @@ export class CodeCellViewModel extends BaseCellViewModel {
   public isUserToggled = false;
   public isHovering = false;
   public contentHeight = 0;
-  public outputUpdateKey = 0;
   public outputVisible = false;
 
   // Refs (managed as properties)
@@ -49,14 +56,9 @@ export class CodeCellViewModel extends BaseCellViewModel {
   }
 
   public updateProps(cell: Cell, isDemoMode: boolean) {
-    const prevCell = this.cell;
-    // Call super.updateProps to handle cell update and notification if needed,
-    // but we have more complex logic here, so we might just update this.cell manually
-    // or call super and then do the rest.
-    // Since super.updateProps checks for cell equality, we can call it.
-    // However, we need to update other props too.
-
-    this.cell = cell; // Update local reference first for logic below
+    let changed = this.cell !== cell || this.isDemoMode !== isDemoMode;
+    const outputsChanged = this.cell.outputs !== cell.outputs;
+    this.cell = cell;
     this.isDemoMode = isDemoMode;
 
     // Handle content changes for expansion logic
@@ -64,41 +66,35 @@ export class CodeCellViewModel extends BaseCellViewModel {
     const prevContentStr = this.prevContent || '';
     const contentDiff = Math.abs(currentContent.length - prevContentStr.length);
 
-    if (contentDiff > 100 || (prevContentStr && !currentContent)) {
+    if ((contentDiff > 100 || (prevContentStr && !currentContent)) && this.isUserToggled) {
       this.isUserToggled = false;
-      this.notify();
+      changed = true;
     }
 
     // Sync local content if it differs from prop and we are not currently typing (simple heuristic)
     if (cell.content !== this.prevContent) {
       this.localContent = cell.content || '';
-      this.notify();
+      changed = true;
     }
 
     this.prevContent = currentContent;
 
+    const hasOutputs = this.processedOutputs.length > 0;
     // Handle output changes for auto-expansion
-    if (
-      this.processedOutputs.length > 0 &&
-      !this.isExpanded &&
-      this.contentHeight > EXPAND_THRESHOLD
-    ) {
+    if (outputsChanged && hasOutputs && !this.isExpanded && this.contentHeight > EXPAND_THRESHOLD) {
       this.isExpanded = true;
       this.isUserToggled = true;
-      this.notify();
+      changed = true;
     }
 
     // Handle output visibility
-    const newOutputVisible = this.processedOutputs.length > 0;
-    if (this.outputVisible !== newOutputVisible) {
-      this.outputVisible = newOutputVisible;
-      this.notify();
+    if (this.outputVisible !== hasOutputs) {
+      this.outputVisible = hasOutputs;
+      changed = true;
     }
 
-    // Check if we need to notify due to other prop changes that affect derived state
-    if (prevCell !== cell) {
-      this.notify();
-    }
+    // Subscribers observe the completed transition, never partially updated view state.
+    if (changed) this.notify();
   }
 
   public setRefs(
@@ -175,16 +171,7 @@ export class CodeCellViewModel extends BaseCellViewModel {
   }
 
   get processedOutputs() {
-    if (this.cell.outputs && Array.isArray(this.cell.outputs)) {
-      return this.cell.outputs
-        .map(processOutput)
-        .filter((o): o is Output => o !== null)
-        .map((output) => ({
-          ...output,
-          key: output.key || `output-${Date.now()}-${Math.random()}`,
-        }));
-    }
-    return [];
+    return this.outputProjection.project(this.cell.outputs);
   }
 
   // Actions
@@ -203,21 +190,21 @@ export class CodeCellViewModel extends BaseCellViewModel {
     this.notify();
   }
 
-  public setContentHeight(height: number) {
+  public setContentHeight = (height: number) => {
+    if (!Number.isFinite(height) || height <= 0) return;
+    let changed = this.contentHeight !== height;
     this.contentHeight = height;
-    if (!this.isUserToggled) {
+    const view = this.editorRef?.current?.view;
+    // Keep the editing surface stable while the user owns its caret or IME session.
+    if (!this.isUserToggled && !view?.hasFocus && !view?.composing) {
       const newExpanded = height <= EXPAND_THRESHOLD;
       if (this.isExpanded !== newExpanded) {
         this.isExpanded = newExpanded;
-        this.notify();
+        changed = true;
       }
     }
-  }
-
-  public incrementOutputUpdateKey() {
-    this.outputUpdateKey += 1;
-    this.notify();
-  }
+    if (changed) this.notify();
+  };
 
   // Store Actions
   public toggleDetachedCellFullscreen = () => {
@@ -240,7 +227,7 @@ export class CodeCellViewModel extends BaseCellViewModel {
     if (!canExecuteCodeLanguage(this.cell.language)) {
       showToast({
         description:
-          'This notebook runs Python only. Switch the cell language to Python to execute it.',
+          'Execution is available for Python and AAL. Switch the cell language to execute it.',
         variant: 'destructive',
       });
       return;
@@ -299,19 +286,25 @@ export class CodeCellViewModel extends BaseCellViewModel {
   };
 
   public handleExpand = () => {
+    this.cancelPendingScroll();
     this.isUserToggled = true;
     this.isExpanded = true;
     this.notify();
   };
 
   public handleCollapse = () => {
+    this.cancelPendingScroll();
     this.isUserToggled = true;
     this.isExpanded = false;
     this.notify();
 
-    if (this.codeContainerRef?.current) {
-      setTimeout(() => {
-        this.codeContainerRef?.current?.scrollIntoView({
+    const element = this.codeContainerRef?.current;
+    if (element) {
+      this.collapseScroll = setTimeout(() => {
+        this.collapseScroll = undefined;
+        if (this.isExpanded || !element.isConnected || this.codeContainerRef?.current !== element)
+          return;
+        element.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });
@@ -324,14 +317,16 @@ export class CodeCellViewModel extends BaseCellViewModel {
     if (isCompositionInput(event.nativeEvent) || this.editorRef?.current?.view?.composing)
       return null;
     // Backspace at start of empty code cell
-    if (event.key === 'Backspace' && !this.cell.content.trim()) {
+    if (
+      isPlainBackspace(event) &&
+      this.getEditorState()?.selection.main.empty &&
+      !this.cell.content.trim()
+    ) {
       if (this.isCursorAtDocStart()) {
         event.preventDefault();
         const state = useStore.getState();
         state.updateCellType(this.cell.id, 'markdown');
-        setTimeout(() => {
-          state.setEditingCellId(this.cell.id);
-        }, 50);
+        state.setEditingCellId(this.cell.id);
         return 'convert';
       }
     }

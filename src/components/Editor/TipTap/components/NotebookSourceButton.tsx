@@ -4,7 +4,7 @@ import useStore from '@Store/notebookStore';
 import { NotebookSourceSession } from '../../model/NotebookSourceSession';
 import { applyNotebookSource } from '../model/applyNotebookSource';
 import { useEditorReadOnly } from '../../EditorAccessContext';
-import { SourceDraftHistory } from '../../model/SourceDraftHistory';
+import { SourceDraftHistory, type SourceDraftChange } from '../../model/SourceDraftHistory';
 import { indentSourceChange } from '../../utils/sourceIndentation';
 import { isCompositionInput } from '../../utils/compositionInput';
 import { sourceInputChange } from '../../utils/sourceInputChange';
@@ -51,6 +51,7 @@ export function NotebookSourceButton({ editor }: { editor: Editor }) {
         <NotebookSourceDialog
           session={session}
           draftHistory={draft.history}
+          viewport={draft.viewport}
           editor={editor}
           close={() => {
             notebookSourceDrafts.release(draft);
@@ -66,12 +67,14 @@ export function NotebookSourceButton({ editor }: { editor: Editor }) {
 function NotebookSourceDialog({
   session,
   draftHistory,
+  viewport,
   editor,
   close,
   restoreFocus,
 }: {
   session: NotebookSourceSession;
   draftHistory: SourceDraftHistory;
+  viewport: NotebookSourceDraft['viewport'];
   editor: Editor;
   close: () => void;
   restoreFocus: () => void;
@@ -92,20 +95,39 @@ function NotebookSourceDialog({
     element.setSelectionRange(cursor, cursor);
     element.scrollTop = element.scrollHeight;
   }, [source]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = dialog.current!;
+    const textarea = input.current!;
+    const selection = draftHistory.selection;
     element.showModal();
-    input.current?.focus();
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(
+      selection.from,
+      selection.to,
+      selection.anchor > selection.head ? 'backward' : 'forward'
+    );
+    textarea.scrollTop = viewport.top;
+    textarea.scrollLeft = viewport.left;
     return () => {
+      // Layout cleanup runs before the textarea is detached. Retain values, not DOM nodes.
+      draftHistory.select(
+        textarea.selectionStart,
+        textarea.selectionEnd,
+        textarea.selectionDirection === 'backward'
+      );
+      viewport.top = textarea.scrollTop;
+      viewport.left = textarea.scrollLeft;
       element.close();
-      restoreFocus();
     };
   }, []);
+  // The trigger is re-enabled during commit, after layout cleanup has captured the draft.
+  useEffect(() => () => restoreFocus(), []);
   const canEditDraft = useCallback(
     () => !readOnly && !editor.isDestroyed && editor.isEditable,
     [readOnly, editor]
   );
   const cancel = () => {
+    if (composing.current) return;
     session.cancel();
     close();
   };
@@ -114,23 +136,33 @@ function NotebookSourceDialog({
     setSource(draftHistory.source);
     setError(null);
   }, [session, draftHistory]);
-  const restoreDraftSelection = useCallback(() => {
-    const element = input.current;
-    if (!element) return;
-    const selection = draftHistory.selection;
-    element.setRangeText(draftHistory.source, 0, element.value.length, 'preserve');
-    element.setSelectionRange(
-      selection.from,
-      selection.to,
-      selection.anchor > selection.head ? 'backward' : 'forward'
-    );
-    publishDraft();
-  }, [draftHistory, publishDraft]);
+  const restoreDraftSelection = useCallback(
+    (changes: readonly SourceDraftChange[]) => {
+      const element = input.current;
+      if (!element) return;
+      const selection = draftHistory.selection;
+      // Historical ranges address the old input; descending application preserves those offsets.
+      for (let index = changes.length - 1; index >= 0; index--) {
+        const change = changes[index];
+        element.setRangeText(change.insert, change.from, change.to, 'preserve');
+      }
+      element.setSelectionRange(
+        selection.from,
+        selection.to,
+        selection.anchor > selection.head ? 'backward' : 'forward'
+      );
+      publishDraft();
+    },
+    [draftHistory, publishDraft]
+  );
   useEffect(() => {
     const element = input.current;
     if (!element) return;
     const beforeInput = (event: InputEvent) => {
-      if (!canEditDraft()) { event.preventDefault(); return; }
+      if (!canEditDraft()) {
+        event.preventDefault();
+        return;
+      }
       if (composing.current || event.isComposing) return;
       draftHistory.select(
         element.selectionStart,
@@ -154,7 +186,7 @@ function NotebookSourceDialog({
       // Native edit-menu history must use the same owner as keyboard history.
       event.preventDefault();
       event.stopPropagation();
-      if (draftHistory.step(event.inputType === 'historyUndo')) restoreDraftSelection();
+      draftHistory.step(event.inputType === 'historyUndo', restoreDraftSelection);
     };
     element.addEventListener('beforeinput', beforeInput);
     return () => element.removeEventListener('beforeinput', beforeInput);
@@ -170,7 +202,6 @@ function NotebookSourceDialog({
       onKeyDown={(event) => event.stopPropagation()}
       onCancel={(event) => {
         event.preventDefault();
-        if (composing.current) return;
         cancel();
       }}
     >
@@ -179,7 +210,8 @@ function NotebookSourceDialog({
       </h2>
       <p id="notebook-source-help" className="text-sm my-2">
         Keep the boundary comments intact. Move or remove complete sections to reorder or delete
-        cells. Outputs stay outside this source buffer.
+        cells. Outputs stay outside this source buffer. Unapplied drafts stay in memory only; apply
+        changes before refreshing or closing this page.
       </p>
       <div className="flex flex-wrap gap-2 my-2">
         {(['markdown', 'code', 'raw'] as const).map((type) => (
@@ -193,14 +225,15 @@ function NotebookSourceDialog({
               try {
                 const previousLength = draftHistory.source.length;
                 insertionCursor.current = session.appendCell(type);
+                const insert = session.source.slice(previousLength);
                 draftHistory.replace(
                   previousLength,
                   previousLength,
-                  session.source.slice(previousLength),
+                  insert,
                   insertionCursor.current,
                   insertionCursor.current
                 );
-                publishDraft();
+                restoreDraftSelection([{ from: previousLength, to: previousLength, insert }]);
               } catch (failure) {
                 setError(failure instanceof Error ? failure.message : String(failure));
               }
@@ -219,8 +252,7 @@ function NotebookSourceDialog({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
               if (composing.current || !canEditDraft()) return;
-              if (draftHistory.step(backward)) {
-                restoreDraftSelection();
+              if (draftHistory.step(backward, restoreDraftSelection)) {
                 input.current?.focus({ preventScroll: true });
               }
             }}
@@ -238,8 +270,12 @@ function NotebookSourceDialog({
         style={{ height: '55vh', tabSize: 2 }}
         value={source}
         readOnly={!canEditDraft()}
-        onCompositionStart={() => { composing.current = true; }}
-        onCompositionEnd={() => { composing.current = false; }}
+        onCompositionStart={() => {
+          composing.current = true;
+        }}
+        onCompositionEnd={() => {
+          composing.current = false;
+        }}
         onSelect={(event) => {
           const element = event.currentTarget;
           draftHistory.select(
@@ -281,10 +317,10 @@ function NotebookSourceDialog({
               edit.end,
               element.selectionDirection === 'backward'
             );
-            restoreDraftSelection();
+            restoreDraftSelection([edit]);
           } else if (key === 'z' || (key === 'y' && event.ctrlKey && !event.metaKey)) {
             event.preventDefault();
-            if (draftHistory.step(key === 'z' && !event.shiftKey)) restoreDraftSelection();
+            draftHistory.step(key === 'z' && !event.shiftKey, restoreDraftSelection);
           }
         }}
         onChange={(event) => {
@@ -292,7 +328,8 @@ function NotebookSourceDialog({
           const element = event.currentTarget;
           const inputType = (event.nativeEvent as InputEvent).inputType;
           const isolated =
-            inputType === 'insertFromPaste' || inputType === 'insertFromDrop' ||
+            inputType === 'insertFromPaste' ||
+            inputType === 'insertFromDrop' ||
             inputType === 'insertReplacementText';
           draftHistory.edit(
             element.value,

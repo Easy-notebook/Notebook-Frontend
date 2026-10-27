@@ -1,6 +1,10 @@
 import pdfMake from 'pdfmake/build/pdfmake';
+import { saveAs } from 'file-saver';
+import { pdfFontResources } from './PdfFontResources';
+import { renderPdfDocument } from './PdfDocumentRenderer';
 import Prism from 'prismjs';
 import { marked } from 'marked';
+import type { Cell, OutputItem as CellOutput } from '@Store/models';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/components/prism-java';
@@ -11,21 +15,6 @@ import 'prismjs/components/prism-bash';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-markdown';
 import 'prismjs/components/prism-sql';
-
-// Type definitions for PDF export
-interface CellOutput {
-  type: 'image' | 'error' | 'text';
-  content: string;
-}
-
-interface Cell {
-  id: string;
-  type: 'markdown' | 'code' | 'hybrid';
-  content: string;
-  outputs?: CellOutput[];
-  language?: string;
-  [key: string]: any;
-}
 
 interface PDFStyle {
   font?: string;
@@ -68,47 +57,6 @@ const mainColor = '#9F1239';
 const paragraphColor = '#1f2937';
 const codeBlockBg = '#fef2f2';
 const inlineCodeBg = '#fff7ed';
-
-// Font loading
-const loadFonts = async (): Promise<void> => {
-  if (pdfMake.vfs && pdfMake.fonts) return;
-
-  try {
-    const fontResponse: Response = await fetch('/fonts/NotoSansSC-VariableFont_wght.ttf');
-    if (!fontResponse.ok) {
-      throw new Error('Font file not found');
-    }
-    const fontArrayBuffer: ArrayBuffer = await fontResponse.arrayBuffer();
-    const fontBase64: string = arrayBufferToBase64(fontArrayBuffer);
-
-    const fontFileName = 'NotoSansSC.ttf';
-    const boldFontFileName = 'NotoSansSC-Bold.ttf';
-
-    pdfMake.vfs = {
-      [fontFileName]: fontBase64,
-      [boldFontFileName]: fontBase64,
-    };
-
-    pdfMake.fonts = {
-      NotoSansSC: {
-        normal: fontFileName,
-        bold: boldFontFileName,
-        italics: fontFileName,
-        bolditalics: boldFontFileName,
-      },
-    };
-  } catch (error: unknown) {
-    console.warn('Failed to load NotoSansSC font, falling back to Helvetica', error);
-    pdfMake.fonts = {
-      NotoSansSC: {
-        normal: 'Helvetica',
-        bold: 'Helvetica-Bold',
-        italics: 'Helvetica-Oblique',
-        bolditalics: 'Helvetica-BoldOblique',
-      },
-    };
-  }
-};
 
 const getStyles = (): Record<string, PDFStyle> => ({
   h1: {
@@ -217,15 +165,6 @@ const getStyles = (): Record<string, PDFStyle> => ({
     decoration: 'underline',
   },
 });
-
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  let binary = '';
-  const bytes: Uint8Array = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
-};
 
 // --- Markdown Processing with Marked ---
 
@@ -515,16 +454,22 @@ const createCodeBlock = (
     margin: [0, 5, 0, 5],
   };
 
-  const result: PDFContent[] = [mainContainer];
+  return [mainContainer, ...createOutputBlocks(outputs)];
+};
+
+/** Shared output projection for code and hybrid source cells. */
+const createOutputBlocks = (outputs: CellOutput[] = []): PDFContent[] => {
+  const result: PDFContent[] = [];
 
   if (outputs && outputs.length > 0) {
     outputs.forEach((output: CellOutput) => {
-      if (!output.content) return;
+      if (output.content === undefined || output.content === null || output.content === '') return;
+      const text = String(output.content);
 
       if (output.type === 'image') {
         // Handle base64 images
         // Ensure content is a valid base64 data URI or raw base64
-        let imageContent = output.content;
+        let imageContent = text;
         // If it doesn't start with data:image, assume it's raw base64 and prepend prefix (guess png)
         // But usually output.content from backend might be just base64 or data uri.
         // Let's assume standard data URI or try to detect.
@@ -538,7 +483,7 @@ const createCodeBlock = (
           margin: [0, 5, 0, 5],
         });
       } else {
-        const outputLines: string[] = output.content.split('\n');
+        const outputLines: string[] = text.split('\n');
         outputLines.forEach((line: string) => {
           result.push({
             text: line,
@@ -555,15 +500,17 @@ const createCodeBlock = (
 
 export const exportToPdf = async (cells: Cell[]): Promise<void> => {
   try {
-    await loadFonts();
+    const snapshot = structuredClone(cells);
+    const resources = await pdfFontResources.load();
 
     const content: PDFContent[] = [];
 
-    for (const cell of cells) {
-      if (!cell || !cell.type || !cell.content) continue;
+    for (const cell of snapshot) {
+      if (!cell || !cell.type) continue;
 
-      if (cell.type === 'markdown') {
+      if (cell.type === 'markdown' || cell.type === 'hybrid') {
         content.push(...convertMarkdownToPdf(cell.content));
+        if (cell.type === 'hybrid') content.push(...createOutputBlocks(cell.outputs));
       } else if (cell.type === 'code') {
         const language: string = typeof cell.language === 'string' ? cell.language : 'python';
         content.push(...createCodeBlock(cell.content, cell.outputs, language));
@@ -580,7 +527,9 @@ export const exportToPdf = async (cells: Cell[]): Promise<void> => {
       pageMargins: [40, 40, 40, 40],
     };
 
-    pdfMake.createPdf(docDefinition).download('notebook.pdf');
+    const document = pdfMake.createPdf(docDefinition, undefined, resources.fonts, resources.vfs);
+    const blob = await renderPdfDocument(document);
+    saveAs(blob, 'notebook.pdf');
   } catch (error: unknown) {
     console.error('Error exporting to PDF:', error);
     throw error;

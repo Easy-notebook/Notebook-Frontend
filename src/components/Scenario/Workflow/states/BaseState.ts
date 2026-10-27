@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Base State Class
  * ================
@@ -25,7 +26,6 @@ export enum APIResponseType {
 
 export abstract class BaseState {
   protected stateName: string;
-  protected apiClient: any;
 
   // API Handlers
   protected planningHandler: PlanningAPIHandler | null = null;
@@ -123,9 +123,7 @@ export abstract class BaseState {
    *
    * @param apiClient - WorkflowAPIClient instance
    */
-  setApiClient(apiClient: any): void {
-    this.apiClient = apiClient;
-
+  setApiClient(apiClient: WorkflowAPIClientPort): void {
     // Initialize API handlers (scriptStore not available in BaseState context)
     this.planningHandler = new PlanningAPIHandler(apiClient, undefined);
     this.generatingHandler = new GeneratingAPIHandler(apiClient, undefined);
@@ -144,7 +142,8 @@ export abstract class BaseState {
    * @param transitionName - Optional transition name to pass to API
    * @returns API response (parsed JSON or async iterator for streaming)
    */
-  async callAPI(state: WorkflowState, transitionName?: string): Promise<any> {
+  async callAPI(state: WorkflowState, transitionName?: string, signal?: AbortSignal): Promise<any> {
+    signal?.throwIfAborted();
     // Check what API type this state requires
     const apiType = this.getRequiredAPIType();
     if (!apiType) {
@@ -175,11 +174,11 @@ export abstract class BaseState {
 
     // Route to appropriate API based on type
     if (apiType === APIResponseType.PLANNING) {
-      return await this.callPlanningAPI(state, stageId, stepId, transitionName);
+      return await this.callPlanningAPI(state, stageId, stepId, transitionName, signal);
     } else if (apiType === APIResponseType.GENERATING) {
-      return this.callGeneratingAPI(state, stageId, stepId, transitionName);
+      return this.callGeneratingAPI(state, stageId, stepId, transitionName, signal);
     } else if (apiType === APIResponseType.COMPLETE) {
-      return this.callReflectingAPI(state, stageId, stepId, transitionName);
+      return this.callReflectingAPI(state, stageId, stepId, transitionName, signal);
     } else {
       throw new Error(`Unknown API type: ${apiType}`);
     }
@@ -192,15 +191,22 @@ export abstract class BaseState {
     state: WorkflowState,
     stageId: string,
     stepId: string,
-    transitionName?: string
+    transitionName?: string,
+    signal?: AbortSignal
   ): Promise<any> {
     console.log(
       `[State.${this.stateName}] Calling Planning API via handler (transition=${transitionName})`
     );
 
-    return await this.planningHandler!.call(state, stageId, stepId, {
-      transition_name: transitionName,
-    });
+    return await this.planningHandler!.call(
+      state,
+      stageId,
+      stepId,
+      {
+        transition_name: transitionName,
+      },
+      signal
+    );
   }
 
   /**
@@ -210,16 +216,23 @@ export abstract class BaseState {
     state: WorkflowState,
     stageId: string,
     stepId: string,
-    transitionName?: string
+    transitionName?: string,
+    signal?: AbortSignal
   ): AsyncIterableIterator<any> {
     console.log(
       `[State.${this.stateName}] Calling Generating API via handler (transition=${transitionName})`
     );
 
-    return this.generatingHandler!.call(state, stageId, stepId, {
-      stream: true,
-      transition_name: transitionName,
-    });
+    return this.generatingHandler!.call(
+      state,
+      stageId,
+      stepId,
+      {
+        stream: true,
+        transition_name: transitionName,
+      },
+      signal
+    );
   }
 
   /**
@@ -229,16 +242,23 @@ export abstract class BaseState {
     state: WorkflowState,
     stageId: string,
     stepId: string,
-    transitionName?: string
+    transitionName?: string,
+    signal?: AbortSignal
   ): AsyncIterableIterator<any> {
     console.log(
       `[State.${this.stateName}] Calling Reflecting API via handler (transition=${transitionName})`
     );
 
-    return this.reflectingHandler!.call(state, stageId, stepId, {
-      stream: true,
-      transition_name: transitionName,
-    });
+    return this.reflectingHandler!.call(
+      state,
+      stageId,
+      stepId,
+      {
+        stream: true,
+        transition_name: transitionName,
+      },
+      signal
+    );
   }
 
   toString(): string {

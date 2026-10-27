@@ -6,8 +6,9 @@ import useCodeStore from '@Store/codeStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 
 import AICommandInput from './AICommandInput';
+import { useAttachmentDraft } from '@/hooks/useAttachmentDraft';
 import Header from './Header';
-import { UploadFile, AddCellFn, EmptyStateProps } from './types';
+import { AddCellFn, EmptyStateProps } from './types';
 import { navigateToLibrary } from '@Utils/navigation';
 import { uiLog } from '@Utils/logger';
 
@@ -29,7 +30,8 @@ const WHEEL_DOWN_TRIGGER = 220; // 竖向滚轮触发阈值
 const WHEEL_RIGHT_DECAY_MS = 140; // 横向滚轮“结束”判定间隔
 
 const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
-  const [files, setFiles] = useState<UploadFile[]>([]);
+  const notebookId = useStore((state) => state.notebookId);
+  const { draft, files } = useAttachmentDraft(notebookId);
   const [swipeDistance, setSwipeDistance] = useState(0); // 上滑视觉
   const [rightSwipeDistance, setRightSwipeDistance] = useState(0); // 右滑视觉
   const [showLibraryState, setShowLibraryState] = useState(false);
@@ -498,14 +500,14 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onAddCell }) => {
 
         {/* 主体 */}
         <div
-          className="w-full max-w-4xl mx-auto px-4 py-6 text-center transition-all duration-500 ease-out"
+          className="w-full max-w-[640px] mx-auto px-6 sm:px-10 py-6 text-center transition-all duration-500 ease-out"
           style={{
             transform: `translateY(${-Math.min(swipeDistance * 0.2, 20)}px)`,
             marginTop: '0',
           }}
         >
           <Header />
-          <AICommandInput files={files} setFiles={setFiles} />
+          <AICommandInput files={files} setFiles={draft.replaceFiles} />
         </div>
       </div>
     </div>

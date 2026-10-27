@@ -1,40 +1,15 @@
-// fileUtils.ts
+import { FileUploadAttempt } from '@Services/notebook/FileUploadAttempt';
+import type {
+  FileUploadClient,
+  FileUploadConfig as UploadConfig,
+} from '@Services/notebook/FileUploadClient';
+import type { ApiResponse } from '@Services/types';
 
-// Type definitions for file utilities
-interface FileItem {
-  name: string;
-  size: number;
-  type: string;
-  lastModified: number;
-  [key: string]: any;
-}
-
-interface ApiResponse {
-  status: 'ok' | 'error';
-  message?: string;
-  files?: FileItem[];
-}
-
-interface FileServiceInterface {
-  listFiles: (notebookId: string) => Promise<ApiResponse>;
-  uploadFiles: (
-    notebookId: string,
-    files: File[],
-    config: UploadConfig,
-    onProgress: (event: ProgressEvent) => void,
-    signal: AbortSignal
-  ) => Promise<ApiResponse>;
+interface FileServiceInterface extends Pick<FileUploadClient, 'uploadFiles'> {
   getFilePreviewUrl: (notebookId: string, filename: string) => Promise<string>;
   getFileContent: (notebookId: string, filename: string) => Promise<string>;
   downloadFile: (notebookId: string, filename: string) => Promise<void>;
   deleteFile: (notebookId: string, filename: string) => Promise<void>;
-}
-
-interface UploadConfig {
-  maxFileSize: number;
-  mode: 'restricted' | 'open';
-  allowedTypes: string[];
-  maxFiles?: number;
 }
 
 interface ToastOptions {
@@ -45,17 +20,10 @@ interface ToastOptions {
 
 type ToastFunction = (options: ToastOptions) => void;
 
-interface FetchFileListParams {
-  notebookId: string;
-  fileService: FileServiceInterface;
-  setFileList: (files: FileItem[]) => void;
-  toast: ToastFunction;
-}
-
 interface HandleFileUploadParams {
   notebookId: string;
   files: File[];
-  fileService: FileServiceInterface;
+  fileService: Pick<FileUploadClient, 'uploadFiles'>;
   uploadConfig: UploadConfig;
   setUploading: (uploading: boolean) => void;
   setUploadProgress: (progress: number) => void;
@@ -72,7 +40,7 @@ interface HandleFileUploadParams {
 interface HandlePreviewParams {
   notebookId: string;
   filename: string;
-  fileService: FileServiceInterface;
+  fileService: Pick<FileServiceInterface, 'getFilePreviewUrl' | 'getFileContent'>;
   setSelectedFile: (filename: string) => void;
   setPreviewContent: (content: string) => void;
   setPreviewType: (type: 'image' | 'text') => void;
@@ -85,47 +53,17 @@ interface HandlePreviewParams {
 interface HandleDownloadParams {
   notebookId: string;
   filename: string;
-  fileService: FileServiceInterface;
+  fileService: Pick<FileServiceInterface, 'downloadFile'>;
   toast: ToastFunction;
 }
 
 interface HandleDeleteFileParams {
   notebookId: string;
   filename: string;
-  fileService: FileServiceInterface;
+  fileService: Pick<FileServiceInterface, 'deleteFile'>;
   fetchFileList: () => Promise<void>;
   toast: ToastFunction;
 }
-
-/**
- * 获取文件列表
- * @param params - 参数对象
- */
-export const fetchFileList = async ({
-  notebookId,
-  fileService,
-  setFileList,
-  toast,
-}: FetchFileListParams): Promise<void> => {
-  if (!notebookId) return;
-
-  try {
-    const data: ApiResponse = await fileService.listFiles(notebookId);
-    if (data.status === 'ok') {
-      setFileList(data.files);
-    } else {
-      throw new Error(data.message || 'Failed to fetch file list');
-    }
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    toast({
-      title: 'Error',
-      description: `Failed to fetch file list: ${errorMessage}`,
-      variant: 'destructive',
-    });
-    setFileList([]);
-  }
-};
 
 /**
  * 验证文件是否符合上传配置
@@ -171,13 +109,16 @@ export const handleFileUpload = async ({
 }: HandleFileUploadParams): Promise<void> => {
   if (!files || files.length === 0) return;
 
-  abortControllerRef.current = new AbortController();
-
-  setUploading(true);
-  setUploadProgress(0);
-  setError(null);
+  files = [...files];
+  uploadConfig = { ...uploadConfig, allowedTypes: [...uploadConfig.allowedTypes] };
+  const attempt = new FileUploadAttempt(abortControllerRef);
 
   try {
+    attempt.publish(() => setUploading(true));
+    attempt.publish(() => setUploadProgress(0));
+    attempt.publish(() => setError(null));
+    if (!attempt.isCurrent) return;
+    attempt.checkCancellation();
     if (
       uploadConfig.mode === 'restricted' &&
       uploadConfig.maxFiles &&
@@ -193,52 +134,67 @@ export const handleFileUpload = async ({
       files,
       uploadConfig,
       (progressEvent: ProgressEvent) => {
-        const percentCompleted: number = Math.round(
-          (progressEvent.loaded * 100) / progressEvent.total
-        );
-        setUploadProgress(percentCompleted);
+        attempt.progress(progressEvent.loaded, progressEvent.total, setUploadProgress);
       },
-      abortControllerRef.current!.signal
+      attempt.signal
     );
 
+    if (!attempt.isCurrent) return;
+    attempt.checkCancellation();
     if (result.status === 'ok') {
+      if (!attempt.beginRefresh()) return;
       await fetchFileList();
-      setIsPreview(true);
-      toast({
-        title: 'Upload Successful',
-        description: `Successfully uploaded ${files.length} file(s)`,
-        variant: 'success',
-      });
+      if (!attempt.succeed()) return;
+      attempt.publish(() => setIsPreview(true));
+      attempt.publish(() =>
+        toast({
+          title: 'Upload Successful',
+          description: `Successfully uploaded ${files.length} file(s)`,
+          variant: 'success',
+        })
+      );
 
       if (onUpdate) {
-        onUpdate(cellId, { uploadedFiles: files.map((file: File) => file.name) });
+        attempt.publish(() =>
+          onUpdate(cellId, { uploadedFiles: files.map((file: File) => file.name) })
+        );
       }
     } else {
       throw new Error(result.message || 'Upload failed');
     }
   } catch (err: unknown) {
-    const error = err as Error;
-    if (error.name === 'AbortError') {
-      setError('Upload cancelled');
-      toast({
-        title: 'Upload Cancelled',
-        description: 'File upload was cancelled',
-        variant: 'info',
-      });
+    const outcome = attempt.fail(err);
+    if (!outcome) return;
+    const error = err instanceof Error ? err : new Error('Unknown error');
+    if (outcome === 'cancelled') {
+      attempt.publish(() => setError('Upload cancelled'));
+      attempt.publish(() =>
+        toast({
+          title: 'Upload Cancelled',
+          description: 'File upload was cancelled',
+          variant: 'info',
+        })
+      );
     } else {
       const errorMessage = error.message || 'Unknown error';
-      setError(errorMessage);
-      toast({
-        title: 'Upload Failed',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      attempt.publish(() => setError(errorMessage));
+      attempt.publish(() =>
+        toast({
+          title: 'Upload Failed',
+          description: errorMessage,
+          variant: 'destructive',
+        })
+      );
     }
   } finally {
-    setUploading(false);
-    setUploadProgress(0);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    try {
+      attempt.publish(() => setUploading(false));
+      attempt.publish(() => setUploadProgress(0));
+      attempt.publish(() => {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      });
+    } finally {
+      attempt.release();
     }
   }
 };

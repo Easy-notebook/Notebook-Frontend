@@ -8,7 +8,7 @@
 - ✅ `AsyncStateMachineAdapter.ts` - 流式执行核心逻辑
 - ✅ `CompleteBehaviorHandler.ts` - 移除重复执行
 - ✅ `TransitionCoordinator.ts` - 添加 getContext() 方法
-- ✅ `streaming-debug-logger.ts` - 调试日志工具
+- ✅ `../core/WorkflowStreamTrace.ts` - 每次流式执行独立的日志会话
 
 ### 2. 检查依赖注入
 确保以下组件正确初始化：
@@ -288,8 +288,8 @@ console.log(performance.getEntriesByType('measure'));
 ### 技巧 3: 导出日志数据
 ```typescript
 // 在控制台
-import streamingLogger from '@/components/Scenario/Workflow/__tests__/streaming-debug-logger';
-console.log(streamingLogger.exportSessionData());
+// 每次流式执行结束（包括取消和失败）会输出独立的 [WorkflowStreamTrace] 报告。
+// 报告包含 phase、起止时间和每个动作的执行状态，不保留全局历史队列。
 // 复制 JSON 数据用于分析
 ```
 
@@ -316,3 +316,13 @@ console.log(streamingLogger.exportSessionData());
 2. 导出 streaming logger 数据
 3. 记录重现步骤
 4. 提交 issue
+
+## 自动化规划回归测试
+
+执行 `npx vitest run src/components/Scenario/Workflow --maxWorkers=2`。
+
+- `../api/PlanningAPIHandler.test.ts`：规划消息按顺序透传，处理器不执行笔记本动作。
+- `../core/AsyncStateMachineAdapter.planning.test.ts`：真实动作注册与状态更新；前一个动作完成后才读取后续消息，全部完成后才进行转换。
+- `../states/IdleState.test.ts`：直接导入状态类，验证规划响应的转换条件；同时防止应用层循环依赖再次进入状态类的加载过程。
+
+旧 `idle-planning-flow-test.ts` 使用过时的 Jest 接口且不匹配 Vitest 的默认发现规则，已在迁移有效覆盖后删除。API 处理器仅在请求开始时加载全局笔记本接口，并在异步加载后重新检查取消信号。

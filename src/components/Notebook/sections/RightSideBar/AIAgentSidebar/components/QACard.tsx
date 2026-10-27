@@ -1,3 +1,5 @@
+import { FactCapture } from '@Editor/NotebookContext/FactCapture';
+import useNotebookStore from '@Store/notebookStore';
 import React, { memo, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QAItem } from '@Store/models/agent';
@@ -17,6 +19,14 @@ interface QACardProps {
 const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
   const { t } = useTranslation();
   const isUser = qa.type === 'user';
+  const notebookId = useNotebookStore((state) => state.notebookId);
+  const source = {
+    notebookId: notebookId || '',
+    cellId: qa.cellId,
+    conversationId: 'sidebar',
+    messageId: qa.id,
+    role: isUser ? ('user' as const) : ('assistant' as const),
+  };
   const qaNumber = totalCount - index;
 
   // Memoize XML parsing to avoid re-parsing on every render
@@ -36,15 +46,20 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    if (qa.thinkingStartAtMs && !qa.thinkingEndAtMs) {
+    if (
+      !isUser &&
+      qa.onProcess &&
+      qa.thinkingStartAtMs !== undefined &&
+      qa.thinkingEndAtMs === undefined
+    ) {
       const interval = setInterval(() => setNow(Date.now()), 1000);
       return () => clearInterval(interval);
     }
-  }, [qa.thinkingStartAtMs, qa.thinkingEndAtMs]);
+  }, [isUser, qa.onProcess, qa.thinkingStartAtMs, qa.thinkingEndAtMs]);
 
   const thinkingDuration = useMemo(() => {
-    if (!qa.thinkingStartAtMs) return null;
-    const end = qa.thinkingEndAtMs || now;
+    if (qa.thinkingStartAtMs === undefined) return null;
+    const end = qa.thinkingEndAtMs ?? now;
     return Math.max(0, Math.round((end - qa.thinkingStartAtMs) / 1000));
   }, [qa.thinkingStartAtMs, qa.thinkingEndAtMs, now]);
 
@@ -61,16 +76,18 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
               <span className="text-xs text-gray-500 dark:text-gray-400">{qa.timestamp}</span>
             </div>
           </div>
-          <div className="text-left break-words overflow-wrap-anywhere">
-            {qa.content?.trim().startsWith('/') ? (
-              <div className="flex items-center gap-2 text-theme-600 dark:text-theme-400 font-mono">
-                <Zap className="w-4 h-4 shrink-0" />
-                <span>{qa.content}</span>
-              </div>
-            ) : (
-              <ExpandableText text={qa.content} maxLines={5} />
-            )}
-          </div>
+          <FactCapture source={source} disabled={!notebookId}>
+            <div className="text-left break-words overflow-wrap-anywhere">
+              {qa.content?.trim().startsWith('/') ? (
+                <div className="flex items-center gap-2 text-theme-600 dark:text-theme-400 font-mono">
+                  <Zap className="w-4 h-4 shrink-0" />
+                  <span>{qa.content}</span>
+                </div>
+              ) : (
+                <ExpandableText text={qa.content} maxLines={5} />
+              )}
+            </div>
+          </FactCapture>
         </SpotlightCard>
       </div>
     );
@@ -89,25 +106,37 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
           </div>
         </div>
 
-        <div className="text-left break-words overflow-wrap-anywhere">
-          {(!qa.content || qa.content.trim() === '') &&
-          (!qa.toolCalls || qa.toolCalls.length === 0) &&
-          xmlMatches.length === 0 ? (
-            <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-              <ShinyText
-                text={`${qa.agentType || qa.agent || 'AI'} ${t('rightSideBar.thinking') || 'is thinking...'}`}
-                disabled={false}
-                speed={3}
-                className="font-medium"
-              />
-              {thinkingDuration !== null && (
-                <span className="text-gray-400 dark:text-gray-500">({thinkingDuration}s)</span>
-              )}
-            </div>
-          ) : (
-            <ExpandableText text={qa.content} maxLines={5} />
-          )}
-        </div>
+        <FactCapture source={source} disabled={!notebookId}>
+          <div className="text-left break-words overflow-wrap-anywhere">
+            {(!qa.content || qa.content.trim() === '') &&
+            (!qa.toolCalls || qa.toolCalls.length === 0) &&
+            xmlMatches.length === 0 ? (
+              <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                {qa.onProcess ? (
+                  <ShinyText
+                    text={`${qa.agentType || qa.agent || 'AI'} ${t('rightSideBar.thinking') || 'is thinking...'}`}
+                    disabled={false}
+                    speed={3}
+                    className="font-medium"
+                  />
+                ) : (
+                  <span>
+                    {t(
+                      !qa.resolved && qa.thinkingStartAtMs !== undefined
+                        ? 'rightSideBar.responseInterrupted'
+                        : 'rightSideBar.noContent'
+                    )}
+                  </span>
+                )}
+                {thinkingDuration !== null && (
+                  <span className="text-gray-400 dark:text-gray-500">({thinkingDuration}s)</span>
+                )}
+              </div>
+            ) : (
+              <ExpandableText text={qa.content} maxLines={5} />
+            )}
+          </div>
+        </FactCapture>
 
         {/* 显示工具调用信息 */}
         {qa.toolCalls && qa.toolCalls.length > 0 && (

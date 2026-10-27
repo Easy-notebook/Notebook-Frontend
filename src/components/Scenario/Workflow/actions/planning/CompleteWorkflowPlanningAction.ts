@@ -10,13 +10,15 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
    * @param step - Execution step containing:
    *   - total_stages: Total number of stages planned
    */
-  execute(step: ExecutionStep): void {
+  async execute(step: ExecutionStep, signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted();
     // Backend sends total_stages, but convertActionToExecutionStep converts it to totalStages
     const totalStages = (step as any).totalStages || (step as any).total_stages;
 
     // Get the workflow state machine's current state JSON
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
+    const previous = stateMachine.stateJSON;
+    const stateJSON = structuredClone(previous);
     const observation = stateJSON.observation;
 
     console.log(
@@ -64,7 +66,7 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
           console.log(
             `[CompleteWorkflowPlanningAction] Executing new_section for first stage: "${firstStageTitle}"`
           );
-          executeAction('new_section', firstStageTitle);
+          await executeAction('new_section', firstStageTitle, signal);
         }
       } else {
         console.warn('[CompleteWorkflowPlanningAction] No stages planned, cannot transition');
@@ -72,6 +74,8 @@ export class CompleteWorkflowPlanningAction extends ActionBase {
     }
 
     // Update the workflow state machine with the modified stateJSON
+    signal?.throwIfAborted();
+    if (useWorkflowStateMachine.getState().stateJSON !== previous) return;
     stateMachine.setState(stateJSON);
   }
 }

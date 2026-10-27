@@ -4,7 +4,122 @@ import * as structure from '@Utils/markdown/structureIndex';
 import useStore from './notebookStore';
 
 describe('cell publication identity', () => {
-  it.each([[null, 'title'], ['missing', 'title'], ['b', 'b']] as const)('reconciles phase %s after insertion', (currentPhaseId, expected) => {
+  it('retains canonical output identities when cloned snapshots append a result', () => {
+    const original = useStore.getState();
+    try {
+      useStore
+        .getState()
+        .setCells([
+          {
+            id: 'output-code',
+            type: 'code',
+            content: 'x',
+            outputs: [{ type: 'text', content: 'first' }],
+          },
+        ]);
+      const before = useStore.getState().cells.find((cell) => cell.id === 'output-code')!.outputs!;
+      useStore.getState().updateCellOutputs('output-code', [
+        { type: 'text', content: 'first' },
+        { type: 'text', content: 'second' },
+      ]);
+      const after = useStore.getState().cells.find((cell) => cell.id === 'output-code')!.outputs!;
+      expect(after[0]).toBe(before[0]);
+      expect(after[1].content).toBe('second');
+      const state = useStore.getState();
+      state.updateCellOutputs(
+        'output-code',
+        after.map((output) => ({ ...output }))
+      );
+      expect(useStore.getState()).toBe(state);
+    } finally {
+      useStore.setState(original, true);
+    }
+  });
+  it('updates output content and added fields rather than reusing stale output objects', () => {
+    const original = useStore.getState();
+    try {
+      useStore
+        .getState()
+        .setCells([
+          {
+            id: 'output-code',
+            type: 'code',
+            content: 'x',
+            outputs: [{ type: 'text', content: 'first', key: 'fixed' }],
+          },
+        ]);
+      const before = useStore.getState().cells.find((cell) => cell.id === 'output-code')!
+        .outputs![0];
+      useStore
+        .getState()
+        .updateCellOutputs('output-code', [{ ...before, content: 'changed', timestamp: 'new' }]);
+      const after = useStore.getState().cells.find((cell) => cell.id === 'output-code')!
+        .outputs![0];
+      expect(after).not.toBe(before);
+      expect(after).toMatchObject({ content: 'changed', timestamp: 'new', key: 'fixed' });
+    } finally {
+      useStore.setState(original, true);
+    }
+  });
+  it.each(['#tag', '    # code', '```\n# code\n```'])(
+    'appends Markdown to non-heading source %s',
+    (content) => {
+      const original = useStore.getState();
+      try {
+        useStore.getState().setCells([
+          { id: 'title', type: 'markdown', content: '# Notebook' },
+          { id: 'body', type: 'markdown', content },
+        ]);
+        useStore.getState().addNewContent2EndCellMarkdown('\ncontinued');
+        expect(useStore.getState().cells.map((cell) => cell.id)).toEqual(['title', 'body']);
+        expect(useStore.getState().cells[1].content).toBe(content + '\ncontinued');
+      } finally {
+        useStore.setState(original, true);
+      }
+    }
+  );
+  it.each(['# Title', '## Section', '###### Heading', 'Title\n===', 'Section\n---'])(
+    'does not append generated body to heading %s',
+    (content) => {
+      const original = useStore.getState();
+      try {
+        useStore.getState().setCells([{ id: 'heading', type: 'markdown', content }]);
+        useStore.getState().addNewContent2EndCellMarkdown('Body');
+        const cells = useStore.getState().cells;
+        expect(cells[0].content).toBe(content);
+        expect(cells[cells.length - 1].content).toBe('Body');
+        expect(cells[cells.length - 1].id).not.toBe('heading');
+      } finally {
+        useStore.setState(original, true);
+      }
+    }
+  );
+  it.each(['Markdown', 'Code'] as const)(
+    'publishes %s content without an intermediate empty body',
+    (kind) => {
+      const original = useStore.getState();
+      const bodies: string[] = [];
+      let unsubscribe = () => {};
+      try {
+        useStore.getState().setCells([{ id: 'title', type: 'markdown', content: '# Notebook' }]);
+        unsubscribe = useStore.subscribe((state) => {
+          const body = state.cells.find((cell) => cell.id !== 'title');
+          if (body) bodies.push(body.content);
+        });
+        useStore.getState()[`addNewContent2EndCell${kind}`]('generated');
+        expect(bodies.length).toBeGreaterThan(0);
+        expect(bodies.every((content) => content === 'generated')).toBe(true);
+      } finally {
+        unsubscribe();
+        useStore.setState(original, true);
+      }
+    }
+  );
+  it.each([
+    [null, 'title'],
+    ['missing', 'title'],
+    ['b', 'b'],
+  ] as const)('reconciles phase %s after insertion', (currentPhaseId, expected) => {
     const original = useStore.getState();
     try {
       useStore.getState().setCells([
@@ -17,56 +132,107 @@ describe('cell publication identity', () => {
       const state = useStore.getState();
       expect(state.currentPhaseId).toBe(expected);
       expect(state.currentStepIndex).toBe(0);
-    } finally { useStore.setState(original, true); }
-  });
-  it.each(['addNewCell2End', 'addNewCell2Next'] as const)('keeps the published title identity through %s', method => {
-    const original = useStore.getState();
-    try {
-      useStore.getState().setCells([{ id: 'placeholder', type: 'markdown', content: '# ', metadata: { isDefaultTitle: true } }]);
-      useStore.setState({ currentCellId: 'placeholder' });
-      const returned = useStore.getState()[method]('markdown', '# Real title', true);
-      const state = useStore.getState();
-      expect(state.cells).toHaveLength(1);
-      expect(state.currentCellId).toBe('placeholder');
-      expect(state.lastAddedCellId).toBe('placeholder');
-      expect(state.editingCellId).toBe('placeholder');
-      if (method === 'addNewCell2End') expect(returned).toBe('placeholder');
-    } finally { useStore.setState(original, true); }
-  });
-  it.each([false, true])('skips title recognition for ordinary append (default title: %s)', isDefaultTitle => {
-    const original = useStore.getState();
-    const recognize = vi.spyOn(structure, 'startsWithNotebookTitle');
-    try {
-      useStore.getState().setCells([
-        { id: 'title', type: 'markdown', content: '# Notebook', metadata: { isDefaultTitle } },
-        { id: 'body', type: 'raw', content: 'keep' },
-      ]);
-      useStore.getState().addCell({ id: 'appended', type: 'markdown', content: 'long prose\n'.repeat(1000) });
-      expect(recognize).not.toHaveBeenCalled();
-      const cells = useStore.getState().cells;
-      expect(cells[cells.length - 1]?.id).toBe('appended');
     } finally {
-      recognize.mockRestore();
       useStore.setState(original, true);
     }
   });
-  it.each(['## Section', '#tag', '    # indented code', '> # quoted heading', '```\n# code\n```'])('does not replace the default title with %s', content => {
-    const original = useStore.getState();
-    try {
-      useStore.getState().setCells([{ id: 'placeholder', type: 'markdown', content: '# ', metadata: { isDefaultTitle: true } }]);
-      useStore.getState().addCell({ id: 'inserted', type: 'markdown', content }, 0);
-      expect(useStore.getState().cells.map(cell => cell.id)).toEqual(['placeholder', 'inserted']);
-      expect(useStore.getState().cells[0].content).toBe('# ');
-    } finally { useStore.setState(original, true); }
-  });
+  it.each(['addNewCell2End', 'addNewCell2Next'] as const)(
+    'keeps the published title identity through %s',
+    (method) => {
+      const original = useStore.getState();
+      try {
+        useStore
+          .getState()
+          .setCells([
+            {
+              id: 'placeholder',
+              type: 'markdown',
+              content: '# ',
+              metadata: { isDefaultTitle: true },
+            },
+          ]);
+        useStore.setState({ currentCellId: 'placeholder' });
+        const returned = useStore.getState()[method]('markdown', '# Real title', true);
+        const state = useStore.getState();
+        expect(state.cells).toHaveLength(1);
+        expect(state.currentCellId).toBe('placeholder');
+        expect(state.lastAddedCellId).toBe('placeholder');
+        expect(state.editingCellId).toBe('placeholder');
+        if (method === 'addNewCell2End') expect(returned).toBe('placeholder');
+      } finally {
+        useStore.setState(original, true);
+      }
+    }
+  );
+  it.each([false, true])(
+    'skips title recognition for ordinary append (default title: %s)',
+    (isDefaultTitle) => {
+      const original = useStore.getState();
+      const recognize = vi.spyOn(structure, 'startsWithNotebookTitle');
+      try {
+        useStore.getState().setCells([
+          { id: 'title', type: 'markdown', content: '# Notebook', metadata: { isDefaultTitle } },
+          { id: 'body', type: 'raw', content: 'keep' },
+        ]);
+        useStore
+          .getState()
+          .addCell({ id: 'appended', type: 'markdown', content: 'long prose\n'.repeat(1000) });
+        expect(recognize).not.toHaveBeenCalled();
+        const cells = useStore.getState().cells;
+        expect(cells[cells.length - 1]?.id).toBe('appended');
+      } finally {
+        recognize.mockRestore();
+        useStore.setState(original, true);
+      }
+    }
+  );
+  it.each(['## Section', '#tag', '    # indented code', '> # quoted heading', '```\n# code\n```'])(
+    'does not replace the default title with %s',
+    (content) => {
+      const original = useStore.getState();
+      try {
+        useStore
+          .getState()
+          .setCells([
+            {
+              id: 'placeholder',
+              type: 'markdown',
+              content: '# ',
+              metadata: { isDefaultTitle: true },
+            },
+          ]);
+        useStore.getState().addCell({ id: 'inserted', type: 'markdown', content }, 0);
+        expect(useStore.getState().cells.map((cell) => cell.id)).toEqual([
+          'placeholder',
+          'inserted',
+        ]);
+        expect(useStore.getState().cells[0].content).toBe('# ');
+      } finally {
+        useStore.setState(original, true);
+      }
+    }
+  );
   it('recognizes a Setext H1 when replacing a default title', () => {
     const original = useStore.getState();
     try {
-      useStore.getState().setCells([{ id: 'placeholder', type: 'markdown', content: '# ', metadata: { isDefaultTitle: true } }]);
-      useStore.getState().addCell({ id: 'inserted', type: 'markdown', content: 'Real title\n===' }, 0);
+      useStore
+        .getState()
+        .setCells([
+          {
+            id: 'placeholder',
+            type: 'markdown',
+            content: '# ',
+            metadata: { isDefaultTitle: true },
+          },
+        ]);
+      useStore
+        .getState()
+        .addCell({ id: 'inserted', type: 'markdown', content: 'Real title\n===' }, 0);
       expect(useStore.getState().cells).toHaveLength(1);
       expect(useStore.getState().cells[0].content).toBe('Real title\n===');
-    } finally { useStore.setState(original, true); }
+    } finally {
+      useStore.setState(original, true);
+    }
   });
   it('selects the retained identity when a real title replaces the default title', () => {
     const original = useStore.getState();
@@ -79,10 +245,16 @@ describe('cell publication identity', () => {
       useStore.getState().addCell(input, 0);
       const state = useStore.getState();
       expect(state.cells).toHaveLength(2);
-      expect(state.cells[0]).toMatchObject({ id: 'placeholder', content: '# Real title', metadata: { isDefaultTitle: false } });
+      expect(state.cells[0]).toMatchObject({
+        id: 'placeholder',
+        content: '# Real title',
+        metadata: { isDefaultTitle: false },
+      });
       expect(state.currentCellId).toBe(state.cells[0].id);
       expect(input.id).toBe('incoming');
-    } finally { useStore.setState(original, true); }
+    } finally {
+      useStore.setState(original, true);
+    }
   });
   it.each([
     ['code', undefined, 'python'],
@@ -97,15 +269,26 @@ describe('cell publication identity', () => {
       const title = useStore.getState().cells[0];
       useStore.getState().addCell({ id: 'language-cell', type, content: '', language });
       expect(useStore.getState().cells[0]).toBe(title);
-      expect(useStore.getState().cells[1]).toMatchObject({ id: 'language-cell', type, language: expected });
-    } finally { useStore.setState(original, true); }
+      expect(useStore.getState().cells[1]).toMatchObject({
+        id: 'language-cell',
+        type,
+        language: expected,
+      });
+    } finally {
+      useStore.setState(original, true);
+    }
   });
   it('reuses canonical cells and outputs in view and prefix queries', () => {
     const original = useStore.getState();
     try {
       useStore.getState().setCells([
         { id: 'query-title', type: 'markdown', content: '# Notebook' },
-        { id: 'query-code', type: 'code', content: 'x', outputs: [{ type: 'text', content: { value: 1 } } as any] },
+        {
+          id: 'query-code',
+          type: 'code',
+          content: 'x',
+          outputs: [{ type: 'text', content: { value: 1 } } as any],
+        },
         { id: 'query-tail', type: 'markdown', content: 'Tail' },
       ]);
       useStore.setState({ viewMode: 'create', currentCellId: 'query-tail' });
@@ -114,10 +297,12 @@ describe('cell publication identity', () => {
       expect(state.getCurrentViewCells()[1].outputs).toBe(state.cells[1].outputs);
       expect(state.cells[1].outputs?.[0].content).toBe('{"value":1}');
       const prefix = state.getAllCellsBeforeCurrent();
-      expect(prefix.map(cell => cell.id)).toEqual(['query-title', 'query-code']);
+      expect(prefix.map((cell) => cell.id)).toEqual(['query-title', 'query-code']);
       expect(prefix[1]).toBe(state.cells[1]);
       expect(prefix[1].outputs).toBe(state.cells[1].outputs);
-    } finally { useStore.setState(original); }
+    } finally {
+      useStore.setState(original);
+    }
   });
   it('shares metadata and editability updates across views and skips identical patches', () => {
     const original = useStore.getState();
@@ -138,11 +323,20 @@ describe('cell publication identity', () => {
       expect(useStore.getState()).toBe(state);
       state.updateCellMetadata('flags-code', { label: undefined });
       expect(useStore.getState().cells[1].metadata).toHaveProperty('label', undefined);
-    } finally { useStore.setState(original, true); }
+    } finally {
+      useStore.setState(original, true);
+    }
   });
   it('does not inspect late output payloads for a removed cell', () => {
     const before = useStore.getState();
-    const outputs = [{ type: 'text', get content(): string { throw new Error('Stale payload was read'); } }];
+    const outputs = [
+      {
+        type: 'text',
+        get content(): string {
+          throw new Error('Stale payload was read');
+        },
+      },
+    ];
     expect(() => before.updateCellOutputs('definitely-removed-cell', outputs)).not.toThrow();
     expect(useStore.getState()).toBe(before);
   });
@@ -163,7 +357,10 @@ describe('cell publication identity', () => {
       expect(before.cells[1].outputs).toEqual([]);
       expect(after.cells[0]).toBe(before.cells[0]);
       expect(parse).not.toHaveBeenCalled();
-    } finally { parse.mockRestore(); useStore.setState(original, true); }
+    } finally {
+      parse.mockRestore();
+      useStore.setState(original, true);
+    }
   });
   it('skips repeated type assignments and derives structure for a real type change', () => {
     const original = useStore.getState();
@@ -183,7 +380,10 @@ describe('cell publication identity', () => {
       expect(parse).toHaveBeenCalledOnce();
       expect(useStore.getState().tasks[0].phases[1].title).toBe('Phase');
       expect(useStore.getState().cells[1].content).toBe('## Phase');
-    } finally { parse.mockRestore(); useStore.setState(original, true); }
+    } finally {
+      parse.mockRestore();
+      useStore.setState(original, true);
+    }
   });
   it('keeps rejected code conversions as no-ops and successful ones preserve outputs', () => {
     const original = useStore.getState();
@@ -191,19 +391,32 @@ describe('cell publication identity', () => {
       useStore.getState().setCells([
         { id: 'reverse-title', type: 'markdown', content: '# Notebook' },
         { id: 'reverse-diagram', type: 'markdown', content: '```mermaid\ngraph TD; A-->B\n```' },
-        { id: 'reverse-code', type: 'hybrid', content: '~~~typescript\n  x\n\n~~~', outputs: [{ type: 'text', content: 'kept' }] },
+        {
+          id: 'reverse-code',
+          type: 'hybrid',
+          content: '~~~typescript\n  x\n\n~~~',
+          outputs: [{ type: 'text', content: 'kept' }],
+        },
       ]);
       const before = useStore.getState();
       before.convertToCodeCell('reverse-diagram');
       expect(useStore.getState()).toBe(before);
       before.convertToCodeCell('reverse-code');
       const after = useStore.getState();
-      expect(after.cells[2]).toMatchObject({ type: 'code', content: '  x\n', language: 'typescript' });
+      expect(after.cells[2]).toMatchObject({
+        type: 'code',
+        content: '  x\n',
+        language: 'typescript',
+      });
       expect(after.cells[2].outputs).toBe(before.cells[2].outputs);
-      expect(after.tasks[0].phases[0].steps[0].content?.find(cell => cell.id === 'reverse-code')).toBe(after.cells[2]);
+      expect(
+        after.tasks[0].phases[0].steps[0].content?.find((cell) => cell.id === 'reverse-code')
+      ).toBe(after.cells[2]);
       after.convertToCodeCell('reverse-code');
       expect(useStore.getState()).toBe(after);
-    } finally { useStore.setState(original, true); }
+    } finally {
+      useStore.setState(original, true);
+    }
   });
   it('publishes object patches and hybrid conversion with canonical references and merged metadata', () => {
     const original = useStore.getState();
@@ -217,14 +430,21 @@ describe('cell publication identity', () => {
       useStore.setState({ currentCellId: 'patch-code' });
       useStore.getState().convertCurrentCodeCellToHybridCell();
       const state = useStore.getState();
-      expect(state.cells[1]).toMatchObject({ type: 'hybrid', content: '```python\n  print(1)\n```' });
-      expect(state.tasks[0].phases[0].steps[0].content?.find(cell => cell.id === 'patch-code')).toBe(state.cells[1]);
+      expect(state.cells[1]).toMatchObject({
+        type: 'hybrid',
+        content: '```python\n  print(1)\n```',
+      });
+      expect(
+        state.tasks[0].phases[0].steps[0].content?.find((cell) => cell.id === 'patch-code')
+      ).toBe(state.cells[1]);
       state.updateCellObject('patch-code', { type: 'markdown', content: '## New phase' });
       expect(useStore.getState().tasks[0].phases[1].title).toBe('New phase');
       const before = useStore.getState();
       before.updateCellObject('patch-code', { content: '## New phase' });
       expect(useStore.getState()).toBe(before);
-    } finally { useStore.setState(original, true); }
+    } finally {
+      useStore.setState(original, true);
+    }
   });
   it('rebuilds ownership for direct heading edits after reusing a body-edit structure', () => {
     const original = useStore.getState();
@@ -252,37 +472,40 @@ describe('cell publication identity', () => {
       useStore.setState(original, true);
     }
   });
-  it.each(['code', 'markdown'] as const)('updates only affected task branches for %s body edits', (type) => {
-    const original = useStore.getState();
-    const parse = vi.spyOn(markdownParser, 'parseMarkdownCells');
-    try {
-      useStore.getState().setCells([
-        { id: 'stable-title', type: 'markdown', content: '# Notebook' },
-        { id: 'stable-a', type: 'markdown', content: '## A' },
-        { id: 'code-a', type, content: 'before' },
-        { id: 'stable-b', type: 'markdown', content: '## B' },
-        { id: 'code-b', type: 'code', content: 'untouched' },
-      ]);
-      const before = useStore.getState();
-      const phaseB = before.tasks[0].phases.find((phase) => phase.id === 'stable-b');
-      parse.mockClear();
-      before.setCells(
-        before.cells.map((cell) => (cell.id === 'code-a' ? { ...cell, content: 'after' } : cell))
-      );
-      const after = useStore.getState();
-      expect(parse).not.toHaveBeenCalled();
-      expect(after.tasks[0].phases.find((phase) => phase.id === 'stable-b')).toBe(phaseB);
-      const reference = after.tasks[0].phases
-        .flatMap((phase) => phase.steps.flatMap((step) => step.content || []))
-        .find((cell) => cell.id === 'code-a');
-      expect(reference).toBe(after.cells[2]);
-      expect(reference?.content).toBe('after');
-      expect(before.cells[2].content).toBe('before');
-    } finally {
-      parse.mockRestore();
-      useStore.setState(original, true);
+  it.each(['code', 'markdown'] as const)(
+    'updates only affected task branches for %s body edits',
+    (type) => {
+      const original = useStore.getState();
+      const parse = vi.spyOn(markdownParser, 'parseMarkdownCells');
+      try {
+        useStore.getState().setCells([
+          { id: 'stable-title', type: 'markdown', content: '# Notebook' },
+          { id: 'stable-a', type: 'markdown', content: '## A' },
+          { id: 'code-a', type, content: 'before' },
+          { id: 'stable-b', type: 'markdown', content: '## B' },
+          { id: 'code-b', type: 'code', content: 'untouched' },
+        ]);
+        const before = useStore.getState();
+        const phaseB = before.tasks[0].phases.find((phase) => phase.id === 'stable-b');
+        parse.mockClear();
+        before.setCells(
+          before.cells.map((cell) => (cell.id === 'code-a' ? { ...cell, content: 'after' } : cell))
+        );
+        const after = useStore.getState();
+        expect(parse).not.toHaveBeenCalled();
+        expect(after.tasks[0].phases.find((phase) => phase.id === 'stable-b')).toBe(phaseB);
+        const reference = after.tasks[0].phases
+          .flatMap((phase) => phase.steps.flatMap((step) => step.content || []))
+          .find((cell) => cell.id === 'code-a');
+        expect(reference).toBe(after.cells[2]);
+        expect(reference?.content).toBe('after');
+        expect(before.cells[2].content).toBe('before');
+      } finally {
+        parse.mockRestore();
+        useStore.setState(original, true);
+      }
     }
-  });
+  );
   it('reuses published outputs while source content changes but normalizes replacement outputs', () => {
     const original = useStore.getState();
     try {
@@ -299,17 +522,15 @@ describe('cell publication identity', () => {
       const outputs = before[1].outputs!;
       const map = vi.spyOn(outputs, 'map');
       try {
-        useStore
-          .getState()
-          .setCells([
-            before[0],
-            {
-              ...before[1],
-              type: 'markdown',
-              content: '```python\nprint(2)\n```',
-              metadata: { editorMode: 'source' },
-            },
-          ]);
+        useStore.getState().setCells([
+          before[0],
+          {
+            ...before[1],
+            type: 'markdown',
+            content: '```python\nprint(2)\n```',
+            metadata: { editorMode: 'source' },
+          },
+        ]);
         expect(useStore.getState().cells[1].outputs).toBe(outputs);
         expect(map).not.toHaveBeenCalled();
       } finally {
@@ -457,38 +678,43 @@ describe('cell publication identity', () => {
       useStore.setState(original, true);
     }
   });
-  it.each(['code', 'markdown'] as const)('refreshes %s body references without rebuilding tasks or resetting progress', (type) => {
-    const original = useStore.getState();
-    const parse = vi.spyOn(markdownParser, 'parseMarkdownCells');
-    try {
-      useStore.getState().setCells([
-        { id: 'title', type: 'markdown', content: '# Notebook', outputs: [] },
-        { id: 'code', type, content: 'before', outputs: [] },
-      ]);
-      const tasks = useStore.getState().tasks.map((task) => ({
-        ...task,
-        phases: task.phases.map((phase) => ({
-          ...phase,
-          status: 'running' as const,
-          steps: phase.steps.map((step) => ({ ...step, status: 'completed' as const })),
-        })),
-      }));
-      useStore.setState({ tasks });
-      parse.mockClear();
-      useStore.getState().updateCell('code', 'after');
-      expect(parse).not.toHaveBeenCalled();
-      const phase = useStore.getState().tasks[0].phases[0];
-      expect(phase.status).toBe('running');
-      expect(phase.steps[0].status).toBe('completed');
-      expect(phase.steps[0].content?.find((cell) => cell.id === 'code')?.content).toBe('after');
-      expect(phase.steps[0].content?.find((cell) => cell.id === 'code')).toBe(useStore.getState().cells[1]);
-      expect(useStore.getState().tasks[0]).not.toHaveProperty('introPhase');
-      expect(phase).not.toHaveProperty('currentIntroStep');
-    } finally {
-      parse.mockRestore();
-      useStore.setState(original, true);
+  it.each(['code', 'markdown'] as const)(
+    'refreshes %s body references without rebuilding tasks or resetting progress',
+    (type) => {
+      const original = useStore.getState();
+      const parse = vi.spyOn(markdownParser, 'parseMarkdownCells');
+      try {
+        useStore.getState().setCells([
+          { id: 'title', type: 'markdown', content: '# Notebook', outputs: [] },
+          { id: 'code', type, content: 'before', outputs: [] },
+        ]);
+        const tasks = useStore.getState().tasks.map((task) => ({
+          ...task,
+          phases: task.phases.map((phase) => ({
+            ...phase,
+            status: 'running' as const,
+            steps: phase.steps.map((step) => ({ ...step, status: 'completed' as const })),
+          })),
+        }));
+        useStore.setState({ tasks });
+        parse.mockClear();
+        useStore.getState().updateCell('code', 'after');
+        expect(parse).not.toHaveBeenCalled();
+        const phase = useStore.getState().tasks[0].phases[0];
+        expect(phase.status).toBe('running');
+        expect(phase.steps[0].status).toBe('completed');
+        expect(phase.steps[0].content?.find((cell) => cell.id === 'code')?.content).toBe('after');
+        expect(phase.steps[0].content?.find((cell) => cell.id === 'code')).toBe(
+          useStore.getState().cells[1]
+        );
+        expect(useStore.getState().tasks[0]).not.toHaveProperty('introPhase');
+        expect(phase).not.toHaveProperty('currentIntroStep');
+      } finally {
+        parse.mockRestore();
+        useStore.setState(original, true);
+      }
     }
-  });
+  );
   it('does not republish cells or derived tasks for unchanged or missing content updates', () => {
     const original = useStore.getState();
     try {

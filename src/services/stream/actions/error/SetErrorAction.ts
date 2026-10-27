@@ -1,3 +1,4 @@
+import { CapturedQAEvent } from '../../CapturedQAEvent';
 /**
  * Set Error Action - Handles set_error stream type
  * Sets global error state and records to agent memory
@@ -14,33 +15,18 @@ export class SetErrorAction extends StreamAction {
     const details = payload?.details;
 
     if (error) {
-      // Set global error state
-      const state = useStore.getState();
-      state.setError(error);
+      const captured = new CapturedQAEvent(
+        { type: 'error', content: error, details, agent: 'system' },
+        payload.QId
+      );
+      useStore.getState().setError(error);
 
-      // Show error toast
       await showToast({
         message: error,
         type: 'error',
       });
 
-      // Record to agent memory
-      try {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        const agentState = useAIAgentStore.getState();
-        const runningQA = agentState.qaList.find((q: any) => q.onProcess) || agentState.qaList[0];
-
-        if (runningQA) {
-          agentState.addToolCallToQA(runningQA.id, {
-            type: 'error',
-            content: error,
-            details: details,
-            agent: 'system',
-          });
-        }
-      } catch (err) {
-        console.error('Failed to record error to agent memory:', err);
-      }
+      captured.record();
 
       console.error('[SetError]', error, details);
     }

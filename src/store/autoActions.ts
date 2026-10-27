@@ -12,19 +12,10 @@
 
 import useOperatorStore from '@Store/operatorStore';
 import useStore from '@Store/notebookStore';
-import useCodeStore from '@Store/codeStore';
+import { CodeOutputSubmissionService } from '@Services/notebook/CodeOutputSubmissionService';
+export type { CodeOutputPayload } from '@Services/notebook/CodeOutputSubmissionService';
 import type { Operation } from '@Store/models/operation';
 import { storeLog } from '@Utils/logger';
-
-/**
- * 代码输出操作载荷接口
- */
-export interface CodeOutputPayload {
-  executeResult: any[];
-  executeCode: string;
-  cellId: string;
-  description?: string;
-}
 
 /**
  * 代码错误调试操作载荷接口
@@ -42,40 +33,7 @@ export interface CodeErrorPayload {
  * @deprecated Use SendCodeOutputAction instead
  */
 export const sendCurrentCellExecuteCodeResult = (): void => {
-  const currentCell = useStore.getState().getCurrentCell();
-  const notebookId = useStore.getState().notebookId;
-
-  if (!currentCell) {
-    storeLog.warn('No current cell found, cannot send execute code result');
-    return;
-  }
-
-  if (currentCell.type !== 'code') {
-    storeLog.warn('Current cell is not a code cell, cannot send execute code result', {
-      cellType: currentCell.type,
-    });
-    return;
-  }
-
-  const executeResult = currentCell.outputs;
-
-  if (!executeResult) {
-    storeLog.warn('No execute result found, executing cell first', { cellId: currentCell.id });
-    useCodeStore.getState().executeCell(currentCell.id);
-    return;
-  }
-
-  const operation: Operation = {
-    type: 'code_output',
-    payload: {
-      executeResult: executeResult,
-      executeCode: currentCell.content,
-      cellId: currentCell.id,
-      description: currentCell.description,
-    } as CodeOutputPayload,
-  };
-
-  useOperatorStore.getState().sendOperation(notebookId, operation);
+  void CodeOutputSubmissionService.submitCurrentCell();
 };
 
 /**

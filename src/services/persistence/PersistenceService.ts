@@ -5,14 +5,20 @@ import {
   ITabRepository,
   ISplitFileRepository,
   IStorageProvider,
+  IStorageMaintenanceRepository,
+  INotebookRecoveryRepository,
 } from './interfaces';
 import { IndexedDBStorageProvider } from './providers/IndexedDBStorageProvider';
 import { NotebookRepository } from './repositories/NotebookRepository';
 import { FileRepository } from './repositories/FileRepository';
 import { TabRepository } from './repositories/TabRepository';
+import { StorageMaintenanceRepository } from './repositories/StorageMaintenanceRepository';
 import { SplitFileRepository } from './repositories/SplitFileRepository';
+import { NotebookRecoveryRepository } from './repositories/NotebookRecoveryRepository';
 
 export class PersistenceService implements IPersistenceService {
+  public recovery: INotebookRecoveryRepository;
+  public maintenance: IStorageMaintenanceRepository;
   public notebooks: INotebookRepository;
   public files: IFileRepository;
   public tabs: ITabRepository;
@@ -21,6 +27,8 @@ export class PersistenceService implements IPersistenceService {
 
   constructor() {
     this.storage = new IndexedDBStorageProvider();
+    this.recovery = new NotebookRecoveryRepository(this.storage);
+    this.maintenance = new StorageMaintenanceRepository(this.storage);
     this.notebooks = new NotebookRepository(this.storage);
     this.files = new FileRepository(this.storage);
     this.tabs = new TabRepository(this.storage);

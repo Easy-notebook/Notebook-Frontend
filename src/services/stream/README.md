@@ -79,6 +79,18 @@ await manager.startPolling({ taskId, uniqueIdentifier, commandId, prompt });
 manager.stopPolling(taskId);
 ```
 
+Each task owns a `VideoPollingSession` with `waiting → requesting → waiting/stopped`
+transitions. Requests are serialized: the next delay starts after the current operation
+settles, so slow responses cannot overlap. The default is 60 attempts with a 10-second
+delay between attempts, plus request duration. The final response is processed before
+timeout is applied; a completed/failed status that stops polling wins over timeout.
+
+Sessions capture the starting notebook identity and recheck ownership before dispatch
+and after asynchronous boundaries. Stop/replacement invalidates pending continuations;
+old results cannot remove a replacement or update a different notebook's timeout state.
+Stopping does not abort an operation already dispatched through the operator store.
+Positive integer attempt limits and finite nonnegative delays are required.
+
 #### QAStreamManager
 ```typescript
 // Replaces global lastStreamingQaId
@@ -297,3 +309,20 @@ export const handleStreamResponse = async (data, showToast) => { ... }
 - [Workflow Actions](../../components/Scenario/Workflow/actions/README.md)
 - [Service Layer Architecture](../README.md)
 - [Agent Memory Service](../agentMemoryService.ts)
+
+## Action ownership
+
+The production catalog registers one concrete handler class per stream action name.
+Registering the same class again is idempotent; registering a different class under an
+occupied name throws without changing the existing handler. Cell selection belongs to
+`cell`, phase navigation to `phase`, and pagination to `view`. Unreferenced alternate
+handlers have been removed so imports cannot silently select a different implementation.
+`update_current_step_index` uses the existing `stepIndex` payload emitted by CLI commands.
+Indexes must be nonnegative safe integers; missing, malformed, fractional and non-finite
+values fail before changing notebook selection. Positional inputs use the same value parser
+as flags, so numeric prefixes are never silently truncated.
+
+`open_link_in_split` uses `previewFileInSplit` for notebook paths and waits for an actual
+loaded file before reporting success. External HTTP(S) links follow the editor convention
+and open in a separate tab. Other URL schemes are rejected. File requests use the command
+context notebook, then the payload notebook, then the current notebook captured at admission.

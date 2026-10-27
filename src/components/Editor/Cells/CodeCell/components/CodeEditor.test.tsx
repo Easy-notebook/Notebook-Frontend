@@ -26,6 +26,31 @@ vi.mock('@uiw/react-codemirror', () => ({
 import { CodeEditor } from './CodeEditor';
 
 describe('CodeEditor theme', () => {
+  it.each(['isExecuting', 'dslcMode'] as const)(
+    'disconnects mutations while %s is active',
+    (mode) => {
+      const props = {
+        cell: { id: 'code', type: 'code', content: '', language: 'python' },
+        isExecuting: false,
+        dslcMode: false,
+        onChange: vi.fn(),
+        onKeyDown: vi.fn(),
+        codeBlockWrapperRef: { current: null },
+        onContentHeightChange: vi.fn(),
+      } as unknown as CodeEditorProps;
+      const view = render(<CodeEditor {...props} />);
+      const node = view.getByTestId('code-mirror-theme');
+      view.rerender(<CodeEditor {...props} {...{ [mode]: true }} />);
+      expect(node.getAttribute('data-readonly')).toBe('true');
+      expect(node.getAttribute('data-change')).toBe('false');
+      expect(node.getAttribute('data-keydown')).toBe('false');
+      view.rerender(<CodeEditor {...props} />);
+      expect(node.getAttribute('data-readonly')).toBe('false');
+      expect(node.getAttribute('data-change')).toBe('true');
+      expect(node.getAttribute('data-keydown')).toBe('true');
+      view.unmount();
+    }
+  );
   it('reacts to notebook read-only transitions and removes mutation callbacks', () => {
     const props = {
       cell: { id: 'code', type: 'code', content: 'print(1)', language: 'python' },
@@ -33,6 +58,8 @@ describe('CodeEditor theme', () => {
       dslcMode: false,
       onChange: vi.fn(),
       onKeyDown: vi.fn(),
+      codeBlockWrapperRef: { current: null },
+      onContentHeightChange: vi.fn(),
     } as unknown as CodeEditorProps;
     const view = render(
       <EditorReadOnlyContext.Provider value={false}>
@@ -69,6 +96,8 @@ describe('CodeEditor theme', () => {
       isExpanded: true,
       isHovering: false,
       onHoverChange: vi.fn(),
+      codeBlockWrapperRef: { current: null },
+      onContentHeightChange: vi.fn(),
     } as unknown as CodeEditorProps;
 
     themeState.resolvedTheme = 'light';

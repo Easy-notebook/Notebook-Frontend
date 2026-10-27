@@ -48,10 +48,7 @@ export const useNotebookExport = () => {
   }, [notebookId, cells, tasks, toast, t]);
 
   // Get other export handlers
-  const { exportDocx, exportPdf, exportMarkdown } = createExportHandlers(
-    cells as any,
-    tasks as any
-  );
+  const { exportDocx, exportPdf, exportMarkdown } = createExportHandlers(cells, tasks);
 
   return {
     handleExportJson,

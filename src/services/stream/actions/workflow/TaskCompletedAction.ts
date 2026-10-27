@@ -1,3 +1,4 @@
+import { CapturedQAEvent } from '../../CapturedQAEvent';
 /**
  * Task Completed Action - Handles task_completed stream type
  * Notifies when a task is successfully completed
@@ -15,28 +16,17 @@ export class TaskCompletedAction extends StreamAction {
     if (taskName) {
       console.log(`[TaskCompleted] ${taskName}`, result);
 
+      const captured = new CapturedQAEvent(
+        { type: 'task-completed', content: taskName, agent: 'task-manager', result },
+        payload.QId
+      );
+
       await showToast({
         message: `任务完成: ${taskName}`,
         type: 'success',
       });
 
-      // Record to agent memory
-      try {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        const state = useAIAgentStore.getState();
-        const runningQA = state.qaList.find((q: any) => q.onProcess) || state.qaList[0];
-
-        if (runningQA) {
-          state.addToolCallToQA(runningQA.id, {
-            type: 'task-completed',
-            content: taskName,
-            agent: 'task-manager',
-            result: result,
-          });
-        }
-      } catch (error) {
-        console.error('Failed to record task completion:', error);
-      }
+      captured.record();
     }
   }
 }

@@ -6,7 +6,11 @@
 import type { Cell } from '@Store/models';
 import { convertMarkdownToHtml } from './markdownConverters';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
-import { formatCodeFence, replaceFencedCode, standaloneFence } from '@Utils/markdown/fencedMarkdown';
+import {
+  formatCodeFence,
+  replaceFencedCode,
+  standaloneFence,
+} from '@Utils/markdown/fencedMarkdown';
 import { codeCellFromAttributes } from './codeCellAttributes';
 import { parseSourceCellType } from './sourceCellAttributes';
 import { encodeTableCode, escapeHtml } from './inlineMarkdown';
@@ -99,6 +103,8 @@ export function convertCellsToHtml(cells: Cell[], includeDocumentFrame = true) {
 
       // Generation state is store-owned and observed directly by ImageView.
       return `<div data-type="image-cell" data-cell-id="${escapeHtml(cell.id)}"><div data-type="markdown-image" data-cell-id="${escapeHtml(cell.id)}" data-src="${escapeHtml(parsedSrc)}" data-alt="${escapeHtml(parsedAlt)}" data-markdown="${escapeHtml(markdownContent)}" data-display-mode="true"></div></div>`;
+    } else if (cell.type === 'agent') {
+      return `<div data-type="agent-cell" data-cell-id="${cellId}"></div>`;
     } else if (cell.type === 'thinking') {
       // thinking cell转换为HTML
       if (DEBUG) console.log(`转换AI思考单元格 ${index}: ID=${cell.id}`);
@@ -225,7 +231,7 @@ export function extractTextFromNode(node: any, options?: MarkdownSerializationOp
         .join('\n\n');
       return inner
         .split('\n')
-        .map((line: string) => line.length === 0 ? '>' : `> ${line}`)
+        .map((line: string) => (line.length === 0 ? '>' : `> ${line}`))
         .join('\n');
     }
 
@@ -300,10 +306,12 @@ export function serializeMarkdownBlock(node: any, options?: MarkdownSerializatio
     const source =
       original && original.code.replace(/\r\n?/g, '\n') === code.replace(/\r\n?/g, '\n')
         ? original.source
-        : original ? replaceFencedCode(original, code) : formatCodeFence(
-            code,
-            node.type === 'mermaidBlock' ? 'mermaid' : node.attrs?.language || ''
-          );
+        : original
+          ? replaceFencedCode(original, code)
+          : formatCodeFence(
+              code,
+              node.type === 'mermaidBlock' ? 'mermaid' : node.attrs?.language || ''
+            );
     return options?.transformFence ? options.transformFence(node, source) : source;
   }
   if (node.type === 'heading') {
@@ -372,6 +380,7 @@ const cellNodeTypes = new Set([
   'executableCodeBlock',
   'rawBlock',
   'thinkingCell',
+  'agentCell',
   'fileAttachment',
 ]);
 
@@ -492,6 +501,15 @@ function projectJsonToCells(docJson: any): Cell[] {
         outputs: [],
         enableEdit: true,
       } as any);
+    } else if (node.type === 'agentCell') {
+      flushMarkdownContent();
+      newCells.push({
+        id: node.attrs?.cellId || generateCellId(),
+        type: 'agent',
+        content: '',
+        outputs: [],
+        enableEdit: true,
+      });
     } else if (node.type === 'thinkingCell') {
       // 处理AI思考单元格
       flushMarkdownContent();

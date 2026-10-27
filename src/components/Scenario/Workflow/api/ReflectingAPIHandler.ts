@@ -1,24 +1,21 @@
 /** Reflecting API Handler - Calls VDSAgents /reflecting endpoint */
 import { BaseAPIHandler } from './BaseAPIHandler';
 import { WorkflowState } from '../observation/WorkflowState';
-import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 
 export class ReflectingAPIHandler extends BaseAPIHandler {
   async *call(
     state: WorkflowState,
     stageId?: string,
     stepId?: string,
-    kwargs?: Record<string, any>
+    kwargs?: Record<string, any>,
+    signal?: AbortSignal
   ): AsyncIterableIterator<any> {
+    signal?.throwIfAborted();
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(state);
     }
 
-    // Get latest notebook state directly from notebookStore
-    const latestNotebook = globalUpdateInterface.getNotebookState();
-
-    // Update state with latest notebook data
-    state.state.notebook.update(latestNotebook);
+    const latestNotebook = await this.synchronizeNotebook(state, signal);
 
     // Log detailed notebook and effects info for debugging
     console.log('[ReflectingAPI] Injected latest notebook data:', {
@@ -56,11 +53,12 @@ export class ReflectingAPIHandler extends BaseAPIHandler {
       let actionCount = 0;
 
       // Call WorkflowAPIClient's callReflectingAPI method
-      const iterator = this.apiClient.callReflectingAPI(state.toJSON());
+      const iterator = this.apiClient.callReflectingAPI(state.toJSON(), signal);
 
       for await (const action of iterator) {
+        signal?.throwIfAborted();
         actionCount++;
-        console.log(`[ReflectingAPI] Action ${actionCount}: ${action.type || 'unknown'}`);
+        console.log(`[ReflectingAPI] Action ${actionCount}`);
         yield action;
       }
 

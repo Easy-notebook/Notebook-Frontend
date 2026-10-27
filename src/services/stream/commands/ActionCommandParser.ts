@@ -12,6 +12,7 @@
  *   /update_view_mode --help
  */
 
+import { describeError } from '@Utils/errors';
 import { getStreamActionClass, getAllStreamActionTypes } from '../actions/base';
 import type { StreamActionContext } from '../types';
 
@@ -170,7 +171,7 @@ export class ActionCommandParser {
         break;
 
       case 'update_current_step_index':
-        if (args[0]) payload.stepIndex = parseInt(args[0], 10);
+        if (args[0]) payload.stepIndex = this.parseValue(args[0]);
         break;
 
       case 'set_current_cell':
@@ -191,7 +192,6 @@ export class ActionCommandParser {
         break;
 
       case 'addCell2EndWithContent':
-      case 'add_cell':
         // AddCellAction expects: type, description (or content), metadata
         // Keep type and content/description at top level, don't nest in cell object
         if (!payload.description && payload.content) {
@@ -202,6 +202,18 @@ export class ActionCommandParser {
         }
         if (!payload.type) {
           payload.type = 'markdown'; // Default type
+        }
+        break;
+
+      case 'add_cell':
+        if (payload.cell === undefined) {
+          payload.cell = {
+            type: payload.type ?? 'markdown',
+            content: payload.content ?? payload.description ?? args[0] ?? '',
+            id: payload.id ?? payload.cellId,
+            metadata: payload.metadata,
+            language: payload.language,
+          };
         }
         break;
 
@@ -600,8 +612,9 @@ Examples:
       // Create full context
       const fullContext: StreamActionContext = {
         payload,
+        signal: context.signal,
         showToast: context.showToast || (async () => {}),
-        notebookId: context.notebookId || '',
+        notebookId: context.notebookId,
         currentCellId: context.currentCellId,
         viewMode: context.viewMode,
         currentPhaseId: context.currentPhaseId,
@@ -609,20 +622,22 @@ Examples:
       };
 
       // Execute the action
+      context.signal?.throwIfAborted();
       const actionInstance = new ActionClass();
       await actionInstance.execute(fullContext);
+      context.signal?.throwIfAborted();
 
       return {
         success: true,
         message: `✓ Executed: /${actionType}`,
         actionType,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error(`[ActionCommand] Error executing ${actionType}:`, error);
       return {
         success: false,
         message: `Failed to execute /${actionType}`,
-        error: error.message || String(error),
+        error: describeError(error),
         actionType,
       };
     }
@@ -705,6 +720,6 @@ Tips:
 
     // Check if it's a registered action (try both original and normalized)
     const ActionClass = getStreamActionClass(actionType) || getStreamActionClass(normalized);
-    return ActionClass !== null;
+    return ActionClass !== undefined;
   }
 }

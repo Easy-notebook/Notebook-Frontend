@@ -27,7 +27,8 @@ export class StartStepHandler extends BaseTransitionHandler {
     return false;
   }
 
-  async apply(state: WorkflowState, r: any): Promise<WorkflowState> {
+  async apply(state: WorkflowState, r: any, signal?: AbortSignal): Promise<WorkflowState> {
+    signal?.throwIfAborted();
     const ns = this.deepCopyState(state);
     let steps = r.steps || [];
 
@@ -79,7 +80,7 @@ export class StartStepHandler extends BaseTransitionHandler {
 
     this.updateLocationCurrent(ns, { step_id: fs.step_id, behavior_id: 'clear' });
     this.updateFSMState(ns, WorkflowStateEnum.STEP_RUNNING, WorkflowEvent.START_STEP);
-    if (fs.title) await this.executeAction('new_step', fs.title);
+    if (fs.title) await this.executeAction('new_step', fs.title, {}, signal);
 
     // Note: Steps data is already stored in ns.observation.location.progress.steps
     // UI components should read directly from stateJSON instead of a separate store

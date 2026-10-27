@@ -7,6 +7,8 @@ vi.mock('@/contexts/ThemeContext', () => ({ useTheme: () => theme }));
 
 import mermaid from 'mermaid';
 import { MermaidPreview } from './MermaidPreview';
+import { mermaidRenderService } from './model/MermaidRenderService';
+import { PreviewEngineLoadError } from './model/PreviewEngineLoadError';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -17,6 +19,91 @@ function deferred<T>() {
 }
 
 describe('MermaidPreview', () => {
+  it('distinguishes engine loading failure from a retryable diagram error', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    vi.useFakeTimers();
+    const request = vi
+      .spyOn(mermaidRenderService, 'render')
+      .mockRejectedValue(new PreviewEngineLoadError('Mermaid', new Error('offline')));
+    try {
+      const view = render(<MermaidPreview source="graph TD; A-->B" />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+      });
+      expect(screen.getByRole('status').textContent).toContain('Save your work, then reload');
+      expect(screen.queryByRole('button', { name: 'Retry diagram' })).toBeNull();
+      request.mockRejectedValue(new Error('Invalid diagram'));
+      view.rerender(<MermaidPreview source="invalid" />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+      });
+      expect(screen.getByRole('button', { name: 'Retry diagram' })).toBeTruthy();
+      expect(screen.getByRole('status').textContent).not.toContain('reload');
+    } finally {
+      request.mockRestore();
+    }
+  });
+  it.each(['', ' \t\r\n', '\u00a0\u2003\ufeff'])(
+    'does not schedule rendering for whitespace-only source %j',
+    async (source) => {
+      vi.stubGlobal('IntersectionObserver', undefined);
+      vi.useFakeTimers();
+      render(<MermaidPreview source={source} />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(screen.getByRole('status').textContent).toContain('Enter Mermaid source');
+      expect(mermaid.render).not.toHaveBeenCalled();
+    }
+  );
+
+  it('passes nonblank source unchanged, including surrounding whitespace', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    vi.useFakeTimers();
+    vi.mocked(mermaid.render).mockResolvedValue({ svg: '<svg></svg>' } as any);
+    const source = '\n  graph TD; A-->B\n\t';
+    render(<MermaidPreview source={source} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+      await vi.dynamicImportSettled();
+    });
+    expect(mermaid.render).toHaveBeenCalledExactlyOnceWith(expect.any(String), source);
+  });
+
+  it('preserves the last diagram height through an error and retry', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    vi.useFakeTimers();
+    const measure = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ height: 360 } as DOMRect);
+    vi.mocked(mermaid.render)
+      .mockResolvedValueOnce({ svg: '<svg></svg>' } as any)
+      .mockRejectedValueOnce(new Error('Invalid diagram'))
+      .mockResolvedValueOnce({ svg: '<svg></svg>' } as any);
+    try {
+      const view = render(<MermaidPreview source="graph TD; A-->B" />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+        await vi.dynamicImportSettled();
+      });
+      view.rerender(<MermaidPreview source="invalid" />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+      });
+      const error = screen.getByRole('status');
+      expect(error.textContent).toContain('Invalid diagram');
+      expect(error.style.minHeight).toBe('360px');
+      fireEvent.click(screen.getByRole('button', { name: 'Retry diagram' }));
+      expect(screen.getByRole('status').style.height).toBe('360px');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(180);
+      });
+      expect(view.container.querySelector('svg')).not.toBeNull();
+      expect((view.container.firstElementChild as HTMLElement).style.minHeight).toBe('');
+    } finally {
+      measure.mockRestore();
+    }
+  });
   it('releases the derived preview when source is cleared', async () => {
     vi.stubGlobal('IntersectionObserver', undefined);
     vi.useFakeTimers();
@@ -31,7 +118,9 @@ describe('MermaidPreview', () => {
     expect(view.container.querySelector('svg')).toBeNull();
     view.rerender(<MermaidPreview source="graph TD; A-->B" />);
     expect(view.container.querySelector('svg')).toBeNull();
-    await act(async () => { await vi.advanceTimersByTimeAsync(180); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+    });
     expect(mermaid.render).toHaveBeenCalledTimes(2);
     expect(view.container.querySelector('svg')).not.toBeNull();
   });

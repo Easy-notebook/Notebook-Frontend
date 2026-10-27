@@ -39,12 +39,14 @@ export type SessionEventType =
   | 'session_ended'
   | 'session_switched'
   | 'session_loaded'
-  | 'session_error';
+  | 'session_error'
+  | 'error_cleared';
 
 /**
  * Session event payload
  */
 export interface SessionEvent {
+  readonly state: Readonly<SessionState>;
   type: SessionEventType;
   status?: SessionStatus;
   notebookId?: string;
@@ -81,6 +83,8 @@ export interface ISessionService {
   switchSession(notebookId: string): Promise<NotebookSession | null>;
 
   // State access
+  getState(): SessionState;
+  clearError(): void;
   getStatus(): SessionStatus;
   getCurrentNotebookId(): string | null;
   isConnected(): boolean;

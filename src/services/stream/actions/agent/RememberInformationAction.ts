@@ -1,39 +1,27 @@
-/**
- * Remember Information Action - Handles remember_information stream type
- * Stores information to agent memory
- */
-
 import { StreamAction, registerStreamAction } from '../base';
 import type { StreamActionContext } from '../../types';
+import { AgentMemoryService } from '@Services/agentMemoryService';
+import useStore from '@Store/notebookStore';
 
 export class RememberInformationAction extends StreamAction {
-  async execute(context: StreamActionContext): Promise<void> {
-    const { payload, showToast } = context;
-    const information = payload?.information;
-    const category = payload?.category || 'general';
-
-    if (information) {
-      console.log(`[RememberInformation] Storing to ${category}:`, information);
-
-      try {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        const state = useAIAgentStore.getState();
-
-        // Store to agent memory
-        state.addMemory({
-          content: information,
-          category: category,
-          timestamp: Date.now(),
-        });
-
-        await showToast({
-          message: '信息已记忆',
-          type: 'success',
-        });
-      } catch (error) {
-        console.error('Failed to store information to memory:', error);
-      }
-    }
+  async execute({ payload, notebookId, showToast }: StreamActionContext): Promise<void> {
+    const information = payload.information;
+    if (information === undefined || information === '') return;
+    if (typeof information !== 'string') throw new Error('Remembered information must be a string');
+    const category = payload.category ?? 'general';
+    if (typeof category !== 'string') throw new Error('Memory category must be a string');
+    const agentType = payload.agentType ?? 'general';
+    if (
+      agentType !== 'general' &&
+      agentType !== 'command' &&
+      agentType !== 'debug' &&
+      agentType !== 'output'
+    )
+      throw new Error('Unsupported memory agent type');
+    const owner = notebookId ?? useStore.getState().notebookId;
+    if (!owner) throw new Error('A notebook is required to remember information');
+    AgentMemoryService.rememberInformation(owner, agentType, information, category);
+    await showToast({ message: '信息已记忆', type: 'success' });
   }
 }
 

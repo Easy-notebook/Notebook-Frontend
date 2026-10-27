@@ -2,7 +2,15 @@
 import { v4 as uuidv4 } from 'uuid';
 import { CellContent } from './CellContent';
 
-export type CellType = 'code' | 'markdown' | 'raw' | 'hybrid' | 'image' | 'thinking' | 'link';
+export type CellType =
+  | 'code'
+  | 'markdown'
+  | 'raw'
+  | 'hybrid'
+  | 'image'
+  | 'thinking'
+  | 'link'
+  | 'agent';
 
 export interface OutputItem {
   type: string;

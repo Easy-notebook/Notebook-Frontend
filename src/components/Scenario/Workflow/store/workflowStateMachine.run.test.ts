@@ -1,0 +1,179 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { createInitialStateJSON, WorkflowState, type StateJSON } from '@Store/models';
+import useNotebookStore from '@Store/notebookStore';
+import { WORKFLOW_MAX_ITERATIONS } from '@/config/workflow';
+import { useWorkflowStateMachine } from './workflowStateMachine';
+const mocks = vi.hoisted(() => ({ step: vi.fn(), navigate: vi.fn() }));
+vi.mock('../core/AsyncStateMachineAdapter', () => ({
+  getAsyncStateMachine: async () => ({ step: mocks.step }),
+}));
+vi.mock('@Store/routeStore', () => ({
+  default: { getState: () => ({ currentView: 'workspace', navigateToWorkspace: mocks.navigate }) },
+}));
+const originalNotebook = useNotebookStore.getState();
+afterEach(() => {
+  useWorkflowStateMachine.getState().reset();
+  useNotebookStore.setState(originalNotebook, true);
+  vi.resetAllMocks();
+});
+function setup() {
+  useWorkflowStateMachine.getState().reset();
+  useNotebookStore.setState({ notebookId: 'a', isExecuting: false });
+}
+function deferred() {
+  let resolve!: (value: [StateJSON, string | null]) => void;
+  const promise = new Promise<[StateJSON, string | null]>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+it('cancels a pending run without letting its eventual result overwrite CANCELED', async () => {
+  setup();
+  const response = deferred();
+  mocks.step.mockReturnValue(response.promise);
+  const pending = useWorkflowStateMachine.getState().startWorkflow('planning');
+  await vi.waitFor(() => expect(mocks.step).toHaveBeenCalledOnce());
+  expect(useNotebookStore.getState().isExecuting).toBe(true);
+  useWorkflowStateMachine.getState().cancel();
+  await pending;
+  expect(useNotebookStore.getState().isExecuting).toBe(false);
+  response.resolve([createInitialStateJSON(), 'old']);
+  await Promise.resolve();
+  expect(useWorkflowStateMachine.getState().currentState).toBe(WorkflowState.CANCELED);
+});
+it('pause stops the old run and resume starts a fresh run from the paused state', async () => {
+  setup();
+  const first = deferred();
+  const resumed = deferred();
+  mocks.step.mockReturnValueOnce(first.promise).mockReturnValueOnce(resumed.promise);
+  const pending = useWorkflowStateMachine.getState().startWorkflow('planning');
+  await vi.waitFor(() => expect(mocks.step).toHaveBeenCalledTimes(1));
+  useWorkflowStateMachine.getState().pause();
+  await pending;
+  expect(mocks.step.mock.calls[0][1].aborted).toBe(true);
+  useWorkflowStateMachine.getState().resume();
+  await vi.waitFor(() => expect(mocks.step).toHaveBeenCalledTimes(2));
+  first.resolve([createInitialStateJSON(), 'late']);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(useNotebookStore.getState().isExecuting).toBe(true);
+  const complete = createInitialStateJSON();
+  complete.state.FSM.state = WorkflowState.COMPLETE;
+  resumed.resolve([complete, 'done']);
+  await vi.waitFor(() => expect(useNotebookStore.getState().isExecuting).toBe(false));
+  expect(useWorkflowStateMachine.getState().currentState).toBe(WorkflowState.COMPLETE);
+});
+it('starts a new planning run after a previous terminal state', async () => {
+  setup();
+  const complete = createInitialStateJSON();
+  complete.state.FSM.state = WorkflowState.COMPLETE;
+  useWorkflowStateMachine.getState().setState(complete);
+  mocks.step.mockResolvedValue([complete, 'done']);
+  await useWorkflowStateMachine.getState().startWorkflow({ user_requirement: 'new request' });
+  expect(mocks.step).toHaveBeenCalledOnce();
+  expect(mocks.step.mock.calls[0][0].state.FSM.state).toBe(WorkflowState.IDLE);
+  expect(mocks.step.mock.calls[0][0].state.variables.user_requirement).toBe('new request');
+});
+
+it('publishes FAILED and releases execution when an owned step rejects', async () => {
+  setup();
+  mocks.step.mockRejectedValue(new Error('planning failed'));
+  await useWorkflowStateMachine.getState().startWorkflow('planning');
+  expect(useWorkflowStateMachine.getState().currentState).toBe(WorkflowState.FAILED);
+  expect(useWorkflowStateMachine.getState().stateJSON.metadata?.error).toBe('planning failed');
+  expect(useNotebookStore.getState().isExecuting).toBe(false);
+  expect(mocks.step).toHaveBeenCalledOnce();
+});
+
+it('publishes an explicit failure when automatic execution exhausts its configured budget', async () => {
+  setup();
+  mocks.step.mockImplementation(async (snapshot: StateJSON) => {
+    snapshot.state.FSM.state = WorkflowState.STEP_RUNNING;
+    return [snapshot, 'continue'];
+  });
+  await useWorkflowStateMachine.getState().startWorkflow('planning');
+  expect(mocks.step).toHaveBeenCalledTimes(WORKFLOW_MAX_ITERATIONS);
+  expect(useWorkflowStateMachine.getState().currentState).toBe(WorkflowState.FAILED);
+  expect(useWorkflowStateMachine.getState().stateJSON.metadata?.error).toBe(
+    `Workflow execution exceeded the step limit (${WORKFLOW_MAX_ITERATIONS})`
+  );
+  expect(useNotebookStore.getState().isExecuting).toBe(false);
+});
+
+it.each(['workflow', 'batch'] as const)(
+  'preserves shared busy state when %s finishes first',
+  async (first) => {
+    setup();
+    const workflowStep = deferred();
+    mocks.step.mockReturnValue(workflowStep.promise);
+    let finishCell!: (result: { success: boolean }) => void;
+    useNotebookStore.setState({
+      cells: [{ id: 'code', type: 'code', content: 'pass' }],
+      clearAllOutputs: vi.fn(),
+      runSingleCell: vi.fn(
+        () =>
+          new Promise<{ success: boolean }>((resolve) => {
+            finishCell = resolve;
+          })
+      ),
+    });
+    const workflow = useWorkflowStateMachine.getState().startWorkflow('planning');
+    await vi.waitFor(() => expect(mocks.step).toHaveBeenCalledOnce());
+    const batch = useNotebookStore.getState().runAllCells();
+    if (first === 'workflow') {
+      useWorkflowStateMachine.getState().cancel();
+      await workflow;
+      expect(useNotebookStore.getState().isExecuting).toBe(true);
+      finishCell({ success: true });
+      await batch;
+    } else {
+      finishCell({ success: true });
+      await batch;
+      expect(useNotebookStore.getState().isExecuting).toBe(true);
+      useWorkflowStateMachine.getState().cancel();
+      await workflow;
+    }
+    expect(useNotebookStore.getState().isExecuting).toBe(false);
+    workflowStep.resolve([createInitialStateJSON(), null]);
+  }
+);
+
+it('releases activity when a subscriber cancels during acquisition', async () => {
+  setup();
+  const stop = useNotebookStore.subscribe((state) => {
+    if (state.isExecuting) useWorkflowStateMachine.getState().cancel();
+  });
+  try {
+    await useWorkflowStateMachine.getState().startWorkflow('planning');
+    expect(useNotebookStore.getState().isExecuting).toBe(false);
+    expect(mocks.step).not.toHaveBeenCalled();
+  } finally {
+    stop();
+  }
+});
+
+it('stops a batch after notebook navigation without clearing the new phase marker', async () => {
+  setup();
+  let finishCell!: (result: { success: boolean }) => void;
+  const runSingleCell = vi.fn(
+    () =>
+      new Promise<{ success: boolean }>((resolve) => {
+        finishCell = resolve;
+      })
+  );
+  useNotebookStore.setState({
+    cells: [
+      { id: 'first', type: 'code', content: 'pass' },
+      { id: 'second', type: 'code', content: 'pass' },
+    ],
+    clearAllOutputs: vi.fn(),
+    runSingleCell,
+  });
+  const pending = useNotebookStore.getState().runAllCells();
+  useNotebookStore.setState({ notebookId: 'b', currentRunningPhaseId: 'new-phase' });
+  finishCell({ success: true });
+  await pending;
+  expect(runSingleCell).toHaveBeenCalledOnce();
+  expect(useNotebookStore.getState().isExecuting).toBe(false);
+  expect(useNotebookStore.getState().currentRunningPhaseId).toBe('new-phase');
+});

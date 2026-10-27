@@ -23,46 +23,46 @@ export class UpdateLocationAction extends ActionBase {
     const { stage_id, step_id, behavior_id, behavior_iteration } = step;
 
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
-    const observation = stateJSON.observation;
+    stateMachine.updateState((stateJSON) => {
+      const observation = stateJSON.observation;
 
-    if (!observation?.location?.current) {
-      console.warn('[UpdateLocationAction] Invalid observation structure');
-      return;
-    }
+      if (!observation?.location?.current) {
+        console.warn('[UpdateLocationAction] Invalid observation structure');
+        return;
+      }
 
-    const current = observation.location.current;
-    let changed = false;
+      const current = observation.location.current;
+      let changed = false;
 
-    if (stage_id !== undefined) {
-      current.stage_id = stage_id;
-      changed = true;
-    }
+      if (stage_id !== undefined) {
+        current.stage_id = stage_id;
+        changed = true;
+      }
 
-    if (step_id !== undefined) {
-      current.step_id = step_id === 'clear' ? null : step_id;
-      changed = true;
-    }
+      if (step_id !== undefined) {
+        current.step_id = step_id === 'clear' ? null : step_id;
+        changed = true;
+      }
 
-    if (behavior_id !== undefined) {
-      current.behavior_id = behavior_id === 'clear' ? null : behavior_id;
-      changed = true;
-    }
+      if (behavior_id !== undefined) {
+        current.behavior_id = behavior_id === 'clear' ? null : behavior_id;
+        changed = true;
+      }
 
-    if (behavior_iteration !== undefined) {
-      current.behavior_iteration = behavior_iteration;
-      changed = true;
-    }
+      if (behavior_iteration !== undefined) {
+        current.behavior_iteration = behavior_iteration;
+        changed = true;
+      }
 
-    if (changed) {
-      console.log(`[UpdateLocationAction] ✅ Updated location`, {
-        stage_id,
-        step_id,
-        behavior_id,
-        behavior_iteration,
-      });
-      stateMachine.setState(stateJSON);
-    }
+      if (changed) {
+        console.log(`[UpdateLocationAction] ✅ Updated location`, {
+          stage_id,
+          step_id,
+          behavior_id,
+          behavior_iteration,
+        });
+      }
+    });
   }
 }
 

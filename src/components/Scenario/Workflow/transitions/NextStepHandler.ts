@@ -16,7 +16,12 @@ export class NextStepHandler extends BaseTransitionHandler {
     return typeof apiResponse === 'object' && apiResponse._auto_trigger === 'NEXT_STEP';
   }
 
-  async apply(state: WorkflowState, _apiResponse: any): Promise<WorkflowState> {
+  async apply(
+    state: WorkflowState,
+    _apiResponse: any,
+    signal?: AbortSignal
+  ): Promise<WorkflowState> {
+    signal?.throwIfAborted();
     const ns = this.deepCopyState(state);
     const p = ns.location.progress;
     const sp = p.steps;
@@ -58,7 +63,7 @@ export class NextStepHandler extends BaseTransitionHandler {
     console.log(`[NextStepHandler] scriptStore available: ${!!this.scriptStore}`);
     if (next.title) {
       console.log(`[NextStepHandler] Executing new_step action for: ${next.title}`);
-      await this.executeAction('new_step', next.title);
+      await this.executeAction('new_step', next.title, {}, signal);
     } else {
       console.warn('[NextStepHandler] Next step has no title, skipping new_step action');
     }

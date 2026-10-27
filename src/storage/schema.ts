@@ -17,6 +17,8 @@ export interface NotebookEntity {
   totalSize: number; // Total size of associated files in bytes
   // Settings
   cacheEnabled: boolean;
+  /** Missing identity is persistent. Automatic cleanup requires explicit evictable ownership. */
+  retention?: 'persistent' | 'evictable';
   maxCacheSize?: number; // Max cache size for this notebook in MB
 }
 
@@ -62,7 +64,7 @@ export interface FileContentEntity {
  * Notebook activity log - tracks notebook usage for cleanup
  */
 export interface NotebookActivityEntity {
-  id: string; // `${notebookId}::${timestamp}`
+  id: string; // Opaque event identity; timestamp is indexed separately
   notebookId: string;
   activityType: 'open' | 'close' | 'file_access' | 'file_create' | 'file_delete';
   filePath?: string; // Optional file path for file-related activities
@@ -73,14 +75,16 @@ export interface NotebookActivityEntity {
 /**
  * Tab state entity - tracks open tabs and active tab per notebook
  */
+export interface TabEntry {
+  id: string;
+  path: string;
+  name: string;
+  type: string;
+}
+
 export interface TabStateEntity {
   notebookId: string; // Primary key
-  tabList: Array<{
-    id: string;
-    path: string;
-    name: string;
-    type: string;
-  }>;
+  tabList: TabEntry[];
   activeTabId: string | null;
   lastUpdated: number;
 }
@@ -98,7 +102,7 @@ export interface SplitFileEntity {
   size: number;
   lastModified: string;
   cachedAt: number;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 /**
@@ -107,7 +111,7 @@ export interface SplitFileEntity {
 export interface StorageConfigEntity {
   id: 'config'; // Single config record
   maxNotebooks: number; // Maximum number of notebooks to cache
-  maxTotalSize: number; // Maximum total cache size in bytes
+  maxTotalSize: number; // UTF-8 content budget; protected documents may exceed it
   maxFileSize: number; // Files larger than this are soft-referenced
   cleanupInterval: number; // Cleanup interval in ms
   retentionPeriod: number; // How long to keep inactive notebooks (ms)
@@ -119,6 +123,8 @@ export interface StorageConfigEntity {
  * Database stores configuration
  */
 export const DB_STORES = {
+  NOTEBOOK_RECOVERY: 'notebook_recovery',
+  MIGRATION_LEDGER: 'migration_ledger',
   NOTEBOOKS: 'notebooks',
   FILES_METADATA: 'files_metadata',
   FILES_CONTENT: 'files_content',

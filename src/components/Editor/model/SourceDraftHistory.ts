@@ -1,6 +1,25 @@
 import { EditorState, Transaction } from '@codemirror/state';
-import { history, isolateHistory, redo, redoDepth, undo, undoDepth } from '@codemirror/commands';
+import {
+  history,
+  historyField,
+  isolateHistory,
+  redo,
+  redoDepth,
+  undo,
+  undoDepth,
+} from '@codemirror/commands';
 import { textReplacement } from '@Utils/textReplacement';
+
+export interface SourceDraftChange {
+  from: number;
+  to: number;
+  insert: string;
+}
+export interface SourceDraftHistoryCheckpoint {
+  version: 1;
+  state: ReturnType<EditorState['toJSON']>;
+}
+const historyFields = { history: historyField };
 
 /** Local source-buffer history. Retains inverse changes, not full snapshots per key. */
 export class SourceDraftHistory {
@@ -11,6 +30,24 @@ export class SourceDraftHistory {
   constructor(source: string) {
     this.value = source;
     this.state = EditorState.create({ doc: source, extensions: [history()] });
+  }
+
+  /** Explicit checkpoint boundary; callers decide when and where to persist it. */
+  checkpoint(): SourceDraftHistoryCheckpoint {
+    return { version: 1, state: this.state.toJSON(historyFields) };
+  }
+
+  static restore(checkpoint: SourceDraftHistoryCheckpoint): SourceDraftHistory {
+    if (!checkpoint || checkpoint.version !== 1)
+      throw new Error('Unsupported source history checkpoint');
+    const state = EditorState.fromJSON(
+      checkpoint.state,
+      { extensions: [history()] },
+      historyFields
+    );
+    const restored = new SourceDraftHistory(state.doc.toString());
+    restored.state = state;
+    return restored;
   }
 
   get source() {
@@ -48,7 +85,15 @@ export class SourceDraftHistory {
   }
 
   /** Known-range commands need no full-buffer prefix/suffix search. */
-  replace(from: number, to: number, insert: string, start: number, end: number, backward = false, isolated = true) {
+  replace(
+    from: number,
+    to: number,
+    insert: string,
+    start: number,
+    end: number,
+    backward = false,
+    isolated = true
+  ) {
     if (this.value.slice(from, to) === insert) {
       this.select(start, end, backward);
       return;
@@ -69,10 +114,14 @@ export class SourceDraftHistory {
   ) {
     const deletion = insert.length === 0 && to > from;
     // Replacing a selection is discrete, including a diff trimmed to its changed interior.
-    const isolate = isolated || (!this.selection.empty &&
-      from >= this.selection.from && to <= this.selection.to);
+    const isolate =
+      isolated || (!this.selection.empty && from >= this.selection.from && to <= this.selection.to);
     const kind = deletion ? 'delete' : 'input';
-    const boundary = isolate ? 'full' : this.previousKind && this.previousKind !== kind ? 'before' : undefined;
+    const boundary = isolate
+      ? 'full'
+      : this.previousKind && this.previousKind !== kind
+        ? 'before'
+        : undefined;
     this.state = this.state.update({
       changes: { from, to, insert },
       selection: { anchor: backward ? end : start, head: backward ? start : end },
@@ -85,13 +134,20 @@ export class SourceDraftHistory {
     this.previousKind = isolate ? undefined : kind;
   }
 
-  step(backward: boolean): boolean {
+  step(backward: boolean, applyChanges?: (changes: readonly SourceDraftChange[]) => void): boolean {
     return (backward ? undo : redo)({
       state: this.state,
       dispatch: (transaction) => {
         this.state = transaction.state;
         this.value = this.state.doc.toString();
         this.previousKind = undefined;
+        if (applyChanges) {
+          const changes: SourceDraftChange[] = [];
+          transaction.changes.iterChanges((from, to, _fromB, _toB, inserted) => {
+            changes.push({ from, to, insert: inserted.toString() });
+          });
+          applyChanges(changes);
+        }
       },
     });
   }

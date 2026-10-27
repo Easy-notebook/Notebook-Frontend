@@ -24,6 +24,19 @@ export const EVENT_TYPES = {
 
 export type EventType = (typeof EVENT_TYPES)[keyof typeof EVENT_TYPES];
 
+export interface QAEvent {
+  type?: string;
+  name?: string;
+  content?: string;
+  arguments?: string;
+  agent?: string;
+  result?: unknown;
+  error?: string;
+  metadata?: Record<string, unknown>;
+  details?: unknown;
+  targetAgent?: string;
+}
+
 export interface QAItem {
   id: string;
   type: 'user' | 'assistant';
@@ -37,20 +50,15 @@ export interface QAItem {
   agent?: string;
   model?: string;
   agentType?: string;
-  toolCalls?: Array<{
-    type?: string;
-    name?: string;
-    content?: string;
-    arguments?: string;
-    agent?: string;
-  }>;
+  toolCalls?: QAEvent[];
   thinkingStartAtMs?: number;
   thinkingEndAtMs?: number;
   // Additional fields for UI attachments
-  attachedFiles?: any[];
+  attachedFiles?: unknown[];
 }
 
 export interface ActionItem {
+  attachedFiles?: unknown[];
   id: string;
   type: EventType;
   timestamp: string;

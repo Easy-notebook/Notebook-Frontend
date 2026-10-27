@@ -51,7 +51,9 @@
   --color-primary-300: rgba(65, 184, 131, 0.3);
 
   /* Layout Variables */
-  --sidebar-mini-width: 64px;
+  --sidebar-mini-width: 48px;
+  --notebook-header-height: 40px;
+  --navigation-icon-size: 18px;
   --sidebar-expanded-width: 384px;
   --sidebar-collapsed-width: 64px;
   --sidebar-right-width: 300px;
@@ -2785,4 +2787,55 @@ vds-cleaning-report {
 .fluent-card:hover {
   box-shadow: var(--shadow-sm);
   transform: translateY(-1px);
+}
+
+/* Shared navigation/action icon size, independent of the root font scale. */
+.app-navigation-icon {
+  width: var(--navigation-icon-size);
+  height: var(--navigation-icon-size);
+  flex-shrink: 0;
+}
+
+/* App chrome: one target size and optical weight across rail and header. */
+.app-navigation-icon {
+  stroke-width: 1.75;
+}
+.app-chrome-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 8px;
+  color: #667085;
+  transition:
+    background-color 150ms,
+    color 150ms;
+}
+.dark .app-chrome-button {
+  color: #a4adbd;
+}
+.app-chrome-button:hover {
+  background: rgb(127 127 127 / 10%);
+  color: #35495e;
+}
+.dark .app-chrome-button:hover {
+  color: #e5e5e7;
+}
+.app-chrome-button[aria-current='page'] {
+  background: rgb(65 184 131 / 10%);
+  color: var(--color-primary);
+}
+.app-chrome-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.app-chrome-button--label {
+  width: auto;
+  gap: 8px;
+  padding-inline: 8px;
+  font-size: 13px;
+  font-weight: 500;
 }

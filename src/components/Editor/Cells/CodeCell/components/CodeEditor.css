@@ -1,0 +1,21 @@
+/* Keep document typography out of the embedded code editor, including tokens. */
+.notebook-code-editor .cm-scroller,
+.notebook-code-editor .cm-scroller *,
+.notebook-code-editor pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 13px;
+  line-height: 22px;
+}
+.notebook-code-editor .cm-content {
+  padding: 8px 0;
+}
+.notebook-code-editor .cm-line {
+  padding: 0 12px;
+}
+.notebook-code-editor .cm-gutterElement {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.notebook-code-editor .cm-scroller {
+  overflow-x: auto;
+}

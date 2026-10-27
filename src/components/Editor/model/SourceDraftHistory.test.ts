@@ -1,5 +1,140 @@
 import { expect, it } from 'vitest';
-import { SourceDraftHistory } from './SourceDraftHistory';
+import { SourceDraftHistory, type SourceDraftChange } from './SourceDraftHistory';
+import { NotebookSourceDocument } from './NotebookSourceDocument';
+
+it('restores a JSON history checkpoint including backward selection and redo branches', () => {
+  const draft = new SourceDraftHistory('中文🐍');
+  draft.select(0, 2, true);
+  draft.replace(0, 2, 'updated', 7, 7);
+  draft.replace(7, 7, '\nnext', 12, 12);
+  draft.step(true);
+  draft.select(0, 7, true);
+  const restored = SourceDraftHistory.restore(JSON.parse(JSON.stringify(draft.checkpoint())));
+  expect(restored.source).toBe(draft.source);
+  expect([restored.selection.anchor, restored.selection.head]).toEqual([7, 0]);
+  expect(restored.canUndo).toBe(true);
+  expect(restored.canRedo).toBe(true);
+  expect(restored.step(false)).toBe(true);
+  expect(restored.source).toBe('updated\nnext🐍');
+  expect(restored.step(true)).toBe(true);
+  expect(restored.step(true)).toBe(true);
+  expect(restored.source).toBe('中文🐍');
+  expect([restored.selection.anchor, restored.selection.head]).toEqual([2, 0]);
+  restored.replace(0, 2, 'branch', 6, 6);
+  expect(restored.canRedo).toBe(false);
+  expect(draft.source).toBe('updated🐍');
+});
+
+it('rejects unsupported checkpoint versions and invalid editor state', () => {
+  expect(() => SourceDraftHistory.restore({ version: 2, state: {} } as any)).toThrow('Unsupported');
+  expect(() => SourceDraftHistory.restore({ version: 1, state: { doc: 12 } })).toThrow();
+});
+
+it('retains a bounded event window and preserves source cell identities across trimming and branching', () => {
+  const document = new NotebookSourceDocument([]);
+  const draft = new SourceDraftHistory(document.source);
+  const identities: string[] = [];
+  for (let index = 0; index < 300; index++) {
+    const previousLength = draft.source.length;
+    const insertion = document.appendCell(draft.source, index % 2 ? 'code' : 'raw');
+    draft.replace(
+      previousLength,
+      previousLength,
+      insertion.source.slice(previousLength),
+      insertion.cursor,
+      insertion.cursor
+    );
+    const decoded = document.decode(draft.source);
+    expect(decoded.map((cell) => cell.id).slice(0, -1)).toEqual(identities);
+    identities.push(decoded[decoded.length - 1].id);
+  }
+  let undone = 0;
+  while (draft.step(true)) {
+    undone++;
+    expect(document.decode(draft.source).map((cell) => cell.id)).toEqual(
+      identities.slice(0, -undone)
+    );
+  }
+  // CodeMirror retains 100 events plus a small amortized-trimming margin.
+  // This bounds event count only, not the bytes retained by a large edit.
+  expect(undone).toBeGreaterThanOrEqual(100);
+  expect(undone).toBeLessThanOrEqual(122);
+  const retainedBase = 300 - undone;
+  for (let index = 1; index <= undone; index++) {
+    expect(draft.step(false)).toBe(true);
+    expect(document.decode(draft.source).map((cell) => cell.id)).toEqual(
+      identities.slice(0, retainedBase + index)
+    );
+  }
+  expect(draft.step(false)).toBe(false);
+  expect(draft.step(true)).toBe(true);
+  const branchBase = draft.source;
+  const insertion = document.appendCell(branchBase, 'markdown');
+  draft.replace(
+    branchBase.length,
+    branchBase.length,
+    insertion.source.slice(branchBase.length),
+    insertion.cursor,
+    insertion.cursor
+  );
+  const branched = document.decode(draft.source);
+  expect(branched.slice(0, -1).map((cell) => cell.id)).toEqual(identities.slice(0, -1));
+  expect(identities).not.toContain(branched[branched.length - 1].id);
+  expect(draft.canRedo).toBe(false);
+  expect(draft.step(true)).toBe(true);
+  expect(draft.source).toBe(branchBase);
+  expect(draft.step(false)).toBe(true);
+  expect(document.decode(draft.source)).toEqual(branched);
+});
+
+it('reconstructs randomized Unicode and multiline history using only published ranges', () => {
+  let seed = 1729;
+  const random = (limit: number) => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed % limit;
+  };
+  const inserts = ['', 'x', '\n', '中文', '🐍', 'first\nsecond'];
+  for (let run = 0; run < 30; run++) {
+    const draft = new SourceDraftHistory('start\n中文🐍\nend');
+    const snapshots = [draft.source];
+    for (let edit = 0; edit < 30; edit++) {
+      const before = draft.source;
+      const from = random(before.length + 1);
+      const to = from + random(before.length - from + 1);
+      const insert = inserts[random(inserts.length)];
+      draft.select(from, to, !!random(2));
+      draft.replace(from, to, insert, from + insert.length, from + insert.length);
+      if (draft.source !== before) snapshots.push(draft.source);
+    }
+    let mirror = draft.source;
+    let calls = 0;
+    const apply = (changes: readonly SourceDraftChange[]) => {
+      calls++;
+      for (let index = changes.length - 1; index >= 0; index--) {
+        const { from, to, insert } = changes[index];
+        expect(from).toBeGreaterThanOrEqual(0);
+        expect(to).toBeLessThanOrEqual(mirror.length);
+        mirror = mirror.slice(0, from) + insert + mirror.slice(to);
+      }
+      expect(mirror).toBe(draft.source);
+      expect(draft.selection.to).toBeLessThanOrEqual(mirror.length);
+    };
+    for (let index = snapshots.length - 2; index >= 0; index--) {
+      expect(draft.step(true, apply)).toBe(true);
+      expect(mirror).toBe(snapshots[index]);
+    }
+    const undoCalls = calls;
+    expect(draft.step(true, apply)).toBe(false);
+    expect(calls).toBe(undoCalls);
+    for (let index = 1; index < snapshots.length; index++) {
+      expect(draft.step(false, apply)).toBe(true);
+      expect(mirror).toBe(snapshots[index]);
+    }
+    expect(calls).toBe(undoCalls * 2);
+    expect(draft.step(false, apply)).toBe(false);
+    expect(calls).toBe(undoCalls * 2);
+  }
+});
 
 it('does not split typing for unchanged selection notifications or record caret-only undo', () => {
   const draft = new SourceDraftHistory('a');

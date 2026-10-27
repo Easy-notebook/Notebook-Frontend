@@ -3,7 +3,11 @@ import { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { Editor } from '@tiptap/core';
 import type { Cell } from '@Store/models';
 import { getTipTapExtensions } from '../config/extensions';
-import { convertCellsToHtml, convertEditorStateToCells, serializeMarkdownBlock } from '../../utils/cellConverters';
+import {
+  convertCellsToHtml,
+  convertEditorStateToCells,
+  serializeMarkdownBlock,
+} from '../../utils/cellConverters';
 import {
   breakCodeBlockFence,
   breakNestedCodeFence,
@@ -37,12 +41,76 @@ function create(cell: Cell) {
 afterEach(() => editor?.destroy());
 
 describe('source cell transitions', () => {
+  it.each(['break', 'edit', 'preview'] as const)(
+    'rejects out-of-document positions for %s without dispatch',
+    (action) => {
+      const cell: Cell = { id: 'code', type: 'code', content: 'print(1)', language: 'python' };
+      const oldPosition = create(cell);
+      editor.commands.setContent(convertCellsToHtml([markdown('title', '# x')]));
+      expect(oldPosition).toBeGreaterThan(editor.state.doc.content.size);
+      const before = editor.state;
+      const dispatch = vi.spyOn(editor.view, 'dispatch');
+      for (const pos of [oldPosition, -1, editor.state.doc.content.size, Infinity, NaN, 0.5]) {
+        const transition = () =>
+          action === 'break'
+            ? breakCodeBlockFence(editor, pos, cell)
+            : action === 'edit'
+              ? editCodeBlockSource(editor, pos, cell)
+              : previewMarkdownSource(editor, pos);
+        expect(transition()).toBe(false);
+      }
+      expect(editor.state).toBe(before);
+      expect(dispatch).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['break', 'edit', 'preview', 'markdown'] as const)(
+    'defers the %s source transition while composition owns the editor',
+    (action) => {
+      const cell: Cell = {
+        id: 'composing-source',
+        type: 'code',
+        content: 'print(1)',
+        language: 'python',
+      };
+      const pos = create(action === 'markdown' ? markdown(cell.id, '中文') : cell);
+      if (action === 'preview') expect(editCodeBlockSource(editor, pos, cell)).toBe(true);
+      if (action === 'markdown') editor.commands.setTextSelection(pos + 2);
+      const transition = () =>
+        action === 'break'
+          ? breakCodeBlockFence(editor, pos, cell)
+          : action === 'edit'
+            ? editCodeBlockSource(editor, pos, cell)
+            : action === 'preview'
+              ? previewMarkdownSource(editor, pos)
+              : editSelectedCellSource(editor);
+      const before = editor.state;
+      const dispatch = vi.spyOn(editor.view, 'dispatch');
+      const composition = vi.spyOn(editor.view, 'composing', 'get').mockReturnValue(true);
+      try {
+        expect(transition()).toBe(false);
+        expect(editor.state).toBe(before);
+        expect(dispatch).not.toHaveBeenCalled();
+      } finally {
+        composition.mockRestore();
+        dispatch.mockRestore();
+      }
+      expect(transition()).toBe(true);
+    }
+  );
   it('does not add trailing spaces to empty quoted code lines', () => {
-    expect(serializeMarkdownBlock({
-      type: 'blockquote', content: [{ type: 'fencedCodeBlock',
-        attrs: { language: 'python', source: '```python\n\n```' }, content: [],
-      }],
-    })).toBe('> ```python\n>\n> ```');
+    expect(
+      serializeMarkdownBlock({
+        type: 'blockquote',
+        content: [
+          {
+            type: 'fencedCodeBlock',
+            attrs: { language: 'python', source: '```python\n\n```' },
+            content: [],
+          },
+        ],
+      })
+    ).toBe('> ```python\n>\n> ```');
   });
   it.each([
     '```python\n\n```',
@@ -51,7 +119,7 @@ describe('source cell transitions', () => {
     '~~~~unknown-language\n中文🐍\n~~~~~',
     '> ```python\n>\n> ```',
     '- before\n\n  ~~~python\n\n  ~~~',
-  ])('breaks and repairs edge-case nested fences without losing content: %s', source => {
+  ])('breaks and repairs edge-case nested fences without losing content: %s', (source) => {
     const pos = create(markdown('edge-fence', 'Before\n\n' + source + '\n\nAfter'));
     let codePos = -1;
     editor.state.doc.descendants((node, position) => {
@@ -66,10 +134,12 @@ describe('source cell transitions', () => {
     expect(broken.attrs.cellId).toBe('edge-fence');
     const delimiter = source.includes('~~~') ? '~' : '`';
     const caret = broken.attrs.caret as number;
-    editor.view.dispatch(editor.state.tr.setNodeMarkup(pos, undefined, {
-      ...broken.attrs,
-      source: broken.attrs.source.slice(0, caret) + delimiter + broken.attrs.source.slice(caret),
-    }));
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(pos, undefined, {
+        ...broken.attrs,
+        source: broken.attrs.source.slice(0, caret) + delimiter + broken.attrs.source.slice(caret),
+      })
+    );
     expect(previewMarkdownSource(editor, pos)).toBe(true);
     expect(convertEditorStateToCells(editor)).toEqual(originalCells);
     expect(editor.state.doc.firstChild).toBe(original.firstChild);
@@ -90,11 +160,13 @@ describe('source cell transitions', () => {
     expect(breakNestedCodeFence(editor)).toBe(true);
   });
   it.each(['fencedCodeBlock', 'mermaidBlock'])(
-    'retains original %s wrapper formatting after editing its body', type => {
+    'retains original %s wrapper formatting after editing its body',
+    (type) => {
       const language = type === 'mermaidBlock' ? 'mermaid' : 'python';
       const source = `  ~~~~${language} custom  \r\nold\r\n ~~~~~  \t`;
       const node = {
-        type, attrs: { source, language, code: 'new' },
+        type,
+        attrs: { source, language, code: 'new' },
         content: [{ type: 'text', text: 'new' }],
       };
       expect(serializeMarkdownBlock(node)).toBe(source.replace('old', 'new'));
@@ -177,7 +249,9 @@ describe('source cell transitions', () => {
       };
       expect(editCodeBlockSource(editor, pos, latest)).toBe(true);
       const sourceNode = editor.state.doc.nodeAt(pos)!;
-      expect(sourceNode.attrs.source).toBe(type === 'hybrid' ? latest.content : '````python\n```\nprint(2)\n````');
+      expect(sourceNode.attrs.source).toBe(
+        type === 'hybrid' ? latest.content : '````python\n```\nprint(2)\n````'
+      );
       expect(sourceNode.attrs.caret).toBe(type === 'hybrid' ? 0 : '````python\n'.length);
       const stored = reconcileCells(convertEditorStateToCells(editor), [
         markdown('title', '# Notebook'),
@@ -192,7 +266,11 @@ describe('source cell transitions', () => {
     }
   );
   it('opens and breaks the actual hybrid fence while retaining surrounding prose', () => {
-    const cell: Cell = { id: 'mixed-hybrid', type: 'hybrid', content: 'Before\n\n~~~python\n  x\n~~~\n\nAfter' };
+    const cell: Cell = {
+      id: 'mixed-hybrid',
+      type: 'hybrid',
+      content: 'Before\n\n~~~python\n  x\n~~~\n\nAfter',
+    };
     const pos = create(cell);
     expect(editCodeBlockSource(editor, pos, cell)).toBe(true);
     expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe(cell.content);
@@ -204,24 +282,40 @@ describe('source cell transitions', () => {
     expect(node.attrs.caret).toBe('Before\n\n~~'.length);
     expect(previewMarkdownSource(editor, pos)).toBe(true);
     expect(editor.state.doc.nodeAt(pos)!.attrs.originalType).toBe('hybrid');
-    expect(decodeURIComponent(editor.state.doc.nodeAt(pos)!.attrs.code)).toBe(cell.content.replace('~~~python', '~~python'));
+    expect(decodeURIComponent(editor.state.doc.nodeAt(pos)!.attrs.code)).toBe(
+      cell.content.replace('~~~python', '~~python')
+    );
   });
   it('preserves hybrid language metadata across mixed-source preview', () => {
-    const cell: Cell = { id: 'hybrid-language', type: 'hybrid', language: 'typescript',
-      content: 'Before\n```typescript\nconst x = 1\n```\nAfter' };
+    const cell: Cell = {
+      id: 'hybrid-language',
+      type: 'hybrid',
+      language: 'typescript',
+      content: 'Before\n```typescript\nconst x = 1\n```\nAfter',
+    };
     const pos = create(cell);
     expect(editCodeBlockSource(editor, pos, cell)).toBe(true);
     const sourceCells = reconcileCells(convertEditorStateToCells(editor), [
-      markdown('title', '# Notebook'), cell, markdown('after', 'Untouched'),
+      markdown('title', '# Notebook'),
+      cell,
+      markdown('after', 'Untouched'),
     ]);
     expect(previewMarkdownSource(editor, pos)).toBe(true);
     const restored = reconcileCells(convertEditorStateToCells(editor), sourceCells);
     expect(editor.state.doc.nodeAt(pos)!.attrs.language).toBe('typescript');
-    expect(restored[1]).toMatchObject({ type: 'hybrid', language: 'typescript', content: cell.content });
+    expect(restored[1]).toMatchObject({
+      type: 'hybrid',
+      language: 'typescript',
+      content: cell.content,
+    });
   });
   it('breaks the editable hybrid code fence rather than a preceding Mermaid diagram', () => {
     const diagram = '```mermaid\ngraph TD; A-->B\n```';
-    const cell: Cell = { id: 'diagram-first', type: 'hybrid', content: diagram + '\n\n```python\nx\n```' };
+    const cell: Cell = {
+      id: 'diagram-first',
+      type: 'hybrid',
+      content: diagram + '\n\n```python\nx\n```',
+    };
     const pos = create(cell);
     expect(breakCodeBlockFence(editor, pos, cell)).toBe(true);
     expect(editor.state.doc.nodeAt(pos)!.attrs.source).toBe(diagram + '\n\n``python\nx\n```');

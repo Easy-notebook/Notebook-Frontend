@@ -5,13 +5,13 @@ import useStore from '@Store/notebookStore';
 import { Command, Paperclip, X, FileText } from 'lucide-react';
 import { CommandHintComponent } from './CommandHint';
 import { aiTerminalService } from '@Services/ai-terminal/AITerminalService';
-import { UploadFile } from '@Services/ai-terminal/types';
+import { useAttachmentDraft } from '@Hooks/useAttachmentDraft';
+import { useCommandDraft } from '@Hooks/useCommandDraft';
 
 const CommandInput: React.FC = () => {
   const {
     showCommandInput,
 
-    setIsLoading,
     setActiveView,
     actions,
     qaList,
@@ -29,14 +29,13 @@ const CommandInput: React.FC = () => {
     isRightSidebarCollapsed,
   } = useStore();
 
-  const [input, setInput] = useState('');
-  const modalRef = useRef(null);
-  const textareaRef = useRef(null);
+  const { commandDraft, input, setInput } = useCommandDraft(notebookId);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
-  const [files, setFiles] = useState<UploadFile[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  const { draft, files, isUploading } = useAttachmentDraft(notebookId);
   const [isDragging, setIsDragging] = useState(false);
 
   // 动态调整文本框高度
@@ -74,6 +73,7 @@ const CommandInput: React.FC = () => {
       if (
         isStepMode &&
         action.viewMode === viewMode &&
+        action.cellId !== null &&
         getCurrentStepCellsIDs().includes(action.cellId)
       ) {
         return true;
@@ -108,7 +108,12 @@ const CommandInput: React.FC = () => {
       const isOtherMode = !isStepMode && !isCompleteMode; // dslc, etc.
 
       // Step mode: only show QAs for current step
-      if (isStepMode && qa.viewMode === viewMode && getCurrentStepCellsIDs().includes(qa.cellId)) {
+      if (
+        isStepMode &&
+        qa.viewMode === viewMode &&
+        qa.cellId !== undefined &&
+        getCurrentStepCellsIDs().includes(qa.cellId)
+      ) {
         return true;
       }
 
@@ -139,26 +144,29 @@ const CommandInput: React.FC = () => {
   }, [input, adjustTextareaHeight]);
 
   // File upload handlers
-  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files ?? []);
-    if (!selectedFiles.length) return;
+  const uploadAttachments = useCallback(
+    (selectedFiles: File[]) =>
+      draft.upload(
+        selectedFiles,
+        (selected) => aiTerminalService.uploadFiles(selected),
+        (error) => {
+          console.error('File upload error:', error);
+          alert('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        }
+      ),
+    [draft]
+  );
 
-    setIsUploading(true);
-    try {
-      const validFiles = await aiTerminalService.uploadFiles(selectedFiles);
-      setFiles((prev) => [...prev, ...validFiles]);
-    } catch (err: any) {
-      console.error('File upload error:', err);
-      alert('Upload failed: ' + err.message);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  }, []);
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFiles = Array.from(e.target.files ?? []);
+      e.target.value = '';
+      void uploadAttachments(selectedFiles);
+    },
+    [uploadAttachments]
+  );
 
-  const handleRemoveFile = useCallback((fileId: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== fileId));
-  }, []);
+  const handleRemoveFile = draft.remove;
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -181,28 +189,23 @@ const CommandInput: React.FC = () => {
       const droppedFiles = Array.from(e.dataTransfer.files);
       if (!droppedFiles.length) return;
 
-      // Simulate file input change
-      const fakeEvent = {
-        target: { files: droppedFiles },
-      } as any;
-      await handleFileChange(fakeEvent);
+      await uploadAttachments(droppedFiles);
     },
-    [handleFileChange]
+    [uploadAttachments]
   );
 
   const handleSubmit = useCallback(
     async (command: string) => {
+      const submission = draft.beginSubmission();
       try {
-        setIsLoading(true);
-
         // Only open sidebar if it is currently closed and not a command
         if (!command.startsWith('/') && isRightSidebarCollapsed) {
           setIsRightSidebarCollapsed(false);
         }
 
-        await aiTerminalService.processCommand(
+        const accepted = await aiTerminalService.processCommand(
           command,
-          files,
+          submission.files,
           {
             notebookId: notebookId!,
             currentCellId,
@@ -217,16 +220,14 @@ const CommandInput: React.FC = () => {
             showToast: async (options) => {
               console.log(`[Toast ${options.type}]`, options.message);
             },
-            setActiveView: (view) => setActiveView(view as any),
+            setActiveView,
           }
         );
 
-        // Clear files after successful submit
-        setFiles([]);
-      } catch (error) {
-        console.error('Error in handleSubmit:', error);
+        submission.finish(accepted);
+        return accepted;
       } finally {
-        setTimeout(() => setIsLoading(false), 500);
+        submission.finish(false);
       }
     },
     [
@@ -235,28 +236,26 @@ const CommandInput: React.FC = () => {
       currentPhaseId,
       currentStepIndex,
       currentCellId,
-      setIsLoading,
       setActiveView,
       actionsToShow,
       qasToShow,
       getCurrentViewCells,
-      files,
+      draft,
       isRightSidebarCollapsed,
       setIsRightSidebarCollapsed,
     ]
   );
 
   const handleKeyDown = useCallback(
-    (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         if (input.trim()) {
-          handleSubmit(input.trim());
-          setInput('');
+          void commandDraft.submit(handleSubmit, (error) => console.error('Submit error:', error));
         }
       }
     },
-    [input, handleSubmit, setInput]
+    [input, handleSubmit, commandDraft]
   );
 
   // Auto focus input when modal opens

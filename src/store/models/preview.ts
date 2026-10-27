@@ -3,8 +3,15 @@ import type { FileObject as StorageFileObject, FileType, ActivePreviewMode } fro
 
 export type PreviewMode = 'notebook' | 'file';
 
+/** Metadata from a file tree, link, or browser File; no blob methods are required. */
+export interface PreviewFileDescriptor {
+  name: string;
+  path?: string;
+  type?: string;
+}
+
 export interface FileMetadata {
-  file: File;
+  file?: PreviewFileDescriptor;
   lastModified?: string | number;
 }
 

@@ -20,9 +20,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 // External dependencies
 import useNotebookStore from '@Store/notebookStore';
-import useCodeStore from '@Store/codeStore';
-import { useAIPlanningContextStore } from './aiPlanningContext';
-import { WorkflowState } from '../observation/WorkflowState';
+import { ScriptCodeExecution, scriptCodeResultValue } from './ScriptCodeExecution';
+import { NotebookActionScope } from '@/services/notebook/NotebookActionScope';
 
 // ==============================================
 // Types
@@ -36,7 +35,7 @@ interface ScriptStoreState {
 }
 
 interface ScriptStoreActions {
-  execAction: (step: ExecutionStep) => Promise<any>;
+  execAction: (step: ExecutionStep, signal?: AbortSignal) => Promise<any>;
 
   // Specialized operations (called by action handlers)
   addCell: (
@@ -48,7 +47,12 @@ interface ScriptStoreActions {
   updateLastText: (text: string) => void;
   finishThinking: () => void;
   setEffectAsThinking: (thinkingText?: string) => void;
-  execCodeCell: (codecellId: string, needOutput?: boolean, autoDebug?: boolean) => Promise<any>;
+  execCodeCell: (
+    codecellId: string,
+    needOutput?: boolean,
+    autoDebug?: boolean,
+    signal?: AbortSignal
+  ) => Promise<any>;
   updateTitle: (title: string) => void;
 }
 
@@ -170,93 +174,90 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
   // ==============================================
   // Main Action Executor
   // ==============================================
-  execAction: async (step: ExecutionStep): Promise<any> => {
-    if (!step?.action) {
-      console.error('[ScriptStore] execAction requires step with action property');
-      return;
+  execAction: async (step: ExecutionStep, signal?: AbortSignal): Promise<any> => {
+    signal?.throwIfAborted();
+    if (typeof step?.action !== 'string' || !step.action.trim()) {
+      throw new Error('Action type must be a non-empty string');
     }
-
-    const actionType = step.action;
+    const request = structuredClone(step);
+    const actionType = request.action;
     console.log(`[ScriptStore] Executing action: ${actionType}`);
 
-    // Record action execution to AIAgentStore
-    let actionId: string | null = null;
+    const scope = new NotebookActionScope(signal);
+    signal = scope.signal;
     try {
-      const { useAIAgentStore } = await import('@Store/AIAgentStore');
-      const viewMode = useNotebookStore.getState().viewMode;
-      const currentCellId = useNotebookStore.getState().getCurrentCellId();
+      const notebook = useNotebookStore.getState();
+      const viewMode = notebook.viewMode;
+      const currentCellId = notebook.getCurrentCellId();
+      // Record action execution to AIAgentStore
+      let actionId: string | null = null;
+      try {
+        const { useAIAgentStore } = await import('@Store/AIAgentStore');
+        signal?.throwIfAborted();
 
-      // Format action content with parameters
-      const actionContent = formatActionContent(actionType, step);
+        // Format action content with parameters
+        const actionContent = formatActionContent(actionType, request);
 
-      // Add action to right sidebar
-      useAIAgentStore.getState().addAction({
-        type: 'system_event' as any,
-        content: actionContent,
-        result: '',
-        relatedQAIds: [],
-        cellId: currentCellId,
-        viewMode: viewMode,
-        onProcess: true,
-      });
+        // Add action to right sidebar
+        actionId = useAIAgentStore.getState().addAction({
+          type: 'system_event' as any,
+          content: actionContent,
+          result: '',
+          relatedQAIds: [],
+          cellId: currentCellId,
+          viewMode: viewMode,
+          onProcess: true,
+        });
+      } catch (error) {
+        console.error('[ScriptStore] Failed to record action to sidebar:', error);
+      }
 
-      // Get the action ID (the most recent action)
-      const actions = useAIAgentStore.getState().actions;
-      actionId = actions.length > 0 ? actions[0].id : null;
-    } catch (error) {
-      console.error('[ScriptStore] Failed to record action to sidebar:', error);
-    }
+      try {
+        // Import action registry dynamically to avoid circular dependencies
+        const { getActionClass } = await import('../actions');
 
-    try {
-      // Import action registry dynamically to avoid circular dependencies
-      const { getActionClass } = await import('../actions');
+        signal?.throwIfAborted();
 
-      // Get action class from registry
-      const ActionClass = getActionClass(actionType);
+        // Get action class from registry
+        const ActionClass = getActionClass(actionType);
 
-      if (!ActionClass) {
-        console.warn(`[ScriptStore] Unknown action type: ${actionType}`);
+        if (!ActionClass) throw new Error(`Unknown action type: ${actionType}`);
+
+        // Create action instance with scriptStore reference
+        scope.begin();
+        const action = new ActionClass(get());
+
+        // Execute action
+        const result = await action.execute(request, signal);
+        signal?.throwIfAborted();
+
+        // Update action with result
+        if (actionId) {
+          const { useAIAgentStore } = await import('@Store/AIAgentStore');
+          signal?.throwIfAborted();
+          useAIAgentStore.getState().updateAction(actionId, {
+            onProcess: false,
+            result: formatActionResult(result),
+          });
+        }
+
+        return result;
+      } catch (error) {
+        console.error(`[ScriptStore] Error executing action ${actionType}:`, error);
 
         // Mark action as failed
         if (actionId) {
           const { useAIAgentStore } = await import('@Store/AIAgentStore');
           useAIAgentStore.getState().updateAction(actionId, {
             onProcess: false,
-            result: `Unknown action type: ${actionType}`,
+            result: `Error: ${error instanceof Error ? error.message : String(error)}`,
           });
         }
-        return;
+
+        throw error;
       }
-
-      // Create action instance with scriptStore reference
-      const action = new ActionClass(get());
-
-      // Execute action
-      const result = await action.execute(step);
-
-      // Update action with result
-      if (actionId) {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        useAIAgentStore.getState().updateAction(actionId, {
-          onProcess: false,
-          result: formatActionResult(result),
-        });
-      }
-
-      return result;
-    } catch (error) {
-      console.error(`[ScriptStore] Error executing action ${actionType}:`, error);
-
-      // Mark action as failed
-      if (actionId) {
-        const { useAIAgentStore } = await import('@Store/AIAgentStore');
-        useAIAgentStore.getState().updateAction(actionId, {
-          onProcess: false,
-          result: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        });
-      }
-
-      throw error;
+    } finally {
+      scope.dispose();
     }
   },
 
@@ -332,105 +333,10 @@ export const useScriptStore = create<ScriptStore>((set, get) => ({
     }
   },
 
-  execCodeCell: async (codecellId: string, needOutput = true, autoDebug = false): Promise<any> => {
-    if (!codecellId) return Promise.resolve(false);
-
-    try {
-      const { setCellMode, executeCell } = useCodeStore.getState();
-      if (needOutput) setCellMode(codecellId, 'output_only');
-
-      const result = await executeCell(codecellId);
-
-      // Always update effects with execution results (success or failure)
-      // This ensures error outputs are available for debugging/reflecting
-      const stateMachine = (
-        await import('./workflowStateMachine')
-      ).useWorkflowStateMachine.getState();
-      const stateJSON = stateMachine.stateJSON;
-
-      // Ensure effects.current exists
-      if (!stateJSON.state.effects) {
-        stateJSON.state.effects = { current: [], history: [] };
-      }
-      if (!stateJSON.state.effects.current) {
-        stateJSON.state.effects.current = [];
-      }
-
-      // Get outputs from result or from notebookStore (for error cases)
-      let outputs: any[] = result?.outputs || [];
-      if (!outputs.length && !result?.success) {
-        // If no outputs in result but failed, get from notebookStore
-        const cell = useNotebookStore.getState().cells.find((c) => c.id === codecellId);
-        outputs = cell?.outputs || [];
-      }
-
-      if (outputs.length > 0) {
-        outputs.forEach((item: any) => {
-          // Map ExecutionOutput to Effect
-          const outputType = item.type || 'text';
-          let effectType: 'text' | 'image_url' | 'error' = 'text';
-          let effectContent = item.content || item.text || item.toString();
-
-          if (outputType === 'image') {
-            effectType = 'image_url';
-          } else if (outputType === 'error') {
-            effectType = 'error';
-          }
-
-          // Update AIPlanningContext (Legacy)
-          useAIPlanningContextStore.getState().addEffect(effectContent);
-
-          // Update WorkflowStateMachine (New Architecture)
-          // Use WorkflowState class to ensure safe state updates
-          const workflowState = new WorkflowState(stateJSON);
-          const effects = workflowState.state.effects;
-
-          if (effectType === 'error') {
-            effects.addCurrentEffect({
-              type: 'error',
-              error: {
-                name: 'ExecutionError',
-                message: effectContent,
-                traceback: [],
-              },
-              cell_ref: codecellId,
-            });
-          } else if (effectType === 'image_url') {
-            effects.addCurrentEffect({
-              type: 'image_url',
-              image_url: effectContent,
-              cell_ref: codecellId,
-            });
-          } else {
-            effects.addCurrentEffect({
-              type: 'text',
-              text: effectContent,
-              cell_ref: codecellId,
-            });
-          }
-
-          // Sync state back to store using toJSON() to ensure clean state
-          stateMachine.setState(workflowState.toJSON());
-        });
-
-        console.log(
-          `[ScriptStore] Updated state.effects.current with ${outputs.length} outputs from ${codecellId} (success: ${result?.success})`
-        );
-      }
-
-      if (autoDebug && !result?.success) {
-        setTimeout(() => {
-          useNotebookStore.getState().setCurrentCell(codecellId);
-        }, 1000);
-        return result.error;
-      }
-
-      return result.success ? result.outputs : result.error;
-    } catch (error) {
-      console.error(`[ScriptStore] Error executing cell ${codecellId}:`, error);
-      return Promise.resolve(false);
-    }
-  },
+  execCodeCell: async (codecellId, needOutput = true, autoDebug = false, signal) =>
+    scriptCodeResultValue(
+      await new ScriptCodeExecution(codecellId, signal).run(needOutput, autoDebug)
+    ),
 
   updateTitle: (title: string): void => {
     useNotebookStore.getState().updateTitle(title);

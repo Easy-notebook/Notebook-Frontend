@@ -1,32 +1,28 @@
+import { TabStateRecord } from './TabStateRecord';
 import { ITabRepository, IStorageProvider } from '../interfaces';
-import { TabStateEntity, DB_STORES } from '../../../storage/schema';
+import { TabStateEntity, type TabEntry, DB_STORES } from '../../../storage/schema';
 
 export class TabRepository implements ITabRepository {
   constructor(private storage: IStorageProvider) {}
 
   async saveTabState(
     notebookId: string,
-    tabList: any[],
+    tabList: readonly TabEntry[],
     activeTabId: string | null
   ): Promise<void> {
-    const tabState: TabStateEntity = {
+    const tabState = new TabStateRecord({
       notebookId,
-      tabList: tabList.map((tab) => ({
-        id: tab.id,
-        path: tab.path,
-        name: tab.name,
-        type: tab.type,
-      })),
+      tabList,
       activeTabId,
       lastUpdated: Date.now(),
-    };
+    }).toRecord();
 
     await this.storage.put(DB_STORES.TAB_STATES, tabState);
   }
 
   async getTabState(notebookId: string): Promise<TabStateEntity | null> {
-    const state = await this.storage.get<TabStateEntity>(DB_STORES.TAB_STATES, notebookId);
-    return state || null;
+    const state = await this.storage.get<unknown>(DB_STORES.TAB_STATES, notebookId);
+    return state == null ? null : new TabStateRecord(state, notebookId).toRecord();
   }
 
   async deleteTabState(notebookId: string): Promise<void> {
@@ -34,6 +30,7 @@ export class TabRepository implements ITabRepository {
   }
 
   async getAllTabStates(): Promise<TabStateEntity[]> {
-    return this.storage.getAll<TabStateEntity>(DB_STORES.TAB_STATES);
+    const records = await this.storage.getAll<unknown>(DB_STORES.TAB_STATES);
+    return records.map((record) => new TabStateRecord(record).toRecord());
   }
 }

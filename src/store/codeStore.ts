@@ -2,16 +2,21 @@
 import { create } from 'zustand';
 import useStore from '@Store/notebookStore';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
+import { KernelSession } from '@Services/notebook/KernelSession';
+import { CellStatusPoller } from '@Services/notebook/CellStatusPoller';
 import { CodeExecutionService } from '@Services/notebook/CodeExecutionService';
+import { NativeCellExecution } from '@Services/notebook/NativeCellExecution';
 import { storeLog } from '@Utils/logger';
-import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
+import {
+  CellExecutionSession,
+  type BatchExecutionResult,
+  type BatchExecutionPhase,
+} from '@Services/notebook/CellExecutionSession';
 import {
   DISPLAY_MODES,
   type DisplayMode,
   type CellExecutionState,
   type ExecutionResult,
-  type KernelInitResult,
-  type ExecutionStatus,
 } from '@Store/models';
 
 // Re-export display modes for backward compatibility with UI imports
@@ -24,6 +29,7 @@ export interface CodeStoreState {
   // ========== 全局内核状态 ==========
   isKernelReady: boolean;
   error: string | null;
+  batchExecution: BatchExecutionPhase;
 
   cellExecStates: Record<string, CellExecutionState>;
 
@@ -49,6 +55,11 @@ export interface CodeStoreActions {
   startStatusCheck: (cellId: string) => void;
   cancelCellExecution: (cellId: string) => Promise<ExecutionResult>;
   executeCell: (cellId: string) => Promise<ExecutionResult>;
+  executeCells: (
+    cellIds: readonly string[],
+    beforeCell?: (cellId: string) => void
+  ) => Promise<BatchExecutionResult>;
+  stopBatchExecution: () => void;
 
   // ========== 显示模式管理 ==========
   setCellMode: (cellId: string, mode: DisplayMode) => void;
@@ -73,329 +84,182 @@ export type CodeStore = CodeStoreState & CodeStoreActions;
  * 4) 单个 Cell 执行 / 取消执行方法
  */
 
-const useCodeStore = create<CodeStore>((set, get) => ({
-  // ========== 全局内核状态 ==========
-  isKernelReady: false,
-  error: null,
+const useCodeStore = create<CodeStore>((set, get) => {
+  const kernel = new KernelSession({
+    notebookId: () => useStore.getState().notebookId,
+    ready: () => get().isKernelReady,
+    watch: (listener) =>
+      useStore.subscribe((state, previous) => listener(previous.notebookId, state.notebookId)),
+    create: () => NotebookLifecycleService.initializeNotebook(),
+    restart: (id) => NotebookLifecycleService.restartNotebook(id),
+    adopt: (id) => useStore.getState().setNotebookId(id, { preserveContent: true }),
+    publish: (ready, error) => set({ isKernelReady: ready, error }),
+  });
+  const polling = new CellStatusPoller({
+    notebookId: () => useStore.getState().notebookId,
+    hasCell: (id) => useStore.getState().cells.some((cell) => cell.id === id),
+    executing: (id) => get().getCellExecState(id).isExecuting,
+    executionPending: (id) => execution.isActive(id),
+    watch: (check) => useStore.subscribe(check),
+    status: (notebookId, signal) => CodeExecutionService.getExecutionStatus(notebookId, signal),
+    update: (id, state) => get().setCellExecState(id, state),
+    outputs: (id, outputs) => useStore.getState().updateCellOutputs(id, outputs),
+    error: (cellId, error) =>
+      storeLog.error('Error checking execution status', {
+        cellId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+  });
+  const execution = new CellExecutionSession({
+    notebookId: () => useStore.getState().notebookId,
+    cell: (id) => useStore.getState().cells.find((cell) => cell.id === id),
+    watch: (check) => useStore.subscribe(check),
+    initialize: (language) =>
+      language === 'aal'
+        ? Promise.resolve(useStore.getState().notebookId || false)
+        : get().initializeKernel(),
+    execute: (code, owner, signal, language, cellId) =>
+      language === 'aal'
+        ? new NativeCellExecution(owner, cellId).execute(code, signal)
+        : CodeExecutionService.executeCode(code, owner, signal),
+    cancel: (owner, signal, language) =>
+      language === 'aal'
+        ? Promise.resolve({
+            status: 'error',
+            message:
+              'AAL cells finish within a 10 second worker deadline; server cancellation is unavailable',
+          })
+        : CodeExecutionService.cancelExecution(owner, signal),
+    update: (id, state) => get().setCellExecState(id, state),
+    clear: (id) => useStore.getState().clearCellOutputs(id),
+    outputs: (id, outputs) => useStore.getState().updateCellOutputs(id, outputs),
+    save: () => useStore.getState().triggerAutoSave(),
+    startPolling: (id, language) => {
+      if (language !== 'aal') polling.start(id);
+    },
+    stopPolling: (id) => polling.stop(id),
+    batchState: (batchExecution) => set({ batchExecution }),
+  });
+  return {
+    // ========== 全局内核状态 ==========
+    isKernelReady: false,
+    error: null,
+    batchExecution: 'idle',
 
-  // ========== 每个 Cell 的执行状态 ==========
-  cellExecStates: {},
+    // ========== 每个 Cell 的执行状态 ==========
+    cellExecStates: {},
 
-  // ========== 每个 Cell 的显示模式 ==========
-  cellModes: {},
+    // ========== 每个 Cell 的显示模式 ==========
+    cellModes: {},
 
-  // ========== Actions: 内核相关 ==========
-  setKernelReady: (ready: boolean) => set({ isKernelReady: ready }),
-  setError: (err: string | null) => set({ error: err }),
+    // ========== Actions: 内核相关 ==========
+    setKernelReady: (ready: boolean) => {
+      kernel.invalidate();
+      set({ isKernelReady: ready });
+    },
+    setError: (err: string | null) => set({ error: err }),
 
-  initializeKernel: async (): Promise<string | false> => {
-    if (get().isKernelReady) return useStore.getState().notebookId || false;
+    initializeKernel: () => kernel.initialize(),
+    restartKernel: () => {
+      execution.reset(true);
+      return kernel.restart();
+    },
 
-    const existingId = useStore.getState().notebookId;
-
-    if (existingId) {
-      // If we have an existing ID, assume it's valid or at least we want to keep using it.
-      // Ideally we would check if the session is alive, but for now we trust the state
-      // to avoid creating a new notebook and clearing cells.
-      get().setKernelReady(true);
-      return existingId;
-    }
-
-    try {
-      get().setError(null);
-      const result: KernelInitResult = await NotebookLifecycleService.initializeNotebook();
-      if (result.status === 'ok') {
-        get().setKernelReady(true);
-        if (result.notebook_id) {
-          // Use preserveContent to prevent clearing cells if we are recovering or initializing late
-          await useStore.getState().setNotebookId(result.notebook_id, { preserveContent: true });
-        }
-        return result.notebook_id || '';
-      } else {
-        throw new Error(result.message || '内核初始化失败');
+    // ========== Actions: 每个 Cell 的执行状态管理 ==========
+    initCellExecState: (cellId: string) => {
+      const state = get();
+      if (!state.cellExecStates[cellId]) {
+        set((prev) => ({
+          cellExecStates: {
+            ...prev.cellExecStates,
+            [cellId]: {
+              isExecuting: false,
+              isCancelling: false,
+              elapsedTime: 0,
+              statusCheckInterval: null,
+            },
+          },
+        }));
       }
-    } catch (error: any) {
-      storeLog.error('Kernel initialization error', { error: error.message, stack: error.stack });
-      get().setKernelReady(false);
-      get().setError(error.message);
-      return false;
-    }
-  },
+    },
 
-  restartKernel: async (): Promise<boolean> => {
-    try {
-      get().setError(null);
-      const result: KernelInitResult = await NotebookLifecycleService.restartNotebook(
-        useStore.getState().notebookId || ''
-      );
-      if (result.status === 'ok') {
-        get().setKernelReady(true);
-        return true;
-      } else {
-        throw new Error(result.message || '内核重启失败');
+    getCellExecState: (cellId: string): CellExecutionState => {
+      const execStates = get().cellExecStates;
+      // 如果还没有初始化过，就返回一个默认状态
+      if (!execStates[cellId]) {
+        return {
+          isExecuting: false,
+          isCancelling: false,
+          elapsedTime: 0,
+          statusCheckInterval: null,
+        };
       }
-    } catch (error: any) {
-      storeLog.error('Kernel restart error', { error: error.message, stack: error.stack });
-      get().setKernelReady(false);
-      get().setError(error.message);
-      return false;
-    }
-  },
+      return execStates[cellId];
+    },
 
-  // ========== Actions: 每个 Cell 的执行状态管理 ==========
-  initCellExecState: (cellId: string) => {
-    const state = get();
-    if (!state.cellExecStates[cellId]) {
+    setCellExecState: (cellId: string, partial: Partial<CellExecutionState>) => {
       set((prev) => ({
         cellExecStates: {
           ...prev.cellExecStates,
           [cellId]: {
-            isExecuting: false,
-            isCancelling: false,
-            elapsedTime: 0,
-            statusCheckInterval: null,
+            ...prev.cellExecStates[cellId],
+            ...partial,
           },
         },
       }));
-    }
-  },
+    },
 
-  getCellExecState: (cellId: string): CellExecutionState => {
-    const execStates = get().cellExecStates;
-    // 如果还没有初始化过，就返回一个默认状态
-    if (!execStates[cellId]) {
-      return {
-        isExecuting: false,
-        isCancelling: false,
-        elapsedTime: 0,
-        statusCheckInterval: null,
-      };
-    }
-    return execStates[cellId];
-  },
+    stopStatusCheck: (cellId: string) => polling.stop(cellId),
+    startStatusCheck: (cellId: string) => polling.start(cellId),
 
-  setCellExecState: (cellId: string, partial: Partial<CellExecutionState>) => {
-    set((prev) => ({
-      cellExecStates: {
-        ...prev.cellExecStates,
-        [cellId]: {
-          ...prev.cellExecStates[cellId],
-          ...partial,
+    cancelCellExecution: (cellId: string) => execution.cancel(cellId),
+    executeCell: (cellId: string) => execution.execute(cellId),
+    executeCells: (cellIds, beforeCell) => execution.executeAll(cellIds, beforeCell),
+    stopBatchExecution: () => execution.stopBatch(),
+
+    // ========== 显示模式管理 ==========
+    setCellMode: (cellId: string, mode: DisplayMode) => {
+      set((prev) => ({
+        cellModes: {
+          ...prev.cellModes,
+          [cellId]: mode,
         },
-      },
-    }));
-  },
+      }));
+    },
 
-  // 停止定时器
-  stopStatusCheck: (cellId: string) => {
-    const cellExec = get().getCellExecState(cellId);
-    if (cellExec.statusCheckInterval) {
-      clearInterval(cellExec.statusCheckInterval);
-    }
-    get().setCellExecState(cellId, { statusCheckInterval: null });
-  },
-
-  // 启动定时器，每秒检查一次执行状态
-  startStatusCheck: (cellId: string) => {
-    const notebookId = useStore.getState().notebookId;
-    if (!notebookId) {
-      storeLog.error('Cannot start status polling - notebook ID does not exist', { cellId });
-      return;
-    }
-    // 先停掉旧的
-    get().stopStatusCheck(cellId);
-
-    const intervalId = setInterval(async () => {
-      try {
-        const status: ExecutionStatus = await CodeExecutionService.getExecutionStatus(notebookId);
-        const cellExec = get().getCellExecState(cellId);
-        // 如果已经不在执行，就停止轮询
-        if (!cellExec.isExecuting) {
-          clearInterval(intervalId);
-          return;
-        }
-
-        if (status.status === 'running') {
-          get().setCellExecState(cellId, { elapsedTime: status.elapsed_time || 0 });
-          if (status.outputs?.length && status.outputs.length > 0) {
-            useStore.getState().updateCellOutputs(cellId, status.outputs);
-          }
-        } else {
-          // 执行结束
-          clearInterval(intervalId);
-          get().setCellExecState(cellId, {
-            isExecuting: false,
-            elapsedTime: 0,
-            statusCheckInterval: null,
-          });
-          if (status.outputs?.length && status.outputs.length > 0) {
-            useStore.getState().updateCellOutputs(cellId, status.outputs);
-          }
-        }
-      } catch (err: any) {
-        storeLog.error('Error checking execution status', { cellId, error: err.message });
-        clearInterval(intervalId);
-        get().setCellExecState(cellId, {
-          isExecuting: false,
-          statusCheckInterval: null,
-        });
+    setCurrentCellMode_onlyCode: () => {
+      const cellId = useStore.getState().currentCellId;
+      if (cellId) {
+        get().setCellMode(cellId, DISPLAY_MODES.CODE_ONLY);
       }
-    }, 1000) as any;
+    },
+    setCurrentCellMode_onlyOutput: () => {
+      const cellId = useStore.getState().currentCellId;
+      if (cellId) {
+        get().setCellMode(cellId, DISPLAY_MODES.OUTPUT_ONLY);
+      }
+    },
+    setCurrentCellMode_complete: () => {
+      const cellId = useStore.getState().currentCellId;
+      if (cellId) {
+        get().setCellMode(cellId, DISPLAY_MODES.COMPLETE);
+      }
+    },
 
-    get().setCellExecState(cellId, { statusCheckInterval: intervalId });
-  },
-
-  // 取消执行
-  cancelCellExecution: async (cellId: string): Promise<ExecutionResult> => {
-    const notebookId = useStore.getState().notebookId;
-    if (!notebookId) {
-      storeLog.error('Cannot cancel execution - notebook ID does not exist', { cellId });
-      return { success: false, error: 'no_notebook_id' };
-    }
-    get().setCellExecState(cellId, { isCancelling: true });
-
-    try {
-      await CodeExecutionService.cancelExecution(notebookId);
-      get().stopStatusCheck(cellId);
-      get().setCellExecState(cellId, {
-        isExecuting: false,
-        elapsedTime: 0,
+    // ========== 重置 ==========
+    resetAll: () => {
+      kernel.invalidate();
+      execution.reset();
+      polling.reset();
+      set({
+        isKernelReady: false,
+        error: null,
+        batchExecution: 'idle',
+        cellExecStates: {},
+        cellModes: {},
       });
-      return { success: false, error: 'canceled_by_user' };
-    } catch (error: any) {
-      storeLog.error('Error cancelling execution', { cellId, error: error.message });
-      return { success: false, error: error.message };
-    } finally {
-      get().setCellExecState(cellId, { isCancelling: false });
-    }
-  },
-
-  // 执行单个 Cell
-  executeCell: async (cellId: string): Promise<ExecutionResult> => {
-    // 如果正在执行 => 视作"取消"
-    const cellExec = get().getCellExecState(cellId);
-    if (cellExec.isExecuting) {
-      return get().cancelCellExecution(cellId);
-    }
-
-    const codeCell = useStore.getState().cells.find((cell) => cell.id === cellId);
-    if (!codeCell) return { success: false, error: 'Cell does not exist' };
-    if (!canExecuteCodeLanguage(codeCell.language)) {
-      return {
-        success: false,
-        error: `${codeCell.language} execution is unavailable; the kernel runs Python only`,
-      };
-    }
-
-    // 如果内核没就绪，先初始化
-    const ok = await get().initializeKernel();
-    const notebookId = useStore.getState().notebookId;
-    const notebookState = useStore.getState();
-    if (!ok) {
-      return { success: false, error: '内核初始化失败' };
-    }
-    if (notebookId) {
-      await CodeExecutionService.executeCode('print("fast check")', notebookId);
-    }
-
-    // 清除旧输出
-    notebookState.clearCellOutputs(cellId);
-    // 设置 isExecuting
-    get().setCellExecState(cellId, {
-      isExecuting: true,
-      elapsedTime: 0,
-    });
-
-    // 开始轮询
-    get().startStatusCheck(cellId);
-
-    // 真正发起执行请求
-    try {
-      const result = await CodeExecutionService.executeCode(codeCell.content, notebookId!);
-
-      // 更新 outputs
-      if (import.meta.env.DEV) {
-        console.log('🔍 [codeStore] Updating cell outputs after execution:', {
-          cellId: cellId.slice(0, 8),
-          outputsCount: result.outputs?.length || 0,
-        });
-      }
-
-      notebookState.updateCellOutputs(cellId, result.outputs || []);
-
-      // Trigger immediate auto-save after execution to ensure outputs are persisted
-      notebookState.triggerAutoSave();
-
-      let hasError = false;
-      let error: string | null = null;
-      if (result.outputs) {
-        for (let output of result.outputs) {
-          if (output.type === 'error') {
-            hasError = true;
-            error = output.content;
-            break;
-          }
-        }
-      }
-
-      // 停止轮询
-      get().stopStatusCheck(cellId);
-      get().setCellExecState(cellId, {
-        isExecuting: false,
-        elapsedTime: 0,
-      });
-
-      if (hasError) {
-        return { success: false, error: error || 'Unknown error' };
-      }
-
-      return { success: true, outputs: result.outputs };
-    } catch (error: any) {
-      storeLog.error('Cell execution error', { cellId, error: error.message, stack: error.stack });
-      notebookState.updateCellOutputs(cellId, [{ type: 'error', content: error.message }]);
-      get().stopStatusCheck(cellId);
-      get().setCellExecState(cellId, { isExecuting: false });
-      return { success: false, error: error.message };
-    }
-  },
-
-  // ========== 显示模式管理 ==========
-  setCellMode: (cellId: string, mode: DisplayMode) => {
-    set((prev) => ({
-      cellModes: {
-        ...prev.cellModes,
-        [cellId]: mode,
-      },
-    }));
-  },
-
-  setCurrentCellMode_onlyCode: () => {
-    const cellId = useStore.getState().currentCellId;
-    if (cellId) {
-      get().setCellMode(cellId, DISPLAY_MODES.CODE_ONLY);
-    }
-  },
-  setCurrentCellMode_onlyOutput: () => {
-    const cellId = useStore.getState().currentCellId;
-    if (cellId) {
-      get().setCellMode(cellId, DISPLAY_MODES.OUTPUT_ONLY);
-    }
-  },
-  setCurrentCellMode_complete: () => {
-    const cellId = useStore.getState().currentCellId;
-    if (cellId) {
-      get().setCellMode(cellId, DISPLAY_MODES.COMPLETE);
-    }
-  },
-
-  // ========== 重置 ==========
-  resetAll: () =>
-    set({
-      isKernelReady: false,
-      error: null,
-      cellExecStates: {},
-      cellModes: {},
-    }),
-}));
+    },
+  };
+});
 
 export default useCodeStore;

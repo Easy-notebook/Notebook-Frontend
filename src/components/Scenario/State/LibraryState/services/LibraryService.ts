@@ -1,6 +1,5 @@
 import { IPersistenceService } from '../../../../../services/persistence/interfaces';
 import useNotebookStore from '@Store/notebookStore';
-import { NotebookORM } from '@Storage/index';
 import { CachedNotebook, CONSTANTS } from '../types';
 import { NotebookEntity } from '../../../../../services/persistence/interfaces';
 
@@ -221,7 +220,7 @@ export class LibraryService {
       }
 
       try {
-        await NotebookORM.updateNotebookAccess(notebookId);
+        await this.persistence.notebooks.updateAccessTime(notebookId);
       } catch (error) {
         console.warn('Failed to update notebook access statistics:', error);
       }

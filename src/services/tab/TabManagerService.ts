@@ -1,11 +1,9 @@
 import { persistenceService } from '@Services/persistence/instance';
 import { PreviewFile, FileType } from '@Store/models';
 import { storeLog } from '@Utils/logger';
-import { FileORM, getFileType } from '@Storage/index';
 import { FileService } from '@Services/notebook/FileService';
-import { validateFileForTab } from '@Utils/fileValidation';
-
-const makeFileId = (notebookId: string, filePath: string) => `${notebookId}::${filePath}`;
+import { TabCatalog } from './TabCatalog';
+import { TabDiscoveryError, type TabDiscoveryFailure } from './TabDiscoveryError';
 
 export class TabManagerService {
   private static instance: TabManagerService;
@@ -31,24 +29,14 @@ export class TabManagerService {
         return null;
       }
 
-      // Filter tabs to ensure they belong to the current notebook
-      const validTabs = tabState.tabList
-        .filter((t) => t.id.startsWith(`${notebookId}::`))
-        .map((t) => ({
-          ...t,
-          type: t.type as FileType,
-        }));
-
-      // Validate active tab ID
-      let activeTabId = tabState.activeTabId;
-      if (activeTabId && !activeTabId.startsWith(`${notebookId}::`)) {
-        activeTabId = null;
-      }
-
-      return { tabs: validTabs, activeTabId };
+      return this.scopeState(
+        notebookId,
+        tabState.tabList.map((tab) => ({ ...tab, type: tab.type as FileType })),
+        tabState.activeTabId
+      );
     } catch (error) {
       storeLog.error('TabManagerService: Failed to load tabs', { notebookId, error });
-      return null;
+      throw error;
     }
   }
 
@@ -62,7 +50,11 @@ export class TabManagerService {
   ): Promise<void> {
     try {
       // Ensure we only save tabs for this notebook
-      const scopedTabs = tabs.filter((t) => t.id.startsWith(`${notebookId}::`));
+      const { tabs: scopedTabs, activeTabId: scopedActiveTabId } = this.scopeState(
+        notebookId,
+        tabs,
+        activeTabId
+      );
 
       storeLog.debug('TabManagerService.saveTabs', {
         notebookId,
@@ -71,10 +63,11 @@ export class TabManagerService {
         activeTabId,
       });
 
-      await persistenceService.tabs.saveTabState(notebookId, scopedTabs, activeTabId);
+      await persistenceService.tabs.saveTabState(notebookId, scopedTabs, scopedActiveTabId);
       storeLog.debug('TabManagerService: Saved tabs', { notebookId, count: scopedTabs.length });
     } catch (error) {
       storeLog.error('TabManagerService: Failed to save tabs', { notebookId, error });
+      throw error;
     }
   }
 
@@ -102,11 +95,15 @@ export class TabManagerService {
    * Clear all tabs for a notebook (persistence only)
    */
   public async clearTabs(notebookId: string): Promise<void> {
-    try {
-      await persistenceService.tabs.saveTabState(notebookId, [], null);
-    } catch (error) {
-      storeLog.error('TabManagerService: Failed to clear tabs', { notebookId, error });
-    }
+    await this.saveTabs(notebookId, [], null);
+  }
+
+  private scopeState(notebookId: string, tabs: PreviewFile[], activeTabId: string | null) {
+    const scopedTabs = tabs.filter((tab) => tab.id.startsWith(`${notebookId}::`));
+    return {
+      tabs: scopedTabs,
+      activeTabId: scopedTabs.some((tab) => tab.id === activeTabId) ? activeTabId : null,
+    };
   }
 
   /**
@@ -114,108 +111,33 @@ export class TabManagerService {
    * Used when no saved tab state exists
    */
   public async loadDefaultTabs(notebookId: string): Promise<PreviewFile[]> {
-    try {
-      storeLog.info('TabManagerService: Loading default tabs', { notebookId });
-
-      // 📂 Get files from storage (only for current notebook)
-      let files: any[] = [];
-      try {
-        const fileResults = await FileORM.getFilesForNotebook(notebookId, false); // Don't load content for tabs
-
-        // 🔍 Filter out notebook main files and invalid files
-        const filteredResults = fileResults.filter((result) => {
-          const filePath = result.metadata.filePath;
-          const fileName = result.metadata.fileName;
-
-          // Skip notebook main files (they shouldn't be tabs)
-          if (filePath.startsWith('notebook_') && filePath.endsWith('.json')) {
-            return false;
-          }
-
-          // Skip .easynb files (they are notebook files, not separate tabs)
-          if (fileName.endsWith('.easynb')) {
-            return false;
-          }
-
-          return true;
+    const results = await Promise.allSettled([
+      persistenceService.files
+        .getFilesForNotebook(notebookId, false)
+        .then((records) => TabCatalog.fromCache(notebookId, records)),
+      FileService.listFiles(notebookId).then((response) =>
+        TabCatalog.fromRemote(notebookId, response)
+      ),
+    ]);
+    const byPath = new Map<string, PreviewFile>();
+    const failures: TabDiscoveryFailure[] = [];
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'rejected') {
+        failures.push({ source: index === 0 ? 'cache' : 'backend', cause: result.reason });
+        storeLog.warn('Tab discovery source failed', {
+          notebookId,
+          source: index === 0 ? 'cache' : 'backend',
+          error: result.reason,
         });
-
-        files = filteredResults.map((result) => ({
-          id: makeFileId(notebookId, result.metadata.filePath),
-          path: result.metadata.filePath,
-          name: result.metadata.fileName,
-          type: result.metadata.fileType,
-          lastModified: result.metadata.lastModified,
-          size: result.metadata.size,
-          notebookId: result.metadata.notebookId,
-          exists: true,
-        }));
-
-        storeLog.info('TabManagerService: Found valid files in storage', {
-          validCount: files.length,
-        });
-
-        // 🔄 Also fetch files from backend for this notebook and merge
-        try {
-          const resp = await FileService.listFiles(notebookId);
-          if (resp && (resp as any).status === 'ok' && Array.isArray((resp as any).files)) {
-            const nodes = (resp as any).files as any[];
-            const flatten = (arr: any[]): any[] =>
-              arr.flatMap((n) =>
-                n && n.type === 'directory' && Array.isArray(n.children) ? flatten(n.children) : [n]
-              );
-            const flatFiles = flatten(nodes);
-            const filteredBackend = flatFiles.filter((f) => {
-              const fileName = f?.name || '';
-              const filePath = f?.path || f?.name || '';
-              if (filePath.startsWith('notebook_') && filePath.endsWith('.json')) return false;
-              if (fileName.endsWith('.easynb')) return false;
-              return true;
-            });
-            const backendFiles = filteredBackend.map((f) => ({
-              id: makeFileId(notebookId, f.path || f.name),
-              path: f.path || f.name,
-              name: f.name,
-              type: getFileType((f.path || f.name) as string),
-            }));
-
-            // Merge storage files and backend files by path
-            const byPath = new Map<string, any>();
-            files.forEach((x) => byPath.set(x.path, x));
-            backendFiles.forEach((x) => {
-              if (!byPath.has(x.path)) byPath.set(x.path, x);
-            });
-            files = Array.from(byPath.values());
-            storeLog.info('TabManagerService: Merged files from storage+backend', {
-              count: files.length,
-            });
-          }
-        } catch (e) {
-          storeLog.warn('TabManagerService: Backend listFiles failed', { error: e });
-        }
-      } catch (storageError) {
-        storeLog.warn('TabManagerService: Storage system failed', { error: storageError });
-        files = [];
+        continue;
       }
-
-      // 🏷️ Convert to PreviewFile format with additional validation
-      const previewFiles: PreviewFile[] = files
-        .filter((file) => {
-          const validation = validateFileForTab(file.path || '', file.name || '', '');
-          return validation.isValid;
-        })
-        .map((file) => ({
-          id: file.id || makeFileId(notebookId, file.path),
-          path: file.path,
-          name: file.name,
-          type: getFileType(file.path || file.name) as FileType,
-        }));
-
-      return previewFiles;
-    } catch (error) {
-      storeLog.error('TabManagerService: Failed to load default tabs', { notebookId, error });
-      return [];
+      // Cached metadata wins a duplicate path; source completion order cannot change this.
+      for (const tab of result.value) if (!byPath.has(tab.path)) byPath.set(tab.path, tab);
     }
+    if (failures.length && byPath.size === 0) {
+      throw new TabDiscoveryError(failures);
+    }
+    return [...byPath.values()];
   }
 }
 

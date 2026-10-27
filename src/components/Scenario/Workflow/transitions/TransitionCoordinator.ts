@@ -70,8 +70,10 @@ export class TransitionCoordinator {
     state: WorkflowState,
     apiResponse: Record<string, unknown>,
     apiType?: string,
-    autoTrigger = true
+    autoTrigger = true,
+    signal?: AbortSignal
   ): Promise<{ state: WorkflowState; transitionName: string }> {
+    signal?.throwIfAborted();
     console.log(
       `[Coordinator] Applying transition (apiType=${apiType}, autoTrigger=${autoTrigger})`
     );
@@ -102,14 +104,15 @@ export class TransitionCoordinator {
     );
 
     // Apply transition and log it
-    const updatedState = await handler.applyAndLog(state, apiResponse, apiType);
+    const updatedState = await handler.applyAndLog(state, apiResponse, apiType, signal);
+    signal?.throwIfAborted();
 
     console.log(`[Coordinator] Transition applied successfully: ${transitionName}`);
 
     // Auto-trigger next transition if enabled
     let finalState = updatedState;
     if (autoTrigger) {
-      const autoResult = await this.autoTriggerNextTransition(updatedState);
+      const autoResult = await this.autoTriggerNextTransition(updatedState, signal);
       finalState = autoResult.state;
       if (autoResult.transitionName) {
         console.log(
@@ -118,6 +121,7 @@ export class TransitionCoordinator {
       }
     }
 
+    signal?.throwIfAborted();
     return { state: finalState, transitionName };
   }
 
@@ -196,8 +200,10 @@ export class TransitionCoordinator {
    * These should be handled by AsyncStateMachineAdapter.step()
    */
   public async autoTriggerNextTransition(
-    state: WorkflowState
+    state: WorkflowState,
+    signal?: AbortSignal
   ): Promise<{ state: WorkflowState; transitionName: string | null }> {
+    signal?.throwIfAborted();
     const currentStateName = state.state.FSM.state;
 
     if (!currentStateName) {
@@ -293,7 +299,8 @@ export class TransitionCoordinator {
     console.log(`[Auto-Trigger] Applying ${handler.constructor.name} for ${nextEvent}`);
 
     // Apply the transition (pass empty response since this is auto-triggered)
-    const newState = await handler.apply(state, {});
+    const newState = await handler.apply(state, {}, signal);
+    signal?.throwIfAborted();
     return { state: newState, transitionName: handler.transitionName };
   }
 }

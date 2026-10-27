@@ -1,24 +1,21 @@
 /** Generating API Handler - Calls VDSAgents /generating endpoint */
 import { BaseAPIHandler } from './BaseAPIHandler';
 import { WorkflowState } from '../observation/WorkflowState';
-import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 
 export class GeneratingAPIHandler extends BaseAPIHandler {
   async *call(
     state: WorkflowState,
     stageId?: string,
     stepId?: string,
-    kwargs?: Record<string, any>
+    kwargs?: Record<string, any>,
+    signal?: AbortSignal
   ): AsyncIterableIterator<any> {
+    signal?.throwIfAborted();
     if (!stageId || !stepId) {
       [stageId, stepId] = this.extractLocationInfo(state);
     }
 
-    // Get latest notebook state directly from notebookStore
-    const latestNotebook = globalUpdateInterface.getNotebookState();
-
-    // Update state with latest notebook data
-    state.state.notebook.update(latestNotebook);
+    const latestNotebook = await this.synchronizeNotebook(state, signal);
 
     console.log('[GeneratingAPI] Injected latest notebook data:', {
       notebook_id: latestNotebook.notebook_id,
@@ -33,11 +30,12 @@ export class GeneratingAPIHandler extends BaseAPIHandler {
       let actionCount = 0;
 
       // Call WorkflowAPIClient's callGeneratingAPI method
-      const iterator = this.apiClient.callGeneratingAPI(state.toJSON());
+      const iterator = this.apiClient.callGeneratingAPI(state.toJSON(), signal);
 
       for await (const action of iterator) {
+        signal?.throwIfAborted();
         actionCount++;
-        console.log(`[GeneratingAPI] Action ${actionCount}: ${action.type || 'unknown'}`);
+        console.log(`[GeneratingAPI] Action ${actionCount}`);
         yield action;
       }
 

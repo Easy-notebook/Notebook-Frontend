@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
 import { previewMarkdownSource } from '../TipTap/model/sourceCellTransitions';
-import { handleSourceInputHistory } from '../utils/sourceInputHistory';
+import { handleSourceInputHistory, useSourceNativeHistory } from '../utils/sourceInputHistory';
 import { parseSourceCellType } from '../utils/sourceCellAttributes';
 import { decodeTextAttribute } from '../utils/encodedText';
 
@@ -20,6 +20,7 @@ export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes 
   const updateSource = (source: string) => {
     if (ownedPosition() !== undefined) updateAttributes({ source });
   };
+  useSourceNativeHistory(input, editor, () => ownedPosition() !== undefined, composing);
   useEffect(() => {
     let mounted = true;
     // NodeViews mount during dispatch; focus the nested input after ProseMirror
@@ -70,7 +71,8 @@ export function MarkdownSourceCellView({ node, editor, getPos, updateAttributes 
           updateSource(event.target.value);
         }}
         onKeyDown={(event) =>
-          ownedPosition() !== undefined && handleSourceInputHistory(event, editor, updateSource)
+          ownedPosition() !== undefined &&
+          handleSourceInputHistory(event, editor, updateSource, composing.current)
         }
       />
     </NodeViewWrapper>

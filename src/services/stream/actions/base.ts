@@ -34,10 +34,14 @@ export abstract class StreamAction {
   }
 }
 
-/**
- * Registry of all stream action classes
- */
-const _streamActionRegistry: Map<string, typeof StreamAction> = new Map();
+/** Concrete, dependency-free construction is required by both dispatch entry points. */
+export interface StreamActionConstructor {
+  new (): StreamAction;
+  actionType: string;
+}
+
+/** Registry of executable action classes. */
+const _streamActionRegistry = new Map<string, StreamActionConstructor>();
 
 /**
  * Register a stream action class.
@@ -45,7 +49,13 @@ const _streamActionRegistry: Map<string, typeof StreamAction> = new Map();
  * @param actionType - The action type identifier (matches stream type)
  * @param actionClass - The action class to register
  */
-export function registerStreamAction(actionType: string, actionClass: typeof StreamAction): void {
+export function registerStreamAction(
+  actionType: string,
+  actionClass: StreamActionConstructor
+): void {
+  const existing = _streamActionRegistry.get(actionType);
+  if (existing && existing !== actionClass)
+    throw new Error(`Stream action already registered: ${actionType}`);
   actionClass.actionType = actionType;
   _streamActionRegistry.set(actionType, actionClass);
   console.log(`[StreamActions] Registered action: ${actionType}`);
@@ -57,7 +67,7 @@ export function registerStreamAction(actionType: string, actionClass: typeof Str
  * @param actionType - The stream type identifier
  * @returns The action class, or undefined if not found
  */
-export function getStreamActionClass(actionType: string): typeof StreamAction | undefined {
+export function getStreamActionClass(actionType: string): StreamActionConstructor | undefined {
   return _streamActionRegistry.get(actionType);
 }
 
@@ -80,6 +90,6 @@ export function clearStreamRegistry(): void {
 /**
  * Get the entire registry (for debugging)
  */
-export function getStreamRegistry(): Map<string, typeof StreamAction> {
+export function getStreamRegistry(): Map<string, StreamActionConstructor> {
   return _streamActionRegistry;
 }

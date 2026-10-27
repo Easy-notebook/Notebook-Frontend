@@ -1,5 +1,25 @@
 // src/store/models/preStage.ts
 
+interface ColumnStatisticsBase {
+  count: number;
+  empty: number;
+  unique: number;
+  topValues: unknown[];
+}
+
+export type ColumnStatistics = ColumnStatisticsBase &
+  (
+    | {
+        dataType: 'numeric';
+        min: number;
+        max: number;
+        sum: number;
+        avg: number;
+        median: number;
+      }
+    | { dataType: 'date' | 'categorical' }
+  );
+
 export interface DatasetMetadata {
   rowCount: number;
   columnCount: number;
@@ -8,7 +28,7 @@ export interface DatasetMetadata {
   dateColumns: string[];
   missingValueSummary: Record<string, number>;
   uniqueValueCounts: Record<string, number>;
-  stats: Record<string, any>;
+  stats: Record<string, ColumnStatistics>;
 }
 
 export interface AnalysisResult {

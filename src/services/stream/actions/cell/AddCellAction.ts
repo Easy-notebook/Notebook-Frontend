@@ -1,151 +1,68 @@
-/**
- * Add Cell Action - Handles addCell2EndWithContent stream type
- */
-
 import { StreamAction, registerStreamAction } from '../base';
 import type { StreamActionContext } from '../../types';
 import useStore from '@Store/notebookStore';
-import globalUpdateInterface from '@/interfaces/globalUpdateInterface';
 import { generationTracker } from '../../managers/GenerationTracker';
 
-// Normalize incoming cell type to store-supported types
-const normalizeCellTypeForStore = (
-  t: string | undefined | null
-): 'code' | 'markdown' | 'hybrid' | 'image' | 'link' => {
-  if (!t) return 'markdown';
-  if (t === 'Hybrid') return 'hybrid';
-  if (t === 'image') return 'image';
-  if (t === 'video') return 'image';
-  if (t === 'thinking') return 'markdown';
-  if (t === 'link') return 'link';
-  return (t as any) === 'code' ||
-    (t as any) === 'markdown' ||
-    (t as any) === 'hybrid' ||
-    (t as any) === 'image' ||
-    (t as any) === 'link'
-    ? (t as any)
-    : 'markdown';
-};
+function normalizeCellType(type: string): 'code' | 'markdown' | 'hybrid' | 'image' | 'link' {
+  if (type === 'Hybrid') return 'hybrid';
+  if (type === 'video') return 'image';
+  if (type === 'code' || type === 'hybrid' || type === 'image' || type === 'link') return type;
+  return 'markdown';
+}
 
+/** Admits a detached creation request, then registers only a published cell owned by this notebook. */
 export class AddCellAction extends StreamAction {
-  async execute(context: StreamActionContext): Promise<void> {
-    const { payload } = context;
-
-    const cellType = payload.type;
-    const description = payload.description;
-    const content = payload.content;
-    const metadata = payload.metadata || {};
-    const commandId = payload.commandId;
-    const prompt = payload.prompt;
-    const serverUniqueIdentifier = payload.uniqueIdentifier || metadata?.uniqueIdentifier;
-
-    console.log('🆕 [AddCellAction] 收到创建cell请求:', {
-      cellType,
-      description: description?.substring(0, 50),
-      content: content?.substring(0, 50),
-      contentLength: content?.length,
-      commandId,
-      uniqueIdentifier: serverUniqueIdentifier,
-      metadata,
-    });
-
-    let newCellId: string | null = null;
-
-    if (cellType && (description || content)) {
-      const enableEdit = !metadata?.isGenerating;
-
-      // If image/video generation task with unique identifier
-      if (
-        (cellType === 'image' || cellType === 'video') &&
-        metadata?.isGenerating &&
-        (prompt || serverUniqueIdentifier)
-      ) {
-        const uniqueIdentifier =
-          serverUniqueIdentifier ||
-          `gen-${Date.now()}-${(prompt || '')
-            .substring(0, 20)
-            .replace(/[^a-zA-Z0-9]/g, '')
-            .toLowerCase()}`;
-
-        const normalizedType = normalizeCellTypeForStore(cellType);
-        newCellId = useStore
-          .getState()
-          .addNewCellWithUniqueIdentifier(
-            normalizedType,
-            description,
-            enableEdit,
-            uniqueIdentifier,
-            prompt
-          );
-
-        // Track both commandId and uniqueIdentifier
-        if (commandId) {
-          generationTracker.trackCell(commandId, newCellId);
-          generationTracker.trackCell(`unique-${uniqueIdentifier}`, newCellId);
-          console.log('✅ [AddCellAction] 存储生成cell映射 (image/video):', {
-            commandId,
-            uniqueIdentifier,
-            cellId: newCellId,
-            trackerSize: generationTracker.getSize(),
-          });
-        } else {
-          console.warn('⚠️ [AddCellAction] 图片/视频cell但没有commandId!', {
-            uniqueIdentifier,
-            cellId: newCellId,
-          });
-        }
-      } else {
-        // Normal cell creation - create with initial content if available
-        const normalizedType = normalizeCellTypeForStore(cellType);
-        const initialContent = content || description;
-
-        newCellId = await globalUpdateInterface.addNewCell2End(
-          normalizedType,
-          initialContent, // Use content as initial value
-          enableEdit
-        );
-
-        // Store mapping if this is a generation task or has commandId
-        if (newCellId && commandId) {
-          generationTracker.trackCell(commandId, newCellId);
-          console.log('✅ [AddCellAction] 存储cell映射:', {
-            commandId,
-            cellId: newCellId,
-            cellType,
-            trackerSize: generationTracker.getSize(),
-          });
-        }
-
-        console.log('✅ [AddCellAction] Cell创建完成（含初始内容）:', {
-          cellId: newCellId,
-          initialContentLength: initialContent.length,
-        });
-      }
+  async execute({ payload, notebookId }: StreamActionContext): Promise<void> {
+    const { type, content, description, commandId, prompt, uniqueIdentifier } = payload;
+    if (!type || (content === undefined && description === undefined)) return;
+    if (typeof type !== 'string') throw new Error('Cell type must be a string');
+    for (const value of [content, description, commandId, prompt, uniqueIdentifier]) {
+      if (value !== undefined && typeof value !== 'string')
+        throw new Error('Cell text fields must be strings');
     }
+    const rawMetadata: unknown = payload.metadata ?? {};
+    if (typeof rawMetadata !== 'object' || rawMetadata === null || Array.isArray(rawMetadata))
+      throw new Error('Cell metadata must be an object');
+    const metadata = structuredClone(rawMetadata) as Record<string, unknown>;
+    if (metadata.isGenerating !== undefined && typeof metadata.isGenerating !== 'boolean')
+      throw new Error('Cell generation flag must be a boolean');
+    if (metadata.uniqueIdentifier !== undefined && typeof metadata.uniqueIdentifier !== 'string')
+      throw new Error('Cell generation identity must be a string');
+    const owner = useStore.getState();
+    if (notebookId !== undefined && notebookId !== owner.notebookId) return;
+    const initialContent = content ?? description ?? '';
+    const serverId = uniqueIdentifier || (metadata.uniqueIdentifier as string | undefined);
+    const generating =
+      (type === 'image' || type === 'video') &&
+      metadata.isGenerating === true &&
+      Boolean(prompt || serverId);
+    const normalized = normalizeCellType(type);
+    const enableEdit = !metadata.isGenerating;
+    const id = generating
+      ? owner.addNewCellWithUniqueIdentifier(
+          normalized,
+          description ?? '',
+          enableEdit,
+          serverId,
+          prompt
+        )
+      : owner.addNewCell2End(normalized, initialContent, enableEdit);
 
-    // Update metadata if provided
-    if (metadata && newCellId) {
-      const cells = useStore.getState().cells;
-      const targetCell = cells.find((cell) => cell.id === newCellId);
-
-      if (targetCell) {
-        useStore.getState().updateCellMetadata(newCellId, metadata);
-        console.log('✅ [AddCellAction] 已设置metadata:', { cellId: newCellId, metadata });
-      } else {
-        console.error('❌ [AddCellAction] 找不到刚创建的cell:', {
-          newCellId,
-          cellsCount: cells.length,
-        });
-      }
-    }
-
-    console.log('📊 [AddCellAction] Cell创建完成，当前tracker状态:', {
-      newCellId,
-      commandId,
-      uniqueIdentifier: serverUniqueIdentifier,
-      trackerSize: generationTracker.getSize(),
-      trackerKeys: generationTracker.getAllTracked(),
-    });
+    // Creation publishes synchronously. Subscribers can still navigate or remove the cell.
+    const current = useStore.getState();
+    const target = current.cells.find((cell) => cell.id === id);
+    if (current.notebookId !== owner.notebookId || !target) return;
+    const generatedId = generating ? target.metadata?.uniqueIdentifier : undefined;
+    if (typeof generatedId === 'string') metadata.uniqueIdentifier = generatedId;
+    if (Object.keys(metadata).length) current.updateCellMetadata(id, metadata);
+    const published = useStore.getState();
+    if (
+      published.notebookId !== owner.notebookId ||
+      !published.cells.some((cell) => cell.id === id)
+    )
+      return;
+    if (commandId) generationTracker.trackCell(commandId, id);
+    if (typeof generatedId === 'string') generationTracker.trackCell(`unique-${generatedId}`, id);
   }
 }
 

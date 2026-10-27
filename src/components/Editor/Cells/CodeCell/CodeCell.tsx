@@ -3,6 +3,7 @@ import { DISPLAY_MODES } from '@Store/codeStore';
 import { useCodeCellViewModel } from './model/useCodeCellViewModel';
 import { useEditorReadOnly } from '../../EditorAccessContext';
 import { isCompositionInput } from '../../utils/compositionInput';
+import { isPlainBackspace } from '../../utils/editorShortcuts';
 
 // Import components
 import { CellToolbar, CodeEditor, OutputDisplay, CompactModeView } from './components';
@@ -67,12 +68,9 @@ const CodeCell: React.FC<CodeCellProps> = ({
         if (
           onBreakFence &&
           !readOnly &&
-          event.key === 'Backspace' &&
+          isPlainBackspace(event) &&
           !isCompositionInput(event.nativeEvent) &&
           !editorRef.current?.view?.composing &&
-          !event.metaKey &&
-          !event.ctrlKey &&
-          !event.altKey &&
           selection?.empty &&
           selection.from === 0 &&
           !vm.isExecuting &&
@@ -159,6 +157,7 @@ const CodeCell: React.FC<CodeCellProps> = ({
               dslcMode={dslcMode}
               isInDetachedView={isInDetachedView}
               contentHeight={vm.contentHeight}
+              onContentHeightChange={vm.setContentHeight}
               isExpanded={vm.isExpanded}
               isHovering={vm.isHovering}
               editorRef={editorRef}
@@ -185,7 +184,6 @@ const CodeCell: React.FC<CodeCellProps> = ({
             isExecuting={vm.isExecuting}
             elapsedTime={vm.elapsedTime}
             outputVisible={vm.outputVisible}
-            outputUpdateKey={vm.outputUpdateKey}
             cellMode={vm.cellMode}
             isInDetachedView={isInDetachedView}
             finished_thinking={finished_thinking}

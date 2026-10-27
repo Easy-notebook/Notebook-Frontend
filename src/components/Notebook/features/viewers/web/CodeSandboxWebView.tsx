@@ -50,7 +50,6 @@ const CodeSandboxWebView: React.FC<CodeSandboxWebViewProps> = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Store integration
-  const setDetachedCellId = useStore((s) => s.setDetachedCellId);
   const isDetachedCellFullscreen = useStore((s) => s.isDetachedCellFullscreen);
   const toggleDetachedCellFullscreen = useStore((s) => s.toggleDetachedCellFullscreen);
 

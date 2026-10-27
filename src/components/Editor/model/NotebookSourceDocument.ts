@@ -1,8 +1,16 @@
 import type { Cell } from '@Store/models';
+import { isEqual } from 'lodash-es';
 import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
 import { formatCodeFence, standaloneFence } from '@Utils/markdown/fencedMarkdown';
 
 const inputText = (text: string) => text.replace(/\r\n?/g, '\n');
+
+export interface NotebookSourceDocumentCheckpoint {
+  version: 1;
+  token: string;
+  cells: readonly Cell[];
+  addedCells: { id: string; type: 'markdown' | 'code' | 'raw' }[];
+}
 
 /** Editable text projection. Outputs and non-text metadata never enter the source buffer. */
 export class NotebookSourceDocument {
@@ -12,30 +20,93 @@ export class NotebookSourceDocument {
   private readonly entries: Cell[];
   private readonly positions: Map<string, number>;
 
-  constructor(private readonly cells: readonly Cell[]) {
-    this.positions = new Map(cells.map((cell, index) => [cell.id, index]));
-    if (this.positions.size !== cells.length) {
+  constructor(
+    private readonly cells: readonly Cell[],
+    identity?: Pick<NotebookSourceDocumentCheckpoint, 'token' | 'addedCells'>
+  ) {
+    this.entries = [
+      ...cells,
+      ...(identity?.addedCells ?? []).map((cell) => ({
+        ...cell,
+        content: '',
+        outputs: [],
+        ...(cell.type === 'code' ? { language: 'python' } : {}),
+      })),
+    ];
+    this.positions = new Map(this.entries.map((cell, index) => [cell.id, index]));
+    if (this.positions.size !== this.entries.length) {
       throw new Error('Duplicate cell identities');
     }
-    this.entries = [...cells];
-    this.bodies = cells.map((cell) =>
+    this.bodies = this.entries.map((cell) =>
       cell.type === 'code'
         ? formatCodeFence(inputText(cell.content), normalizeCodeLanguage(cell.language))
         : inputText(cell.content)
     );
-    do {
-      this.token = crypto.randomUUID();
-    } while (this.bodies.some((body) => body.includes(`<!-- notebook:${this.token}:`)));
+    if (identity) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identity.token))
+        throw new Error('Invalid source boundary token');
+      this.token = identity.token;
+      if (this.bodies.some((body) => body.includes(`<!-- notebook:${this.token}:`)))
+        throw new Error('Source boundary token collides with content');
+    } else {
+      do {
+        this.token = crypto.randomUUID();
+      } while (this.bodies.some((body) => body.includes(`<!-- notebook:${this.token}:`)));
+    }
     this.source = this.bodies
+      .slice(0, cells.length)
       .map((body, index) => `${this.marker(index, 'start')}\n${body}\n${this.marker(index, 'end')}`)
       .join('\n\n');
+  }
+
+  checkpoint(): NotebookSourceDocumentCheckpoint {
+    return {
+      version: 1,
+      token: this.token,
+      cells: [...this.cells],
+      addedCells: this.entries.slice(this.cells.length).map((cell) => ({
+        id: cell.id,
+        type: cell.type as 'markdown' | 'code' | 'raw',
+      })),
+    };
+  }
+
+  static restore(checkpoint: NotebookSourceDocumentCheckpoint): NotebookSourceDocument {
+    if (!checkpoint || checkpoint.version !== 1)
+      throw new Error('Unsupported source document checkpoint');
+    if (
+      !Array.isArray(checkpoint.cells) ||
+      !Array.isArray(checkpoint.addedCells) ||
+      checkpoint.cells.some(
+        (cell) =>
+          !cell ||
+          typeof cell.id !== 'string' ||
+          !cell.id ||
+          typeof cell.content !== 'string' ||
+          !['code', 'markdown', 'raw', 'hybrid', 'image', 'thinking', 'link', 'agent'].includes(
+            cell.type
+          )
+      ) ||
+      checkpoint.addedCells.some(
+        (cell) =>
+          !cell ||
+          typeof cell.id !== 'string' ||
+          !cell.id ||
+          !['markdown', 'code', 'raw'].includes(cell.type)
+      )
+    )
+      throw new Error('Invalid source document checkpoint');
+    return new NotebookSourceDocument(checkpoint.cells, checkpoint);
   }
 
   private marker(index: number, edge: 'start' | 'end') {
     return `<!-- notebook:${this.token}:${index}:${edge} -->`;
   }
 
-  appendCell(source: string, type: 'markdown' | 'code' | 'raw'): { source: string; cursor: number } {
+  appendCell(
+    source: string,
+    type: 'markdown' | 'code' | 'raw'
+  ): { source: string; cursor: number } {
     source = inputText(source);
     this.visitCells(source);
     let id: string;
@@ -74,7 +145,13 @@ export class NotebookSourceDocument {
     }
     const retained = new Set(draft.map((cell) => cell.id));
     for (let index = 0; index < current.length; index++) {
-      if (!retained.has(current[index].id) && current[index] !== this.cells[index]) {
+      // Only deleted cells need whole-record conflict checks. Referential identity
+      // is the fast path; structural equality also supports restored baselines.
+      if (
+        !retained.has(current[index].id) &&
+        current[index] !== this.cells[index] &&
+        !isEqual(current[index], this.cells[index])
+      ) {
         throw new Error(`Deleted cell changed while source was open: ${current[index].id}`);
       }
     }

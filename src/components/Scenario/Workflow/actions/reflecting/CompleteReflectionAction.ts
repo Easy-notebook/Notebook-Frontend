@@ -19,7 +19,9 @@ import { useWorkflowStateMachine } from '../../store/workflowStateMachine';
 import { WorkflowState, WorkflowEvent } from '@Store/models';
 
 export class CompleteReflectionAction extends ActionBase {
-  execute(step: ExecutionStep): boolean {
+  execute(step: ExecutionStep, signal?: AbortSignal): boolean {
+    signal?.throwIfAborted();
+    const previous = useWorkflowStateMachine.getState().stateJSON;
     const notebookStore = useNotebookStore.getState();
     const cells = notebookStore.cells;
 
@@ -50,19 +52,22 @@ export class CompleteReflectionAction extends ActionBase {
 
     // Update Workflow State to BEHAVIOR_RUNNING
     const stateMachine = useWorkflowStateMachine.getState();
-    const stateJSON = stateMachine.stateJSON;
-
-    // Only transition if we are currently in BEHAVIOR_COMPLETED (which is where reflection happens)
-    if (stateJSON.state.FSM.state === WorkflowState.BEHAVIOR_COMPLETED) {
-      stateJSON.state.FSM.state = WorkflowState.BEHAVIOR_RUNNING;
-      stateJSON.state.FSM.last_transition = WorkflowEvent.REFLECTING_AGAIN; // Or a new event like COMPLETE_REFLECTION
-      // Using REFLECTING_AGAIN might be confusing if we are done reflecting.
-      // But if we go to BEHAVIOR_RUNNING, we are effectively "running" again.
-      console.log('[CompleteReflectionAction] Transitioning FSM to BEHAVIOR_RUNNING');
-
-      stateMachine.setState(stateJSON);
-    }
-
+    signal?.throwIfAborted();
+    if (
+      useNotebookStore.getState().notebookId !== notebookStore.notebookId ||
+      stateMachine.stateJSON !== previous
+    )
+      return false;
+    stateMachine.updateState((stateJSON) => {
+      // Only transition if we are currently in BEHAVIOR_COMPLETED (which is where reflection happens)
+      if (stateJSON.state.FSM.state === WorkflowState.BEHAVIOR_COMPLETED) {
+        stateJSON.state.FSM.state = WorkflowState.BEHAVIOR_RUNNING;
+        stateJSON.state.FSM.last_transition = WorkflowEvent.REFLECTING_AGAIN; // Or a new event like COMPLETE_REFLECTION
+        // Using REFLECTING_AGAIN might be confusing if we are done reflecting.
+        // But if we go to BEHAVIOR_RUNNING, we are effectively "running" again.
+        console.log('[CompleteReflectionAction] Transitioning FSM to BEHAVIOR_RUNNING');
+      }
+    });
     console.log('[CompleteReflectionAction] Reflection phase completed');
 
     // Return true to signal completion

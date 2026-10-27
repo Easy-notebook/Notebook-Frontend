@@ -1,60 +1,91 @@
-import { ISplitFileRepository, IStorageProvider } from '../interfaces';
+import { SplitFileRecord } from './SplitFileRecord';
+import { makeFileId } from '../../../storage/fileIdentity';
+import { ISplitFileRepository, IStorageProvider, type SplitFileSaveData } from '../interfaces';
 import { SplitFileEntity, DB_STORES } from '../../../storage/schema';
 
 export class SplitFileRepository implements ISplitFileRepository {
   constructor(private storage: IStorageProvider) {}
 
-  async saveFile(notebookId: string, filePath: string, fileData: any): Promise<void> {
-    const splitFile: SplitFileEntity = {
-      id: `${notebookId}::${filePath}`,
+  async saveFile(notebookId: string, filePath: string, fileData: SplitFileSaveData): Promise<void> {
+    const splitFile = new SplitFileRecord({
+      id: makeFileId(notebookId, filePath),
       notebookId,
       filePath,
-      fileName: fileData.name,
-      content: fileData.content,
-      type: fileData.type,
-      size: fileData.size,
-      lastModified: fileData.lastModified,
+      fileName: fileData?.name,
+      content: fileData?.content,
+      type: fileData?.type,
+      size: fileData?.size,
+      lastModified: fileData?.lastModified,
       cachedAt: Date.now(),
-      metadata: fileData.metadata,
-    };
+      metadata: fileData?.metadata,
+    }).toRecord();
 
     await this.storage.put(DB_STORES.SPLIT_FILES, splitFile);
   }
 
+  async updateFileContent(notebookId: string, filePath: string, content: string): Promise<boolean> {
+    if (typeof content !== 'string') throw new Error('Invalid split file content');
+    const id = makeFileId(notebookId, filePath);
+    let updated = false;
+    await this.storage.transaction([DB_STORES.SPLIT_FILES], 'readwrite', async (stores) => {
+      const store = stores[DB_STORES.SPLIT_FILES];
+      const record = await new Promise<unknown>((resolve, reject) => {
+        const request = store.get(id);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+      });
+      if (record == null) return;
+      const validated = new SplitFileRecord(record, id).toRecord();
+      store.put({
+        ...validated,
+        content,
+        size: new Blob([content]).size,
+        lastModified: new Date().toISOString(),
+      });
+      updated = true;
+    });
+    return updated;
+  }
+
   async getFile(notebookId: string, filePath: string): Promise<SplitFileEntity | null> {
-    const id = `${notebookId}::${filePath}`;
-    const file = await this.storage.get<SplitFileEntity>(DB_STORES.SPLIT_FILES, id);
-    return file || null;
+    const id = makeFileId(notebookId, filePath);
+    const file = await this.storage.get<unknown>(DB_STORES.SPLIT_FILES, id);
+    return file == null ? null : new SplitFileRecord(file, id).toRecord();
   }
 
   async deleteFile(notebookId: string, filePath: string): Promise<void> {
-    const id = `${notebookId}::${filePath}`;
+    const id = makeFileId(notebookId, filePath);
     await this.storage.delete(DB_STORES.SPLIT_FILES, id);
   }
 
   async clearNotebook(notebookId: string): Promise<void> {
-    // This is inefficient without a proper index query support in IStorageProvider
-    // But for now we can iterate or we need to extend IStorageProvider
-    // Since IStorageProvider has transaction support, we can use that if we want to be efficient
-    // But getAll is simpler for now given the likely small number of split files
-
-    const allFiles = await this.storage.getAll<SplitFileEntity>(DB_STORES.SPLIT_FILES);
-    const notebookFiles = allFiles.filter((f) => f.notebookId === notebookId);
-
-    await Promise.all(notebookFiles.map((f) => this.storage.delete(DB_STORES.SPLIT_FILES, f.id)));
+    await this.storage.transaction([DB_STORES.SPLIT_FILES], 'readwrite', (stores) => {
+      const store = stores[DB_STORES.SPLIT_FILES];
+      return new Promise<void>((resolve, reject) => {
+        const request = store.index('notebookId').openKeyCursor(IDBKeyRange.only(notebookId));
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) {
+            resolve();
+            return;
+          }
+          store.delete(cursor.primaryKey);
+          cursor.continue();
+        };
+      });
+    });
   }
 
   async clearAll(): Promise<void> {
-    // We need a clear method in IStorageProvider or just iterate and delete
-    // For now, let's assume we can iterate.
-    // Ideally IStorageProvider should have a clearStore method.
-    // Let's just use getAll and delete for now.
-    const allFiles = await this.storage.getAll<SplitFileEntity>(DB_STORES.SPLIT_FILES);
-    await Promise.all(allFiles.map((f) => this.storage.delete(DB_STORES.SPLIT_FILES, f.id)));
+    await this.storage.transaction([DB_STORES.SPLIT_FILES], 'readwrite', async (stores) => {
+      stores[DB_STORES.SPLIT_FILES].clear();
+    });
   }
 
   async getStats(): Promise<{ totalFiles: number; totalSize: number }> {
-    const allFiles = await this.storage.getAll<SplitFileEntity>(DB_STORES.SPLIT_FILES);
+    const records = await this.storage.getAll<unknown>(DB_STORES.SPLIT_FILES);
+    const allFiles = records.map((record) => new SplitFileRecord(record).toRecord());
     return {
       totalFiles: allFiles.length,
       totalSize: allFiles.reduce((sum, f) => sum + f.size, 0),

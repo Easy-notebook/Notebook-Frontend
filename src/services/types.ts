@@ -15,7 +15,8 @@ export interface ExecutionOutput {
   metadata?: Record<string, any>;
 }
 
-export interface ExecutionResult extends ApiResponse {
+export interface ExecutionResult extends Omit<ApiResponse, 'status'> {
+  status: 'ok' | 'error' | 'pending';
   outputs?: ExecutionOutput[];
   error?: string;
   elapsed_time?: number;
@@ -43,6 +44,7 @@ export interface FileInfo {
   type: string;
   lastModified?: number;
   path?: string;
+  children?: FileInfo[];
 }
 
 export interface FileListResponse extends ApiResponse {

@@ -1,10 +1,8 @@
+import { attachmentUploadService } from './AttachmentUploadService';
 import { useAIAgentStore } from '@Store/AIAgentStore';
-import useStore from '@Store/notebookStore';
 import useOperatorStore from '@Store/operatorStore';
-import useCodeStore from '@Store/codeStore';
-import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
-import { FileService } from '@Services/notebook/FileService';
 import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
+import type { ShowToastFunction } from '@Services/stream/types';
 import { ActionCommandHandler } from '@Services/stream/commands';
 import { EVENT_TYPES } from '@Store/models/agent';
 import { createUserAskQuestionAction } from '@Store/actionCreators';
@@ -12,80 +10,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { UploadFile, CommandContext } from './types';
 
 class AITerminalService {
-  public readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  public readonly ALLOWED_EXTENSIONS = [
-    '.csv',
-    '.xlsx',
-    '.xls',
-    '.jpg',
-    '.png',
-    '.jpeg',
-    '.gif',
-    '.pdf',
-    '.doc',
-    '.docx',
-    '.txt',
-    '.md',
-  ];
+  public readonly MAX_FILE_SIZE = attachmentUploadService.MAX_FILE_SIZE;
+  public readonly ALLOWED_EXTENSIONS = attachmentUploadService.ALLOWED_EXTENSIONS;
 
-  /**
-   * Validate and upload files
-   */
-  async uploadFiles(files: File[]): Promise<UploadFile[]> {
-    const validFiles: UploadFile[] = [];
-    const notebookStore = useStore.getState();
-    const codeStore = useCodeStore.getState();
-
-    for (const file of files) {
-      // Validate file extension
-      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-      if (!this.ALLOWED_EXTENSIONS.includes(ext)) {
-        throw new Error(`File type not allowed: ${file.name}`);
-      }
-
-      // Validate file size
-      if (file.size > this.MAX_FILE_SIZE) {
-        throw new Error(`File too large (max 10MB): ${file.name}`);
-      }
-
-      // Ensure notebookId exists
-      let currentNotebookId = notebookStore.notebookId;
-      if (!currentNotebookId) {
-        const response = await NotebookLifecycleService.initializeNotebook();
-        if (!response.notebook_id) {
-          throw new Error('Failed to initialize notebook: No notebook ID returned');
-        }
-        currentNotebookId = response.notebook_id;
-        notebookStore.setNotebookId(currentNotebookId);
-        codeStore.setKernelReady(true);
-      }
-
-      // Initialize kernel
-      await codeStore.initializeKernel();
-
-      // Upload file
-      const uploadConfig = {
-        mode: 'unrestricted' as const,
-        allowedTypes: this.ALLOWED_EXTENSIONS,
-        maxFileSize: this.MAX_FILE_SIZE,
-        targetDir: 'assets',
-      };
-
-      const result = await FileService.uploadFile(currentNotebookId!, [file], uploadConfig);
-
-      if (result && (result as any).status === 'ok') {
-        validFiles.push({
-          id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          url: URL.createObjectURL(file),
-          file,
-        });
-      }
-    }
-
-    return validFiles;
+  uploadFiles(files: File[]): Promise<UploadFile[]> {
+    return attachmentUploadService.uploadFiles(files);
   }
 
   /**
@@ -96,10 +25,7 @@ class AITerminalService {
     files: UploadFile[],
     context: CommandContext,
     callbacks: {
-      showToast: (options: {
-        message: string;
-        type: 'success' | 'error' | 'info';
-      }) => Promise<void>;
+      showToast: ShowToastFunction;
       setActiveView: (view: 'script' | 'qa') => void;
     }
   ): Promise<boolean> {
@@ -130,9 +56,7 @@ class AITerminalService {
 
       // Not an action command, proceed with original command handling
       callbacks.setActiveView('script');
-      const commandId = `action-${Date.now()}`;
       const actionData = {
-        id: commandId,
         type: EVENT_TYPES.USER_NEW_INSTRUCTION,
         timestamp,
         content: command,
@@ -144,7 +68,7 @@ class AITerminalService {
         attachedFiles: files,
       };
 
-      useAIAgentStore.getState().addAction(actionData);
+      const commandId = useAIAgentStore.getState().addAction(actionData);
 
       // Prepare Command Agent memory context
       const commandMemoryContext = AgentMemoryService.prepareMemoryContextForBackend(
@@ -187,7 +111,7 @@ class AITerminalService {
         }
       );
 
-      useOperatorStore.getState().sendOperation(notebookId, {
+      const submission = await useOperatorStore.getState().submitOperation(notebookId, {
         type: 'user_command',
         payload: {
           current_view_mode: viewMode,
@@ -199,6 +123,8 @@ class AITerminalService {
           ...commandMemoryContext,
         },
       });
+      if (!submission.accepted) useAIAgentStore.getState().removeAction(commandId);
+      return submission.accepted;
     } else {
       // Question mode
       callbacks.setActiveView('qa');
@@ -218,7 +144,7 @@ class AITerminalService {
 
       useAIAgentStore.getState().addQA(qaData);
       const action = createUserAskQuestionAction(command, [qaId], currentCellId);
-      useAIAgentStore.getState().addAction(action);
+      const questionActionId = useAIAgentStore.getState().addAction(action);
 
       // Prepare Agent memory context
       console.log('AITerminal: Preparing memory context', { notebookId, command });
@@ -269,10 +195,15 @@ class AITerminalService {
         },
       };
       console.log('AITerminal: Sending final payload', finalPayload);
-      useOperatorStore.getState().sendOperation(notebookId, finalPayload);
+      const submission = await useOperatorStore
+        .getState()
+        .submitOperation(notebookId, finalPayload);
+      if (!submission.accepted) {
+        useAIAgentStore.getState().removeQA(qaId);
+        useAIAgentStore.getState().removeAction(questionActionId);
+      }
+      return submission.accepted;
     }
-
-    return true;
   }
 }
 

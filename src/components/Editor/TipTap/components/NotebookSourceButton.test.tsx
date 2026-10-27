@@ -51,6 +51,27 @@ afterEach(() => {
   useStore.setState(original, true);
 });
 
+it('protects unapplied source edits on page exit and clears protection after draft undo or cancel', () => {
+  const warned = () => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+  const original = input.value;
+  expect(warned()).toBe(false);
+  fireEvent.change(input, { target: { value: original.replace('print(1)', 'print(2)') } });
+  expect(warned()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }));
+  expect(input.value).toBe(original);
+  expect(warned()).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Redo draft' }));
+  expect(warned()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(warned()).toBe(false);
+  expect(useStore.getState().cells[1].content).toBe('print(1)');
+});
+
 it('records ordinary beforeinput typing as known ranges without full-buffer diffing', () => {
   const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
   const original = input.value;
@@ -59,7 +80,12 @@ it('records ordinary beforeinput typing as known ranges without full-buffer diff
   const diff = vi.spyOn(SourceDraftHistory.prototype, 'edit');
   try {
     for (const data of ['x', 'y']) {
-      const event = new InputEvent('beforeinput', { inputType: 'insertText', data, bubbles: true, cancelable: true });
+      const event = new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data,
+        bubbles: true,
+        cancelable: true,
+      });
       fireEvent(input, event);
       expect(event.defaultPrevented).toBe(true);
     }
@@ -71,64 +97,87 @@ it('records ordinary beforeinput typing as known ranges without full-buffer diff
     fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
     expect(input.value).toBe(original);
     expect(input.selectionDirection).toBe('backward');
-  } finally { diff.mockRestore(); }
+  } finally {
+    diff.mockRestore();
+  }
 });
 
-it.each(['insertLineBreak', 'insertParagraph'])('records %s without scanning the full buffer', inputType => {
-  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
-  const original = input.value;
-  const start = original.indexOf('print(1)');
-  input.setSelectionRange(start, start);
-  const diff = vi.spyOn(SourceDraftHistory.prototype, 'edit');
-  try {
+it.each(['insertLineBreak', 'insertParagraph'])(
+  'records %s without scanning the full buffer',
+  (inputType) => {
+    const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    const original = input.value;
+    const start = original.indexOf('print(1)');
+    input.setSelectionRange(start, start);
+    const diff = vi.spyOn(SourceDraftHistory.prototype, 'edit');
+    try {
+      const event = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
+      fireEvent(input, event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(input.value).toBe(original.slice(0, start) + '\n' + original.slice(start));
+      expect(input.selectionStart).toBe(start + 1);
+      expect(diff).not.toHaveBeenCalled();
+      fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+      expect(input.value).toBe(original);
+    } finally {
+      diff.mockRestore();
+    }
+  }
+);
+
+it.each(['deleteContentBackward', 'deleteContentForward'])(
+  'leaves collapsed %s to browser character-boundary handling',
+  (inputType) => {
+    const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    const original = input.value;
+    input.setSelectionRange(5, 5);
     const event = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
     fireEvent(input, event);
-    expect(event.defaultPrevented).toBe(true);
-    expect(input.value).toBe(original.slice(0, start) + '\n' + original.slice(start));
-    expect(input.selectionStart).toBe(start + 1);
-    expect(diff).not.toHaveBeenCalled();
-    fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+    expect(event.defaultPrevented).toBe(false);
     expect(input.value).toBe(original);
-  } finally { diff.mockRestore(); }
-});
+  }
+);
 
-it.each(['deleteContentBackward', 'deleteContentForward'])('leaves collapsed %s to browser character-boundary handling', inputType => {
-  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
-  const original = input.value;
-  input.setSelectionRange(5, 5);
-  const event = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
-  fireEvent(input, event);
-  expect(event.defaultPrevented).toBe(false);
-  expect(input.value).toBe(original);
-});
+it.each(['deleteContentBackward', 'deleteContentForward', 'deleteByCut'])(
+  'records selected-range %s with exact undo',
+  (inputType) => {
+    const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    const original = input.value;
+    const start = original.indexOf('print(1)');
+    input.setSelectionRange(start, start + 8, 'backward');
+    const diff = vi.spyOn(SourceDraftHistory.prototype, 'edit');
+    try {
+      const event = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
+      fireEvent(input, event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(input.value).toBe(original.replace('print(1)', ''));
+      expect(input.selectionStart).toBe(start);
+      expect(diff).not.toHaveBeenCalled();
+      fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+      expect(input.value).toBe(original);
+      expect(input.selectionDirection).toBe('backward');
+    } finally {
+      diff.mockRestore();
+    }
+  }
+);
 
-it.each(['deleteContentBackward', 'deleteContentForward', 'deleteByCut'])('records selected-range %s with exact undo', inputType => {
-  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
-  const original = input.value;
-  const start = original.indexOf('print(1)');
-  input.setSelectionRange(start, start + 8, 'backward');
-  const diff = vi.spyOn(SourceDraftHistory.prototype, 'edit');
-  try {
-    const event = new InputEvent('beforeinput', { inputType, bubbles: true, cancelable: true });
+it.each([{ cancelable: false }, { cancelable: true, isComposing: true }])(
+  'leaves browser-owned input untouched: %o',
+  (options) => {
+    const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    const original = input.value;
+    const event = new InputEvent('beforeinput', {
+      inputType: 'insertText',
+      data: '中',
+      bubbles: true,
+      ...options,
+    });
     fireEvent(input, event);
-    expect(event.defaultPrevented).toBe(true);
-    expect(input.value).toBe(original.replace('print(1)', ''));
-    expect(input.selectionStart).toBe(start);
-    expect(diff).not.toHaveBeenCalled();
-    fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+    expect(event.defaultPrevented).toBe(false);
     expect(input.value).toBe(original);
-    expect(input.selectionDirection).toBe('backward');
-  } finally { diff.mockRestore(); }
-});
-
-it.each([{ cancelable: false }, { cancelable: true, isComposing: true }])('leaves browser-owned input untouched: %o', options => {
-  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
-  const original = input.value;
-  const event = new InputEvent('beforeinput', { inputType: 'insertText', data: '中', bubbles: true, ...options });
-  fireEvent(input, event);
-  expect(event.defaultPrevented).toBe(false);
-  expect(input.value).toBe(original);
-});
+  }
+);
 
 it.each([
   { key: 'z', metaKey: true },
@@ -153,6 +202,92 @@ it.each([
   }
 );
 
+it.each(['Python', 'markdown', 'raw'])(
+  'appends only the new %s section to the native source input',
+  (type) => {
+    const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    const original = input.value;
+    const cells = useStore.getState().cells;
+    const replace = vi.spyOn(input, 'setRangeText');
+    const assign = vi.spyOn(input, 'value', 'set');
+    fireEvent.click(screen.getByRole('button', { name: `Add ${type}` }));
+    const appended = input.value;
+    expect(appended.startsWith(original)).toBe(true);
+    expect(replace).toHaveBeenCalledExactlyOnceWith(
+      appended.slice(original.length),
+      original.length,
+      original.length,
+      'preserve'
+    );
+    expect(assign).not.toHaveBeenCalled();
+    expect(input.selectionStart).toBe(input.selectionEnd);
+    expect(input.selectionStart).toBeGreaterThan(original.length);
+    expect(document.activeElement).toBe(input);
+    expect(useStore.getState().cells).toBe(cells);
+    fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }));
+    expect(input.value).toBe(original);
+    fireEvent.click(screen.getByRole('button', { name: 'Redo draft' }));
+    expect(input.value).toBe(appended);
+  }
+);
+
+it('writes only the known indentation range into the native source input', () => {
+  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+  const original = input.value;
+  const start = original.indexOf('print(1)');
+  const replace = vi.spyOn(input, 'setRangeText');
+  input.setSelectionRange(start, start + 1, 'backward');
+  fireEvent.keyDown(input, { key: ']', ctrlKey: true });
+  expect(replace).toHaveBeenCalledExactlyOnceWith('  p', start, start + 1, 'preserve');
+  expect(input.selectionStart).toBe(start + 2);
+  expect(input.selectionEnd).toBe(start + 3);
+  expect(input.selectionDirection).toBe('backward');
+  fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+  expect(input.value).toBe(original);
+});
+
+it.each(['keyboard', 'native', 'button'])(
+  'writes only changed ranges for %s undo and redo',
+  (channel) => {
+    const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    const original = input.value;
+    const start = original.indexOf('print(1)');
+    input.setSelectionRange(start, start);
+    fireEvent(
+      input,
+      new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: 'X',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    const replace = vi.spyOn(input, 'setRangeText');
+    const step = (undo: boolean) => {
+      if (channel === 'keyboard')
+        fireEvent.keyDown(input, { key: 'z', ctrlKey: true, shiftKey: !undo });
+      else if (channel === 'native')
+        fireEvent(
+          input,
+          new InputEvent('beforeinput', {
+            inputType: undo ? 'historyUndo' : 'historyRedo',
+            bubbles: true,
+            cancelable: true,
+          })
+        );
+      else
+        fireEvent.click(screen.getByRole('button', { name: undo ? 'Undo draft' : 'Redo draft' }));
+    };
+    step(true);
+    expect(replace).toHaveBeenCalledExactlyOnceWith('', start, start + 1, 'preserve');
+    expect(input.value).toBe(original);
+    replace.mockClear();
+    step(false);
+    expect(replace).toHaveBeenCalledExactlyOnceWith('X', start, start, 'preserve');
+    expect(input.value).toBe(original.slice(0, start) + 'X' + original.slice(start));
+  }
+);
+
 it('undoes indentation and added cells within the draft without changing the live notebook', () => {
   const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
   const original = input.value;
@@ -174,6 +309,20 @@ it('undoes indentation and added cells within the draft without changing the liv
   expect(useStore.getState().cells).toBe(cells);
 });
 
+it('keeps a composing draft intact when cancel is requested by its button', () => {
+  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+  fireEvent.change(input, { target: { value: input.value.replace('print(1)', 'print(2)') } });
+  const draft = input.value;
+  fireEvent.compositionStart(input);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByRole('textbox', { name: 'Notebook source' })).toBe(input);
+  expect(input.value).toBe(draft);
+  fireEvent.compositionEnd(input);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.queryByRole('textbox', { name: 'Notebook source' })).toBeNull();
+  expect(useStore.getState().cells[1].content).toBe('print(1)');
+});
+
 it('keeps a composing draft intact when apply, add or undo is requested', () => {
   const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
   const cells = useStore.getState().cells;
@@ -189,19 +338,29 @@ it('keeps a composing draft intact when apply, add or undo is requested', () => 
   fireEvent.compositionEnd(input);
   fireEvent.click(screen.getByRole('button', { name: 'Apply source' }));
   expect(screen.queryByRole('textbox', { name: 'Notebook source' })).toBeNull();
-  expect(useStore.getState().cells.find(cell => cell.id === 'code')?.content).toBe('print("中文")');
+  expect(useStore.getState().cells.find((cell) => cell.id === 'code')?.content).toBe(
+    'print("中文")'
+  );
 });
 
 it('freezes the open draft when access becomes read-only and preserves it for later editing', () => {
   const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
   const draft = input.value.replace('print(1)', 'print(2)');
   fireEvent.change(input, { target: { value: draft } });
-  view.rerender(<EditorReadOnlyContext.Provider value={true}><NotebookSourceButton editor={editor} /></EditorReadOnlyContext.Provider>);
+  view.rerender(
+    <EditorReadOnlyContext.Provider value={true}>
+      <NotebookSourceButton editor={editor} />
+    </EditorReadOnlyContext.Provider>
+  );
   expect(input.readOnly).toBe(true);
   fireEvent.change(input, { target: { value: 'unauthorized edit' } });
   fireEvent.click(screen.getByRole('button', { name: 'Add Python' }));
   fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
-  view.rerender(<EditorReadOnlyContext.Provider value={false}><NotebookSourceButton editor={editor} /></EditorReadOnlyContext.Provider>);
+  view.rerender(
+    <EditorReadOnlyContext.Provider value={false}>
+      <NotebookSourceButton editor={editor} />
+    </EditorReadOnlyContext.Provider>
+  );
   expect(input.value).toBe(draft);
   fireEvent.click(screen.getByRole('button', { name: 'Undo draft' }));
   expect(input.value).toContain('print(1)');
@@ -257,41 +416,62 @@ it('keeps the active source session when its trigger is invoked again', () => {
   expect(useStore.getState().cells[1].content).toBe('print(2)');
 });
 
-it('resumes an unapplied named-notebook draft and its undo history after remount', () => {
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-  act(() => useStore.setState({ notebookId: 'source-navigation-test' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Notebook source' }));
-  const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
-  fireEvent.change(input, { target: { value: input.value.replace('print(1)', 'print(2)') } });
-  const edited = input.value;
-  view.unmount();
-  view = render(
-    <EditorReadOnlyContext.Provider value={false}>
-      <NotebookSourceButton editor={editor} />
-    </EditorReadOnlyContext.Provider>
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Notebook source' }));
-  expect(
-    (screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement).value
-  ).toBe(edited);
-  expect((screen.getByRole('button', { name: 'Undo draft' }) as HTMLButtonElement).disabled).toBe(
-    false
-  );
-  expect(useStore.getState().cells[1].content).toBe('print(1)');
-  fireEvent.click(screen.getByRole('button', { name: 'Apply source' }));
-  expect(useStore.getState().cells[1].content).toBe('print(2)');
-});
+it.each(['forward', 'backward', 'none'] as const)(
+  'resumes a draft with its %s selection, viewport and undo history after remount',
+  (direction) => {
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    act(() => useStore.setState({ notebookId: 'source-navigation-test' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Notebook source' }));
+    const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: input.value.replace('print(1)', 'print(2)') } });
+    const edited = input.value;
+    const start = edited.indexOf('print(2)');
+    const end = direction === 'none' ? start : start + 8;
+    input.setSelectionRange(start, end, direction);
+    fireEvent.select(input);
+    input.scrollTop = 230;
+    input.scrollLeft = 45;
+    view.unmount();
+    view = render(
+      <EditorReadOnlyContext.Provider value={false}>
+        <NotebookSourceButton editor={editor} />
+      </EditorReadOnlyContext.Provider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Notebook source' }));
+    const resumed = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+    expect(resumed.value).toBe(edited);
+    expect(document.activeElement).toBe(resumed);
+    expect([resumed.selectionStart, resumed.selectionEnd]).toEqual([start, end]);
+    if (direction !== 'none') expect(resumed.selectionDirection).toBe(direction);
+    expect([resumed.scrollTop, resumed.scrollLeft]).toEqual([230, 45]);
+    expect((screen.getByRole('button', { name: 'Undo draft' }) as HTMLButtonElement).disabled).toBe(
+      false
+    );
+    expect(useStore.getState().cells[1].content).toBe('print(1)');
+    fireEvent.click(screen.getByRole('button', { name: 'Apply source' }));
+    expect(useStore.getState().cells[1].content).toBe('print(2)');
+  }
+);
 
 it.each(['Cancel', 'Apply source'])('opens a fresh source history after %s', (action) => {
   const trigger = screen.getByRole('button', { name: 'Notebook source' }) as HTMLButtonElement;
   const input = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
   fireEvent.change(input, { target: { value: input.value.replace('print(1)', 'print(2)') } });
+  input.setSelectionRange(10, 20, 'backward');
+  input.scrollTop = 230;
+  input.scrollLeft = 45;
   expect(trigger.disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: action }));
   expect(trigger.disabled).toBe(false);
   expect(document.activeElement).toBe(trigger);
   fireEvent.click(trigger);
   const reopened = screen.getByRole('textbox', { name: 'Notebook source' }) as HTMLTextAreaElement;
+  expect([
+    reopened.selectionStart,
+    reopened.selectionEnd,
+    reopened.scrollTop,
+    reopened.scrollLeft,
+  ]).toEqual([0, 0, 0, 0]);
   expect(reopened.value).toContain(action === 'Cancel' ? 'print(1)' : 'print(2)');
   expect((screen.getByRole('button', { name: 'Undo draft' }) as HTMLButtonElement).disabled).toBe(
     true

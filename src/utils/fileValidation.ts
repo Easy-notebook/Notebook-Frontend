@@ -70,23 +70,6 @@ export function getSafeFileName(filePath: string): string {
 }
 
 /**
- * Check if a file path looks like an image reference that might be missing
- */
-export function isPotentialMissingImage(filePath: string): boolean {
-  if (!filePath) return false;
-
-  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp'];
-  const lowerPath = filePath.toLowerCase();
-
-  return (
-    imageExtensions.some((ext) => lowerPath.includes(ext)) ||
-    filePath.includes('Screenshot') ||
-    filePath.includes('Image') ||
-    filePath.includes('photo')
-  );
-}
-
-/**
  * Sanitize file path for safe usage
  */
 export function sanitizeFilePath(filePath: string): string {
@@ -170,14 +153,8 @@ export interface FileValidationResult {
   suggestion?: string;
 }
 
-/**
- * Comprehensive file validation
- */
-export function validateFileForTab(
-  filePath: string,
-  fileName: string,
-  content?: string
-): FileValidationResult {
+/** Validate listed file metadata; content availability belongs to the file loader. */
+export function validateTabMetadata(filePath: string, fileName: string): FileValidationResult {
   if (!isValidFilePath(filePath)) {
     return {
       isValid: false,
@@ -199,14 +176,6 @@ export function validateFileForTab(
       isValid: false,
       reason: 'System or temporary file',
       suggestion: 'These files should not be opened as tabs',
-    };
-  }
-
-  if (isPotentialMissingImage(filePath) && (!content || content.trim().length === 0)) {
-    return {
-      isValid: false,
-      reason: 'Potentially missing image file',
-      suggestion: 'File may not exist on server',
     };
   }
 

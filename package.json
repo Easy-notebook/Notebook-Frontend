@@ -18,9 +18,15 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:browser": "playwright test",
+    "agent:bridge": "tsx server/agent/main.ts",
+    "agent:type-check": "tsc -p tsconfig.agent.json",
+    "agent:test": "vitest run --config vitest.agent.config.ts",
+    "agent:smoke": "tsx server/agent/smoke.ts"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.311",
     "@codemirror/lang-javascript": "^6.2.4",
     "@codemirror/lang-markdown": "^6.3.1",
     "@codemirror/lang-python": "^6.1.6",
@@ -32,6 +38,7 @@
     "@fluentui/react-file-type-icons": "^8.12.8",
     "@hookform/resolvers": "^5.2.2",
     "@msgpack/msgpack": "^3.0.0-beta2",
+    "@openai/codex": "0.164.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -98,6 +105,7 @@
     "immer": "^10.1.1",
     "input-otp": "^1.4.2",
     "jspdf": "^2.5.2",
+    "jszip": "^3.10.2",
     "katex": "^0.16.21",
     "lodash-es": "^4.17.21",
     "lucide-react": "^0.468.0",
@@ -151,6 +159,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.64.1",
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/cli": "^2.2.1",
     "@testing-library/jest-dom": "^6.9.1",
@@ -185,6 +194,7 @@
     "lint-staged": "^15.5.2",
     "prettier": "^3.6.2",
     "shadcn": "^3.5.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "vite": "^6.0.1",
     "vitest": "^4.0.6"

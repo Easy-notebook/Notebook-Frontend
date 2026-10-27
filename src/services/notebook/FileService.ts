@@ -92,10 +92,11 @@ export class FileService extends BaseService {
   }
 
   // List files
-  static async listFiles(notebookId: string): Promise<FileListResponse> {
+  static async listFiles(notebookId: string, signal?: AbortSignal): Promise<FileListResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/list_files/${notebookId}`, {
         method: 'GET',
+        signal,
       });
       return await this.handleResponse<FileListResponse>(response);
     } catch (error) {
@@ -110,11 +111,7 @@ export class FileService extends BaseService {
       const response = await fetch(`${this.baseUrl}/download_file/${notebookId}/${filename}`, {
         method: 'GET',
       });
-      if (!response.ok) {
-        const data = await response.json();
-        apiLog.error('API error', { data });
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
-      }
+      await this.assertSuccessfulResponse(response);
       return response.blob();
     } catch (error) {
       apiLog.error('Failed to download file', { error });

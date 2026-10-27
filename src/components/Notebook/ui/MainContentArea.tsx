@@ -59,14 +59,14 @@ export const MainContentArea = ({
   onAgentSelect,
 }: MainContentAreaProps) => {
   // Check if there's a detached cell to display
-  const { detachedCellId, setDetachedCellId } = useStore();
+  const { detachedCellId, setDetachedCellId, notebookId } = useStore();
   // Helper function to check if sidebar has content
   const hasSidebarContent = useCallback(() => {
     const activeItem = activeSidebarItem;
     switch (activeItem) {
       case 'workspace':
         // Workspace has content if there are tasks
-        return tasks && tasks.length > 0;
+        return Boolean(notebookId);
       case 'knowledge-forest':
       case 'easynet':
       case 'settings':
@@ -78,7 +78,7 @@ export const MainContentArea = ({
       default:
         return false;
     }
-  }, [activeSidebarItem, tasks]);
+  }, [activeSidebarItem, notebookId]);
 
   // Helper function to render expanded sidebar content
   const renderExpandedSidebar = useCallback(() => {
@@ -121,13 +121,13 @@ export const MainContentArea = ({
   const leftPanelContent = renderExpandedSidebar();
 
   const centerPanelContent = (
-    <div className="h-full w-full flex flex-col relative">
+    <div className="h-full w-full min-w-0 flex flex-col relative">
       <GlobalTabList />
 
       {/* Workflow Panel - shows current workflow progress */}
       <WorkflowPanel />
 
-      <div className="flex-1 overflow-y-scroll scroll-smooth w-full min-h-0">
+      <div className="flex-1 overflow-x-hidden overflow-y-scroll scroll-smooth w-full min-w-0 min-h-0">
         <div className="w-full h-full relative z-0">{children}</div>
       </div>
       {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
@@ -178,7 +178,7 @@ export const MainContentArea = ({
       )}
 
       {/* Content area using ThreePanelLayout */}
-      <div className="flex-1 flex gap-1.5 p-3 min-h-0">
+      <div className="flex-1 flex gap-1.5 p-1 min-h-0">
         <ThreePanelLayout
           showLeft={showLeft}
           showRight={showRight}

@@ -19,6 +19,16 @@ export enum AutoSaveStatus {
   DISCONNECTED = 'disconnected',
 }
 
+export type SavePhase = 'clean' | 'scheduled' | 'writing' | 'retry_wait' | 'blocked';
+export interface NotebookSaveProgress {
+  readonly notebookId: string;
+  readonly phase: SavePhase;
+  readonly currentRevision: number;
+  readonly committedRevision: number;
+  readonly inFlightRevision: number | null;
+  readonly error: string | null;
+}
+
 /**
  * Notebook snapshot for saving
  */
@@ -57,6 +67,8 @@ export interface AutoSaveConfig {
  * AutoSave state for store synchronization
  */
 export interface AutoSaveState {
+  lifecycle: 'active' | 'closing' | 'disposed';
+  scheduling: 'running' | 'pausing' | 'paused';
   /** Current status of auto-save */
   status: AutoSaveStatus;
   /** Last successful save timestamp */
@@ -82,12 +94,21 @@ export type AutoSaveEventType =
   | 'load_started'
   | 'load_completed'
   | 'load_failed'
-  | 'dirty_changed';
+  | 'dirty_changed'
+  | 'error_cleared'
+  | 'initialization_failed'
+  | 'lifecycle_changed'
+  | 'scheduling_changed';
 
 /**
  * AutoSave event payload
  */
 export interface AutoSaveEvent {
+  /** Complete authoritative state at this transition. */
+  state: Readonly<AutoSaveState>;
+  progress: NotebookSaveProgress | null;
+  /** Revision acknowledged by save_completed, scoped to this service instance. */
+  revision?: number;
   type: AutoSaveEventType;
   notebookId?: string;
   status: AutoSaveStatus;
@@ -114,6 +135,9 @@ export interface IAutoSaveService {
   /** Get full current state */
   getState(): AutoSaveState;
 
+  /** Last save failure for each still-pending notebook; stable immutable snapshot. */
+  getSaveFailures(): Readonly<Record<string, string>>;
+
   /** Check if service is initialized */
   isInitialized(): boolean;
 
@@ -122,6 +146,9 @@ export interface IAutoSaveService {
 
   /** Save immediately without debouncing */
   saveNow(snapshot: NotebookSnapshot): Promise<void>;
+
+  getSaveProgress(notebookId: string): NotebookSaveProgress | null;
+  flushThrough(notebookId: string, revision: number): Promise<void>;
 
   /** Load a notebook from storage */
   load(notebookId: string): Promise<LoadedNotebook | null>;
@@ -159,8 +186,11 @@ export interface IAutoSaveService {
   /** Subscribe to state change events */
   subscribe(listener: AutoSaveEventListener): () => void;
 
+  /** Clear the displayed service error. */
+  clearError(): void;
+
   /** Dispose and cleanup resources */
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 /**
@@ -177,6 +207,8 @@ export const DEFAULT_AUTOSAVE_CONFIG: AutoSaveConfig = {
  * Initial auto-save state
  */
 export const INITIAL_AUTOSAVE_STATE: AutoSaveState = {
+  lifecycle: 'active',
+  scheduling: 'running',
   status: AutoSaveStatus.IDLE,
   lastSavedAt: null,
   error: null,

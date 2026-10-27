@@ -1,3 +1,4 @@
+import type { WorkflowAPIClientPort } from '@Store/models';
 /**
  * Workflow Initializer
  * ====================
@@ -16,16 +17,18 @@
  * @project Easy-notebook
  */
 
-import { initializeStateMachine } from '../store/workflowStateMachine';
-import { AsyncStateMachineAdapter } from '../core/AsyncStateMachineAdapter';
+import {
+  AsyncStateMachineAdapter,
+  installAsyncStateMachine,
+  peekAsyncStateMachine,
+} from '../core/AsyncStateMachineAdapter';
+import useNotebookStore from '@Store/notebookStore';
+import { StateFactory } from '../states/StateFactory';
 import { useScriptStore } from '../store/useScriptStore';
 import { getTransitionCoordinator } from '../transitions/TransitionCoordinator';
 import { getWorkflowAPIClient, initializeWorkflowAPIClient } from '../api/WorkflowAPIClient';
 
 import { WORKFLOW_API_BASE_URL } from '@/config/base_url';
-
-// Global singleton instance
-let globalAsyncAdapter: AsyncStateMachineAdapter | null = null;
 
 /**
  * Initialize the entire workflow system
@@ -58,17 +61,9 @@ export function initializeWorkflowSystem(apiClientConfig?: {
   const scriptStore = useScriptStore.getState();
   console.log('[WorkflowInit] ScriptStore obtained');
 
-  // Initialize the state machine and transition coordinator
-  initializeStateMachine({
-    scriptStore,
-    apiClient: workflowAPIClient,
-  });
-  console.log('[WorkflowInit] StateMachine and TransitionCoordinator initialized');
-
-  // Create AsyncStateMachineAdapter with WorkflowAPIClient
   const asyncAdapter = new AsyncStateMachineAdapter(workflowAPIClient, scriptStore);
-  globalAsyncAdapter = asyncAdapter;
-  console.log('[WorkflowInit] AsyncStateMachineAdapter created with WorkflowAPIClient');
+  getTransitionCoordinator().setContext({ notebookStore: useNotebookStore.getState() });
+  installAsyncStateMachine(asyncAdapter);
 
   // Verify integration
   const coordinator = getTransitionCoordinator();
@@ -93,12 +88,13 @@ export function initializeWorkflowSystem(apiClientConfig?: {
  * @returns The AsyncStateMachineAdapter instance or null if not initialized
  */
 export function getAsyncAdapter(): AsyncStateMachineAdapter | null {
-  if (!globalAsyncAdapter) {
+  const adapter = peekAsyncStateMachine();
+  if (!adapter) {
     console.warn(
       '[WorkflowInit] AsyncStateMachineAdapter not initialized. Call initializeWorkflowSystem first.'
     );
   }
-  return globalAsyncAdapter;
+  return adapter;
 }
 
 /**
@@ -106,17 +102,17 @@ export function getAsyncAdapter(): AsyncStateMachineAdapter | null {
  *
  * @param apiClient - The new API client
  */
-export function updateAPIClient(apiClient: any): void {
+export function updateAPIClient(apiClient: WorkflowAPIClientPort): void {
   console.log('[WorkflowInit] Updating API client...');
 
-  // Update AsyncStateMachineAdapter
-  if (globalAsyncAdapter) {
-    globalAsyncAdapter.setApiClient(apiClient);
+  const adapter = peekAsyncStateMachine();
+  if (adapter) {
+    adapter.setApiClient(apiClient);
+  } else {
+    // Configuration can precede lazy initialization; its loader reads this context.
+    getTransitionCoordinator().setContext({ apiClient });
+    StateFactory.setApiClient(apiClient);
   }
-
-  // Update TransitionCoordinator
-  const coordinator = getTransitionCoordinator();
-  coordinator.setContext({ apiClient });
 
   console.log('✅ [WorkflowInit] API client updated');
 }
@@ -136,7 +132,7 @@ export function verifyWorkflowSystemInit(): {
   const issues: string[] = [];
 
   // Check AsyncStateMachineAdapter
-  const hasAsyncAdapter = globalAsyncAdapter !== null;
+  const hasAsyncAdapter = peekAsyncStateMachine() !== null;
   if (!hasAsyncAdapter) {
     issues.push('AsyncStateMachineAdapter not initialized');
   }

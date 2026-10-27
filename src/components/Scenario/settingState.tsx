@@ -1,11 +1,29 @@
 // components/SettingsPage.js
-import { useState, useEffect, useCallback } from 'react';
-import { Settings, Settings2, Key, FileText, Keyboard, Globe, Monitor } from 'lucide-react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  type InputHTMLAttributes,
+  type SelectHTMLAttributes,
+  type ChangeEvent,
+  type MouseEvent,
+} from 'react';
+import type { EditorSettings, MarkdownPreferences } from '@Store/models/settings';
+import {
+  Settings,
+  Settings2,
+  Key,
+  FileText,
+  Keyboard,
+  Globe,
+  Monitor,
+  type LucideIcon,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import useSettingsStore, { useSettings, useSettingsOpen } from '@Store/settingsStore';
 
 // Base components with dark mode support
-const Input = ({ className = '', ...props }) => (
+const Input = ({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) => (
   <input
     className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-lg
         bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
@@ -15,7 +33,15 @@ const Input = ({ className = '', ...props }) => (
   />
 );
 
-const Switch = ({ checked, onCheckedChange, className = '' }) => (
+const Switch = ({
+  checked,
+  onCheckedChange,
+  className = '',
+}: {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  className?: string;
+}) => (
   <button
     role="switch"
     aria-checked={checked}
@@ -33,7 +59,7 @@ const Switch = ({ checked, onCheckedChange, className = '' }) => (
   </button>
 );
 
-const Select = ({ className = '', ...props }) => (
+const Select = ({ className = '', ...props }: SelectHTMLAttributes<HTMLSelectElement>) => (
   <select
     className={`w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-lg
         bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
@@ -42,36 +68,132 @@ const Select = ({ className = '', ...props }) => (
   />
 );
 
+// Shortcut recording component
+const ShortcutInput = ({
+  label,
+  shortcutKey,
+  value,
+  recordingShortcut,
+  onRecordingChange,
+  onShortcutChange,
+  recordPrompt,
+}: {
+  label: string;
+  shortcutKey: string;
+  value: string;
+  recordingShortcut: string | null;
+  onRecordingChange: (key: string | null) => void;
+  onShortcutChange: (key: string, value: string) => void;
+  recordPrompt: string;
+}) => {
+  const [currentKeys, setCurrentKeys] = useState<string[]>([]);
+  const isRecording = recordingShortcut === shortcutKey;
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      e.preventDefault();
+      if (!isRecording) return;
+
+      const keys = new Set<string>();
+      if (e.ctrlKey) keys.add('Ctrl');
+      if (e.shiftKey) keys.add('Shift');
+      if (e.altKey) keys.add('Alt');
+      if (e.metaKey) keys.add('Meta');
+
+      if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+        keys.add(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+      }
+      setCurrentKeys(Array.from(keys));
+    },
+    [isRecording]
+  );
+
+  const handleKeyUp = useCallback(
+    (e: KeyboardEvent) => {
+      if (!isRecording) return;
+      if (!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+        onRecordingChange(null);
+        if (currentKeys.length > 0) {
+          onShortcutChange(shortcutKey, currentKeys.join(' + '));
+        }
+        setCurrentKeys([]);
+      }
+    },
+    [isRecording, currentKeys, shortcutKey, onRecordingChange, onShortcutChange]
+  );
+
+  useEffect(() => {
+    if (isRecording) {
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
+    }
+  }, [isRecording, handleKeyDown, handleKeyUp]);
+
+  const handleClick = (e: MouseEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (isRecording) {
+      onRecordingChange(null);
+      setCurrentKeys([]);
+      return;
+    }
+    if (recordingShortcut && recordingShortcut !== shortcutKey) {
+      setCurrentKeys([]);
+    }
+    onRecordingChange(shortcutKey);
+  };
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-lg font-medium text-gray-700 dark:text-gray-300">{label}</span>
+      <div className="relative">
+        <Input
+          readOnly
+          type="text"
+          value={isRecording ? currentKeys.join(' + ') : value}
+          className={`w-52 text-right font-mono text-base cursor-pointer
+            ${isRecording ? 'bg-gray-50 dark:bg-gray-700 border-theme-500 dark:border-theme-600' : ''}`}
+          onClick={handleClick}
+          placeholder={recordPrompt}
+        />
+      </div>
+    </div>
+  );
+};
+
+type SettingsTab = 'general' | 'editor' | 'shortcuts' | 'markdown';
+
 const SettingsPage = () => {
   const { t, i18n } = useTranslation();
   const settings = useSettings();
   const settingsOpen = useSettingsOpen();
   const store = useSettingsStore();
 
-  const [activeTab, setActiveTab] = useState<'general' | 'editor' | 'shortcuts' | 'markdown'>(
-    'general'
-  );
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [recordingShortcut, setRecordingShortcut] = useState<string | null>(null);
 
   // Handlers
-  const handleApiSettingsChange = async (e) => {
-    const { name, value } = e.target;
+  const handleApiSettingsChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value, valueAsNumber } = e.currentTarget;
     try {
-      await store.updateApiSettings({
-        [name]: value,
-      });
+      if (name === 'apiTimeout') await store.updateApiSettings({ apiTimeout: valueAsNumber });
+      else if (name === 'apiKey' || name === 'baseUrl')
+        await store.updateApiSettings({ [name]: value });
     } catch (error) {
       console.error('Failed to update API settings:', error);
     }
   };
 
-  const handleMarkdownPreferenceChange = (key) => {
+  const handleMarkdownPreferenceChange = (key: keyof MarkdownPreferences) => {
     store.updateMarkdownPreferences({
       [key]: !settings.markdownPreferences[key],
     });
   };
 
-  const handleShortcutChange = (key, value) => {
+  const handleShortcutChange = (key: string, value: string) => {
     try {
       store.updateShortcut(key, value);
     } catch (error) {
@@ -79,7 +201,7 @@ const SettingsPage = () => {
     }
   };
 
-  const handleLanguageChange = (language) => {
+  const handleLanguageChange = (language: string) => {
     try {
       store.updateLanguage(language);
       i18n.changeLanguage(language);
@@ -89,7 +211,10 @@ const SettingsPage = () => {
     }
   };
 
-  const handleEditorSettingsChange = (key, value) => {
+  const handleEditorSettingsChange = <K extends keyof EditorSettings>(
+    key: K,
+    value: EditorSettings[K]
+  ) => {
     try {
       store.updateEditorSettings({
         [key]: value,
@@ -109,7 +234,15 @@ const SettingsPage = () => {
   }, [recordingShortcut]);
 
   // Tab navigation with dark mode support
-  const TabButton = ({ id, label, icon: Icon }) => (
+  const TabButton = ({
+    id,
+    label,
+    icon: Icon,
+  }: {
+    id: SettingsTab;
+    label: string;
+    icon: LucideIcon;
+  }) => (
     <button
       onClick={() => setActiveTab(id)}
       className={`flex items-center space-x-2 px-4 py-3 font-medium rounded-3xl
@@ -123,93 +256,6 @@ const SettingsPage = () => {
       <span>{label}</span>
     </button>
   );
-
-  // Shortcut recording component
-  const ShortcutInput = ({
-    label,
-    shortcutKey,
-    value,
-    recordingShortcut,
-    onRecordingChange,
-    onShortcutChange,
-  }) => {
-    const [currentKeys, setCurrentKeys] = useState([]);
-    const isRecording = recordingShortcut === shortcutKey;
-
-    const handleKeyDown = useCallback(
-      (e) => {
-        e.preventDefault();
-        if (!isRecording) return;
-
-        const keys = new Set();
-        if (e.ctrlKey) keys.add('Ctrl');
-        if (e.shiftKey) keys.add('Shift');
-        if (e.altKey) keys.add('Alt');
-        if (e.metaKey) keys.add('Meta');
-
-        if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-          keys.add(e.key.length === 1 ? e.key.toUpperCase() : e.key);
-        }
-        setCurrentKeys(Array.from(keys));
-      },
-      [isRecording]
-    );
-
-    const handleKeyUp = useCallback(
-      (e) => {
-        if (!isRecording) return;
-        if (!e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
-          onRecordingChange(null);
-          if (currentKeys.length > 0) {
-            onShortcutChange(shortcutKey, currentKeys.join(' + '));
-          }
-          setCurrentKeys([]);
-        }
-      },
-      [isRecording, currentKeys, shortcutKey, onRecordingChange, onShortcutChange]
-    );
-
-    useEffect(() => {
-      if (isRecording) {
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
-        return () => {
-          window.removeEventListener('keydown', handleKeyDown);
-          window.removeEventListener('keyup', handleKeyUp);
-        };
-      }
-    }, [isRecording, handleKeyDown, handleKeyUp]);
-
-    const handleClick = (e) => {
-      e.stopPropagation();
-      if (isRecording) {
-        onRecordingChange(null);
-        setCurrentKeys([]);
-        return;
-      }
-      if (recordingShortcut && recordingShortcut !== shortcutKey) {
-        setCurrentKeys([]);
-      }
-      onRecordingChange(shortcutKey);
-    };
-
-    return (
-      <div className="flex items-center justify-between">
-        <span className="text-lg font-medium text-gray-700 dark:text-gray-300">{label}</span>
-        <div className="relative">
-          <Input
-            readOnly
-            type="text"
-            value={isRecording ? currentKeys.join(' + ') : value}
-            className={`w-52 text-right font-mono text-base cursor-pointer
-            ${isRecording ? 'bg-gray-50 dark:bg-gray-700 border-theme-500 dark:border-theme-600' : ''}`}
-            onClick={handleClick}
-            placeholder={t('settings.shortcuts.recordPrompt')}
-          />
-        </div>
-      </div>
-    );
-  };
 
   // Tab contents with dark mode support
   const tabContents = {
@@ -227,6 +273,7 @@ const SettingsPage = () => {
             <Input
               type="password"
               name="apiKey"
+              aria-label={t('settings.api.apiKey')}
               value={settings.apiKey}
               onChange={handleApiSettingsChange}
               placeholder={t('settings.api.placeholders.apiKey')}
@@ -239,6 +286,7 @@ const SettingsPage = () => {
             <Input
               type="text"
               name="baseUrl"
+              aria-label={t('settings.api.baseUrl')}
               value={settings.baseUrl}
               onChange={handleApiSettingsChange}
               placeholder={t('settings.api.placeholders.baseUrl')}
@@ -251,6 +299,7 @@ const SettingsPage = () => {
             <Input
               type="number"
               name="apiTimeout"
+              aria-label={t('settings.api.apiTimeout')}
               value={settings.apiTimeout}
               onChange={handleApiSettingsChange}
               placeholder={t('settings.api.placeholders.apiTimeout')}
@@ -290,6 +339,7 @@ const SettingsPage = () => {
           {Object.entries(settings.shortcuts).map(([key, value]) => (
             <ShortcutInput
               key={key}
+              recordPrompt={t('settings.shortcuts.recordPrompt')}
               label={key.replace(/([A-Z])/g, ' $1').trim()}
               shortcutKey={key}
               value={value}
@@ -308,33 +358,24 @@ const SettingsPage = () => {
           <span>{t('settings.markdown.title')}</span>
         </h2>
         <div className="space-y-5">
-          {Object.entries(settings.markdownPreferences).map(([key, value]) => (
-            <div key={key} className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">
-                  {t(`settings.markdown.${key}`)}
-                </h3>
-                <p className="text-base text-gray-500 dark:text-gray-400">
-                  {t(`settings.markdown.${key}Desc`)}
-                </p>
-              </div>
-              {typeof value === 'boolean' ? (
+          {(Object.keys(settings.markdownPreferences) as Array<keyof MarkdownPreferences>).map(
+            (key) => (
+              <div key={key} className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">
+                    {t(`settings.markdown.${key}`)}
+                  </h3>
+                  <p className="text-base text-gray-500 dark:text-gray-400">
+                    {t(`settings.markdown.${key}Desc`)}
+                  </p>
+                </div>
                 <Switch
-                  checked={value}
+                  checked={settings.markdownPreferences[key]}
                   onCheckedChange={() => handleMarkdownPreferenceChange(key)}
                 />
-              ) : (
-                <Input
-                  type="number"
-                  value={value}
-                  className="w-24 text-right"
-                  onChange={(e) =>
-                    handleMarkdownPreferenceChange(key, parseInt(e.target.value, 10))
-                  }
-                />
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          )}
         </div>
       </div>
     ),
@@ -352,7 +393,11 @@ const SettingsPage = () => {
             </label>
             <Select
               value={settings.editorSettings?.editorType || 'tiptap'}
-              onChange={(e) => handleEditorSettingsChange('editorType', e.target.value)}
+              onChange={(e) => {
+                const value = e.currentTarget.value;
+                if (value === 'tiptap' || value === 'jupyter')
+                  handleEditorSettingsChange('editorType', value);
+              }}
             >
               <option value="tiptap">
                 {t('settings.editor.tiptapEditor', 'Tiptap 编辑器 (富文本模式)')}
@@ -471,6 +516,26 @@ const SettingsPage = () => {
               </div>
             </div>
 
+            {store.error && (
+              <div
+                role="alert"
+                className="mx-6 mt-4 rounded-lg border border-red-300 p-3 text-red-700 dark:text-red-300"
+              >
+                <p>{store.error}</p>
+                <button
+                  type="button"
+                  className="mt-2 underline"
+                  onClick={async () => {
+                    await useSettingsStore.persist.rehydrate();
+                    if (useSettingsStore.persist.hasHydrated()) store.clearError();
+                    else
+                      store.setError(t('settings.reloadFailed', 'Could not read saved settings.'));
+                  }}
+                >
+                  {t('settings.reloadSaved', 'Reload saved settings (replace current changes)')}
+                </button>
+              </div>
+            )}
             <div className="p-6">{tabContents[activeTab]}</div>
           </div>
         </div>
