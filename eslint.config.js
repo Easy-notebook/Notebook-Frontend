@@ -95,4 +95,21 @@ export default [
       '@typescript-eslint/no-empty-interface': 'warn',
     },
   },
+  {
+    files: ['server/agent/**/*.ts'],
+    languageOptions: {
+      globals: { ...globals.node, NodeJS: 'readonly' },
+      parserOptions: { project: './tsconfig.agent.json' },
+    },
+    rules: {
+      '@typescript-eslint/no-unused-expressions': ['error', { allowTernary: true }],
+    },
+  },
+  {
+    files: ['vitest.agent.config.ts'],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: { project: null },
+    },
+  },
 ];
