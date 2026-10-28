@@ -1,3 +1,5 @@
+import { AgentVisualization } from '../AgentVisuals/AgentVisualization';
+import { isAgentVisualKind } from '../AgentVisuals/AgentVisualDocument';
 import type { Components } from 'react-markdown';
 import { MermaidPreview } from './MermaidPreview';
 import { MathPreview } from './MathPreview';
@@ -8,6 +10,15 @@ export const markdownCodeComponents: Components = {
     const code = node?.children[0];
     const source = code?.type === 'element' ? code.properties.dataMermaidSource : undefined;
     const classes = code?.type === 'element' ? code.properties.className : undefined;
+    const language = Array.isArray(classes)
+      ? String(classes.find((value) => String(value).startsWith('language-')) || '').slice(9)
+      : '';
+    if (code?.type === 'element' && isAgentVisualKind(language)) {
+      const content = code.children
+        .map((child) => (child.type === 'text' ? child.value : ''))
+        .join('');
+      return <AgentVisualization kind={language} source={content} />;
+    }
     if (
       code?.type === 'element' &&
       Array.isArray(classes) &&
