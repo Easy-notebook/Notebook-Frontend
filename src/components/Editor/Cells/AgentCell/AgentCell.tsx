@@ -1,3 +1,9 @@
+import { AgentAnswer } from './AgentAnswer';
+import { AgentRunActivity } from './AgentRunActivity';
+import { AgentDetails } from './AgentDetails';
+import { AgentAvatar } from '../../../AgentVisuals/shared';
+import { markdownCodeComponents } from '../../MarkdownCodePreview';
+import './agent-cell.css';
 import { FactCapture } from '../../NotebookContext/FactCapture';
 import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -9,10 +15,10 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
   const cell = useStore((state) => state.cells.find((item) => item.id === cellId));
   const notebookId = useStore((state) => state.notebookId);
   const data = cell?.metadata?.agent as AgentCellData | undefined;
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(cell?.content || '');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const [expanded, setExpanded] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const busy = pending || (!!notebookId && agentCellService.isActive(notebookId, cellId));
   const disabled = readOnly || cell?.enableEdit === false;
@@ -36,16 +42,14 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
   };
   return (
     <section
-      className="my-4 rounded-xl border border-slate-300 bg-white text-slate-900 shadow-sm"
+      className="agent-cell av-theme my-4 rounded-xl border shadow-sm"
       aria-label="Agent Cell"
       contentEditable={false}
       onKeyDown={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
     >
-      <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
-        <strong className="text-sm">
-          {data?.role === 'curator' ? '上下文整理 Agent' : 'Agent'}
-        </strong>
+      <header className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+        <AgentAvatar name={data?.provider === 'claude' ? 'Claude Code' : 'Codex'} />
         <select
           aria-label="Agent provider"
           className="rounded border px-2 py-1 text-sm"
@@ -56,36 +60,37 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
           }
         >
           <option value="codex">Codex</option>
-          <option value="claude">Claude Agent</option>
+          <option value="claude">Claude Code</option>
         </select>
-        <span className="text-xs text-slate-500">
-          当前 notebook · {cancelling ? '正在取消' : busy ? '运行中' : '就绪'}
-        </span>
-        <button
-          type="button"
-          className="ml-auto text-xs underline"
-          aria-expanded={expanded}
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? '折叠全部行动' : '展开全部行动'}
-        </button>
+        {busy && (
+          <span className="text-xs text-slate-500" role="status">
+            {cancelling ? '正在取消' : '运行中'}
+          </span>
+        )}
         {!!data?.turns.length && (
           <button
             type="button"
-            className="text-xs underline"
+            className="ml-auto text-xs"
             disabled={disabled || busy}
             onClick={() => agentCellService.configure(cellId, data.provider)}
           >
             新会话
           </button>
         )}
+        <button type="button" className="text-xs" onClick={() => setShowDetails(true)}>
+          Agent 详情
+        </button>
       </header>
-      <div className="space-y-4 px-4 py-3">
-        {!data?.turns.length && (
-          <p className="text-sm text-slate-500">
-            结合当前 cell 列表提问，或让 agent 修改、运行代码。行动和结果会保留在这里。
-          </p>
-        )}
+      {showDetails && (
+        <AgentDetails
+          data={data}
+          cellId={cellId}
+          notebookId={notebookId || ''}
+          readOnly={disabled}
+          close={() => setShowDetails(false)}
+        />
+      )}
+      <div className="space-y-3 px-3 py-2">
         {data?.turns.map((turn) => (
           <article key={turn.id} className="space-y-2">
             <FactCapture
@@ -102,6 +107,13 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
                 {turn.prompt}
               </p>
             </FactCapture>
+            <AgentRunActivity
+              cellId={cellId}
+              notebookId={notebookId || ''}
+              data={data}
+              turn={turn}
+              readOnly={disabled}
+            />
             {turn.answer && (
               <FactCapture
                 source={{
@@ -113,43 +125,14 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
                 }}
                 disabled={disabled || !notebookId}
               >
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown>{turn.answer}</ReactMarkdown>
-                </div>
+                <AgentAnswer text={turn.answer} />
               </FactCapture>
             )}
-            {!!turn.actions.length && (
-              <details
-                key={`${turn.id}-${expanded}`}
-                open={expanded}
-                className="rounded border border-slate-200 text-sm"
-              >
-                <summary className="cursor-pointer px-3 py-2">
-                  行动记录 · {turn.actions.length}
-                </summary>
-                <ol className="space-y-2 px-3 pb-3">
-                  {turn.actions.map((action) => (
-                    <li key={action.id}>
-                      <details>
-                        <summary className="cursor-pointer font-mono text-xs">
-                          {action.name} · {action.status}
-                        </summary>
-                        <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-50 p-2 text-xs">
-                          {JSON.stringify(
-                            { arguments: action.arguments, result: action.result },
-                            null,
-                            2
-                          )}
-                        </pre>
-                      </details>
-                    </li>
-                  ))}
-                </ol>
-              </details>
+            {turn.status === 'running' && !busy && (
+              <p role="status" className="text-xs text-slate-500">
+                连接已中断，可继续追问
+              </p>
             )}
-            <p className="text-xs text-slate-500">
-              {turn.status === 'running' && !busy ? '连接已中断，可继续追问' : turn.status}
-            </p>
             {turn.error && (
               <p role="alert" className="whitespace-pre-wrap text-sm text-red-700">
                 {turn.error}
@@ -161,11 +144,8 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
           <details open className="rounded bg-blue-50 p-3 text-sm">
             <summary className="cursor-pointer font-medium">任务摘要</summary>
             <div className="prose prose-sm mt-2 max-w-none">
-              <ReactMarkdown>{data.summary.text}</ReactMarkdown>
+              <ReactMarkdown components={markdownCodeComponents}>{data.summary.text}</ReactMarkdown>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
-              相关 cells：{data.summary.cellIds.join(', ') || '无'}
-            </p>
           </details>
         )}
         {error && (

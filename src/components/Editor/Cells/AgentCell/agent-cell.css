@@ -1,0 +1,50 @@
+.agent-cell {
+  background: var(--av-bg);
+  color: var(--av-text);
+  border-color: var(--av-border);
+  box-shadow: 0 2px 4px #00000008;
+}
+.agent-cell > header {
+  border-color: var(--av-border);
+  min-height: 40px;
+}
+.agent-cell select,
+.agent-cell textarea {
+  background: transparent;
+  color: inherit;
+  border-color: var(--av-border);
+}
+.agent-cell select {
+  border-radius: 6px;
+}
+.agent-cell textarea {
+  border: 0;
+  min-height: 44px;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.agent-cell textarea:focus-visible {
+  box-shadow: inset 2px 0 var(--av-blue);
+}
+.agent-cell .bg-slate-100,
+.agent-cell .bg-slate-50,
+.agent-cell .bg-blue-50 {
+  background: var(--av-panel);
+}
+.agent-cell .text-slate-500 {
+  color: var(--av-muted);
+}
+.agent-cell .prose {
+  color: inherit;
+}
+.agent-cell details {
+  border-color: var(--av-border);
+  border-radius: 8px;
+}
+.agent-cell > div > article {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--av-border);
+}

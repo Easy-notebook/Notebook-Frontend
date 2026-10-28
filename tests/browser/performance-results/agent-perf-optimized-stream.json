@@ -1,0 +1,88 @@
+{
+  "phase": "stream",
+  "seconds": 69.9,
+  "frames": 4188,
+  "frameP50": 16.7,
+  "frameP95": 17.6,
+  "frameP99": 17.7,
+  "over33ms": 0,
+  "over50ms": 0,
+  "maxFrame": 33.39999999999782,
+  "commits": 748,
+  "commitP95": 12.9,
+  "commitTotal": 2873.1,
+  "longTasks": [],
+  "layoutShiftTotal": 0.17387979359096947,
+  "unexpectedLayoutShift": 0.0180381224155426,
+  "shiftSources": [
+    {
+      "value": 0.0002002716064453125,
+      "recentInput": true,
+      "sources": ["SECTION"]
+    },
+    {
+      "value": 0.09723377826478745,
+      "recentInput": true,
+      "sources": [
+        "space-y-4 px-4 py-3",
+        "notebook-embedded-cell",
+        "space-y-2",
+        "rounded border px-2 py-1 text-sm",
+        "text-xs"
+      ]
+    },
+    {
+      "value": 0.05840762130419413,
+      "recentInput": true,
+      "sources": [
+        "space-y-4 px-4 py-3",
+        "rounded border px-2 py-1 text-sm",
+        "text-xs",
+        "ml-auto text-xs",
+        "text-xs text-slate-500"
+      ]
+    },
+    {
+      "value": 0.0017957866191864013,
+      "recentInput": false,
+      "sources": ["space-y-2", "text-xs text-slate-500"]
+    },
+    {
+      "value": 0.0014014212555355497,
+      "recentInput": false,
+      "sources": ["space-y-2", "rounded border border-slate-200 text-sm", "text-xs text-slate-500"]
+    },
+    {
+      "value": 0.011411792861090767,
+      "recentInput": false,
+      "sources": ["space-y-2", "rounded border border-slate-200 text-sm", "text-xs text-slate-500"]
+    },
+    {
+      "value": 0.003333579831653171,
+      "recentInput": false,
+      "sources": ["rounded border border-slate-200 text-sm"]
+    },
+    {
+      "value": 0.00009554184807671442,
+      "recentInput": false,
+      "sources": ["av-muted"]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}

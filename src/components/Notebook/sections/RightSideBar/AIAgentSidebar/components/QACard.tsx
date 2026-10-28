@@ -4,7 +4,8 @@ import React, { memo, useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QAItem } from '@Store/models/agent';
 import { Zap } from 'lucide-react';
-import SpotlightCard from '@/components/UI/card/SpotlightCard';
+import '@/components/AgentVisuals/agent-visuals.css';
+import { AgentAvatar } from '@/components/AgentVisuals/shared';
 import ExpandableText from '@RightSidebar/components/ExpandableText';
 import ToolCallIndicator from '@RightSidebar/components/ToolCallIndicator';
 import ShinyText from '@/components/UI/magic/shiny-text';
@@ -66,7 +67,10 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
   if (isUser) {
     return (
       <div id={qa.id} className="mb-3 flex justify-start">
-        <SpotlightCard className="p-4 w-full group relative">
+        <div className="av-theme av-chat-message av-chat-user group relative">
+          <div className="av-chat-heading">
+            <span>You</span>
+          </div>
           {/* #标号和时间戳 - 仅在 hover 时显示 */}
           <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
@@ -88,14 +92,19 @@ const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
               )}
             </div>
           </FactCapture>
-        </SpotlightCard>
+        </div>
       </div>
     );
   }
 
   return (
     <div id={qa.id} className="mb-3 flex justify-end">
-      <div className="p-4 max-w-[85%] group relative">
+      <div className="av-theme av-chat-message av-chat-assistant group relative">
+        <div className="av-chat-heading">
+          <AgentAvatar name={qa.agentType || qa.agent || 'AI'} />
+          <span>{qa.agentType || qa.agent || 'Assistant'}</span>
+          {qa.onProcess && <span className="av-blue">Running</span>}
+        </div>
         {/* #标号和时间戳 - 仅在 hover 时显示 */}
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">

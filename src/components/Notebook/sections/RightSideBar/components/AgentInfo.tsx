@@ -1,3 +1,4 @@
+import { AgentAvatar } from '../../../../AgentVisuals/shared';
 // moved to sections/RightSideBar/components
 import React from 'react';
 import { Bot, Image, Video, Command, Brain } from 'lucide-react';
@@ -37,12 +38,12 @@ const AgentInfo: React.FC<AgentInfoProps> = ({ agent, model, type }) => {
   if (!agent && !type) return null;
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1 rounded-md">
-      {getAgentIcon(type || agent)}
-      <span className="text-xs text-theme-700 dark:text-white font-medium">
-        {getAgentName(type || agent)}
-      </span>
-      {model && <span className="text-xs text-gray-500 dark:text-gray-400">({model})</span>}
+    <div className="av-theme av-card-top px-2 py-2">
+      <AgentAvatar name={getAgentName(type || agent)} avatar={getAgentIcon(type || agent)} />
+      <div className="av-identity">
+        <span className="text-xs font-medium">{getAgentName(type || agent)}</span>
+        {model && <span className="av-muted">{model}</span>}
+      </div>
     </div>
   );
 };

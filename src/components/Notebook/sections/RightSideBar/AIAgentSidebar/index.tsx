@@ -1,3 +1,4 @@
+import { NotebookAgentChat } from './components/NotebookAgentChat';
 // moved to sections/RightSideBar
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -208,6 +209,7 @@ const AIAgentSidebar = () => {
 
         {activeView === 'qa' && (
           <div className="space-y-4 py-4">
+            <NotebookAgentChat />
             {qasToShow.length === 0 ? (
               <div className="text-center py-8 text-gray-500 flex flex-col items-center">
                 <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />

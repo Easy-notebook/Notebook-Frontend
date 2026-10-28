@@ -1,0 +1,258 @@
+{
+  "phase": "collapse-scroll",
+  "seconds": 5.8,
+  "frames": 342,
+  "frameP50": 16.7,
+  "frameP95": 17.6,
+  "frameP99": 33.3,
+  "over33ms": 1,
+  "over50ms": 0,
+  "maxFrame": 34.199999999953434,
+  "slowFrames": [
+    {
+      "start": 374444.4,
+      "end": 374478.6,
+      "duration": 34.199999999953434,
+      "commits": [
+        {
+          "id": "agent-action-visual",
+          "phase": "mount",
+          "duration": 1,
+          "startTime": 374442.59999996424,
+          "commitTime": 374447.5
+        },
+        {
+          "id": "agent-action-visual",
+          "phase": "update",
+          "duration": 3.399999976158142,
+          "startTime": 374443.6999999881,
+          "commitTime": 374447.5
+        },
+        {
+          "id": "live-notebook",
+          "phase": "update",
+          "duration": 5.999999940395355,
+          "startTime": 374441.1999999881,
+          "commitTime": 374447.5
+        }
+      ],
+      "interactions": [
+        {
+          "time": 374441.09999996424,
+          "type": "click",
+          "target": "Agent 详情"
+        }
+      ]
+    }
+  ],
+  "animationFrames": [
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 374430.5,
+      "duration": 53.30000001192093,
+      "navigationId": 575,
+      "paintTime": 374483.8000000119,
+      "presentationTime": 374536,
+      "renderStart": 374483.39999997616,
+      "styleAndLayoutStart": 374483.8000000119,
+      "firstUIEventTimestamp": 374435.1999999881,
+      "blockingDuration": 0,
+      "scripts": [
+        {
+          "name": "script",
+          "entryType": "script",
+          "startTime": 374441.1999999881,
+          "duration": 40.39999997615814,
+          "navigationId": 575,
+          "invoker": "DIV#root.onclick",
+          "invokerType": "event-listener",
+          "windowAttribution": "self",
+          "executionStart": 374441.1999999881,
+          "forcedStyleAndLayoutDuration": 29.1,
+          "pauseDuration": 0,
+          "sourceURL": "http://127.0.0.1:5174/node_modules/.vite/deps/chunk-RO7O33BN.js?v=50ae305d",
+          "sourceFunctionName": "dispatchDiscreteEvent",
+          "sourceCharPosition": 209897
+        }
+      ]
+    },
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 375330.09999996424,
+      "duration": 58.80000001192093,
+      "navigationId": 575,
+      "paintTime": 375388.89999997616,
+      "presentationTime": 375392,
+      "renderStart": 375388.89999997616,
+      "styleAndLayoutStart": 375388.89999997616,
+      "firstUIEventTimestamp": 0,
+      "blockingDuration": 0,
+      "scripts": []
+    },
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 376980.89999997616,
+      "duration": 54.90000003576279,
+      "navigationId": 575,
+      "paintTime": 377035.8000000119,
+      "presentationTime": 377088,
+      "renderStart": 377035.5,
+      "styleAndLayoutStart": 377035.8000000119,
+      "firstUIEventTimestamp": 376986.5,
+      "blockingDuration": 0,
+      "scripts": [
+        {
+          "name": "script",
+          "entryType": "script",
+          "startTime": 376993.09999996424,
+          "duration": 40.60000002384186,
+          "navigationId": 575,
+          "invoker": "DIV#root.onclick",
+          "invokerType": "event-listener",
+          "windowAttribution": "self",
+          "executionStart": 376993.09999996424,
+          "forcedStyleAndLayoutDuration": 29.6,
+          "pauseDuration": 0,
+          "sourceURL": "http://127.0.0.1:5174/node_modules/.vite/deps/chunk-RO7O33BN.js?v=50ae305d",
+          "sourceFunctionName": "dispatchDiscreteEvent",
+          "sourceCharPosition": 209897
+        }
+      ]
+    },
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 377829,
+      "duration": 54.09999996423721,
+      "navigationId": 575,
+      "paintTime": 377883.09999996424,
+      "presentationTime": 377884,
+      "renderStart": 377883.09999996424,
+      "styleAndLayoutStart": 377883.09999996424,
+      "firstUIEventTimestamp": 0,
+      "blockingDuration": 0,
+      "scripts": []
+    }
+  ],
+  "worstCommits": [
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 5.999999940395355,
+      "startTime": 374441.1999999881,
+      "commitTime": 374447.5
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 5.000000059604645,
+      "startTime": 376993.3000000119,
+      "commitTime": 376998.8000000119
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 4.300000011920929,
+      "startTime": 375019.89999997616,
+      "commitTime": 375024.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 3.5999999046325684,
+      "startTime": 377503.8000000119,
+      "commitTime": 377507.59999996424
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 3.399999976158142,
+      "startTime": 374443.6999999881,
+      "commitTime": 374447.5
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 3.300000011920929,
+      "startTime": 375020.59999996424,
+      "commitTime": 375024.39999997616
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 2.400000035762787,
+      "startTime": 376995.6999999881,
+      "commitTime": 376998.8000000119
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 2.199999988079071,
+      "startTime": 377504.1999999881,
+      "commitTime": 377507.59999996424
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "mount",
+      "duration": 1.199999988079071,
+      "startTime": 376994.39999997616,
+      "commitTime": 376998.8000000119
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "mount",
+      "duration": 1,
+      "startTime": 374442.59999996424,
+      "commitTime": 374447.5
+    }
+  ],
+  "renderGroups": {
+    "live-notebook": {
+      "count": 14,
+      "p95": 6,
+      "p99": 6,
+      "max": 5.999999940395355,
+      "total": 19.099999964237213
+    },
+    "agent-action-visual": {
+      "count": 6,
+      "p95": 3.4,
+      "p99": 3.4,
+      "max": 3.399999976158142,
+      "total": 13.5
+    }
+  },
+  "commits": 20,
+  "commitP95": 6,
+  "commitTotal": 32.6,
+  "longTasks": [],
+  "layoutShiftTotal": 0.017852359347873263,
+  "unexpectedLayoutShift": 0,
+  "shiftSources": [
+    {
+      "value": 0.017852359347873263,
+      "recentInput": true,
+      "sources": ["SECTION"]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}

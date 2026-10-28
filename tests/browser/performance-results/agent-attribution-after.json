@@ -1,0 +1,331 @@
+{
+  "phase": "stream",
+  "seconds": 239,
+  "frames": 14313,
+  "frameP50": 16.7,
+  "frameP95": 17.4,
+  "frameP99": 18,
+  "over33ms": 4,
+  "over50ms": 2,
+  "maxFrame": 284.20000000001164,
+  "slowFrames": [
+    {
+      "start": 2226.7,
+      "end": 2276.3,
+      "duration": 49.600000000000364,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 3243,
+      "end": 3293.8,
+      "duration": 50.80000000000018,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 3293.8,
+      "end": 3343.4,
+      "duration": 49.59999999999991,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 237760.5,
+      "end": 238044.7,
+      "duration": 284.20000000001164,
+      "commits": [],
+      "interactions": []
+    }
+  ],
+  "animationFrames": [
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 2230.5,
+      "duration": 60.89999997615814,
+      "navigationId": 575,
+      "paintTime": 2291.399999976158,
+      "presentationTime": 2352,
+      "renderStart": 2290.5,
+      "styleAndLayoutStart": 2290.800000011921,
+      "firstUIEventTimestamp": 0,
+      "blockingDuration": 0,
+      "scripts": []
+    },
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 3246.899999976158,
+      "duration": 59,
+      "navigationId": 575,
+      "paintTime": 3305.899999976158,
+      "presentationTime": 3436,
+      "renderStart": 3304.5,
+      "styleAndLayoutStart": 3305,
+      "firstUIEventTimestamp": 0,
+      "blockingDuration": 0,
+      "scripts": []
+    },
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 237747.19999998808,
+      "duration": 267.60000002384186,
+      "navigationId": 575,
+      "paintTime": 238014.80000001192,
+      "presentationTime": 238104,
+      "renderStart": 237837.89999997616,
+      "styleAndLayoutStart": 238014,
+      "firstUIEventTimestamp": 0,
+      "blockingDuration": 196.9,
+      "scripts": [
+        {
+          "name": "script",
+          "entryType": "script",
+          "startTime": 238004.80000001192,
+          "duration": 9.199999988079071,
+          "navigationId": 575,
+          "invoker": "FrameRequestCallback",
+          "invokerType": "user-callback",
+          "windowAttribution": "self",
+          "executionStart": 238004.80000001192,
+          "forcedStyleAndLayoutDuration": 0,
+          "pauseDuration": 0,
+          "sourceURL": "http://127.0.0.1:5174/tests/browser/AgentPerformanceProbe.jsx?t=1793159882953",
+          "sourceFunctionName": "tick",
+          "sourceCharPosition": 2113
+        }
+      ]
+    },
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 238414.30000001192,
+      "duration": 50.09999996423721,
+      "navigationId": 575,
+      "paintTime": 238464.39999997616,
+      "presentationTime": 238504,
+      "renderStart": 238463.39999997616,
+      "styleAndLayoutStart": 238463.69999998808,
+      "firstUIEventTimestamp": 0,
+      "blockingDuration": 0,
+      "scripts": []
+    },
+    {
+      "name": "long-animation-frame",
+      "entryType": "long-animation-frame",
+      "startTime": 239446.30000001192,
+      "duration": 55.59999996423721,
+      "navigationId": 575,
+      "paintTime": 239501.89999997616,
+      "presentationTime": 239536,
+      "renderStart": 239500.89999997616,
+      "styleAndLayoutStart": 239501.19999998808,
+      "firstUIEventTimestamp": 0,
+      "blockingDuration": 0,
+      "scripts": []
+    }
+  ],
+  "worstCommits": [
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 23.099999964237213,
+      "startTime": 57975.30000001192,
+      "commitTime": 58003.89999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 21.30000001192093,
+      "startTime": 190455.59999996424,
+      "commitTime": 190479.39999997616
+    },
+    {
+      "id": "agent-answer-markdown",
+      "phase": "update",
+      "duration": 21.19999998807907,
+      "startTime": 190455.69999998808,
+      "commitTime": 190479.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 19.199999928474426,
+      "startTime": 58178.19999998808,
+      "commitTime": 58205.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 19.100000023841858,
+      "startTime": 58680.80000001192,
+      "commitTime": 58704.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 18.899999916553497,
+      "startTime": 58277.30000001192,
+      "commitTime": 58303.09999996424
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 18.300000071525574,
+      "startTime": 142178.59999996424,
+      "commitTime": 142200
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 18.100000023841858,
+      "startTime": 56795.80000001192,
+      "commitTime": 56818.80000001192
+    },
+    {
+      "id": "agent-answer-markdown",
+      "phase": "update",
+      "duration": 18.100000023841858,
+      "startTime": 142178.80000001192,
+      "commitTime": 142200
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 17.900000035762787,
+      "startTime": 58373.19999998808,
+      "commitTime": 58394.89999997616
+    }
+  ],
+  "renderGroups": {
+    "live-notebook": {
+      "count": 3199,
+      "p95": 11.2,
+      "p99": 15,
+      "max": 23.099999964237213,
+      "total": 10800.300001740456
+    },
+    "agent-action-visual": {
+      "count": 2241,
+      "p95": 2.3,
+      "p99": 3,
+      "max": 10.600000083446503,
+      "total": 2221.500000655651
+    },
+    "agent-answer-markdown": {
+      "count": 2615,
+      "p95": 8.5,
+      "p99": 11.4,
+      "max": 21.19999998807907,
+      "total": 6960.599999666214
+    }
+  },
+  "commits": 8055,
+  "commitP95": 8.8,
+  "commitTotal": 19982.4,
+  "longTasks": [
+    {
+      "name": "self",
+      "entryType": "longtask",
+      "startTime": 237768,
+      "duration": 290,
+      "navigationId": 575,
+      "attribution": [
+        {
+          "name": "unknown",
+          "entryType": "taskattribution",
+          "startTime": 0,
+          "duration": 0,
+          "navigationId": 575,
+          "containerType": "window",
+          "containerSrc": "",
+          "containerId": "",
+          "containerName": ""
+        }
+      ]
+    }
+  ],
+  "layoutShiftTotal": 0.4063439862860574,
+  "unexpectedLayoutShift": 0.027775162272983128,
+  "shiftSources": [
+    {
+      "value": 0.0007715802192687988,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.006433696031570435,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.007740523272090487,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.013961744308471679,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.002832382321357727,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.006191079219182333,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.006584799766540528,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.007224671575758192,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0017952434751722546,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.006433696031570435,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.016541179378827413,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.007124310334523519,
+      "recentInput": true,
+      "sources": ["DIV"]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "phase": "collapse-scroll",
+  "seconds": 46.6,
+  "frames": 2788,
+  "frameP50": 16.7,
+  "frameP95": 17.5,
+  "frameP99": 17.7,
+  "over33ms": 3,
+  "over50ms": 1,
+  "maxFrame": 99.70000000001164,
+  "commits": 16,
+  "commitP95": 6.9,
+  "commitTotal": 14.9,
+  "longTasks": [],
+  "layoutShiftTotal": 0.10515964059034984,
+  "unexpectedLayoutShift": 0,
+  "shiftSources": [
+    {
+      "value": 0.0030032318830490114,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.004139051702287462,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0032169055408901638,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.003184328940179613,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.002670775572458903,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0015140353441238403,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.001803323745727539,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.003913640247450934,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.007991213666068184,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.006537888712353176,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0024051513936784535,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0006025968790054321,
+      "recentInput": true,
+      "sources": ["DIV"]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}
