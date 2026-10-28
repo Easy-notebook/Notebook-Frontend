@@ -10,7 +10,7 @@ const settings = (): Settings => ({
   apiTimeout: 30000,
   markdownPreferences: { autoFormat: true, syntaxHighlighting: true, lineNumbers: false },
   editorSettings: {
-    editorType: 'tiptap',
+    editorType: 'lexical',
     defaultLanguage: 'python',
     kernel: 'local',
     autoSave: true,

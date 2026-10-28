@@ -8,7 +8,7 @@ import { AgentType } from '@Services/agentMemoryService';
 import usePreviewStore from '@Store/previewStore';
 
 // 导入拆分后的组件
-import { PhaseSection } from './PhaseSection';
+import { NotebookOutline } from './NotebookOutline';
 
 // 导入共享组件
 import {
@@ -40,7 +40,6 @@ interface OutlineSidebarProps {
 const OutlineSidebar = ({
   tasks,
   currentPhaseId,
-  currentStepId,
   onPhaseSelect,
   viewMode,
   onAgentSelect,
@@ -54,29 +53,12 @@ const OutlineSidebar = ({
   const [isHovered, setIsHovered] = useState(false);
   const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
 
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
-    const initialState: Record<string, boolean> = {};
-    tasks.forEach((task) => {
-      task.phases.forEach((phase) => {
-        initialState[phase.id] = true;
-      });
-    });
-    return initialState;
-  });
-
   const currentTask = useMemo(() => {
     if (!currentPhaseId) return null;
     return tasks.find((task) => task.phases.some((phase) => phase.id === currentPhaseId));
   }, [tasks, currentPhaseId]);
 
   const projectName = currentTask?.title || (tasks && tasks.length > 0 ? tasks[0].title : '');
-
-  const toggleSection = useCallback((sectionId: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [sectionId]: !prev[sectionId],
-    }));
-  }, []);
 
   const handleAgentSelect = useCallback(
     (agentType: AgentType) => {
@@ -114,21 +96,6 @@ const OutlineSidebar = ({
 
     return <div className="w-full h-10" />;
   }, [viewMode, currentPhaseId, allPhases, activeTab, isHovered]);
-
-  useEffect(() => {
-    if (currentStepId) {
-      const allPhasesFlat = tasks.flatMap((task) => task.phases);
-      const phaseOfcurrentStep = allPhasesFlat.find((phase) =>
-        phase.steps.some((step) => step.id === currentStepId)
-      );
-      if (phaseOfcurrentStep) {
-        setExpandedSections((prev) => ({
-          ...prev,
-          [phaseOfcurrentStep.id]: true,
-        }));
-      }
-    }
-  }, [currentStepId, tasks]);
 
   // Keep tab selection aligned with preview mode
   useEffect(() => {
@@ -182,25 +149,7 @@ const OutlineSidebar = ({
             />
           </div>
         ) : (
-          // 大纲视图：显示任务和阶段
-          <div className="py-0.5">
-            {tasks.map((task) => (
-              <div key={task.id} className="mb-5">
-                {task.phases.map((phase, index) => (
-                  <PhaseSection
-                    key={phase.id}
-                    isTitle={index === 0}
-                    phase={phase}
-                    isExpanded={expandedSections[phase.id]}
-                    onToggle={() => toggleSection(phase.id)}
-                    onStepSelect={onPhaseSelect}
-                    isActive={currentPhaseId === phase.id}
-                    currentStepId={currentStepId}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
+          <NotebookOutline onPhaseSelect={onPhaseSelect} />
         )}
       </SidebarContent>
 

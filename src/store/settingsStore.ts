@@ -25,7 +25,7 @@ import type {
 
 // Constants
 const STORE_NAME = 'easy-notebook-settings';
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const STORAGE_KEYS = {
   SETTINGS: 'easy-notebook-settings',
   BACKUP: 'easy-notebook-settings-backup',

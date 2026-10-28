@@ -378,7 +378,7 @@ Examples:
 Usage: /tiptap_update <content> --cellId <id>
        /tiptap_update --cellId <id> --content <content>
 
-Description: Update TipTap editor content
+Description: Update rich-text editor content
 
 Arguments:
   content           Content to add/replace

@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Editor } from '@tiptap/core';
+import { UNDO_COMMAND, REDO_COMMAND, type LexicalEditor } from 'lexical';
 import type { KeyboardEvent } from 'react';
-import { handleSourceInputHistory } from './sourceInputHistory';
-import { EditorState } from '@tiptap/pm/state';
-import { Schema } from '@tiptap/pm/model';
+import { handleSourceInputHistory } from '../Lexical/interaction/sourceInput';
 
 describe('source input history', () => {
   it('applies caret indentation to the native prefix range without replacing the whole input', () => {
@@ -13,10 +11,7 @@ describe('source input history', () => {
     input.setSelectionRange(0, 0);
     const replace = vi.spyOn(input, 'setRangeText');
     const updateSource = vi.fn();
-    const dispatch = vi.fn();
-    const state = EditorState.create({
-      schema: new Schema({ nodes: { doc: { content: 'text*' }, text: {} } }),
-    });
+    const update = vi.fn((callback: () => void) => callback());
     const event = {
       key: ']',
       ctrlKey: true,
@@ -27,14 +22,14 @@ describe('source input history', () => {
     };
     handleSourceInputHistory(
       event as unknown as KeyboardEvent<HTMLTextAreaElement>,
-      { isEditable: true, state, view: { dispatch } } as unknown as Editor,
+      { isEditable: () => true, update } as unknown as LexicalEditor,
       updateSource
     );
     expect(replace).toHaveBeenCalledExactlyOnceWith('  ', 0, 0, 'preserve');
     expect(input.value).toBe('  ' + original);
     expect(input.selectionStart).toBe(2);
     expect(updateSource).toHaveBeenCalledExactlyOnceWith(input.value);
-    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenCalledOnce();
   });
   it.each([
     [{ key: 'z', metaKey: true }, 'undo'],
@@ -47,18 +42,22 @@ describe('source input history', () => {
     [{ key: 'Enter' }, null],
   ] as const)('routes %j to %s', (keys, expected) => {
     const event = { nativeEvent: {}, stopPropagation: vi.fn(), preventDefault: vi.fn(), ...keys };
-    const commands = { undo: vi.fn(), redo: vi.fn() };
+    const dispatchCommand = vi.fn();
     handleSourceInputHistory(
       event as unknown as KeyboardEvent<HTMLTextAreaElement>,
-      { isEditable: true, commands } as unknown as Editor
+      { isEditable: () => true, dispatchCommand } as unknown as LexicalEditor
     );
     expect(event.stopPropagation).toHaveBeenCalledOnce();
     expect(event.preventDefault).toHaveBeenCalledTimes(expected ? 1 : 0);
-    expect(commands.undo).toHaveBeenCalledTimes(expected === 'undo' ? 1 : 0);
-    expect(commands.redo).toHaveBeenCalledTimes(expected === 'redo' ? 1 : 0);
+    expect(dispatchCommand).toHaveBeenCalledTimes(expected ? 1 : 0);
+    if (expected)
+      expect(dispatchCommand).toHaveBeenCalledWith(
+        expected === 'undo' ? UNDO_COMMAND : REDO_COMMAND,
+        undefined
+      );
   });
   it('does not change read-only documents', () => {
-    const commands = { undo: vi.fn(), redo: vi.fn() };
+    const dispatchCommand = vi.fn();
     const event = {
       key: 'z',
       ctrlKey: true,
@@ -68,9 +67,9 @@ describe('source input history', () => {
     };
     handleSourceInputHistory(
       event as unknown as KeyboardEvent<HTMLTextAreaElement>,
-      { isEditable: false, commands } as unknown as Editor
+      { isEditable: () => false, dispatchCommand } as unknown as LexicalEditor
     );
-    expect(commands.undo).not.toHaveBeenCalled();
+    expect(dispatchCommand).not.toHaveBeenCalled();
     expect(event.preventDefault).not.toHaveBeenCalled();
   });
 });

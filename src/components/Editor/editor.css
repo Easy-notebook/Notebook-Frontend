@@ -1,4 +1,4 @@
-.tiptap-notebook-editor-container {
+.notebook-editor-container {
   --editor-ink: #1f2937;
   --editor-muted: #6b7280;
   --editor-line: #d1d5db;
@@ -14,7 +14,7 @@
   color: var(--editor-ink);
 }
 
-.dark .tiptap-notebook-editor-container {
+.dark .notebook-editor-container {
   --editor-ink: #e5e7eb;
   --editor-muted: #9ca3af;
   --editor-line: #4b5563;
@@ -25,20 +25,20 @@
   --editor-error: #fca5a5;
 }
 
-.tiptap-notebook-editor-container > .flex-1 {
+.notebook-editor-container > .flex-1 {
   flex: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
-.tiptap-notebook-editor {
+.notebook-rich-editor {
   min-height: 120px;
   outline: none;
   caret-color: var(--editor-ink);
 }
 
-.tiptap-notebook-editor p.is-empty::before {
+.notebook-rich-editor p.is-empty::before {
   color: var(--editor-muted);
   content: attr(data-placeholder);
   float: left;
@@ -46,80 +46,34 @@
   pointer-events: none;
 }
 
-.tiptap-notebook-editor .node-title-content[data-empty='true']::before {
-  color: var(--editor-muted);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.tiptap-notebook-editor .selectedCell {
+.notebook-rich-editor .selectedCell {
   background-color: var(--editor-selection);
 }
 
-.tiptap-notebook-editor h1 {
-  caret-color: var(--editor-accent);
-  position: relative;
-}
-
-.tiptap-notebook-editor h1:focus-within {
-  outline: 2px solid var(--editor-selection);
-  border-radius: 4px;
-}
-
-.tiptap-notebook-editor :is(h2, h3, h4, h5, h6, p, li, blockquote, code, th, td) {
-  caret-color: var(--editor-ink);
-}
-
-.tiptap-notebook-editor table {
-  border-collapse: collapse;
-  margin: 1em 0;
-  width: 100%;
-}
-
-.tiptap-notebook-editor :is(th, td) {
-  border: 1px solid var(--editor-line);
-  padding: 0.5em;
-  text-align: left;
-}
-
-.tiptap-notebook-editor th {
-  background: var(--editor-surface-muted);
-  font-weight: 700;
-}
-
-.tiptap-notebook-editor tr:nth-child(even) {
-  background: var(--editor-surface-muted);
-}
-
-.tiptap-notebook-editor :is(.executable-code-block-wrapper, .thinking-cell-wrapper) {
+.notebook-rich-editor :is(.executable-code-block-wrapper, .thinking-cell-wrapper) {
   margin: 1.5em 0;
 }
 
-.tiptap-notebook-editor .thinking-cell-wrapper {
+.notebook-rich-editor .thinking-cell-wrapper {
   position: relative;
   width: 100%;
 }
 
-.tiptap-notebook-editor .thinking-cell-container {
+.notebook-rich-editor .thinking-cell-container {
   position: relative;
   width: 100%;
   min-height: 40px;
   padding: 8px 16px;
 }
 
-.tiptap-notebook-editor .executable-code-block-wrapper :is(pre, .output-container pre) {
+.notebook-rich-editor .executable-code-block-wrapper :is(pre, .output-container pre) {
   border: 0;
   background: transparent;
   padding-left: 0;
   margin: 0;
 }
 
-.tiptap-notebook-editor
+.notebook-rich-editor
   :is(
     .image-markdown-wrapper,
     .image-display,
@@ -132,116 +86,58 @@
   margin: 1rem 0;
 }
 
-.tiptap-notebook-editor :is(.image-editor, .latex-editor) {
+.notebook-rich-editor :is(.image-editor, .latex-editor) {
   margin: 0.5rem 0;
 }
 
-.tiptap-notebook-editor :is(.image-display, .latex-display) {
+.notebook-rich-editor :is(.image-display, .latex-display) {
   position: relative;
 }
 
-.tiptap-notebook-editor .katex-display {
+.notebook-rich-editor .katex-display {
   text-align: center;
 }
 
-.tiptap-notebook-editor .katex-rendered {
+.notebook-rich-editor .katex-rendered {
   user-select: all;
 }
 
-.tiptap-notebook-editor .latex-preview .katex {
+.notebook-rich-editor .latex-preview .katex {
   color: inherit;
 }
 
-.tiptap-notebook-editor-container .cursor-text:hover {
+.notebook-editor-container .cursor-text:hover {
   background: var(--editor-selection);
 }
 
-.tiptap-notebook-editor-container .cursor-text:active {
+.notebook-editor-container .cursor-text:active {
   background: var(--editor-selection);
 }
 
-.tiptap-notebook-editor-container .focus-within\:outline-none {
+.notebook-editor-container .focus-within\:outline-none {
   min-height: 120px;
 }
 
-.tiptap-notebook-editor h1.node-title-content,
-.tiptap-notebook-editor-container .editor-cover-icon {
+.notebook-editor-container .editor-cover-icon {
   font-size: 40px;
   line-height: 1.2;
   font-weight: 700;
 }
 
-.tiptap-notebook-editor h1.node-title-content {
-  margin: 0 0 1rem;
-}
-
-.tiptap-notebook-editor h1.node-title-content,
-.tiptap-notebook-editor .node-title-content > [data-node-view-content-react] {
-  background-image: linear-gradient(to right, #41b883, #3490dc, #6574cd);
-  color: transparent;
-  -webkit-background-clip: text;
-  background-clip: text;
-}
-
-.tiptap-notebook-editor .node-title-content * {
-  font-size: inherit;
-  line-height: inherit;
-}
-
-.tiptap-notebook-editor-container .editor-cover-icon .absolute {
+.notebook-editor-container .editor-cover-icon .absolute {
   font-size: 14px;
   line-height: 1.5;
   font-weight: 400;
 }
 
-.tiptap-notebook-editor .notebook-mermaid-block {
-  display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
-  margin: 1rem 0;
-  border: 1px solid var(--editor-line);
-  border-radius: 8px;
-  background: var(--editor-surface);
-}
-
-.tiptap-notebook-editor .notebook-mermaid-label {
-  color: var(--editor-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.tiptap-notebook-editor .notebook-mermaid-toolbar,
-.tiptap-notebook-editor .notebook-mermaid-actions {
+.notebook-rich-editor .notebook-source-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
 
-.tiptap-notebook-editor .notebook-mermaid-toolbar {
-  justify-content: space-between;
-}
-
-.tiptap-notebook-editor .notebook-mermaid-actions button {
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  color: var(--editor-muted);
-  font-size: 0.75rem;
-}
-
-.tiptap-notebook-editor .notebook-mermaid-actions button:hover,
-.tiptap-notebook-editor .notebook-mermaid-actions button[aria-pressed='true'] {
-  color: var(--editor-ink);
-  background: var(--editor-surface-muted);
-}
-
-.tiptap-notebook-editor .notebook-mermaid-copy-status {
-  color: var(--editor-muted);
-  font-size: 0.75rem;
-}
-
-.tiptap-notebook-editor .notebook-mermaid-source {
+.notebook-rich-editor .notebook-source-textarea {
   width: 100%;
   min-height: 6rem;
   resize: vertical;
@@ -257,7 +153,7 @@
     monospace;
 }
 
-.tiptap-notebook-editor .notebook-mermaid-source:focus-visible {
+.notebook-rich-editor .notebook-source-textarea:focus-visible {
   outline: 2px solid var(--editor-accent);
   outline-offset: 2px;
 }

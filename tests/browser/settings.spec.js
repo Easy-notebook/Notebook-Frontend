@@ -203,7 +203,7 @@ test('malformed current settings cannot hydrate or be introduced through runtime
   });
   expect(result.hydrated).toBe(false);
   expect(result.error).toContain('settings.editorSettings');
-  expect(result.runtime.editorSettings.editorType).toBe('tiptap');
+  expect(result.runtime.editorSettings.editorType).toBe('lexical');
   expect(result.preserved).toBe(true);
 });
 

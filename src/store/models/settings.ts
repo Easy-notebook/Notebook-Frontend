@@ -11,7 +11,7 @@ export interface MarkdownPreferences {
 }
 
 export interface EditorSettings {
-  editorType: 'tiptap' | 'jupyter';
+  editorType: 'lexical' | 'jupyter';
   defaultLanguage: string;
   kernel: 'local' | 'remote' | 'docker' | 'cloud';
   autoSave: boolean;

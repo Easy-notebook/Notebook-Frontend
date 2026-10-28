@@ -2,7 +2,7 @@
  * Editor Actions - Handles rich text editor operations
  */
 
-export { TiptapUpdateAction } from './TiptapUpdateAction';
+export { RichTextUpdateAction } from './RichTextUpdateAction';
 
 // Auto-register all actions
-import './TiptapUpdateAction';
+import './RichTextUpdateAction';

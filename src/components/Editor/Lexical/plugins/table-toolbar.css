@@ -1,0 +1,64 @@
+.notebook-table-topbar {
+  position: fixed;
+  z-index: 45;
+  box-sizing: border-box;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  background: var(--editor-surface-muted, #eeeeee);
+  color: var(--editor-text, #444);
+}
+.notebook-table-topbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 3px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.notebook-table-topbar button:hover,
+.notebook-table-topbar button[aria-pressed='true'] {
+  background: #80808020;
+}
+.notebook-table-topbar button:focus-visible {
+  outline: 2px solid #8b95a5;
+}
+.notebook-table-topbar button[data-danger]:hover {
+  color: #dc2626;
+}
+.notebook-table-topbar__spacer {
+  flex: 1;
+}
+.notebook-table-topbar__menu-anchor {
+  position: relative;
+}
+.notebook-table-topbar__menu {
+  position: absolute;
+  top: 32px;
+  left: 0;
+  width: 220px;
+  padding: 4px;
+  background: var(--editor-background, #fff);
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px #0002;
+}
+.notebook-table-topbar__menu button {
+  width: 100%;
+  justify-content: flex-start;
+  font-size: 12px;
+}
+
+.notebook-rich-editor .notebook-table-cell-selected {
+  background: color-mix(in srgb, var(--accent-color, #3b82f6) 18%, transparent) !important;
+}
+.notebook-table-selection ::selection {
+  background: transparent;
+}

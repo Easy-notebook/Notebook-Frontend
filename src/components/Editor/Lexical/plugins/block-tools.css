@@ -1,0 +1,229 @@
+.notebook-block-controls {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  z-index: 40;
+  width: 42px;
+  height: 26px;
+  border: 1px solid #e1e3e7;
+  border-radius: 7px;
+  background: #fff;
+  color: #777e89;
+  overflow: hidden;
+}
+.notebook-block-controls button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  touch-action: none;
+}
+.notebook-block-controls button[data-drag-handle] {
+  width: 16px;
+  cursor: grab;
+}
+.notebook-block-controls button[data-drag-handle]:active {
+  cursor: grabbing;
+}
+.notebook-block-controls button:hover {
+  background: #f1f3f5;
+  color: #374151;
+}
+.notebook-block-controls button:focus-visible {
+  outline: 2px solid #93b4ff;
+  outline-offset: -2px;
+}
+.dark .notebook-block-controls {
+  background: #24262e;
+  border-color: #454852;
+  color: #a0a6b1;
+}
+.dark .notebook-block-controls button:hover {
+  background: #343740;
+  color: #e5e7eb;
+}
+.notebook-block-dragging,
+.notebook-block-dragging * {
+  user-select: none !important;
+  cursor: grabbing !important;
+}
+.notebook-block-menu {
+  position: fixed;
+  z-index: 80;
+  width: min(288px, calc(100vw - 16px));
+  max-height: min(520px, calc(100vh - 16px));
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  box-shadow: 0 8px 24px #0002;
+  font-size: 13px;
+}
+.notebook-block-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 4px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
+.notebook-block-menu button:hover,
+.notebook-block-menu button:focus-visible {
+  background: #f1f3f5;
+  outline: none;
+}
+.notebook-block-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.notebook-block-menu input:not([type='color']) {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+}
+.notebook-block-menu label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+}
+.notebook-block-menu small {
+  display: block;
+  padding: 8px;
+  color: #89929e;
+}
+.notebook-block-drop {
+  position: fixed;
+  height: 3px;
+  z-index: 85;
+  pointer-events: none;
+  background: #41b883;
+}
+.dark .notebook-block-menu {
+  background: #24262e;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+.dark .notebook-block-menu button:hover,
+.dark .notebook-block-menu button:focus-visible {
+  background: #343740;
+}
+.notebook-rich-editor .persistent-block {
+  margin: 12px 0;
+  border-radius: 6px;
+}
+.notebook-rich-editor .persistent-block[data-kind='callout'] {
+  padding: 14px 16px;
+  background: var(--editor-surface-muted);
+}
+.persistent-block-header {
+  padding: 4px 0;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.persistent-block-header[hidden],
+.persistent-block-body[hidden] {
+  display: none;
+}
+.persistent-block-header button {
+  color: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.persistent-block-body {
+  min-height: 24px;
+}
+.notebook-rich-editor
+  .persistent-block[style*='color']
+  :is(p, li, h1, h2, h3, h4, h5, h6, blockquote) {
+  color: inherit;
+}
+
+.notebook-insert-menu {
+  width: min(288px, calc(100vw - 16px));
+  max-width: calc(100vw - 24px);
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 4px;
+  background: #fff;
+  color: #374151;
+  box-shadow: 0 8px 24px #0002;
+}
+.notebook-insert-query {
+  padding: 7px 9px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.notebook-insert-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.notebook-insert-option[aria-selected='true'],
+.notebook-insert-option:hover {
+  background: #f1f3f5;
+}
+.notebook-insert-icon {
+  flex-shrink: 0;
+}
+.notebook-insert-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+.notebook-insert-description {
+  color: #6b7280;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dark .notebook-insert-menu {
+  background: #24262e;
+  color: #e5e7eb;
+  border-color: #4b5563;
+}
+.dark .notebook-insert-option[aria-selected='true'],
+.dark .notebook-insert-option:hover {
+  background: #343740;
+}
+.dark .notebook-insert-description {
+  color: #9ca3af;
+}
+
+.notebook-block-menu-divider {
+  height: 1px;
+  margin: 5px 3px;
+  background: #e5e7eb;
+}
+.dark .notebook-block-menu-divider {
+  background: #454852;
+}
+.notebook-block-menu button svg {
+  flex-shrink: 0;
+}

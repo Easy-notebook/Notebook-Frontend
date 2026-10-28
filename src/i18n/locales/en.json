@@ -94,8 +94,8 @@
     "editor": {
       "title": "Editor Settings",
       "editorType": "Editor Type",
-      "editorTypeDesc": "Choose your preferred editor style. Tiptap is suitable for smooth writing, Jupyter for structured programming.",
-      "tiptapEditor": "Tiptap Editor (Rich Text Mode)",
+      "editorTypeDesc": "Choose your preferred editor style. Lexical is suitable for smooth writing, Jupyter for structured programming.",
+      "lexicalEditor": "Lexical Editor (Rich Text Mode)",
       "jupyterEditor": "Jupyter Editor (Cell Mode)",
       "defaultLanguage": "Default Programming Language",
       "defaultLanguageDesc": "Default programming language used when creating new code cells.",

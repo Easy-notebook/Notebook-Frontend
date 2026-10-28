@@ -114,7 +114,7 @@ export class CommandHintProvider {
 
       tiptap_update: {
         command: '/tiptap-update',
-        description: 'Update TipTap editor content',
+        description: 'Update rich-text editor content',
         usage: '/tiptap-update --cellId <id> --content <text>',
         examples: [
           '/tiptap-update --cellId cell-123 --content "New text"',

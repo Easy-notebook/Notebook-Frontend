@@ -6,7 +6,7 @@ import type { DemoModeProps, StepRef, PhaseRef, TaskRef } from '@Store/models';
 
 /**
  * DemoMode component combines StepMode's cell filtering and layout logic
- * with CreateMode's dual editor support (tiptap and jupyter editors).
+ * with CreateMode's dual editor support (Lexical and Jupyter editors).
  * It provides a demonstration mode with step-by-step navigation and proper cell filtering.
  */
 const DemoMode: React.FC<DemoModeProps> = ({
@@ -26,7 +26,7 @@ const DemoMode: React.FC<DemoModeProps> = ({
   const settings = useSettings();
 
   // Determine which editor to render based on the current settings.
-  const editorType = settings.editorSettings?.editorType || 'tiptap';
+  const editorType = settings.editorSettings?.editorType || 'lexical';
 
   // If no phase is selected, show editor selection interface
   if (!currentPhaseId) {
@@ -36,7 +36,7 @@ const DemoMode: React.FC<DemoModeProps> = ({
           <div className="mb-6 p-6 bg-gradient-to-r from-theme-50 to-green-50 rounded-xl border border-theme-200">
             <h3 className="text-xl font-bold text-gray-800 mb-2">Demo Mode</h3>
             <p className="text-gray-600">
-              Interactive demonstration mode with {editorType === 'tiptap' ? 'Tiptap' : 'Jupyter'}{' '}
+              Interactive demonstration mode with {editorType === 'lexical' ? 'Lexical' : 'Jupyter'}{' '}
               editor support
             </p>
           </div>
