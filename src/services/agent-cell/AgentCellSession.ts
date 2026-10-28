@@ -1,3 +1,8 @@
+import {
+  AgentApprovalGate,
+  requiresAgentApproval,
+  type ApprovalDecision,
+} from './AgentApprovalGate';
 import type { AgentCellData, AgentEvent, AgentPhase, AgentTurn, ToolResult } from './protocol';
 import type { AgentTransport } from './AgentTransport';
 import { NotebookAgentTools, type NotebookAgentPorts } from './NotebookAgentTools';
@@ -20,6 +25,18 @@ const transitions: Record<AgentPhase, readonly AgentPhase[]> = {
 export class AgentCellSession {
   phase: AgentPhase = 'idle';
   private controller?: AbortController;
+  private readonly approvals = new AgentApprovalGate();
+  private currentTurnId?: string;
+  resolve(sessionId: string, turnId: string, callId: string, decision: ApprovalDecision) {
+    if (
+      this.phase !== 'running' ||
+      this.ports.notebookId() !== this.notebookId ||
+      this.ports.load().sessionId !== sessionId ||
+      this.currentTurnId !== turnId
+    )
+      throw new Error('Agent run ownership changed');
+    this.approvals.resolve(callId, decision);
+  }
   constructor(
     private readonly notebookId: string,
     private readonly cellId: string,
@@ -39,7 +56,7 @@ export class AgentCellSession {
     this.transition('cancelling');
     this.controller?.abort();
   }
-  async send(prompt: string): Promise<void> {
+  async send(prompt: string, retryOf?: string): Promise<void> {
     if (!prompt.trim() || this.active) return;
     if (this.ports.notebookId() !== this.notebookId) throw new Error('Notebook context changed');
     const initial = this.ports.load();
@@ -54,7 +71,10 @@ export class AgentCellSession {
       answer: '',
       actions: [],
       status: 'running',
+      startedAt: Date.now(),
+      retryOf,
     };
+    this.currentTurnId = turn.id;
     data = { ...data, turns: [...data.turns, turn] };
     const current = () =>
       this.ports.notebookId() === this.notebookId &&
@@ -65,15 +85,21 @@ export class AgentCellSession {
         ) &&
       this.ports.load()?.sessionId === sessionId;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let actionSnapshot: AgentTurn['actions'] = [];
     const publish = () => {
       clearTimeout(timer);
       timer = undefined;
       if (!current()) return;
+      if (
+        actionSnapshot.length !== turn.actions.length ||
+        actionSnapshot.some((action, index) => action !== turn.actions[index])
+      )
+        actionSnapshot = [...turn.actions];
       // Summary is owned by the notebook tool and may have changed during this turn.
       this.ports.save({
         ...data,
         summary: this.ports.load().summary,
-        turns: [...data.turns.slice(0, -1), { ...turn, actions: [...turn.actions] }],
+        turns: [...data.turns.slice(0, -1), { ...turn, actions: actionSnapshot }],
       });
     };
     const schedule = () => {
@@ -104,6 +130,9 @@ export class AgentCellSession {
           name: event.label,
           status: event.status,
           result: event.detail,
+          kind: 'activity' as const,
+          startedAt: turn.actions.find((item) => item.id === event.id)?.startedAt ?? Date.now(),
+          endedAt: event.status === 'running' ? undefined : Date.now(),
         };
         const index = turn.actions.findIndex((item) => item.id === event.id);
         if (index < 0) turn.actions.push(action);
@@ -117,16 +146,37 @@ export class AgentCellSession {
             id: event.callId,
             name: event.name,
             arguments: event.arguments,
-            status: 'running',
+            status: requiresAgentApproval(event.name) ? 'waiting' : 'running',
+            kind: 'tool',
+            startedAt: Date.now(),
           });
+          const approval = requiresAgentApproval(event.name)
+            ? this.approvals.wait(event.callId, controller.signal)
+            : undefined;
           publish();
-          result = await tools.execute(event.name, event.arguments);
+          const decision = approval ? await approval : 'approve';
+          controller.signal.throwIfAborted();
+          if (!current()) throw new Error('Agent session ownership changed');
+          if (decision === 'reject') {
+            result = {
+              ok: false,
+              error:
+                'USER_REJECTED: The user declined this action. Do not repeat it without a new user request.',
+            };
+          } else {
+            await this.transport.start(turn.id, event.callId, controller.signal);
+            const index = turn.actions.findIndex((item) => item.id === event.callId);
+            turn.actions[index] = { ...turn.actions[index], status: 'running' };
+            publish();
+            result = await tools.execute(event.name, event.arguments);
+          }
           results.set(event.callId, result);
           controller.signal.throwIfAborted();
           const index = turn.actions.findIndex((item) => item.id === event.callId);
           turn.actions[index] = {
             ...turn.actions[index],
-            status: result.ok ? 'completed' : 'failed',
+            status: decision === 'reject' ? 'rejected' : result.ok ? 'completed' : 'failed',
+            endedAt: Date.now(),
             result,
           };
           publish();
@@ -178,11 +228,16 @@ export class AgentCellSession {
       }
     } finally {
       turn.actions = turn.actions.map((action) =>
-        action.status === 'running'
-          ? { ...action, status: this.phase === 'cancelled' ? 'cancelled' : 'failed' }
+        ['running', 'waiting'].includes(action.status)
+          ? {
+              ...action,
+              endedAt: Date.now(),
+              status: this.phase === 'cancelled' ? 'cancelled' : 'failed',
+            }
           : action
       );
       turn.status = this.phase;
+      turn.endedAt = Date.now();
       try {
         publish();
       } finally {
@@ -190,6 +245,7 @@ export class AgentCellSession {
         tools.dispose();
         watch();
         this.controller = undefined;
+        this.currentTurnId = undefined;
       }
     }
   }

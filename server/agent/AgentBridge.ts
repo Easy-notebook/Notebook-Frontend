@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import {
@@ -22,6 +23,7 @@ interface Session extends ProviderSession {
 interface PendingTool {
   resolve(result: ToolResult): void;
   timer: NodeJS.Timeout;
+  started?: boolean;
 }
 interface ActiveRun {
   controller: AbortController;
@@ -85,6 +87,23 @@ export class AgentBridge {
     }
     try {
       const input = await body(request);
+      if (route === '/agent-api/tool-start') {
+        const start = z
+          .object({ runId: z.string().uuid(), callId: z.string().uuid() })
+          .strict()
+          .parse(input);
+        const run = this.runs.get(start.runId);
+        const pending = run?.tools.get(start.callId);
+        if (!pending || pending.started || run?.controller.signal.aborted) {
+          json(response, 409, { error: 'Tool call is no longer available' });
+          return;
+        }
+        pending.started = true;
+        // Starting execution gets a fresh tool deadline after the human decision.
+        pending.timer.refresh();
+        json(response, 200, { ok: true });
+        return;
+      }
       if (route === '/agent-api/tool-result') {
         const reply = toolReplySchema.parse(input);
         const run = this.runs.get(reply.runId);

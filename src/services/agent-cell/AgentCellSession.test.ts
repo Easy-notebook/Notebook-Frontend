@@ -34,7 +34,7 @@ function fixture(run: AgentTransport['run']) {
       data = { ...data, summary: { text, cellIds, updatedAt: 'now' } };
     },
   };
-  const transport = { run: vi.fn(run), reply: vi.fn(async () => {}) };
+  const transport = { start: vi.fn(async () => {}), run: vi.fn(run), reply: vi.fn(async () => {}) };
   const session = new AgentCellSession('notebook', 'agent', ports, transport);
   return {
     session,
@@ -49,6 +49,24 @@ function fixture(run: AgentTransport['run']) {
   };
 }
 describe('AgentCellSession', () => {
+  it('shares unchanged action snapshots across text publications', async () => {
+    vi.useFakeTimers();
+    try {
+      const snapshots: unknown[] = [];
+      const f = fixture(async (_request, _signal, emit) => {
+        await emit({ type: 'activity', id: 'a', label: 'read', status: 'completed' });
+        await vi.advanceTimersByTimeAsync(80);
+        snapshots.push(f.data().turns[0].actions);
+        await emit({ type: 'text', text: 'More text' });
+        await vi.advanceTimersByTimeAsync(80);
+        snapshots.push(f.data().turns[0].actions);
+      });
+      await f.session.send('Read');
+      expect(snapshots[0]).toBe(snapshots[1]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('streams answers, deduplicates tool execution and preserves a summary on follow-up', async () => {
     const callId = crypto.randomUUID();
     const f = fixture(async (_request, _signal, emit) => {
@@ -131,5 +149,111 @@ describe('AgentCellSession', () => {
       status: 'failed',
       error: 'Provider unavailable',
     });
+  });
+});
+
+describe('live approvals', () => {
+  it('pauses before mutation and consumes the exact approval only once', async () => {
+    const callId = crypto.randomUUID();
+    const f = fixture(async (request, _signal, emit) => {
+      const version = JSON.parse(request.context).cells.find(
+        (cell: { cellId: string }) => cell.cellId === 'code'
+      ).version;
+      await emit({
+        type: 'tool',
+        callId,
+        name: 'update_cell',
+        arguments: { cellId: 'code', version, content: 'approved' },
+      });
+    });
+    const pending = f.session.send('edit');
+    await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
+    expect(f.ports.update).not.toHaveBeenCalled();
+    const turn = f.data().turns[0];
+    expect(() => f.session.resolve('wrong', turn.id, callId, 'approve')).toThrow('ownership');
+    f.session.resolve(f.data().sessionId, turn.id, callId, 'approve');
+    expect(() => f.session.resolve(f.data().sessionId, turn.id, callId, 'approve')).toThrow(
+      'no longer'
+    );
+    await pending;
+    expect(f.ports.update).toHaveBeenCalledExactlyOnceWith('code', 'approved');
+    expect(f.transport.start).toHaveBeenCalledTimes(1);
+    expect(f.data().turns[0].actions[0]).toMatchObject({ status: 'completed', kind: 'tool' });
+    expect(f.data().turns[0].endedAt).toBeGreaterThanOrEqual(f.data().turns[0].startedAt!);
+  });
+  it.each(['reject', 'cancel', 'switch'] as const)(
+    '%s does not execute the waiting tool',
+    async (mode) => {
+      const callId = crypto.randomUUID();
+      const f = fixture(async (request, _signal, emit) => {
+        const version = JSON.parse(request.context).cells.find(
+          (cell: { cellId: string }) => cell.cellId === 'code'
+        ).version;
+        await emit({
+          type: 'tool',
+          callId,
+          name: 'update_cell',
+          arguments: { cellId: 'code', version, content: 'blocked' },
+        });
+      });
+      const pending = f.session.send('edit');
+      await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
+      if (mode === 'reject')
+        f.session.resolve(f.data().sessionId, f.data().turns[0].id, callId, 'reject');
+      else if (mode === 'cancel') f.session.cancel();
+      else f.switchNotebook();
+      await pending;
+      expect(f.ports.update).not.toHaveBeenCalled();
+      expect(f.transport.start).not.toHaveBeenCalled();
+      if (mode === 'reject') expect(f.data().turns[0].actions[0].status).toBe('rejected');
+      if (mode === 'cancel')
+        expect(f.data().turns[0]).toMatchObject({
+          status: 'cancelled',
+          actions: [{ status: 'cancelled' }],
+        });
+    }
+  );
+  it('rechecks version after approval rather than overwriting an intervening edit', async () => {
+    const callId = crypto.randomUUID();
+    const f = fixture(async (request, _signal, emit) => {
+      const version = JSON.parse(request.context).cells.find(
+        (cell: { cellId: string }) => cell.cellId === 'code'
+      ).version;
+      await emit({
+        type: 'tool',
+        callId,
+        name: 'update_cell',
+        arguments: { cellId: 'code', version, content: 'stale' },
+      });
+    });
+    const pending = f.session.send('edit');
+    await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
+    (f.ports.cells()[1] as Cell).content = 'manual change';
+    for (const listener of f.listeners) listener();
+    f.session.resolve(f.data().sessionId, f.data().turns[0].id, callId, 'approve');
+    await pending;
+    expect(f.ports.update).not.toHaveBeenCalled();
+    expect(JSON.stringify(f.data().turns[0].actions[0].result)).toContain('VERSION_CONFLICT');
+  });
+  it('does not mutate when the bridge refuses an expired tool', async () => {
+    const callId = crypto.randomUUID();
+    const f = fixture(async (request, _signal, emit) => {
+      const version = JSON.parse(request.context).cells.find(
+        (cell: { cellId: string }) => cell.cellId === 'code'
+      ).version;
+      await emit({
+        type: 'tool',
+        callId,
+        name: 'update_cell',
+        arguments: { cellId: 'code', version, content: 'stale' },
+      });
+    });
+    f.transport.start.mockRejectedValueOnce(new Error('expired'));
+    const pending = f.session.send('edit');
+    await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
+    f.session.resolve(f.data().sessionId, f.data().turns[0].id, callId, 'approve');
+    await pending;
+    expect(f.ports.update).not.toHaveBeenCalled();
+    expect(f.data().turns[0].status).toBe('failed');
   });
 });

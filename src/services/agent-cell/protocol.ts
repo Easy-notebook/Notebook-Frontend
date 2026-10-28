@@ -100,6 +100,9 @@ export interface AgentAction {
   status: string;
   arguments?: unknown;
   result?: unknown;
+  kind?: 'tool' | 'activity';
+  startedAt?: number;
+  endedAt?: number;
 }
 export interface AgentTurn {
   id: string;
@@ -108,6 +111,9 @@ export interface AgentTurn {
   actions: AgentAction[];
   status: AgentPhase;
   error?: string;
+  startedAt?: number;
+  endedAt?: number;
+  retryOf?: string;
 }
 export interface AgentCellData {
   version: 1;

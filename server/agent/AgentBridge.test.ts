@@ -72,6 +72,17 @@ describe('AgentBridge', () => {
             buffer = buffer.slice(newline + 1);
             events.push(event);
             if (event.type === 'tool') {
+              const claim = { runId: input.runId, callId: event.callId };
+              expect((await post(f.origin, '/agent-api/tool-start', claim)).status).toBe(200);
+              expect((await post(f.origin, '/agent-api/tool-start', claim)).status).toBe(409);
+              expect(
+                (
+                  await post(f.origin, '/agent-api/tool-start', {
+                    ...claim,
+                    runId: crypto.randomUUID(),
+                  })
+                ).status
+              ).toBe(409);
               const reply = await post(f.origin, '/agent-api/tool-result', {
                 runId: input.runId,
                 callId: event.callId,
