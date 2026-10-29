@@ -7,6 +7,9 @@ import { useToast } from '@/components/UI/Toast';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { parseMarkdownContent } from '@Editor/utils/markdownParser';
 import { fileLog } from '@Utils/logger';
+import { ClaudeCodeTranscript } from './ClaudeCodeTranscript';
+import { NotebookCreation } from '@Services/notebook/NotebookCreation';
+import useRouteStore from '@Store/routeStore';
 
 // Type definitions for imported notebook formats
 interface CustomNotebookData {
@@ -266,72 +269,59 @@ const ImportNotebook4JsonOrJupyter = () => {
     ]
   );
 
-  // 处理文件导入
+  // Read and report failures once for every supported import format.
   const handleImport = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-      const file: File | undefined = e.target.files?.[0];
+      const input = e.target;
+      const file = input.files?.[0];
       if (!file) return;
-
-      const fileExtension: string = file.name.split('.').pop()?.toLowerCase() || '';
-
-      if (fileExtension === 'ipynb') {
-        // **[Modification 1]**: 检查是否为 Jupyter Notebook 文件
-        // 处理 Jupyter Notebook 文件导入
-        const reader: FileReader = new FileReader();
-        reader.onload = async (event: ProgressEvent<FileReader>) => {
-          try {
-            const result = event.target?.result as string;
-            if (!result) throw new Error('Failed to read file');
-            const jupyterData: JupyterNotebookData = JSON.parse(result);
-            await importJupyterNotebook(jupyterData);
-            toast({
-              title: 'Success',
-              description: 'Jupyter Notebook imported successfully',
-              variant: 'default',
-            });
-            e.target.value = ''; // 清除文件输入
-          } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            fileLog.error('Error importing Jupyter Notebook', { error: err });
-            setError(
-              'Failed to import Jupyter Notebook. Please check the file format and try again.'
-            );
-            toast({
-              title: 'Error',
-              description: errorMessage,
-              variant: 'destructive',
-            });
-          }
-        };
-        reader.readAsText(file);
-      } else {
-        // **[Modification 2]**: 默认处理自定义格式
-        // 处理自定义 Notebook 格式导入
-        const reader: FileReader = new FileReader();
-        reader.onload = async (event: ProgressEvent<FileReader>) => {
-          try {
-            const result = event.target?.result as string;
-            if (!result) throw new Error('Failed to read file');
-            const importedData: CustomNotebookData = JSON.parse(result);
-            await importCustomNotebook(importedData);
-            toast({
-              title: 'Success',
-              description: 'Custom Notebook imported successfully',
-              variant: 'default',
-            });
-            e.target.value = ''; // 清除文件输入
-          } catch (err: unknown) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            fileLog.error('Error importing custom Notebook', { error: err });
-            setError('Failed to import Notebook. Please check the file format and try again.');
-            toast({
-              title: 'Error',
-              description: errorMessage,
-              variant: 'destructive',
-            });
-          }
-        };
-        reader.readAsText(file);
+      try {
+        const result = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? ''));
+          reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+          reader.onabort = () => reject(new Error('File reading was cancelled'));
+          reader.readAsText(file);
+        });
+        if (!result.trim()) throw new Error('The selected file is empty');
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        let description: string;
+        if (extension === 'txt') {
+          const { title, cells } = new ClaudeCodeTranscript().parse(result, file.name);
+          // Persist the full import before navigation activates it. A failed import leaves
+          // the currently open notebook untouched and never requires a running kernel.
+          const id = await new NotebookCreation().create(title, cells);
+          useRouteStore.getState().navigateToWorkspace(id);
+          description = 'Claude Code conversation imported successfully';
+        } else if (extension === 'easynb') {
+          const imported: CustomNotebookData & { title?: string; notebookTitle?: string } =
+            JSON.parse(result);
+          if (!Array.isArray(imported.cells))
+            throw new Error('Invalid Notebook format: Missing cells array');
+          const title =
+            imported.notebookTitle || imported.title || file.name.replace(/\.easynb$/i, '');
+          const cells = imported.cells.map((cell) => ({ ...cell, id: `imported-${uuidv4()}` }));
+          const id = await new NotebookCreation().create(title, cells);
+          useRouteStore.getState().navigateToWorkspace(id);
+          description = 'Notebook imported successfully';
+        } else if (extension === 'ipynb') {
+          await importJupyterNotebook(JSON.parse(result));
+          description = 'Jupyter Notebook imported successfully';
+        } else {
+          await importCustomNotebook(JSON.parse(result));
+          description = 'Custom Notebook imported successfully';
+        }
+        toast({ title: 'Success', description, variant: 'default' });
+      } catch (err: unknown) {
+        fileLog.error('Error importing Notebook', { error: err });
+        setError('Failed to import Notebook. Please check the file format and try again.');
+        toast({
+          title: 'Error',
+          description: err instanceof Error ? err.message : 'Unknown error',
+          variant: 'destructive',
+        });
+      } finally {
+        input.value = '';
       }
     },
     [importJupyterNotebook, importCustomNotebook, toast, setError]

@@ -58,7 +58,7 @@ it('revokes detached work and stale starts, then supports reattachment', async (
   expect(session.getSnapshot()).toMatchObject({ status: 'ready', files: [{ name: 'new' }] });
 });
 
-it('retains files during refresh, clears on current failure, and recovers on retry', async () => {
+it('retains files during refresh and transport failure, and recovers on retry', async () => {
   const load = vi
     .fn()
     .mockResolvedValueOnce(listing('old'))
@@ -68,9 +68,13 @@ it('retains files during refresh, clears on current failure, and recovers on ret
   session.attach();
   await session.refresh();
   const refresh = session.refresh();
-  expect(session.getSnapshot()).toMatchObject({ status: 'loading', files: [{ name: 'old' }] });
+  expect(session.getSnapshot()).toMatchObject({ status: 'ready', files: [{ name: 'old' }] });
   await refresh;
-  expect(session.getSnapshot()).toEqual({ status: 'error', files: [], error: 'offline' });
+  expect(session.getSnapshot()).toMatchObject({
+    status: 'error',
+    files: [{ name: 'old' }],
+    error: 'offline',
+  });
   await session.refresh();
   expect(session.getSnapshot()).toMatchObject({ status: 'ready', files: [{ name: 'new' }] });
 });
@@ -117,17 +121,83 @@ it('normalizes directory children and leaves an omitted successful list empty', 
 });
 
 it('passes cancellation through the real list transport', async () => {
-  const fetcher = vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValue(new Response(JSON.stringify({ status: 'ok', files: [] })));
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        revision: 0,
+        unchanged: false,
+        reset: true,
+        entries: [],
+        removed: [],
+        permissions: {},
+      })
+    )
+  );
   try {
     const controller = new AbortController();
     await FileService.listFiles('owner', controller.signal);
-    expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('/list_files/owner'), {
-      method: 'GET',
-      signal: controller.signal,
-    });
+    expect(fetcher).toHaveBeenCalledWith(
+      '/aal-api/workspaces/owner/files',
+      expect.objectContaining({
+        method: 'POST',
+        signal: expect.any(AbortSignal),
+      })
+    );
   } finally {
     fetcher.mockRestore();
   }
 });
+
+it('applies native changes, retains stable snapshots when unchanged and removes deleted paths', async () => {
+  const load = vi
+    .fn()
+    .mockResolvedValueOnce({
+      status: 'ok',
+      revision: 1,
+      reset: true,
+      files: [{ name: 'a', path: '/work/a', type: 'file', size: 1 }],
+    })
+    .mockResolvedValueOnce({ status: 'ok', revision: 1, unchanged: true })
+    .mockResolvedValueOnce({
+      status: 'ok',
+      revision: 2,
+      reset: false,
+      removed: ['/work/a'],
+      files: [{ name: 'b', path: '/output/b', type: 'file', size: 2 }],
+    });
+  const session = new FileListSession('native', load);
+  session.attach();
+  await session.refresh();
+  const previous = session.getSnapshot();
+  await session.refresh(true);
+  expect(session.getSnapshot()).toBe(previous);
+  expect(load.mock.calls[1][2]).toBe(1);
+  await session.refresh(true);
+  expect(session.getSnapshot().files).toMatchObject([
+    { path: '/output', children: [{ path: '/output/b' }] },
+  ]);
+  session.detach();
+});
+
+it.each([{ files: [] }, { files: [{ name: 'a', path: '/work/a', type: 'file', size: 1 }] }])(
+  'keeps a loaded snapshot and subscribers stable during manual refresh: %j',
+  async ({ files }) => {
+    const next = pending();
+    const load = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'ok', revision: 1, reset: true, files })
+      .mockReturnValueOnce(next.promise);
+    const session = new FileListSession('native', load);
+    session.attach();
+    await session.refresh();
+    const snapshot = session.getSnapshot();
+    const notify = vi.fn();
+    session.subscribe(notify);
+    const refresh = session.refresh();
+    expect(session.getSnapshot()).toBe(snapshot);
+    next.resolve({ status: 'ok', revision: 1, unchanged: true });
+    await refresh;
+    expect(session.getSnapshot()).toBe(snapshot);
+    expect(notify).not.toHaveBeenCalled();
+  }
+);

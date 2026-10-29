@@ -25,6 +25,18 @@ import { NotebookConflictError } from '../NotebookConflictError';
 export class NotebookRepository implements INotebookRepository {
   constructor(private storage: IStorageProvider) {}
 
+  async updateLibraryMetadata(
+    id: string,
+    patch: NonNullable<NotebookEntity['library']>
+  ): Promise<void> {
+    await this.storage.transaction([DB_CONFIG.STORES.NOTEBOOKS], 'readwrite', async (stores) => {
+      const store = stores[DB_CONFIG.STORES.NOTEBOOKS];
+      const notebook = await this.read<NotebookEntity | undefined>(store.get(id));
+      if (!notebook) throw new Error('Notebook no longer exists');
+      store.put({ ...notebook, library: { ...notebook.library, ...patch } });
+    });
+  }
+
   async importNotebook(
     notebook: NotebookSaveData,
     files: FileSaveData[],
@@ -90,6 +102,7 @@ export class NotebookRepository implements INotebookRepository {
       if (file) history = history.merge(inputHistory.observedAt(now));
       notebook = {
         ...data,
+        library: existing?.library ?? data.library,
         // Metadata inputs can be stale. File-derived counters belong to this transaction.
         ...NotebookFileTotals.fromFiles(file ? [...retained, file.metadata] : retained).toRecord(),
         ...history.toRecord(),

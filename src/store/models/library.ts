@@ -9,20 +9,24 @@ export interface LibraryStateProps {
 export interface CachedNotebook extends NotebookEntity {
   isStarred?: boolean;
   lastOpenedFiles?: string[];
+  presentation?: {
+    kind: 'document' | 'project' | 'chat';
+    providers: Array<'codex' | 'claude'>;
+    preview: string;
+  };
 }
 
 export type ViewMode = 'grid' | 'list';
 export type SortBy = 'recent' | 'name' | 'size' | 'files';
-export type BentoSize = 'small' | 'medium' | 'large' | 'featured';
 
 export interface NotebookCardProps {
   notebook: CachedNotebook;
   viewMode: ViewMode;
-  bentoSize?: BentoSize;
   onSelect: (notebookId: string) => void;
   onToggleStar: (notebookId: string, e: React.MouseEvent) => void;
   onDelete: (notebookId: string) => void;
   onExport?: (notebookId: string) => void;
+  onCustomize?: (notebookId: string) => void;
 }
 
 export interface NotebookListProps {
@@ -32,6 +36,7 @@ export interface NotebookListProps {
   onToggleStar: (notebookId: string, e: React.MouseEvent) => void;
   onDeleteNotebook: (notebookId: string) => void;
   onExportNotebook?: (notebookId: string) => void;
+  onCustomize?: (notebookId: string) => void;
 }
 
 export interface LibraryHeaderProps {
@@ -44,20 +49,4 @@ export interface LibraryHeaderProps {
   onSearchChange: (query: string) => void;
   onViewModeChange: (mode: ViewMode) => void;
   onRefresh: () => void;
-}
-
-export interface NotebookStatsProps {
-  fileCount?: number;
-  accessCount?: number;
-  totalSize?: number;
-}
-
-export interface FileTagsProps {
-  files?: string[];
-  maxVisible?: number;
-}
-
-export interface NotebookAvatarProps {
-  id: string;
-  size?: number;
 }

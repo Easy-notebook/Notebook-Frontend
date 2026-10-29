@@ -42,7 +42,7 @@ it('refreshes only after acknowledged deletion and retains the notebook/path', a
     fetchFileList: refresh,
     toast,
   });
-  expect(remove).toHaveBeenCalledExactlyOnceWith('owner', 'assets/a.txt');
+  expect(remove).toHaveBeenCalledExactlyOnceWith('owner', 'assets/a.txt', undefined);
   expect(refresh).toHaveBeenCalledOnce();
   expect(toast).toHaveBeenCalledWith(expect.objectContaining({ variant: 'success' }));
 });

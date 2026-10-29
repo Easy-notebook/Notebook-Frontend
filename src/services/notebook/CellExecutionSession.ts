@@ -7,7 +7,7 @@ import type {
 } from '@Services/types';
 interface ExecutionPorts {
   notebookId(): string | null;
-  cell(id: string): { content: string; language?: string } | undefined;
+  cell(id: string): { content: string; language?: string; metadata?: { executionPolicy?: string } | null } | undefined;
   watch(check: () => void): () => void;
   initialize(language: string): Promise<string | false>;
   execute(
@@ -108,6 +108,8 @@ export class CellExecutionSession {
     for (const id of cellIds) {
       const cell = this.ports.cell(id);
       if (!cell) return rejected(`Cell ${id} does not exist`);
+      if (cell.metadata?.executionPolicy === 'reference')
+        return rejected(`Cell ${id}: imported reference code must be copied to a new code cell before execution`);
       if (!canExecuteCodeLanguage(cell.language))
         return rejected(`Cell ${id}: ${cell.language} execution is unavailable`);
       cells.push({ id, content: cell.content, language: normalizeCodeLanguage(cell.language) });
@@ -198,6 +200,8 @@ export class CellExecutionSession {
   private start(cellId: string): Promise<ExecutionResult> {
     const cell = this.ports.cell(cellId);
     if (!cell) return Promise.resolve(failure('Cell does not exist'));
+    if (cell.metadata?.executionPolicy === 'reference')
+      return Promise.resolve(failure('Imported reference code must be copied to a new code cell before execution'));
     if (!canExecuteCodeLanguage(cell.language))
       return Promise.resolve(
         failure(`${cell.language} execution is unavailable; supported languages are Python and AAL`)

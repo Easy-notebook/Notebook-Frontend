@@ -132,7 +132,7 @@ export interface NotebookStoreActions {
   clearCells: () => void;
   clearAllOutputs: () => number;
   clearCellOutputs: (cellId: string) => void;
-  setCells: (cells: Cell[]) => void;
+  setCells: (cells: Cell[], options?: { notebookTitle?: string }) => void;
   updateCurrentCellWithContent: (content: string) => void;
   addCell: (newCell: Partial<Cell> & { id?: string }, index?: number) => string;
   updateTitle: (title: string) => void;
@@ -486,7 +486,7 @@ const useStore = create(
         }
       },
 
-      setCells: (cells: Cell[]) => {
+      setCells: (cells: Cell[], options?: { notebookTitle?: string }) => {
         if (!Array.isArray(cells)) {
           storeLog.error('setCells called with non-array', {
             receivedType: typeof cells,
@@ -500,6 +500,8 @@ const useStore = create(
           current.isInitialized &&
           cells.length > 0 &&
           cells.length === current.cells.length &&
+          (options?.notebookTitle === undefined ||
+            options.notebookTitle === current.notebookTitle) &&
           (cells === current.cells || cells.every((cell, index) => cell === current.cells[index]))
         )
           return;
@@ -567,7 +569,12 @@ const useStore = create(
           finalTasksCount: tasks.length,
         });
 
-        set({ cells: processedCells, tasks, isInitialized: true });
+        set({
+          cells: processedCells,
+          tasks,
+          isInitialized: true,
+          ...(options?.notebookTitle !== undefined ? { notebookTitle: options.notebookTitle } : {}),
+        });
       },
 
       updateCurrentCellWithContent: (content: string) => {

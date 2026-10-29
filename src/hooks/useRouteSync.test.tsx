@@ -3,11 +3,14 @@ import { expect, it, vi } from 'vitest';
 
 const fixture = vi.hoisted(() => {
   const route = {
-    currentRoute: '/workspace/a', currentView: 'workspace', currentNotebookId: 'a',
+    currentRoute: '/workspace/a',
+    currentView: 'workspace',
+    currentNotebookId: 'a',
     setRoute: vi.fn(),
   };
   return {
-    location: { pathname: '/workspace/a' }, route,
+    location: { pathname: '/workspace/a' },
+    route,
     notebook: { notebookId: 'a' },
     session: {
       isDisconnected: () => false,
@@ -22,14 +25,23 @@ const fixture = vi.hoisted(() => {
 });
 vi.mock('react-router-dom', () => ({ useLocation: () => fixture.location }));
 vi.mock('@Store/routeStore', () => ({
-  default: Object.assign((select: (state: typeof fixture.route) => unknown) => select(fixture.route), {
-    getState: () => fixture.route,
-  }),
+  default: Object.assign(
+    (select: (state: typeof fixture.route) => unknown) => select(fixture.route),
+    {
+      getState: () => fixture.route,
+    }
+  ),
 }));
 vi.mock('@Store/notebookStore', () => ({ default: { getState: () => fixture.notebook } }));
-vi.mock('@Store/previewStore', () => ({ default: { getState: () => ({ switchToNotebook: fixture.preview }) } }));
-vi.mock('@Services/session', () => ({ NotebookSessionService: { getInstance: () => fixture.session } }));
-vi.mock('@Services/store', () => ({ StoreCleanupService: { getInstance: () => ({ cleanAll: fixture.clean }) } }));
+vi.mock('@Store/previewStore', () => ({
+  default: { getState: () => ({ switchToNotebook: fixture.preview }) },
+}));
+vi.mock('@Services/session', () => ({
+  NotebookSessionService: { getInstance: () => fixture.session },
+}));
+vi.mock('@Services/store', () => ({
+  StoreCleanupService: { getInstance: () => ({ cleanAll: fixture.clean }) },
+}));
 vi.mock('@Utils/logger', () => ({ uiLog: { error: vi.fn() } }));
 
 import { useRouteSync } from './useRouteSync';
@@ -40,7 +52,12 @@ it('does not expose the old workspace as ready while home cleanup is still in fl
   await waitFor(() => expect(result.current.isRouteReady).toBe(true));
 
   let release!: () => void;
-  fixture.clean.mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve; }));
+  fixture.clean.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      })
+  );
   fixture.location = { pathname: '/' };
   rerender();
   await waitFor(() => expect(fixture.clean).toHaveBeenCalledTimes(1));
@@ -49,7 +66,9 @@ it('does not expose the old workspace as ready while home cleanup is still in fl
   expect(result.current.isRouteReady).toBe(false);
   expect(fixture.session.connect).toHaveBeenCalledTimes(1);
 
-  await act(async () => { release(); });
+  await act(async () => {
+    release();
+  });
   await waitFor(() => expect(result.current.isRouteReady).toBe(true));
   expect(fixture.session.connect).toHaveBeenCalledTimes(2);
   expect(fixture.preview).toHaveBeenCalledTimes(2);
@@ -60,8 +79,30 @@ it('does not expose the old workspace as ready while home cleanup is still in fl
   await waitFor(() => expect(result.current.routeError).toContain('Cannot save'));
   expect(result.current.isRouteReady).toBe(false);
   expect(fixture.clean).toHaveBeenCalledTimes(1);
-  await act(async () => { result.current.retryRoute(); });
+  await act(async () => {
+    result.current.retryRoute();
+  });
   await waitFor(() => expect(result.current.isRouteReady).toBe(true));
   expect(result.current.routeError).toBeNull();
   expect(fixture.clean).toHaveBeenCalledTimes(2);
+});
+
+it('opens the document and library while remote file discovery remains pending', async () => {
+  let release!: () => void;
+  fixture.preview.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      })
+  );
+  fixture.location = { pathname: '/workspace/library-navigation-check' };
+  const { result, rerender } = renderHook(() => useRouteSync());
+  await waitFor(() => expect(release).toBeDefined());
+  await waitFor(() => expect(result.current.isRouteReady).toBe(true));
+  fixture.location = { pathname: '/FoKn/Library' };
+  rerender();
+  expect(result.current.isRouteReady).toBe(true);
+  await act(async () => {
+    release();
+  });
 });

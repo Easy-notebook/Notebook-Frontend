@@ -1,3 +1,4 @@
+import { NotebookCreation } from './NotebookCreation';
 import { apiLog } from '@Utils/logger';
 import { BaseService } from './BaseService';
 import { NotebookInitResponse, ApiResponse, KernelStatus } from '../types';
@@ -5,26 +6,8 @@ import { NotebookInitResponse, ApiResponse, KernelStatus } from '../types';
 export class NotebookLifecycleService extends BaseService {
   // Initialize notebook
   static async initializeNotebook(): Promise<NotebookInitResponse> {
-    try {
-      const response = await fetch(`${this.baseUrl}/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      return await this.handleResponse<NotebookInitResponse>(response);
-    } catch (error) {
-      apiLog.error('Failed to initialize notebook', { error });
-
-      // Provide more user-friendly error messages
-      if (error instanceof TypeError && error.message.includes('Load failed')) {
-        throw new Error(
-          `Cannot connect to the notebook server at ${this.baseUrl}. Please ensure the backend server is running and accessible.`
-        );
-      }
-
-      throw error;
-    }
+    const notebookId = await new NotebookCreation().create();
+    return { status: 'ok', notebook_id: notebookId };
   }
 
   static async restartNotebook(notebookId: string): Promise<ApiResponse> {
