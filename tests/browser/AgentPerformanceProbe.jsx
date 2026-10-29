@@ -14,6 +14,7 @@ const percentile = (values, fraction) => {
 export function AgentPerformanceProbe() {
   const session = useRef(null);
   const [report, setReport] = useState('Ready');
+  const [profileJson, setProfileJson] = useState('null');
   const [phase, setPhase] = useState('stream');
   const [recording, setRecording] = useState(false);
   useEffect(() => {
@@ -41,7 +42,8 @@ export function AgentPerformanceProbe() {
         for (const entry of list.getEntries()) {
           if (entry.startTime < state.started) continue;
           if (type === 'measure') {
-            if (entry.name.startsWith('agent-native:')) state.nativeCalls.push(entry.toJSON());
+            if (entry.name.startsWith('agent-native:'))
+              state.nativeCalls.push({ ...entry.toJSON(), detail: entry.detail });
           } else if (type === 'long-animation-frame') state.animationFrames.push(entry.toJSON());
           else if (type === 'longtask') state.longTasks.push(entry.toJSON());
           else
@@ -107,12 +109,14 @@ export function AgentPerformanceProbe() {
     capture = null;
     setRecording(false);
     const profile = state.profiler ? await state.profiler.stop() : null;
+    setProfileJson(JSON.stringify(profile));
     const frames = state.frames;
     setReport(
       JSON.stringify(
         {
           phase: state.phase,
-          profile,
+          profileSamples: profile?.samples?.length,
+          profileInterval: state.profiler?.sampleInterval,
           profileError: state.profileError,
           timeOrigin: performance.timeOrigin,
           started: state.started,
@@ -187,6 +191,9 @@ export function AgentPerformanceProbe() {
         fontSize: 12,
       }}
     >
+      <script type="application/json" id="agent-cpu-profile">
+        {profileJson}
+      </script>
       <label>
         采集阶段{' '}
         <select
