@@ -19,13 +19,15 @@ export const useNotebookConversation = create<{
 /** The notebook terminal always addresses its own agent, never the selected worker. */
 export function resolveNotebookAgent(
   cells: ReturnType<typeof useStore.getState>['cells'],
-  agentId: string
+  agentId: string,
+  sourceSessionId?: string
 ) {
   return cells.find(
     (cell) =>
       cell.type === 'agent' &&
       cell.enableEdit !== false &&
-      cell.metadata?.agent?.notebookAgentId === agentId
+      cell.metadata?.agent?.notebookAgentId === agentId &&
+      cell.metadata?.agent?.sourceSessionId === sourceSessionId
   );
 }
 
@@ -41,7 +43,7 @@ export const notebookConversation = {
     const profile = await notebookAgentProfiles.load(notebookId);
     const state = useStore.getState();
     if (state.notebookId !== notebookId) throw new Error('Notebook 已切换，请重新发送');
-    const current = resolveNotebookAgent(state.cells, profile.agentId);
+    const current = resolveNotebookAgent(state.cells, profile.agentId, profile.source?.sessionId);
     if (current && agentCellService.isActive(notebookId, current.id))
       throw new Error('Agent 正在回答，请等待完成或先取消');
     if (current && current.metadata?.agent?.provider !== profile.provider) {
@@ -53,7 +55,11 @@ export const notebookConversation = {
         type: 'agent',
         content: '',
         metadata: {
-          agent: { ...newAgentCellData(profile.provider), notebookAgentId: profile.agentId },
+          agent: {
+            ...newAgentCellData(profile.provider),
+            notebookAgentId: profile.agentId,
+            sourceSessionId: profile.source?.sessionId,
+          },
         },
       });
     useNotebookConversation.getState().select(notebookId, cellId);

@@ -220,6 +220,7 @@ export class AgentCellSession {
           cellId: this.cellId,
           provider: data.provider,
           notebookAgentId: data.notebookAgentId,
+          sourceSessionId: data.sourceSessionId,
           role: data.role ?? 'worker',
           sessionId,
           runId: turn.id,

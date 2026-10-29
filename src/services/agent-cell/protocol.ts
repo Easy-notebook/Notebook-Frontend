@@ -64,6 +64,7 @@ export const runRequestSchema = z
     notebookId: id,
     cellId: id,
     notebookAgentId: z.string().min(1).max(512).optional(),
+    sourceSessionId: z.string().uuid().optional(),
     provider: providerSchema,
     role: z.enum(['worker', 'curator']).optional(),
     intent: z.literal('regenerate').optional(),
@@ -152,6 +153,7 @@ export interface AgentTurn {
 export interface AgentCellData {
   version: 1;
   notebookAgentId?: string;
+  sourceSessionId?: string;
   sessionId: string;
   provider: AgentProvider;
   role?: AgentRole;

@@ -17,6 +17,8 @@ export function useNotebookAgentIdentity(notebookId: string) {
   return {
     identity,
     error: entry?.error,
-    cell: identity ? resolveNotebookAgent(cells, identity.agentId) : undefined,
+    cell: identity
+      ? resolveNotebookAgent(cells, identity.agentId, identity.source?.sessionId)
+      : undefined,
   };
 }

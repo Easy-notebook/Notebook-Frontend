@@ -74,3 +74,23 @@ it('fails closed if native identity cannot load', async () => {
   await expect(notebookConversation.submit('book', 'hello', vi.fn())).rejects.toThrow('offline');
   expect(mocks.state.addCell).not.toHaveBeenCalled();
 });
+
+it('does not reuse a conversation from before binding an imported provider session', async () => {
+  mocks.load.mockResolvedValue({
+    agentId: 'book-agent',
+    provider: 'codex',
+    source: { sessionId: '11111111-1111-4111-8111-111111111111' },
+  });
+  mocks.state.cells = [
+    {
+      id: 'old',
+      type: 'agent',
+      metadata: { agent: { notebookAgentId: 'book-agent', provider: 'codex' } },
+    },
+  ];
+  await notebookConversation.submit('book', 'continue original', vi.fn());
+  expect(mocks.send).toHaveBeenCalledWith('new', 'continue original');
+  expect(mocks.state.cells[1].metadata.agent.sourceSessionId).toBe(
+    '11111111-1111-4111-8111-111111111111'
+  );
+});
