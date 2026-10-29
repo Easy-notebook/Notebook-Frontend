@@ -1,0 +1,22 @@
+import { expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+const state = vi.hoisted(() => ({ cells: [] as {type:string}[], viewMode:'create', currentPhaseId:'', currentStepIndex:0, getCurrentStepCellsIDs: () => [] }));
+vi.mock('@Store/notebookStore', () => ({default:(selector:(s:typeof state)=>unknown)=>selector(state)}));
+vi.mock('@Store/AIAgentStore', () => ({useAIAgentStore:()=>({activeView:'qa',isLoading:false,actions:[],qaList:[],setActiveView:vi.fn()})}));
+vi.mock('react-i18next',()=>({useTranslation:()=>({t:(key:string)=>key})}));
+vi.mock('./components/NotebookAgentChat',()=>({NotebookAgentChat:()=>state.cells.length ? <div>Agent session</div> : null}));
+vi.mock('./components/QACard',()=>({default:()=>null}));
+vi.mock('./components/ActionCard',()=>({default:()=>null}));
+vi.mock('@RightSidebar/components/ViewSwitcher',()=>({default:()=>null}));
+vi.mock('@Notebook/features/workflow/WorkflowVisualization',()=>({default:()=>null}));
+vi.mock('@/components/UI/magic/shiny-text',()=>({default:()=>null}));
+import AIAgentSidebar from './index';
+it('shows empty state only when neither QA nor notebook Agent sessions exist',()=>{
+  state.cells=[];
+  const view=render(<AIAgentSidebar/>);
+  expect(screen.getByText('rightSideBar.noChatMessages')).toBeInTheDocument();
+  state.cells=[{type:'agent'}];
+  view.rerender(<AIAgentSidebar/>);
+  expect(screen.getByText('Agent session')).toBeInTheDocument();
+  expect(screen.queryByText('rightSideBar.noChatMessages')).toBeNull();
+});

@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom';
 import { AgentMark } from './AgentMark';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { startTransition, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Check,
   ChevronDown,
@@ -69,17 +70,21 @@ export function AgentDialog({
   children,
   close,
   anchor,
+  variant,
 }: {
   title: string;
   children: ReactNode;
   close(): void;
   anchor?: HTMLElement;
+  variant?: 'details';
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const [contentReady, setContentReady] = useState(variant !== 'details');
   useEffect(() => {
     const dialog = ref.current!;
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog.showModal();
+    if (variant === 'details') startTransition(() => setContentReady(true));
     const position = () => {
       if (!anchor) return;
       const rect = anchor.getBoundingClientRect();
@@ -95,14 +100,20 @@ export function AgentDialog({
       window.removeEventListener('resize', position);
       window.removeEventListener('scroll', position, true);
       dialog.close();
-      if (opener?.isConnected) opener.focus({ preventScroll: true });
+      // React removes the portal after effect cleanup. Restore focus after removal,
+      // so native modal teardown and focus do not force two layouts of the same tree.
+      queueMicrotask(() => {
+        if (opener?.isConnected && document.activeElement === document.body)
+          opener.focus({ preventScroll: true });
+      });
     };
   }, []);
-  return (
+  return createPortal(
     <dialog
       ref={ref}
-      className={`av-dialog av-theme ${anchor ? 'av-popover' : ''}`}
+      className={`av-dialog av-theme ${anchor ? 'av-popover' : ''} ${variant === 'details' ? 'av-detail-dialog' : ''}`}
       aria-label={title}
+      aria-busy={!contentReady}
       onCancel={(e) => {
         e.preventDefault();
         close();
@@ -111,13 +122,20 @@ export function AgentDialog({
         if (e.target === e.currentTarget) close();
       }}
     >
-      <header>
-        <strong>{title}</strong>
-        <button aria-label="Close details" onClick={close}>
+      {variant === 'details' ? (
+        <button className="av-detail-close" aria-label="Close details" onClick={close}>
           <X size={16} />
         </button>
-      </header>
-      {children}
-    </dialog>
+      ) : (
+        <header>
+          <strong>{title}</strong>
+          <button aria-label="Close details" onClick={close}>
+            <X size={16} />
+          </button>
+        </header>
+      )}
+      {contentReady && children}
+    </dialog>,
+    document.body
   );
 }

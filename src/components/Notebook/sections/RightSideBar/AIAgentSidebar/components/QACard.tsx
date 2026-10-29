@@ -1,15 +1,15 @@
-import { FactCapture } from '@Editor/NotebookContext/FactCapture';
-import useNotebookStore from '@Store/notebookStore';
-import React, { memo, useMemo, useState, useEffect } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { QAItem } from '@Store/models/agent';
-import { Zap } from 'lucide-react';
-import '@/components/AgentVisuals/agent-visuals.css';
-import { AgentAvatar } from '@/components/AgentVisuals/shared';
-import ExpandableText from '@RightSidebar/components/ExpandableText';
-import ToolCallIndicator from '@RightSidebar/components/ToolCallIndicator';
-import ShinyText from '@/components/UI/magic/shiny-text';
-import { ToolCall } from '../types';
+import { CircleHelp } from 'lucide-react';
+import { FactCapture } from '@Editor/NotebookContext/FactCapture';
+import { ReadonlyMarkdown } from '@Editor/ReadonlyMarkdown';
+import { AgentAnswer } from '@Editor/Cells/AgentCell/AgentAnswer';
+import { AgentAvatar, AgentDialog } from '@/components/AgentVisuals/shared';
+import { ActionPayload } from '@/components/AgentVisuals/AgentThinking';
+import { ReadingViewport } from '@/components/AgentVisuals/ReadingViewport';
+import useNotebookStore from '@Store/notebookStore';
+import type { QAItem } from '@Store/models/agent';
+import '@Editor/Cells/AgentCell/agent-cell.css';
 
 interface QACardProps {
   qa: QAItem;
@@ -17,292 +17,109 @@ interface QACardProps {
   totalCount: number;
 }
 
-const QACard: React.FC<QACardProps> = ({ qa, index, totalCount }) => {
+/** Operation-stream records share the message presentation, not the Agent session lifecycle. */
+function QACard({ qa }: QACardProps) {
   const { t } = useTranslation();
-  const isUser = qa.type === 'user';
   const notebookId = useNotebookStore((state) => state.notebookId);
+  const [details, setDetails] = useState(false);
+  const user = qa.type === 'user';
+  const name = qa.agentType || qa.agent || 'Assistant';
+  const provider = /claude/i.test(name)
+    ? 'claude'
+    : /codex|openai/i.test(name)
+      ? 'codex'
+      : undefined;
+  const content = qa.content || '';
   const source = {
     notebookId: notebookId || '',
     cellId: qa.cellId,
     conversationId: 'sidebar',
     messageId: qa.id,
-    role: isUser ? ('user' as const) : ('assistant' as const),
+    role: user ? ('user' as const) : ('assistant' as const),
   };
-  const qaNumber = totalCount - index;
-
-  // Memoize XML parsing to avoid re-parsing on every render
-  const xmlMatches = useMemo(() => {
-    if (!qa.content) return [];
-    const xmlTagRegex = /<([a-z-]+)(?:\s+[^>]*)?>[\s\S]*?<\/\1>/gi;
-    return [...qa.content.matchAll(xmlTagRegex)];
-  }, [qa.content]);
-
-  const hasCompletedActions = useMemo(() => {
-    if (qa.toolCalls && qa.toolCalls.length > 0) return false; // Already handled by toolCalls
-    if (!qa.content) return false;
-    return /<([a-z-]+)[\s\S]*?<\/\1>/i.test(qa.content);
-  }, [qa.content, qa.toolCalls]);
-
-  // Live timer for thinking duration
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    if (
-      !isUser &&
-      qa.onProcess &&
-      qa.thinkingStartAtMs !== undefined &&
-      qa.thinkingEndAtMs === undefined
-    ) {
-      const interval = setInterval(() => setNow(Date.now()), 1000);
-      return () => clearInterval(interval);
-    }
-  }, [isUser, qa.onProcess, qa.thinkingStartAtMs, qa.thinkingEndAtMs]);
-
-  const thinkingDuration = useMemo(() => {
-    if (qa.thinkingStartAtMs === undefined) return null;
-    const end = qa.thinkingEndAtMs ?? now;
-    return Math.max(0, Math.round((end - qa.thinkingStartAtMs) / 1000));
-  }, [qa.thinkingStartAtMs, qa.thinkingEndAtMs, now]);
-
-  if (isUser) {
-    return (
-      <div id={qa.id} className="mb-3 flex justify-start">
-        <div className="av-theme av-chat-message av-chat-user group relative">
-          <div className="av-chat-heading">
-            <span>You</span>
-          </div>
-          {/* #标号和时间戳 - 仅在 hover 时显示 */}
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                #{qaNumber}
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">{qa.timestamp}</span>
-            </div>
-          </div>
-          <FactCapture source={source} disabled={!notebookId}>
-            <div className="text-left break-words overflow-wrap-anywhere">
-              {qa.content?.trim().startsWith('/') ? (
-                <div className="flex items-center gap-2 text-theme-600 dark:text-theme-400 font-mono">
-                  <Zap className="w-4 h-4 shrink-0" />
-                  <span>{qa.content}</span>
-                </div>
-              ) : (
-                <ExpandableText text={qa.content} maxLines={5} />
-              )}
-            </div>
-          </FactCapture>
-        </div>
-      </div>
-    );
-  }
-
+  const emptyStatus = qa.onProcess
+    ? t('rightSideBar.thinking')
+    : t(
+        !qa.resolved && qa.thinkingStartAtMs !== undefined
+          ? 'rightSideBar.responseInterrupted'
+          : 'rightSideBar.noContent'
+      );
   return (
-    <div id={qa.id} className="mb-3 flex justify-end">
-      <div className="av-theme av-chat-message av-chat-assistant group relative">
-        <div className="av-chat-heading">
-          <AgentAvatar name={qa.agentType || qa.agent || 'AI'} />
-          <span>{qa.agentType || qa.agent || 'Assistant'}</span>
-          {qa.onProcess && <span className="av-blue">Running</span>}
-        </div>
-        {/* #标号和时间戳 - 仅在 hover 时显示 */}
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-          <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm">
-            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-              #{qaNumber}
-            </span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">{qa.timestamp}</span>
-          </div>
-        </div>
-
+    <section
+      id={qa.id}
+      className={
+        user ? 'av-theme av-chat-message av-chat-user' : 'agent-cell agent-message-callout av-theme'
+      }
+      data-provider={provider}
+    >
+      <header className="agent-cell-toolbar flex items-center gap-2 px-3 py-2">
+        {!user && (
+          <AgentAvatar
+            name={provider === 'claude' ? 'Claude Code' : provider === 'codex' ? 'Codex' : name}
+          />
+        )}
+        <strong className="agent-message-author">{user ? 'You' : name}</strong>
+        {!user && qa.onProcess && (
+          <span role="status" className="agent-turn-description">
+            {t('rightSideBar.thinking')}
+          </span>
+        )}
+        {!user && (
+          <button
+            type="button"
+            className="agent-toolbar-button ml-auto"
+            aria-label="回答详情"
+            title="详情与行动"
+            onClick={() => setDetails(true)}
+          >
+            <CircleHelp size={15} />
+          </button>
+        )}
+      </header>
+      <div className="px-3 pb-2">
         <FactCapture source={source} disabled={!notebookId}>
-          <div className="text-left break-words overflow-wrap-anywhere">
-            {(!qa.content || qa.content.trim() === '') &&
-            (!qa.toolCalls || qa.toolCalls.length === 0) &&
-            xmlMatches.length === 0 ? (
-              <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-                {qa.onProcess ? (
-                  <ShinyText
-                    text={`${qa.agentType || qa.agent || 'AI'} ${t('rightSideBar.thinking') || 'is thinking...'}`}
-                    disabled={false}
-                    speed={3}
-                    className="font-medium"
-                  />
-                ) : (
-                  <span>
-                    {t(
-                      !qa.resolved && qa.thinkingStartAtMs !== undefined
-                        ? 'rightSideBar.responseInterrupted'
-                        : 'rightSideBar.noContent'
-                    )}
-                  </span>
-                )}
-                {thinkingDuration !== null && (
-                  <span className="text-gray-400 dark:text-gray-500">({thinkingDuration}s)</span>
-                )}
-              </div>
+          {content.trim() ? (
+            user ? (
+              <ReadonlyMarkdown source={content} />
             ) : (
-              <ExpandableText text={qa.content} maxLines={5} />
-            )}
-          </div>
+              <AgentAnswer text={content} />
+            )
+          ) : (
+            <p className="av-muted" role="status">
+              {emptyStatus}
+            </p>
+          )}
         </FactCapture>
-
-        {/* 显示工具调用信息 */}
-        {qa.toolCalls && qa.toolCalls.length > 0 && (
-          <div className="mt-3 space-y-2">
-            {(() => {
-              const groupedTools: ToolCall[] = [];
-              if (qa.toolCalls) {
-                let currentGroup: ToolCall | null = null;
-
-                qa.toolCalls.forEach((tool) => {
-                  const isAddText = tool.type === 'add-text' || tool.type === 'add';
-
-                  if (isAddText) {
-                    // Try to parse content to check for heading
-                    let isHeading = false;
-                    try {
-                      // Arguments might be a JSON string or direct content
-                      const args = tool.arguments ? JSON.parse(tool.arguments) : {};
-                      const content = args.content || tool.content || '';
-                      if (content.trim().startsWith('#')) {
-                        isHeading = true;
-                      }
-                    } catch (e) {
-                      // If parsing fails, check content directly if available
-                      if (tool.content && tool.content.trim().startsWith('#')) {
-                        isHeading = true;
-                      }
-                    }
-
-                    if (currentGroup && !isHeading) {
-                      // Continue current group
-                      // We don't need to merge content for display, just grouping the indicator
-                    } else {
-                      // Start new group
-                      if (currentGroup) {
-                        groupedTools.push(currentGroup);
-                      }
-                      currentGroup = {
-                        ...tool,
-                        type: 'edit-notebook', // Rename to edit-notebook
-                        name: 'edit-notebook',
-                      };
-                    }
-                  } else {
-                    // Push pending group
-                    if (currentGroup) {
-                      groupedTools.push(currentGroup);
-                      currentGroup = null;
-                    }
-                    groupedTools.push(tool);
-                  }
-                });
-
-                // Push remaining group
-                if (currentGroup) {
-                  groupedTools.push(currentGroup);
-                }
-              }
-
-              return groupedTools.map((tool: ToolCall, toolIndex: number) => (
-                <ToolCallIndicator
-                  key={`${qa.id}-tool-${toolIndex}`}
-                  type={tool.type || tool.name || 'unknown'}
-                  content={tool.content || tool.arguments}
-                  agent={tool.agent}
-                />
-              ));
-            })()}
-          </div>
-        )}
-
-        {/* 解析内容中的XML标签作为工具调用显示 */}
-        {/* 解析内容中的XML标签作为工具调用显示 */}
-        {xmlMatches.length > 0 && (
-          <div className="mt-3 space-y-2">
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">⚡ 执行的操作:</div>
-            {(() => {
-              // Convert XML matches to ToolCall objects
-              const xmlTools: ToolCall[] = xmlMatches.map((match) => ({
-                type: match[1],
-                content: match[0],
-                name: match[1],
-                agent: qa.agentType || qa.agent,
-              }));
-
-              const groupedTools: ToolCall[] = [];
-              let currentGroup: ToolCall | null = null;
-
-              xmlTools.forEach((tool) => {
-                const isAddText = tool.type === 'add-text' || tool.type === 'add';
-
-                if (isAddText) {
-                  // For XML, the content IS the tool content (the whole tag)
-                  // We check if the inner content starts with #
-                  // match[0] is full tag, match[1] is tag name.
-                  // We need to extract inner content to check for heading.
-                  // Regex used: /<([a-z-]+)(?:\s+[^>]*)?>([\s\S]*?)<\/\1>/gi
-                  // But the current regex in useMemo is: /<([a-z-]+)(?:\s+[^>]*)?>[\s\S]*?<\/\1>/gi
-                  // It doesn't capture inner content as a group.
-                  // Let's try to extract it simply by stripping tags.
-
-                  let isHeading = false;
-                  const innerContent = tool.content?.replace(/<[^>]+>/g, '').trim() || '';
-                  if (innerContent.startsWith('#')) {
-                    isHeading = true;
-                  }
-
-                  if (currentGroup && !isHeading) {
-                    // Continue current group
-                  } else {
-                    // Start new group
-                    if (currentGroup) {
-                      groupedTools.push(currentGroup);
-                    }
-                    currentGroup = {
-                      ...tool,
-                      type: 'edit-notebook',
-                      name: 'edit-notebook',
-                    };
-                  }
-                } else {
-                  // Push pending group
-                  if (currentGroup) {
-                    groupedTools.push(currentGroup);
-                    currentGroup = null;
-                  }
-                  groupedTools.push(tool);
-                }
-              });
-
-              // Push remaining group
-              if (currentGroup) {
-                groupedTools.push(currentGroup);
-              }
-
-              return groupedTools.map((tool: ToolCall, toolIndex: number) => (
-                <ToolCallIndicator
-                  key={`${qa.id}-xml-${toolIndex}`}
-                  type={tool.type || tool.name || 'unknown'}
-                  content={tool.content}
-                  agent={tool.agent}
-                />
-              ));
-            })()}
-          </div>
-        )}
-
-        {/* 回答后操作摘要（若无显式 toolCalls，也尽量提示完成了动作） */}
-        {hasCompletedActions && (
-          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            ✅ {qa.agentType || qa.agent || 'AI'}{' '}
-            {t('rightSideBar.completedActions') || 'completed some operations during answering.'}
-          </div>
-        )}
       </div>
-    </div>
+      {details && (
+        <AgentDialog title="回答详情" close={() => setDetails(false)} variant="details">
+          <header className="agent-turn-heading">
+            <AgentAvatar
+              name={provider === 'claude' ? 'Claude Code' : provider === 'codex' ? 'Codex' : name}
+            />
+            <strong>{name}</strong>
+            <span className="av-muted">{qa.timestamp}</span>
+          </header>
+          <ReadingViewport label="回答详情记录" className="av-detail-history">
+            <AgentAnswer text={content} />
+            {!!qa.toolCalls?.length && (
+              <details className="agent-execution-trace">
+                <summary>行动记录</summary>
+                {qa.toolCalls.map((tool, index) => (
+                  <section key={`${qa.id}-${index}`} className="py-2">
+                    <strong>{tool.name || tool.type || 'Tool'}</strong>
+                    <ActionPayload value={tool} />
+                  </section>
+                ))}
+              </details>
+            )}
+            {!qa.resolved && !qa.onProcess && (
+              <p className="av-muted">{t('rightSideBar.responseInterrupted')}</p>
+            )}
+          </ReadingViewport>
+        </AgentDialog>
+      )}
+    </section>
   );
-};
-
+}
 export default memo(QACard);

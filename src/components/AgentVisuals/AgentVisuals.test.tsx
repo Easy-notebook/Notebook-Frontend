@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { AgentDialog } from './shared';
 import { beforeAll, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { AgentTree } from './AgentTree';
@@ -20,6 +22,58 @@ beforeAll(() => {
   };
 });
 describe('Agent interactions', () => {
+  it('portals details outside the editor and restores the trigger after removal', async () => {
+    function Inspector() {
+      const [open, setOpen] = useState(false);
+      return (
+        <section>
+          <button onClick={() => setOpen(true)}>Open inspector</button>
+          {open && (
+            <AgentDialog title="Inspector" variant="details" close={() => setOpen(false)}>
+              <p>Actual run</p>
+            </AgentDialog>
+          )}
+        </section>
+      );
+    }
+    const { container } = render(<Inspector />);
+    const trigger = screen.getByRole('button', { name: 'Open inspector' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: 'Inspector' });
+    expect(container.contains(dialog)).toBe(false);
+    expect(await screen.findByText('Actual run')).toBeTruthy();
+    const dismiss = within(dialog).getByRole('button', { name: 'Close details' });
+    dismiss.focus();
+    fireEvent.click(dismiss);
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  it('keeps selected details and folded branches current across streamed tree updates', async () => {
+    const { rerender } = render(<AgentTree root={root} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Child', exact: true }));
+    const dialog = await screen.findByRole('dialog', { name: 'Child' });
+    const updated = { ...child, status: 'running' as const, task: 'New live task' };
+    rerender(<AgentTree root={{ ...root, children: [updated] }} />);
+    expect(within(dialog).getByText('New live task')).toBeTruthy();
+    expect(within(dialog).getByText('Running')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide 1 sub-agents of Root' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Child', exact: true })).toBeNull()
+    );
+    rerender(
+      <AgentTree root={{ ...root, children: [updated, { ...child, id: 'new', name: 'New' }] }} />
+    );
+    expect(screen.queryByRole('button', { name: 'New', exact: true })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 sub-agents of Root' }));
+    expect(screen.getByRole('button', { name: 'New', exact: true })).toBeTruthy();
+    rerender(<AgentTree root={{ ...root, children: [] }} />);
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'New', exact: true })).toBeNull()
+    );
+    expect(screen.queryByRole('group')).toBeNull();
+  });
   it('collapses branches and clears a filter after its last matching status changes', async () => {
     const { rerender } = render(<AgentTree root={root} />);
     fireEvent.click(screen.getByRole('button', { name: 'Hide 1 sub-agents of Root' }));

@@ -39,7 +39,7 @@
 .av-theme * {
   box-sizing: border-box;
 }
-.av-theme button {
+:where(.av-theme) button {
   font: inherit;
   color: inherit;
   cursor: pointer;
@@ -47,11 +47,11 @@
   background: transparent;
   padding: 0;
 }
-.av-theme button:focus-visible {
+:where(.av-theme) button:focus-visible {
   outline: 2px solid var(--av-blue);
   outline-offset: 3px;
 }
-.av-theme button:disabled {
+:where(.av-theme) button:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -246,7 +246,6 @@
   transform: rotate(-90deg);
 }
 .av-children {
-  border-left: 1.5px solid var(--av-blue);
   margin-left: 23px;
   padding-left: 11px;
   padding-top: 11px;
@@ -265,14 +264,19 @@
   width: 12px;
   border-top: 1.5px solid var(--av-blue);
 }
-.av-children > .av-branch:last-child:after {
+/* Each sibling owns its connector; the final segment ends at its junction. */
+.av-children > .av-branch:after {
   content: '';
   position: absolute;
-  left: -13px;
-  top: 25px;
-  bottom: 0;
-  width: 2px;
-  background: var(--av-panel);
+  left: -12px;
+  top: -11px;
+  bottom: -11px;
+  border-left: 1.5px solid var(--av-blue);
+  pointer-events: none;
+}
+.av-children > .av-branch:last-child:after {
+  bottom: auto;
+  height: 34px;
 }
 .av-tree-body {
   display: flex;
@@ -282,16 +286,6 @@
 .av-branch[data-status='queued'] > .av-tree-card,
 .av-branch[data-status='stopped'] > .av-tree-card {
   opacity: 0.65;
-}
-@container (min-width:760px) {
-  .av-first-level {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-    margin-left: 23px;
-  }
-  .av-first-level > .av-branch {
-    min-width: 0;
-  }
 }
 .av-lanes {
   border: 1px solid var(--av-border);
@@ -685,11 +679,7 @@ dialog.av-dialog.av-popover {
     monospace;
   border-radius: 6px;
 }
-.av-live-answer {
-  white-space: pre-wrap;
-  margin-top: 12px;
-}
-.av-dialog:has(.av-live-run) {
+.av-dialog.av-detail-dialog {
   width: min(880px, calc(100vw - 32px));
 }
 .av-live-run .av-tree-card .av-task {
@@ -758,15 +748,15 @@ dialog.av-dialog.av-popover {
   }
 }
 /* Keep the live inspector anchored while streamed content grows below its header. */
-dialog.av-dialog[open]:has(.av-detail-history) {
+dialog.av-dialog.av-detail-dialog[open] {
   inset: 24px 0 auto;
   height: calc(100dvh - 48px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-dialog.av-dialog:has(.av-detail-history) > header,
-dialog.av-dialog:has(.av-detail-history) > .av-card-top {
+dialog.av-dialog.av-detail-dialog > header,
+dialog.av-dialog.av-detail-dialog > .av-card-top {
   flex-shrink: 0;
 }
 .av-detail-history {
@@ -778,4 +768,138 @@ dialog.av-dialog:has(.av-detail-history) > .av-card-top {
 }
 .av-live-controls {
   min-height: 32px;
+}
+
+.agent-reading-viewport {
+  overflow: auto;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+.agent-conversation-history {
+  max-height: 60vh;
+}
+.agent-conversation-history > .agent-reading-viewport > div > article + article {
+  margin-top: 16px;
+}
+.at-action-scroll {
+  max-height: 280px;
+}
+.agent-reading-viewport:focus-visible {
+  outline: 1px solid var(--av-border);
+  outline-offset: -1px;
+}
+.agent-reading-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.agent-reading-shell > .agent-reading-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.agent-reading-shell > .agent-jump-latest {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  z-index: 2;
+  padding: 5px 10px;
+  border: 1px solid var(--av-border);
+  border-radius: 16px;
+  background: var(--av-bg);
+  color: var(--av-text);
+  box-shadow: 0 2px 8px #0001;
+  font-size: 12px;
+}
+
+.av-detail-dialog > .av-detail-close {
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  padding: 4px;
+}
+.av-detail-dialog > .av-card-top {
+  padding-right: 28px;
+}
+
+/* Runtime identities stay in details; ordinary execution is a single row. */
+.av-tree-card.av-tree-card--compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.av-tree-card--compact .av-card-top {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.av-tree-card--compact .av-identity {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.av-tree-card--compact .av-identity > .av-muted {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.av-tree-card--compact .av-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.av-tree-card--compact .av-card-top > button {
+  flex-shrink: 0;
+}
+.av-tree-card--compact .av-task,
+.av-tree-card--compact .av-avatar {
+  display: none;
+}
+.av-tree-card--compact footer {
+  margin: 0;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.agent-execution-trace > summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--av-muted);
+}
+.agent-trace-switch {
+  display: inline-flex;
+  vertical-align: middle;
+  gap: 2px;
+  margin-left: 8px;
+}
+.agent-trace-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--av-muted);
+  cursor: pointer;
+}
+.agent-trace-switch button:hover,
+.agent-trace-switch button[aria-pressed='true'] {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: var(--av-text);
+}
+.agent-trace-switch button:focus-visible {
+  outline: 2px solid var(--av-blue);
+  outline-offset: 2px;
 }

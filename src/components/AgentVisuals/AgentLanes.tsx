@@ -14,6 +14,7 @@ export interface AgentLanesProps {
   span?: number;
   now?: number;
   title?: string;
+  showHeader?: boolean;
   className?: string;
   onApprove?(task: LaneTask): void;
   onReject?(task: LaneTask): void;
@@ -29,6 +30,7 @@ export function AgentLanes({
   span = 1800000,
   now,
   title = 'Agents',
+  showHeader = true,
   className = '',
   onApprove,
   onReject,
@@ -72,21 +74,28 @@ export function AgentLanes({
   };
   return (
     <section className={`av-theme av-lanes ${className}`} aria-label={title}>
-      <header className="av-bar">
-        <Sparkles size={15} />
-        <strong>{title}</strong>
-        <span className="av-muted" aria-live="polite">
-          {executionStatus ? (
-            <AgentStatusBadge status={executionStatus} />
-          ) : (
-            <>
-              <i className="av-dot" />
-              {running} running
-            </>
-          )}
-        </span>
-        <span className="av-span">Last {Math.round(windowSize / 60000)}m</span>
-      </header>
+      {showHeader && (
+        <header className="av-bar">
+          <Sparkles size={15} />
+          <strong>{title}</strong>
+          <span className="av-muted" aria-live="polite">
+            {executionStatus ? (
+              <AgentStatusBadge status={executionStatus} />
+            ) : (
+              <>
+                <i className="av-dot" />
+                {running} running
+              </>
+            )}
+          </span>
+          <span className="av-span">
+            Last{' '}
+            {windowSize < 60000
+              ? `${Math.ceil(windowSize / 1000)}s`
+              : `${Math.round(windowSize / 60000)}m`}
+          </span>
+        </header>
+      )}
       <div className="av-lanes-body">
         <div className="av-axis">
           <span />

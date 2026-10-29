@@ -1,9 +1,12 @@
+import { NotebookDocumentTools, type NotebookDocumentPorts } from './NotebookDocumentTools';
+import { documentToolSchemas, type DocumentToolName } from './documentProtocol';
 import type { ContextCuration } from '../notebook-context/model';
 import { toolsForRole, type AgentRole } from './protocol';
 import type { Cell } from '@Store/models';
 import { toolSchemas, type ToolName, type ToolResult } from './protocol';
 
 export interface NotebookAgentPorts {
+  document?: NotebookDocumentPorts;
   notebookId(): string | null;
   cells(): readonly Cell[];
   watch(listener: () => void): () => void;
@@ -22,6 +25,7 @@ export class NotebookAgentTools {
   private readonly unsubscribe: () => void;
   private executing?: string;
   private disposed = false;
+  private readonly document?: NotebookDocumentTools;
   constructor(
     private readonly notebookId: string,
     private readonly agentCellId: string,
@@ -29,6 +33,8 @@ export class NotebookAgentTools {
     private readonly signal: AbortSignal,
     private readonly role: AgentRole = 'worker'
   ) {
+    if (ports.document)
+      this.document = new NotebookDocumentTools(ports.document, () => this.assertOwner(), signal);
     this.refresh();
     this.unsubscribe = ports.watch(() => this.refresh());
     signal.addEventListener('abort', this.abort, { once: true });
@@ -52,6 +58,7 @@ export class NotebookAgentTools {
       throw new Error('Notebook or Agent Cell context changed');
   }
   private refresh() {
+    this.document?.observe();
     const cells = this.ports.cells();
     const alive = new Set(cells.map((cell) => cell.id));
     for (const key of this.revisions.keys()) if (!alive.has(key)) this.revisions.delete(key);
@@ -105,6 +112,10 @@ export class NotebookAgentTools {
       if (!(name in toolsForRole(this.role)))
         throw new Error('Tool unavailable for this agent role');
       const args = toolSchemas[name].parse(input);
+      if (name in documentToolSchemas) {
+        if (!this.document) throw new Error('Notebook document service unavailable');
+        return { ok: true, data: await this.document.execute(name as DocumentToolName, args) };
+      }
       if (name === 'read_context' || name === 'curate_context') {
         if (!this.ports.readContext || !this.ports.curateContext)
           throw new Error('Notebook context service unavailable');

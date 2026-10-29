@@ -1,3 +1,4 @@
+import { documentToolSchemas, documentToolDescriptions } from './documentProtocol';
 import { z } from 'zod';
 import { curationSchema } from '../notebook-context/model';
 export type AgentRole = 'worker' | 'curator';
@@ -6,6 +7,7 @@ export const providerSchema = z.enum(['codex', 'claude']);
 export type AgentProvider = z.infer<typeof providerSchema>;
 const id = z.string().min(1).max(200);
 export const toolSchemas = {
+  ...documentToolSchemas,
   read_context: z
     .object({
       path: z.string().max(300).optional(),
@@ -23,6 +25,7 @@ export const toolSchemas = {
 };
 export type ToolName = keyof typeof toolSchemas;
 export const toolDescriptions: Record<ToolName, string> = {
+  ...documentToolDescriptions,
   read_context:
     'Read durable notebook context: original starting points, captured facts, leads, evidence sources, current summary and folder index. Pass an exact path from the index for Markdown evidence. Large files are chunked: continue with nextOffset until it is null. Read before every curation.',
   curate_context:
@@ -39,6 +42,13 @@ export const toolDescriptions: Record<ToolName, string> = {
     'Save a concise task summary: objective, findings, changed cells, execution evidence and remaining work. This persists a handoff, does not erase history. cellIds must refer to existing notebook cells.',
 };
 export const toolNameSchema = z.enum([
+  'read_notebook',
+  'backup_notebook',
+  'apply_notebook_edits',
+  'save_notebook_copy',
+  'flush_notebook',
+  'list_notebook_files',
+  'read_notebook_file',
   'read_context',
   'curate_context',
   'list_cells',
@@ -53,13 +63,31 @@ export const runRequestSchema = z
     runId: z.string().uuid(),
     notebookId: id,
     cellId: id,
+    notebookAgentId: z.string().min(1).max(512).optional(),
     provider: providerSchema,
     role: z.enum(['worker', 'curator']).optional(),
+    intent: z.literal('regenerate').optional(),
     prompt: z.string().min(1).max(64_000),
     context: z.string().max(1_000_000),
   })
   .strict();
 export type RunRequest = z.infer<typeof runRequestSchema>;
+export const executionSpanSchema = z.object({
+  id: z.string().min(1),
+  parentId: z.string().optional(),
+  runtime: z.enum(['aal', 'model', 'notebook', 'eal']),
+  name: z.string(),
+  status: z.enum(['queued', 'waiting', 'running', 'done', 'failed', 'stopped']),
+  startedAt: z.number(),
+  endedAt: z.number().optional(),
+  invocation: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ExecutionSpan = z.infer<typeof executionSpanSchema>;
+export const usageSchema = z.object({
+  inputTokens: z.number().nonnegative(),
+  outputTokens: z.number().nonnegative(),
+});
 export const eventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('text'), text: z.string() }),
   z.object({
@@ -75,6 +103,8 @@ export const eventSchema = z.discriminatedUnion('type', [
     status: z.string(),
     detail: z.string().optional(),
   }),
+  z.object({ type: z.literal('usage'), usage: usageSchema }),
+  z.object({ type: z.literal('span'), span: executionSpanSchema }),
   z.object({ type: z.literal('done') }),
   z.object({ type: z.literal('error'), message: z.string() }),
 ]);
@@ -114,17 +144,23 @@ export interface AgentTurn {
   startedAt?: number;
   endedAt?: number;
   retryOf?: string;
+  spans?: ExecutionSpan[];
+  usage?: z.infer<typeof usageSchema>;
+  followUps?: string[];
+  feedback?: { value: 'up' | 'down'; reason?: string };
 }
 export interface AgentCellData {
   version: 1;
+  notebookAgentId?: string;
   sessionId: string;
   provider: AgentProvider;
   role?: AgentRole;
   turns: AgentTurn[];
   summary?: { text: string; cellIds: string[]; updatedAt: string };
 }
+export const DEFAULT_AGENT_PROVIDER: AgentProvider = 'codex';
 export function newAgentCellData(
-  provider: AgentProvider = 'codex',
+  provider: AgentProvider = DEFAULT_AGENT_PROVIDER,
   role: AgentRole = 'worker'
 ): AgentCellData {
   return { version: 1, sessionId: crypto.randomUUID(), provider, role, turns: [] };
@@ -133,7 +169,16 @@ export function newAgentCellData(
 export function toolsForRole(role: AgentRole = 'worker') {
   return Object.fromEntries(
     Object.entries(toolSchemas).filter(([name]) =>
-      role === 'curator' ? !['update_cell', 'run_cell'].includes(name) : name !== 'curate_context'
+      role === 'curator'
+        ? ![
+            'update_cell',
+            'run_cell',
+            'apply_notebook_edits',
+            'backup_notebook',
+            'save_notebook_copy',
+            'flush_notebook',
+          ].includes(name)
+        : name !== 'curate_context'
     )
   );
 }

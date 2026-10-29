@@ -1,21 +1,15 @@
 import React, { useMemo, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { Trash2, Eye } from 'lucide-react';
-import ReactMarkdown, { type Components } from 'react-markdown';
-import { markdownRemarkPlugins } from '../../markdownPreviewPlugins';
+import type { Components } from 'react-markdown';
+import { ReadonlyMarkdown } from '../../ReadonlyMarkdown';
 import useStore from '@Store/notebookStore';
 import type { Cell as StoreCell } from '@Store/models';
 import editorLogger from '@Utils/logger/editor_logger';
 import { useMarkdownCellViewModel } from './model/useMarkdownCellViewModel';
-import { markdownCodeComponents, markdownSoftLineComponents } from '../../MarkdownCodePreview';
-import {
-  MarkdownImage,
-  MarkdownTable,
-  MarkdownTableRow,
-  MarkdownTableCell,
-  MarkdownTableHead,
-} from './components/MarkdownElements';
 import { markdownEditorTheme, useMarkdownEditorExtensions } from './utils/markdownEditorConfig';
+import { TranscriptCellDocument } from '@Utils/importFile/TranscriptCellDocument';
+import { TranscriptCell } from '../TranscriptCell/TranscriptCell';
 
 interface MarkdownCellProps {
   cell: StoreCell;
@@ -27,6 +21,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
   const editorExtensions = useMarkdownEditorExtensions(vm.boundaryKeymap);
   const viewMode = useStore((state) => state.viewMode);
   const isFirstCell = useStore((state) => state.cells[0]?.id === cell.id);
+  const transcript = useMemo(() => TranscriptCellDocument.read(cell), [cell]);
 
   const isDefaultTitle =
     isFirstCell && cell.metadata?.isDefaultTitle === true && !disableDefaultTitleStyle;
@@ -34,13 +29,6 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
   /** ---------- Markdown 渲染组件 ---------- **/
   const markdownComponents = useMemo<Components>(
     () => ({
-      ...markdownCodeComponents,
-      ...markdownSoftLineComponents,
-      img: MarkdownImage,
-      table: MarkdownTable,
-      tr: MarkdownTableRow,
-      td: MarkdownTableCell,
-      th: MarkdownTableHead,
       a: ({ href = '', children, node: _node, ...props }) => (
         <a
           {...props}
@@ -183,12 +171,7 @@ const MarkdownCell: React.FC<MarkdownCellProps> = ({ cell, disableDefaultTitleSt
                       : {}
                   }
                 >
-                  <ReactMarkdown
-                    remarkPlugins={markdownRemarkPlugins}
-                    components={markdownComponents}
-                  >
-                    {cell.content}
-                  </ReactMarkdown>
+                  {transcript && !transcript.richMarkdown ? <TranscriptCell document={transcript} /> : <ReadonlyMarkdown source={cell.content} components={markdownComponents} />}
                 </div>
               )}
             </div>

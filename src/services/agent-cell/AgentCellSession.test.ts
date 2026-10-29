@@ -49,6 +49,31 @@ function fixture(run: AgentTransport['run']) {
   };
 }
 describe('AgentCellSession', () => {
+  it('upserts real spans without mutating previously published snapshots', async () => {
+    vi.useFakeTimers();
+    try {
+      let before: unknown;
+      const f = fixture(async (_request, _signal, emit) => {
+        const span = {
+          id: 'native',
+          runtime: 'aal' as const,
+          name: 'Agent.run',
+          startedAt: 10,
+          status: 'running' as const,
+        };
+        await emit({ type: 'span', span });
+        await vi.advanceTimersByTimeAsync(80);
+        before = f.data().turns[0].spans;
+        await emit({ type: 'span', span: { ...span, status: 'done', endedAt: 20 } });
+      });
+      await f.session.send('Run');
+      expect(f.data().turns[0].spans).toHaveLength(1);
+      expect(f.data().turns[0].spans?.[0].status).toBe('done');
+      expect(before).toMatchObject([{ status: 'running' }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('shares unchanged action snapshots across text publications', async () => {
     vi.useFakeTimers();
     try {

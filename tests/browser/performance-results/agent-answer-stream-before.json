@@ -1,0 +1,360 @@
+{
+  "phase": "stream",
+  "profileSamples": 9863,
+  "profileInterval": 10,
+  "timeOrigin": 1793171997954.6,
+  "started": 150656.5,
+  "interactions": [
+    {
+      "time": 180066.30000001192,
+      "type": "keydown",
+      "target": "Agent 对话记录"
+    },
+    {
+      "time": 197957.90000003576,
+      "type": "click",
+      "target": "Verification note: original."
+    },
+    {
+      "time": 198756.90000003576,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 199041.40000003576,
+      "type": "click",
+      "target": "来源：Verification note: original."
+    },
+    {
+      "time": 219139.80000001192,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 219423,
+      "type": "click",
+      "target": "Agent 对话记录：回到最新"
+    },
+    {
+      "time": 220207.10000002384,
+      "type": "click",
+      "target": "Agent 详情"
+    },
+    {
+      "time": 235906.60000002384,
+      "type": "click",
+      "target": "取消运行"
+    },
+    {
+      "time": 236423,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 237206.10000002384,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 270224.90000003576,
+      "type": "click",
+      "target": " 取消"
+    },
+    {
+      "time": 270507.2000000477,
+      "type": "click",
+      "target": "停止性能采集"
+    }
+  ],
+  "nativeCalls": [
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 180058.90000003576,
+      "duration": 0.30000001192092896,
+      "navigationId": 1059,
+      "detail": {
+        "element": "DIV",
+        "label": "Agent 对话记录"
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 180059.20000004768,
+      "duration": 0,
+      "navigationId": 1059,
+      "detail": {
+        "element": "DIV",
+        "label": "Agent 对话记录"
+      }
+    },
+    {
+      "name": "agent-native:showModal",
+      "entryType": "measure",
+      "startTime": 220209.70000004768,
+      "duration": 10.199999988079071,
+      "navigationId": 1059,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:close",
+      "entryType": "measure",
+      "startTime": 236426.5,
+      "duration": 0,
+      "navigationId": 1059,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 236426.90000003576,
+      "duration": 9.199999988079071,
+      "navigationId": 1059,
+      "detail": {
+        "element": "BUTTON",
+        "label": null
+      }
+    }
+  ],
+  "seconds": 119.9,
+  "frames": 7190,
+  "frameP50": 16.7,
+  "frameP95": 17.4,
+  "frameP99": 18.1,
+  "over33ms": 0,
+  "over50ms": 0,
+  "maxFrame": 18.70000000001164,
+  "slowFrames": [],
+  "animationFrames": [],
+  "worstCommits": [
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 14.399999976158142,
+      "startTime": 235397.60000002384,
+      "commitTime": 235412.5
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 13.199999988079071,
+      "startTime": 227434.5,
+      "commitTime": 227449.30000001192
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 12.900000035762787,
+      "startTime": 244304,
+      "commitTime": 244317.5
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 12.500000059604645,
+      "startTime": 223749.5,
+      "commitTime": 223764.5
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.800000011920929,
+      "startTime": 222387.5,
+      "commitTime": 222401.40000003576
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.79999989271164,
+      "startTime": 256151.70000004768,
+      "commitTime": 256163.90000003576
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.200000047683716,
+      "startTime": 228022.30000001192,
+      "commitTime": 228035.90000003576
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.000000059604645,
+      "startTime": 263833.3000000119,
+      "commitTime": 263844.8000000119
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 10.900000035762787,
+      "startTime": 228259.20000004768,
+      "commitTime": 228272.40000003576
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 10.499999940395355,
+      "startTime": 257709.20000004768,
+      "commitTime": 257720.20000004768
+    }
+  ],
+  "renderGroups": {
+    "agent-action-visual": {
+      "count": 1167,
+      "p95": 0.4,
+      "p99": 0.6,
+      "max": 0.699999988079071,
+      "total": 250.299997985363
+    },
+    "agent-answer-markdown": {
+      "count": 1620,
+      "p95": 3.2,
+      "p99": 3.9,
+      "max": 6.099999964237213,
+      "total": 1309.3999999165535
+    },
+    "live-notebook": {
+      "count": 1432,
+      "p95": 8.2,
+      "p99": 10.2,
+      "max": 14.399999976158142,
+      "total": 3964.999997675419
+    }
+  },
+  "commits": 4219,
+  "commitP95": 6.1,
+  "commitTotal": 5524.7,
+  "longTasks": [],
+  "layoutShiftTotal": 0.31974574142260526,
+  "unexpectedLayoutShift": 0.10470554583496502,
+  "shiftSources": [
+    {
+      "value": 0.0004448611906201672,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "aa-stream-dot"
+      ]
+    },
+    {
+      "value": 0.000444587397928485,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "aa-stream-dot"
+      ]
+    },
+    {
+      "value": 0.0004490781797257424,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "aa-stream-dot"
+      ]
+    },
+    {
+      "value": 0.0007431178201844702,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "BUTTON",
+        "BUTTON",
+        "BUTTON"
+      ]
+    },
+    {
+      "value": 0.000444587397928485,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "aa-stream-dot"
+      ]
+    },
+    {
+      "value": 0.0004490781797257424,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "aa-stream-dot"
+      ]
+    },
+    {
+      "value": 0.0007431178201844702,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "BUTTON",
+        "BUTTON",
+        "BUTTON"
+      ]
+    },
+    {
+      "value": 0.0013006191522170754,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "aa-stream-dot"
+      ]
+    },
+    {
+      "value": 0.0009543889743737901,
+      "recentInput": false,
+      "sources": [
+        "aa-footer"
+      ]
+    },
+    {
+      "value": 0.0007431178201844702,
+      "recentInput": false,
+      "sources": [
+        "aa-footer",
+        "BUTTON",
+        "BUTTON",
+        "BUTTON"
+      ]
+    },
+    {
+      "value": 0.12397240267956929,
+      "recentInput": true,
+      "sources": [
+        "agent-answer",
+        "space-y-3 px-3 py-2",
+        "notebook-embedded-cell",
+        "aa-footer",
+        "agent-composer-actions"
+      ]
+    },
+    {
+      "value": 0.0016490535897352007,
+      "recentInput": true,
+      "sources": [
+        "aa-related",
+        "aa-footer"
+      ]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}

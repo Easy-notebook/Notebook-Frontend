@@ -56,7 +56,7 @@ export class AgentCellSession {
     this.transition('cancelling');
     this.controller?.abort();
   }
-  async send(prompt: string, retryOf?: string): Promise<void> {
+  async send(prompt: string, retryOf?: string, intent?: 'regenerate'): Promise<void> {
     if (!prompt.trim() || this.active) return;
     if (this.ports.notebookId() !== this.notebookId) throw new Error('Notebook context changed');
     const initial = this.ports.load();
@@ -121,6 +121,18 @@ export class AgentCellSession {
       if (!current()) throw new Error('Agent session ownership changed');
       if (event.type === 'text') {
         turn.answer += event.text;
+        schedule();
+      }
+      if (event.type === 'span') {
+        const spans = [...(turn.spans ?? [])];
+        const index = spans.findIndex((span) => span.id === event.span.id);
+        if (index < 0) spans.push(event.span);
+        else spans[index] = event.span;
+        turn.spans = spans;
+        schedule();
+      }
+      if (event.type === 'usage') {
+        turn.usage = event.usage;
         schedule();
       }
       if (event.type === 'error') throw new Error(event.message);
@@ -207,10 +219,12 @@ export class AgentCellSession {
           notebookId: this.notebookId,
           cellId: this.cellId,
           provider: data.provider,
+          notebookAgentId: data.notebookAgentId,
           role: data.role ?? 'worker',
           sessionId,
           runId: turn.id,
           prompt: turn.prompt,
+          intent,
           context,
         },
         controller.signal,
@@ -236,6 +250,18 @@ export class AgentCellSession {
             }
           : action
       );
+      if (this.phase !== 'completed')
+        turn.spans = turn.spans?.map((span) =>
+          ['running', 'queued', 'waiting'].includes(span.status)
+            ? {
+                ...span,
+                status: 'stopped',
+                endedAt: Date.now(),
+                error:
+                  'Observation ended before a terminal runtime event; no remote completion is asserted.',
+              }
+            : span
+        );
       turn.status = this.phase;
       turn.endedAt = Date.now();
       try {

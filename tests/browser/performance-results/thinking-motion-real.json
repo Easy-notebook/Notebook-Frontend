@@ -1,0 +1,484 @@
+{
+  "phase": "stream",
+  "profileSamples": 16992,
+  "profileInterval": 10,
+  "timeOrigin": 1793162187815.2,
+  "started": 391670,
+  "interactions": [
+    {
+      "time": 391934.89999997616,
+      "type": "keydown",
+      "target": "Agent prompt"
+    },
+    {
+      "time": 392304.89999997616,
+      "type": "keydown",
+      "target": "Agent prompt"
+    },
+    {
+      "time": 441711.6999999881,
+      "type": "click",
+      "target": "读取 Cell已完成"
+    },
+    {
+      "time": 458008.60000002384,
+      "type": "click",
+      "target": "Worked for50s"
+    },
+    {
+      "time": 469389.5,
+      "type": "click",
+      "target": "Worked for50s"
+    },
+    {
+      "time": 470150.1999999881,
+      "type": "click",
+      "target": "Agent 详情"
+    },
+    {
+      "time": 487170.10000002384,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 487705.1999999881,
+      "type": "keydown",
+      "target": "Agent prompt"
+    },
+    {
+      "time": 488198.6999999881,
+      "type": "click",
+      "target": "Agent 详情"
+    },
+    {
+      "time": 527841,
+      "type": "click",
+      "target": "取消运行"
+    },
+    {
+      "time": 528302.6999999881,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 542446.1999999881,
+      "type": "keydown",
+      "target": "Agent prompt"
+    },
+    {
+      "time": 592111.1000000238,
+      "type": "click",
+      "target": " 取消"
+    },
+    {
+      "time": 592902.8999999762,
+      "type": "click",
+      "target": "Agent 详情"
+    },
+    {
+      "time": 593405.3000000119,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 594330.6999999881,
+      "type": "click",
+      "target": "停止性能采集"
+    }
+  ],
+  "nativeCalls": [
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 391892.3000000119,
+      "duration": 1,
+      "navigationId": 6319,
+      "detail": {
+        "element": "TEXTAREA",
+        "label": "Agent prompt"
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 392264.89999997616,
+      "duration": 0.7000000476837158,
+      "navigationId": 6319,
+      "detail": {
+        "element": "TEXTAREA",
+        "label": "Agent prompt"
+      }
+    },
+    {
+      "name": "agent-native:showModal",
+      "entryType": "measure",
+      "startTime": 470152.60000002384,
+      "duration": 11.899999976158142,
+      "navigationId": 6319,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:close",
+      "entryType": "measure",
+      "startTime": 487171.60000002384,
+      "duration": 0,
+      "navigationId": 6319,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 487171.89999997616,
+      "duration": 8.600000023841858,
+      "navigationId": 6319,
+      "detail": {
+        "element": "BUTTON",
+        "label": null
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 487679.5,
+      "duration": 0.699999988079071,
+      "navigationId": 6319,
+      "detail": {
+        "element": "TEXTAREA",
+        "label": "Agent prompt"
+      }
+    },
+    {
+      "name": "agent-native:showModal",
+      "entryType": "measure",
+      "startTime": 488200.39999997616,
+      "duration": 10.800000011920929,
+      "navigationId": 6319,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:close",
+      "entryType": "measure",
+      "startTime": 528304.6999999881,
+      "duration": 0,
+      "navigationId": 6319,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 528305,
+      "duration": 10.699999988079071,
+      "navigationId": 6319,
+      "detail": {
+        "element": "BUTTON",
+        "label": null
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 542414.8000000119,
+      "duration": 0.5999999642372131,
+      "navigationId": 6319,
+      "detail": {
+        "element": "TEXTAREA",
+        "label": "Agent prompt"
+      }
+    },
+    {
+      "name": "agent-native:showModal",
+      "entryType": "measure",
+      "startTime": 592904.3000000119,
+      "duration": 13.899999976158142,
+      "navigationId": 6319,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:close",
+      "entryType": "measure",
+      "startTime": 593408,
+      "duration": 0.10000002384185791,
+      "navigationId": 6319,
+      "detail": {
+        "element": "DIALOG",
+        "label": "Agent 详情"
+      }
+    },
+    {
+      "name": "agent-native:focus",
+      "entryType": "measure",
+      "startTime": 593408.5,
+      "duration": 13.899999976158142,
+      "navigationId": 6319,
+      "detail": {
+        "element": "BUTTON",
+        "label": null
+      }
+    }
+  ],
+  "seconds": 202.7,
+  "frames": 12149,
+  "frameP50": 16.7,
+  "frameP95": 17.6,
+  "frameP99": 17.7,
+  "over33ms": 5,
+  "over50ms": 0,
+  "maxFrame": 50,
+  "slowFrames": [
+    {
+      "start": 491741.1,
+      "end": 491774.5,
+      "duration": 33.40000000002328,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 500107.8,
+      "end": 500141.2,
+      "duration": 33.40000000002328,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 500524.5,
+      "end": 500574.5,
+      "duration": 50,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 588574.8,
+      "end": 588624.3,
+      "duration": 49.5,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 588624.3,
+      "end": 588657.8,
+      "duration": 33.5,
+      "commits": [],
+      "interactions": []
+    }
+  ],
+  "animationFrames": [],
+  "worstCommits": [
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 20.000000059604645,
+      "startTime": 512048.6999999881,
+      "commitTime": 512069.5
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 15.600000023841858,
+      "startTime": 436303,
+      "commitTime": 436319.5
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 15.499999940395355,
+      "startTime": 525133,
+      "commitTime": 525150.1999999881
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 13.100000023841858,
+      "startTime": 436807.39999997616,
+      "commitTime": 436821.8000000119
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.999999940395355,
+      "startTime": 526332.8000000119,
+      "commitTime": 526346.3999999762
+    },
+    {
+      "id": "agent-answer-markdown",
+      "phase": "update",
+      "duration": 11.600000023841858,
+      "startTime": 436307.1999999881,
+      "commitTime": 436319.5
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.400000035762787,
+      "startTime": 420210.3000000119,
+      "commitTime": 420222.1999999881
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.399999976158142,
+      "startTime": 430206.3000000119,
+      "commitTime": 430218.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.300000011920929,
+      "startTime": 526229.8999999762,
+      "commitTime": 526241.6999999881
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 11.100000083446503,
+      "startTime": 527857.6000000238,
+      "commitTime": 527872.1999999881
+    }
+  ],
+  "renderGroups": {
+    "agent-action-visual": {
+      "count": 6024,
+      "p95": 0.4,
+      "p99": 0.6,
+      "max": 4.699999988079071,
+      "total": 1105.2999991178513
+    },
+    "live-notebook": {
+      "count": 3257,
+      "p95": 6.3,
+      "p99": 9.2,
+      "max": 20.000000059604645,
+      "total": 6334.800000548363
+    },
+    "agent-answer-markdown": {
+      "count": 2938,
+      "p95": 4.2,
+      "p99": 5.4,
+      "max": 11.600000023841858,
+      "total": 3830.500000357628
+    }
+  },
+  "commits": 12219,
+  "commitP95": 4.1,
+  "commitTotal": 11270.6,
+  "longTasks": [],
+  "layoutShiftTotal": 0.30135039119256857,
+  "unexpectedLayoutShift": 0.1258609055744277,
+  "shiftSources": [
+    {
+      "value": 0.0027427474657694497,
+      "recentInput": true,
+      "sources": [
+        "DIV"
+      ]
+    },
+    {
+      "value": 0.001863539550039503,
+      "recentInput": true,
+      "sources": [
+        "DIV"
+      ]
+    },
+    {
+      "value": 0.001034793191485935,
+      "recentInput": true,
+      "sources": [
+        "DIV"
+      ]
+    },
+    {
+      "value": 0.00602445662021637,
+      "recentInput": true,
+      "sources": [
+        "DIV"
+      ]
+    },
+    {
+      "value": 0.010756555398305256,
+      "recentInput": true,
+      "sources": [
+        "DIV"
+      ]
+    },
+    {
+      "value": 0.007987643082936605,
+      "recentInput": true,
+      "sources": [
+        "DIV"
+      ]
+    },
+    {
+      "value": 0.001000362899568346,
+      "recentInput": true,
+      "sources": [
+        "DIV"
+      ]
+    },
+    {
+      "value": 0.000006788720687230429,
+      "recentInput": true,
+      "sources": [
+        "at-time"
+      ]
+    },
+    {
+      "value": 0.006013921168115405,
+      "recentInput": true,
+      "sources": [
+        "agent-composer"
+      ]
+    },
+    {
+      "value": 0.000023541847864786786,
+      "recentInput": true,
+      "sources": [
+        "at-time"
+      ]
+    },
+    {
+      "value": 0.006013921168115405,
+      "recentInput": true,
+      "sources": [
+        "agent-composer"
+      ]
+    },
+    {
+      "value": 0.0000018828312555948894,
+      "recentInput": false,
+      "sources": [
+        "#text"
+      ]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}

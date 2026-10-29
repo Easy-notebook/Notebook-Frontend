@@ -12,6 +12,7 @@ import {
 import { dollars, duration, indexTree, statusLabel, type TreeAgent } from './model';
 export interface AgentTreeProps {
   root: TreeAgent;
+  compact?: boolean;
   collapsed?: string[];
   defaultCollapsed?: string[];
   onCollapsedChange?(ids: string[]): void;
@@ -25,10 +26,12 @@ export interface AgentTreeProps {
   now?: number;
   formatCost?(amount: number): string;
   title?: string;
+  showHeader?: boolean;
   className?: string;
 }
 export function AgentTree({
   root,
+  compact = false,
   collapsed,
   defaultCollapsed = [],
   onCollapsedChange,
@@ -42,6 +45,7 @@ export function AgentTree({
   now,
   formatCost = dollars,
   title = 'Agents',
+  showHeader = true,
   className = '',
 }: AgentTreeProps) {
   const reducedMotion = useReducedMotion();
@@ -67,7 +71,7 @@ export function AgentTree({
     setFolds([...next]);
     onCollapsedChange?.([...next]);
   };
-  const render = (node: TreeAgent, depth: number) => (
+  const render = (node: TreeAgent) => (
     <motion.div
       transition={transition}
       role="treeitem"
@@ -78,7 +82,7 @@ export function AgentTree({
       data-status={node.status}
     >
       <article
-        className="av-tree-card"
+        className={`av-tree-card${compact && !node.error && !node.ask ? ' av-tree-card--compact' : ''}`}
         data-status={node.status}
         onClick={(event) => {
           if (!(event.target as HTMLElement).closest('button')) {
@@ -143,8 +147,8 @@ export function AgentTree({
             transition={transition}
             style={{ overflow: 'hidden' }}
           >
-            <div role="group" className={`av-children ${depth === 0 ? 'av-first-level' : ''}`}>
-              {node.children.map((child) => render(child, depth + 1))}
+            <div role="group" className="av-children">
+              {node.children.map((child) => render(child))}
             </div>
           </motion.div>
         )}
@@ -153,37 +157,39 @@ export function AgentTree({
   );
   return (
     <section className={`av-theme av-tree ${className}`} aria-label={title}>
-      <header className="av-bar">
-        <Sparkles size={15} />
-        <strong>{title}</strong>
-        <div className="av-totals" aria-live="polite">
-          <span>
-            {summaryNodes.length} {itemLabel}
-          </span>
-          {running > 0 && <span className="av-blue">{running} running</span>}
-          {(['waiting', 'failed'] as const).map((status) => {
-            const count = summaryNodes.filter((node) => node.status === status).length;
-            return count ? (
-              <button
-                key={status}
-                data-status={status}
-                aria-pressed={activeFilter === status}
-                onClick={() => setFilter(filter === status ? null : status)}
-              >
-                {count} {status === 'waiting' ? 'needs you' : 'failed'}
-                <ChevronDown size={12} />
-              </button>
-            ) : null;
-          })}
-          {hasCosts && <b>{formatCost(totals.get(root.id) ?? 0)}</b>}
-        </div>
-      </header>
+      {showHeader && (
+        <header className="av-bar">
+          <Sparkles size={15} />
+          <strong>{title}</strong>
+          <div className="av-totals" aria-live="polite">
+            <span>
+              {summaryNodes.length} {itemLabel}
+            </span>
+            {running > 0 && <span className="av-blue">{running} running</span>}
+            {(['waiting', 'failed'] as const).map((status) => {
+              const count = summaryNodes.filter((node) => node.status === status).length;
+              return count ? (
+                <button
+                  key={status}
+                  data-status={status}
+                  aria-pressed={activeFilter === status}
+                  onClick={() => setFilter(filter === status ? null : status)}
+                >
+                  {count} {status === 'waiting' ? 'needs you' : 'failed'}
+                  <ChevronDown size={12} />
+                </button>
+              ) : null;
+            })}
+            {hasCosts && <b>{formatCost(totals.get(root.id) ?? 0)}</b>}
+          </div>
+        </header>
+      )}
       <div role="tree" aria-label={title} className="av-tree-body">
         {activeFilter
           ? nodes
               .filter((node) => node.status === activeFilter)
-              .map((node) => render({ ...node, children: [] }, 0))
-          : render(root, 0)}
+              .map((node) => render({ ...node, children: [] }))
+          : render(root)}
       </div>
       {selectedAgent && (
         <AgentDialog title={selectedAgent.name} close={() => setSelected(null)}>

@@ -5,8 +5,7 @@ import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import type { ShowToastFunction } from '@Services/stream/types';
 import { ActionCommandHandler } from '@Services/stream/commands';
 import { EVENT_TYPES } from '@Store/models/agent';
-import { createUserAskQuestionAction } from '@Store/actionCreators';
-import { v4 as uuidv4 } from 'uuid';
+import { notebookConversation } from '../agent-cell/NotebookConversation';
 import { UploadFile, CommandContext } from './types';
 
 class AITerminalService {
@@ -36,7 +35,6 @@ class AITerminalService {
       currentPhaseId,
       currentStepIndex,
       actionsToShow,
-      qasToShow,
       currentViewCells,
     } = context;
 
@@ -126,83 +124,16 @@ class AITerminalService {
       if (!submission.accepted) useAIAgentStore.getState().removeAction(commandId);
       return submission.accepted;
     } else {
-      // Question mode
       callbacks.setActiveView('qa');
-      const qaId = `qa-${uuidv4()}`;
-      const qaData = {
-        id: qaId,
-        type: 'user' as const,
-        timestamp,
-        content: command,
-        resolved: false,
-        relatedActionId: null,
-        cellId: currentCellId ?? undefined,
-        viewMode,
-        onProcess: true,
-        attachedFiles: files,
-      };
-
-      useAIAgentStore.getState().addQA(qaData);
-      const action = createUserAskQuestionAction(command, [qaId], currentCellId);
-      const questionActionId = useAIAgentStore.getState().addAction(action);
-
-      // Prepare Agent memory context
-      console.log('AITerminal: Preparing memory context', { notebookId, command });
-      const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-        notebookId,
-        'general' as AgentType,
-        {
-          current_cell_id: currentCellId ?? undefined,
-          related_cells: currentViewCells,
-          related_qa_ids: qasToShow.map((qa) => qa.id),
-          current_qa_id: qaId,
-          question_content: command,
-        }
-      );
-      console.log('AITerminal: Memory context ready', memoryContext);
-
-      // Record QA interaction start
-      AgentMemoryService.recordOperationInteraction(
-        notebookId,
-        'general' as AgentType,
-        'qa_started',
-        true,
-        {
-          qa_id: qaId,
-          question: command,
-          start_time: new Date().toISOString(),
-          related_context: {
-            current_cell_id: currentCellId,
-            related_qa_count: qasToShow.length,
-            view_mode: viewMode,
-          },
-        }
-      );
-
-      const finalPayload = {
-        type: 'user_question',
-        payload: {
-          content: command,
-          QId: [qaId],
-          current_view_mode: viewMode,
-          current_phase_id: currentPhaseId,
-          current_step_index: currentStepIndex,
-          related_qas: qasToShow,
-          related_actions: actionsToShow,
-          related_cells: currentViewCells,
-          files,
-          ...memoryContext,
-        },
-      };
-      console.log('AITerminal: Sending final payload', finalPayload);
-      const submission = await useOperatorStore
-        .getState()
-        .submitOperation(notebookId, finalPayload);
-      if (!submission.accepted) {
-        useAIAgentStore.getState().removeQA(qaId);
-        useAIAgentStore.getState().removeAction(questionActionId);
+      if (files.length) {
+        throw new Error('Agent 输入暂不支持附件，请先将附件内容放入 notebook 后再提问');
       }
-      return submission.accepted;
+      return notebookConversation.submit(notebookId, command, (error) => {
+        void callbacks.showToast({
+          type: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
   }
 }

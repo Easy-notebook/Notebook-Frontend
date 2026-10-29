@@ -1,0 +1,45 @@
+{
+  "claude": {
+    "before": {
+      "offset": 58.96875,
+      "paragraphs": 10,
+      "text": "这个 Notebook 的 ID 是 agent-live-verification，用来验证 Live Agent 在真实环境里是否正常工作。它一共有 5 个单元格：两个 Markdown 单元格（title、notes），一个 AAL 代码单元格（calculation），两个 Agent 对话单元格（codex-live、claude-live）。结构很简单，每个单元格只负责一件事，所以很适合用来检查滚动、读取、版本号和输出流这些基础功能。本说明只读取内容，不做任何修改。",
+      "top": 412,
+      "total": 1344
+    },
+    "after": {
+      "offset": 58.96875,
+      "paragraphs": 32,
+      "text": "这个 Notebook 的 ID 是 agent-live-verification，用来验证 Live Agent 在真实环境里是否正常工作。它一共有 5 个单元格：两个 Markdown 单元格（title、notes），一个 AAL 代码单元格（calculation），两个 Agent 对话单元格（codex-live、claude-live）。结构很简单，每个单元格只负责一件事，所以很适合用来检查滚动、读取、版本号和输出流这些基础功能。本说明只读取内容，不做任何修改。",
+      "top": 412,
+      "total": 3125
+    }
+  },
+  "codex": {
+    "before": {
+      "index": 2,
+      "offset": 30.75,
+      "text": "当前读取到的单元格索引包含五项，顺序为 title、notes、calculation、codex-live 与 claude-live。前两项属于 Markdown 单元格，第三项属于代码单元格，最后两项属于 Agent 单元格。这种组合把标题、简短说明、计算内容与对话入口放在同一个 Notebook 中。这里只能依据已读取的数据描述结构，不能由单元格名称推断其内部功能已经完成，也不能把代码预览当作运行记录。对于滚动验证，这五个单元格构成了外围页面的参照物，而当前回复提供了较长的内部内容。",
+      "top": 412,
+      "total": 1703
+    },
+    "after": {
+      "offset": 30.75,
+      "text": "当前读取到的单元格索引包含五项，顺序为 title、notes、calculation、codex-live 与 claude-live。前两项属于 Markdown 单元格，第三项属于代码单元格，最后两项属于 Agent 单元格。这种组合把标题、简短说明、计算内容与对话入口放在同一个 Notebook 中。这里只能依据已读取的数据描述结构，不能由单元格名称推断其内部功能已经完成，也不能把代码预览当作运行记录。对于滚动验证，这五个单元格构成了外围页面的参照物，而当前回复提供了较长的内部内容。",
+      "top": 412,
+      "total": 2173
+    }
+  },
+  "detail": {
+    "before": {
+      "actionScroll": 0,
+      "scroll": 0,
+      "y": 323.375
+    },
+    "after": {
+      "actionScroll": 0,
+      "scroll": 0,
+      "y": 323.375
+    }
+  }
+}

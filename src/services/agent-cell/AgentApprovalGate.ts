@@ -1,7 +1,7 @@
 import type { ToolName } from './protocol';
 export type ApprovalDecision = 'approve' | 'reject';
 export const requiresAgentApproval = (name: ToolName) =>
-  ['update_cell', 'run_cell', 'curate_context'].includes(name);
+  ['update_cell', 'run_cell', 'curate_context', 'apply_notebook_edits'].includes(name);
 /** One-shot decisions are scoped by the session's current run and call identity. */
 export class AgentApprovalGate {
   private readonly pending = new Map<string, (decision: ApprovalDecision) => void>();

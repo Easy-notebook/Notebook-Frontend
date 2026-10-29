@@ -1,0 +1,150 @@
+{
+  "owner": "9977eedf-8bfb-44bc-83b3-95af250eb3e6",
+  "sourceBytes": 675928,
+  "backupEqual": true,
+  "sourceSha256": "bc3fe7fe632430c0d9ac51a23d4bcefe0bb508d5ed4e4b08bdb766ba4b5c7cd4",
+  "backup": {
+    "receipt": {
+      "contentHash": "b0d5895ccabc6b0d9b6310386551c703b8562278af0c595516679996ceb156df",
+      "path": "/output/导入时备份.easynb",
+      "revision": 3,
+      "size": 675928
+    },
+    "replayed": false
+  },
+  "deltaEntries": [
+    {
+      "path": "/output/导入时备份.easynb",
+      "removable": false,
+      "revision": 3,
+      "size": 675928,
+      "writable": false
+    }
+  ],
+  "idleQueries": 100,
+  "idleResponseBytes": 54,
+  "idleTotalMs": 197.8,
+  "idleMeanMs": 1.98,
+  "temporary": {
+    "receipt": {
+      "contentHash": "5198c307bbd97db043af483d10318e880877954bf0bd2aa52a2d29452e0bb00d",
+      "path": "/tmp/文件变化验证.txt",
+      "revision": 4,
+      "size": 42
+    },
+    "replayed": false
+  },
+  "modified": {
+    "receipt": {
+      "contentHash": "279a7a3aebb32e98bf4cefac446370715d5c2c7598b7cff207906ac6333f7c52",
+      "path": "/tmp/文件变化验证.txt",
+      "revision": 6,
+      "size": 39
+    },
+    "replayed": false
+  },
+  "removed": {
+    "receipt": {
+      "path": "/tmp/文件变化验证.txt",
+      "removed": true,
+      "revision": 7
+    },
+    "replayed": false
+  },
+  "deletionDelta": {
+    "datasetToken": "empty",
+    "datasets": [],
+    "entries": [],
+    "permissions": {
+      "default": "deny",
+      "maxFileBytes": 2097152,
+      "maxReadBytes": 65536,
+      "owner": "notebook/Files",
+      "partitions": [
+        {
+          "denies": [],
+          "maxBytes": 8388608,
+          "maxFiles": 128,
+          "mode": "read_only",
+          "mount": "/source",
+          "scopes": [
+            {
+              "access": [
+                "read",
+                "list"
+              ],
+              "path": "/source"
+            }
+          ],
+          "temporary": false
+        },
+        {
+          "denies": [],
+          "maxBytes": 8388608,
+          "maxFiles": 1024,
+          "mode": "read_write",
+          "mount": "/work",
+          "scopes": [
+            {
+              "access": [
+                "read",
+                "list",
+                "create",
+                "replace",
+                "remove"
+              ],
+              "path": "/work"
+            }
+          ],
+          "temporary": false
+        },
+        {
+          "denies": [],
+          "maxBytes": 8388608,
+          "maxFiles": 1024,
+          "mode": "create_only",
+          "mount": "/output",
+          "scopes": [
+            {
+              "access": [
+                "read",
+                "list",
+                "create"
+              ],
+              "path": "/output"
+            }
+          ],
+          "temporary": false
+        },
+        {
+          "denies": [],
+          "maxBytes": 4194304,
+          "maxFiles": 1024,
+          "mode": "read_write",
+          "mount": "/tmp",
+          "scopes": [
+            {
+              "access": [
+                "read",
+                "list",
+                "create",
+                "replace",
+                "remove"
+              ],
+              "path": "/tmp"
+            }
+          ],
+          "temporary": true
+        }
+      ],
+      "precedence": "mount cap, explicit deny, matching allow",
+      "workspace": "9977eedf-8bfb-44bc-83b3-95af250eb3e6"
+    },
+    "removed": [
+      "/tmp/文件变化验证.txt"
+    ],
+    "reset": false,
+    "revision": 7,
+    "unchanged": false
+  }
+}

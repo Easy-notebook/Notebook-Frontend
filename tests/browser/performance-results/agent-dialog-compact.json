@@ -1,0 +1,193 @@
+{
+  "phase": "collapse-scroll",
+  "profileSamples": 276,
+  "timeOrigin": 1793160999739.9,
+  "started": 275476.3000000119,
+  "interactions": [
+    {
+      "time": 275755.89999997616,
+      "type": "click",
+      "target": "Agent 详情"
+    },
+    {
+      "time": 276313,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 277209,
+      "type": "click",
+      "target": "Agent 详情"
+    },
+    {
+      "time": 277748.59999996424,
+      "type": "click",
+      "target": ""
+    },
+    {
+      "time": 278641.8000000119,
+      "type": "click",
+      "target": "停止性能采集"
+    }
+  ],
+  "nativeCalls": [
+    {
+      "name": "agent-native:showModal",
+      "entryType": "measure",
+      "startTime": 275759.8000000119,
+      "duration": 14.899999976158142,
+      "navigationId": 3282
+    },
+    {
+      "name": "agent-native:close",
+      "entryType": "measure",
+      "startTime": 276316.5,
+      "duration": 0,
+      "navigationId": 3282
+    },
+    {
+      "name": "agent-native:showModal",
+      "entryType": "measure",
+      "startTime": 277212.39999997616,
+      "duration": 12.800000011920929,
+      "navigationId": 3282
+    },
+    {
+      "name": "agent-native:close",
+      "entryType": "measure",
+      "startTime": 277752.09999996424,
+      "duration": 0,
+      "navigationId": 3282
+    }
+  ],
+  "seconds": 3.2,
+  "frames": 189,
+  "frameP50": 16.7,
+  "frameP95": 17.7,
+  "frameP99": 17.7,
+  "over33ms": 0,
+  "over50ms": 0,
+  "maxFrame": 17.70000000001164,
+  "slowFrames": [],
+  "animationFrames": [],
+  "worstCommits": [
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 3.5,
+      "startTime": 275756.09999996424,
+      "commitTime": 275759.59999996424
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 2.899999976158142,
+      "startTime": 277209.09999996424,
+      "commitTime": 277212.09999996424
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 2.699999988079071,
+      "startTime": 277748.6999999881,
+      "commitTime": 277751.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 2.5000000596046448,
+      "startTime": 276313.1999999881,
+      "commitTime": 276315.8000000119
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 2.300000011920929,
+      "startTime": 275757.1999999881,
+      "commitTime": 275759.59999996424
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 2.300000011920929,
+      "startTime": 276313.5,
+      "commitTime": 276315.8000000119
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 2.299999952316284,
+      "startTime": 277209.6999999881,
+      "commitTime": 277212.09999996424
+    },
+    {
+      "id": "agent-action-visual",
+      "phase": "update",
+      "duration": 2.200000047683716,
+      "startTime": 277749.09999996424,
+      "commitTime": 277751.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 1.699999988079071,
+      "startTime": 275783.1999999881,
+      "commitTime": 275784.89999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 1.5999999642372131,
+      "startTime": 277234.3000000119,
+      "commitTime": 277235.89999997616
+    }
+  ],
+  "renderGroups": {
+    "live-notebook": {
+      "count": 16,
+      "p95": 3.5,
+      "p99": 3.5,
+      "max": 3.5,
+      "total": 15
+    },
+    "agent-action-visual": {
+      "count": 6,
+      "p95": 2.3,
+      "p99": 2.3,
+      "max": 2.300000011920929,
+      "total": 11
+    }
+  },
+  "commits": 22,
+  "commitP95": 2.9,
+  "commitTotal": 26,
+  "longTasks": [],
+  "layoutShiftTotal": 0.017852359347873263,
+  "unexpectedLayoutShift": 0,
+  "shiftSources": [
+    {
+      "value": 0.017852359347873263,
+      "recentInput": true,
+      "sources": [
+        "SECTION"
+      ]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}
