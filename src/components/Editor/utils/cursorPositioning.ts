@@ -1,6 +1,6 @@
 /**
  * Cursor positioning utilities for enhanced editor UX
- * Provides consistent cursor positioning behavior across TipTap and Jupyter editors
+ * Provides consistent cursor positioning behavior across rich-text and Jupyter editors
  */
 
 /**
@@ -83,9 +83,8 @@ export const focusCellEditor = (cellElement: HTMLElement, focusAtEnd = true): bo
 export const isBlankArea = (element: HTMLElement): boolean => {
   return !!(
     element &&
-    (element.classList.contains('ProseMirror') ||
-      element.classList.contains('tiptap-notebook-editor') ||
-      element.classList.contains('tiptap-notebook-editor-container') ||
+    (element.classList.contains('notebook-rich-editor') ||
+      element.classList.contains('notebook-editor-container') ||
       element.classList.contains('jupyter-notebook-editor') ||
       (element.tagName === 'DIV' && !element.textContent?.trim() && !element.querySelector('*')))
   );

@@ -4,7 +4,7 @@ import useCodeStore, { DISPLAY_MODES } from '@Store/codeStore';
 import { OutputProjection } from './OutputProjection';
 import { EXPAND_THRESHOLD } from '../utils';
 import { BaseCellViewModel } from '../../model/BaseCellViewModel';
-import { canExecuteCodeLanguage } from '@Store/models/codeLanguage';
+import { canExecuteCodeLanguage, normalizeCodeLanguage } from '@Store/models/codeLanguage';
 import { showToast } from '@/components/UI/Toast';
 import { isCompositionInput } from '../../../utils/compositionInput';
 import { isPlainBackspace } from '../../../utils/editorShortcuts';
@@ -124,6 +124,9 @@ export class CodeCellViewModel extends BaseCellViewModel {
     const storedMode = useCodeStore.getState().cellModes[this.cell.id];
     if (storedMode) return storedMode;
 
+    if (normalizeCodeLanguage(this.cell.language) === 'mermaid' && !this.isDemoMode)
+      return DISPLAY_MODES.COMPLETE;
+
     if (this.cell.outputs && this.cell.outputs.length > 0) {
       return DISPLAY_MODES.OUTPUT_ONLY;
     }
@@ -227,7 +230,7 @@ export class CodeCellViewModel extends BaseCellViewModel {
     if (!canExecuteCodeLanguage(this.cell.language)) {
       showToast({
         description:
-          'Execution is available for Python and AAL. Switch the cell language to execute it.',
+          'Execution is available for Python, AAL and Mermaid. Switch the cell language to execute it.',
         variant: 'destructive',
       });
       return;

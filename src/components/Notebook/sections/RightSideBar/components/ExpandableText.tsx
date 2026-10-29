@@ -1,3 +1,7 @@
+import {
+  markdownCodeComponents,
+  markdownSoftLineComponents,
+} from '../../../../Editor/MarkdownCodePreview';
 // moved to sections/RightSideBar/components
 import React, { useState, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,7 +55,9 @@ const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) =
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
-            p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+            ...markdownCodeComponents,
+            ...markdownSoftLineComponents,
+
             code: ({ children, className }) => {
               const isInline = !className;
               return isInline ? (
@@ -64,8 +70,7 @@ const ExpandableText: React.FC<ExpandableTextProps> = ({ text, maxLines = 3 }) =
             },
           }}
         >
-          {/* 预处理内容：将单个换行符转换为 markdown 换行格式（两个空格 + 换行符），但跳过列表项 */}
-          {filteredText.replace(/(?<!\n)\n(?!\n)(?!\s*(?:[*+-]|\d+\.)\s)/g, '  \n')}
+          {filteredText}
         </ReactMarkdown>
       </div>
 

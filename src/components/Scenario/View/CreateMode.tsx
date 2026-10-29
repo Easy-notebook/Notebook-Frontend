@@ -1,5 +1,5 @@
 import React from 'react';
-import TiptapNotebookEditor from '@Editor/TiptapNotebookEditor.js';
+import NotebookEditor from '@Editor/Lexical/NotebookEditor';
 import JupyterNotebookEditor from '@Editor/JupyterNotebookEditor.js';
 import { useSettings } from '@Store/settingsStore.js';
 import useStore from '@Store/notebookStore.js';
@@ -11,10 +11,10 @@ const CreateMode: React.FC<CreateModeProps> = ({ className = '', readOnly = fals
   const isLoaded = useStore((state) => state.isLoaded);
 
   // Determine which editor to render based on the current settings.
-  const editorType = settings.editorSettings?.editorType || 'tiptap';
+  const editorType = settings.editorSettings?.editorType || 'lexical';
 
-  if (editorType === 'tiptap') {
-    // Render Tiptap-based notebook editor
+  if (editorType === 'lexical') {
+    // Render the rich notebook editor
     // Only render when data is fully loaded to prevent race conditions
     if (!isLoaded) {
       return (
@@ -27,7 +27,7 @@ const CreateMode: React.FC<CreateModeProps> = ({ className = '', readOnly = fals
 
     return (
       <div className={`w-full flex flex-col ${className}`}>
-        <TiptapNotebookEditor className="w-full" placeholder="Untitled" readOnly={readOnly} />
+        <NotebookEditor className="w-full" placeholder="Untitled" readOnly={readOnly} />
       </div>
     );
   } else {

@@ -3,7 +3,8 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Modal } from 'antd';
-import LibraryHeader from './components/LibraryHeader';
+import LibraryHeader, { type LibraryFilter } from './components/LibraryHeader';
+import './library.css';
 import NotebookList from './components/NotebookList';
 import SwipeIndicator from './components/SwipeIndicator';
 import StorageCleanupTool from './components/StorageCleanupTool';
@@ -12,11 +13,32 @@ import { useLibraryController } from '../controllers/LibraryController';
 import type { LibraryStateProps } from '../types';
 
 const LibraryView: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook }) => {
+  const [filter, setFilter] = useState<LibraryFilter>('all');
+  const [customizing, setCustomizing] = useState<string | null>(null);
+  const [icon, setIcon] = useState('');
+  const [kind, setKind] = useState<'document' | 'project' | 'chat'>('document');
+  const [saving, setSaving] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [showCleanupTool, setShowCleanupTool] = useState(false);
 
   // Use Controller for logic and state
   const controller = useLibraryController({ onSelectNotebook });
+
+  const visibleNotebooks = useMemo(
+    () =>
+      controller.notebooks.filter(
+        (nb) =>
+          filter === 'all' ||
+          (filter === 'favorites' ? nb.isStarred : nb.presentation?.kind === filter)
+      ),
+    [controller.notebooks, filter]
+  );
+  const customize = (id: string) => {
+    const item = controller.notebooks.find((nb) => nb.id === id);
+    setIcon(item?.library?.icon ?? '');
+    setKind(item?.presentation?.kind ?? 'document');
+    setCustomizing(id);
+  };
 
   // Swipe gesture for back navigation
   const { swipeDistance, handlers } = useSwipeGesture(() => onBack?.());
@@ -51,7 +73,7 @@ const LibraryView: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook }) 
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-hidden relative flex flex-col"
+      className="library-page"
       {...handlers}
       style={{
         transform: `translateX(${swipeDistance * 0.3}px)`,
@@ -61,34 +83,95 @@ const LibraryView: React.FC<LibraryStateProps> = ({ onBack, onSelectNotebook }) 
       {/* Swipe Indicator */}
       <SwipeIndicator swipeDistance={swipeDistance} visible={swipeDistance > 0} />
 
-      {/* Header */}
-      <LibraryHeader
-        totalNotebooks={controller.notebooks.length}
-        totalSize={totalSize}
-        searchQuery={controller.searchQuery}
-        viewMode={controller.viewMode}
-        refreshing={controller.refreshing}
-        onBack={onBack}
-        onSearchChange={controller.setSearchQuery}
-        onViewModeChange={controller.setViewMode}
-        onRefresh={controller.refreshNotebooks}
-      />
-
-      {/* Content Area */}
-      <div className="flex-1 p-6 overflow-y-auto">
-        <NotebookList
-          notebooks={controller.notebooks}
-          viewMode={controller.viewMode}
-          loading={controller.loading}
+      <div className="library-shell">
+        {/* Header */}
+        <LibraryHeader
+          filter={filter}
+          onFilter={setFilter}
+          onCreate={controller.handleCreateNotebook}
+          sortBy={controller.sortBy}
+          onSort={controller.setSortBy}
+          count={visibleNotebooks.length}
+          totalNotebooks={controller.notebooks.length}
+          totalSize={totalSize}
           searchQuery={controller.searchQuery}
-          onSelectNotebook={handleSelectNotebook}
-          onCreateNotebook={controller.handleCreateNotebook}
-          onToggleStar={(id) => controller.handleToggleStar(id)}
-          onDeleteNotebook={controller.openDeleteModal}
-          onExportNotebook={controller.handleExportNotebook}
+          viewMode={controller.viewMode}
+          refreshing={controller.refreshing}
+          onBack={onBack}
+          onSearchChange={controller.setSearchQuery}
+          onViewModeChange={controller.setViewMode}
+          onRefresh={controller.refreshNotebooks}
         />
-      </div>
 
+        {/* Content Area */}
+        <div className="library-content">
+          <NotebookList
+            notebooks={visibleNotebooks}
+            viewMode={controller.viewMode}
+            loading={controller.loading}
+            searchQuery={controller.searchQuery}
+            onCustomize={customize}
+            onSelectNotebook={handleSelectNotebook}
+            onCreateNotebook={controller.handleCreateNotebook}
+            onToggleStar={(id) => controller.handleToggleStar(id)}
+            onDeleteNotebook={controller.openDeleteModal}
+            onExportNotebook={controller.handleExportNotebook}
+          />
+        </div>
+      </div>
+      <Modal
+        title="图标与类型"
+        open={!!customizing}
+        onCancel={() => setCustomizing(null)}
+        confirmLoading={saving}
+        okText="保存"
+        cancelText="取消"
+        onOk={async () => {
+          if (!customizing) return;
+          setSaving(true);
+          try {
+            await controller.updateLibrary(customizing, { icon: icon.trim(), kind });
+            setCustomizing(null);
+          } catch {
+            /* Controller reports the storage failure. Keep draft open. */
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        <div className="library-customize">
+          <label>
+            自定义图标
+            <input
+              aria-label="自定义图标"
+              value={icon}
+              maxLength={12}
+              placeholder="输入 emoji 或短字符"
+              onChange={(e) => setIcon(e.target.value)}
+            />
+          </label>
+          <div className="library-icon-options">
+            {['📄', '📁', '🔬', '📊', '💬', '✦'].map((value) => (
+              <button key={value} aria-label={`使用 ${value}`} onClick={() => setIcon(value)}>
+                {value}
+              </button>
+            ))}
+            <button onClick={() => setIcon('')}>使用来源图标</button>
+          </div>
+          <label>
+            项目类型
+            <select
+              aria-label="项目类型"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as typeof kind)}
+            >
+              <option value="document">文档</option>
+              <option value="project">项目</option>
+              <option value="chat">聊天记录</option>
+            </select>
+          </label>
+        </div>
+      </Modal>
       {/* Delete Confirmation Modal */}
       <Modal
         title="删除 Notebook"

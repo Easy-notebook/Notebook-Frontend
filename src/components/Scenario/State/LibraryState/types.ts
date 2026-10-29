@@ -6,26 +6,18 @@ import type {
   CachedNotebook,
   ViewMode,
   SortBy,
-  BentoSize,
   NotebookCardProps,
   NotebookListProps,
   LibraryHeaderProps,
-  NotebookStatsProps,
-  FileTagsProps,
-  NotebookAvatarProps,
 } from '@Store/models';
 export type {
   LibraryStateProps,
   CachedNotebook,
   ViewMode,
   SortBy,
-  BentoSize,
   NotebookCardProps,
   NotebookListProps,
   LibraryHeaderProps,
-  NotebookStatsProps,
-  FileTagsProps,
-  NotebookAvatarProps,
 };
 
 // Constants

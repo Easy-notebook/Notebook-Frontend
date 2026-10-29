@@ -1,0 +1,75 @@
+.notebook-outline {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  color: var(--color-text-primary, #334155);
+}
+.dark .notebook-outline {
+  color: #d1d5db;
+}
+.notebook-outline-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow: auto;
+  max-height: calc(100dvh - 200px);
+  overscroll-behavior: contain;
+}
+.notebook-outline-list > li {
+  display: flex;
+  align-items: flex-start;
+  padding-left: calc(var(--outline-depth) * 12px);
+  margin: 2px 0;
+}
+.notebook-outline-fold {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 30px;
+  flex: 0 0 20px;
+  color: #94a3b8;
+}
+.notebook-outline-link {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 5px;
+  text-align: left;
+  color: inherit;
+}
+.notebook-outline-link > span {
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+.notebook-outline-link.is-title {
+  font-weight: 600;
+}
+.notebook-outline-number {
+  flex-shrink: 0;
+  color: #8a98aa;
+  font-variant-numeric: tabular-nums;
+}
+.notebook-outline-link[aria-current='location'] {
+  color: #168260;
+  background: rgb(65 184 131 / 10%);
+  font-weight: 600;
+}
+.dark .notebook-outline-link[aria-current='location'] {
+  color: #69d7ad;
+}
+.notebook-outline button:hover {
+  background: rgb(148 163 184 / 12%);
+}
+.notebook-outline button:focus-visible {
+  outline: 2px solid #41b883;
+  outline-offset: 1px;
+}
+.notebook-outline-empty {
+  padding: 12px;
+  color: #94a3b8;
+  line-height: 1.7;
+}

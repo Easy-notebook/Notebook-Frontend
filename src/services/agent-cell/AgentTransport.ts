@@ -1,6 +1,7 @@
 import { eventSchema, type AgentEvent, type RunRequest, type ToolResult } from './protocol';
 
 export interface AgentTransport {
+  start(runId: string, callId: string, signal: AbortSignal): Promise<void>;
   run(
     request: RunRequest,
     signal: AbortSignal,
@@ -9,6 +10,16 @@ export interface AgentTransport {
   reply(runId: string, callId: string, result: ToolResult, signal: AbortSignal): Promise<void>;
 }
 export class HttpAgentTransport implements AgentTransport {
+  async start(runId: string, callId: string, signal: AbortSignal) {
+    const response = await fetch('/agent-api/tool-start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runId, callId }),
+      signal,
+    });
+    if (!response.ok)
+      throw new Error('Tool call expired or run was cancelled; no action was executed');
+  }
   async run(
     request: RunRequest,
     signal: AbortSignal,

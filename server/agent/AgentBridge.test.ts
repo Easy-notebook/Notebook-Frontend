@@ -72,6 +72,17 @@ describe('AgentBridge', () => {
             buffer = buffer.slice(newline + 1);
             events.push(event);
             if (event.type === 'tool') {
+              const claim = { runId: input.runId, callId: event.callId };
+              expect((await post(f.origin, '/agent-api/tool-start', claim)).status).toBe(200);
+              expect((await post(f.origin, '/agent-api/tool-start', claim)).status).toBe(409);
+              expect(
+                (
+                  await post(f.origin, '/agent-api/tool-start', {
+                    ...claim,
+                    runId: crypto.randomUUID(),
+                  })
+                ).status
+              ).toBe(409);
               const reply = await post(f.origin, '/agent-api/tool-result', {
                 runId: input.runId,
                 callId: event.callId,
@@ -169,4 +180,56 @@ describe('AgentBridge', () => {
       globalThis.fetch = originalFetch;
     }
   });
+});
+
+it('rejects an owned run when native notebook agent identity or provider differs', async () => {
+  let runs = 0;
+  const bridge = new AgentBridge(
+    {
+      codex: {
+        run: async () => {
+          runs++;
+        },
+      },
+      claude: {
+        run: async () => {
+          runs++;
+        },
+      },
+    },
+    {
+      readAgent: async () => ({
+        notebookId: 'notebook',
+        agentId: 'owned',
+        name: 'Research',
+        provider: 'claude',
+        className: 'NotebookWorkspace',
+      }),
+    } as any
+  );
+  const server = createServer((req, res) => {
+    void bridge.handle(req, res, () => res.end());
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    const response = await post(origin, '/agent-api/run', {
+      ...request(),
+      notebookAgentId: 'owned',
+    });
+    expect(response.ok).toBe(false);
+    expect(runs).toBe(0);
+    const accepted = await post(origin, '/agent-api/run', {
+      ...request(),
+      provider: 'claude',
+      notebookAgentId: 'owned',
+    });
+    expect(accepted.ok).toBe(true);
+    await accepted.text();
+    expect(runs).toBe(1);
+  } finally {
+    bridge.close();
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
 });

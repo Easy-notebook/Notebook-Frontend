@@ -67,6 +67,7 @@ export type NotebookSaveData = Omit<
   Partial<Pick<NotebookEntity, 'fileCount' | 'totalSize'>>;
 
 export interface INotebookRepository {
+  updateLibraryMetadata(id: string, patch: NonNullable<NotebookEntity['library']>): Promise<void>;
   importNotebook(
     notebook: NotebookSaveData,
     files: FileSaveData[],
@@ -130,7 +131,11 @@ export interface IFileRepository {
     options?: FileSaveOptions
   ): Promise<FileMetadataEntity>;
   getLargeFiles(notebookId?: string): Promise<FileMetadataEntity[]>;
-  getFile(notebookId: string, filePath: string): Promise<FileReadRecord | null>;
+  getFile(
+    notebookId: string,
+    filePath: string,
+    options?: { trackAccess?: boolean }
+  ): Promise<FileReadRecord | null>;
   getFilesForNotebook(notebookId: string, includeContent?: boolean): Promise<FileReadRecord[]>;
   deleteFile(notebookId: string, filePath: string): Promise<boolean>;
   clearNotebook(notebookId: string): Promise<void>;

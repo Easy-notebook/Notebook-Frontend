@@ -1,0 +1,202 @@
+.claude-transcript {
+  position: relative;
+  color: var(--editor-ink, #292823);
+  margin: 12px 0;
+  font-size: 13px;
+  line-height: 1.65;
+}
+.claude-transcript--activity {
+  margin: 2px 0;
+}
+.transcript-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  height: 25px;
+  color: var(--editor-muted, #838078);
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.claude-transcript:hover .transcript-actions,
+.claude-transcript:focus-within .transcript-actions {
+  opacity: 1;
+}
+.claude-transcript pre,
+.claude-transcript pre *,
+.transcript-file {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace !important;
+}
+.claude-transcript pre {
+  background: var(--editor-surface-muted, #f5f5f2);
+  color: var(--editor-ink, #292823);
+  font-size: 12px;
+  line-height: 1.75;
+  border: 0;
+  border-radius: 5px;
+  white-space: pre;
+  overflow-x: auto;
+  padding: 14px 18px;
+  margin: 0;
+  tab-size: 4;
+}
+.claude-transcript summary {
+  color: var(--editor-muted, #838078);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.transcript-activity > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.transcript-activity > summary::before {
+  content: '›';
+  transition: transform 120ms;
+}
+.transcript-activity[open] > summary::before {
+  transform: rotate(90deg);
+}
+.transcript-tool-name {
+  flex-shrink: 0;
+}
+.transcript-activity-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+}
+.transcript-output {
+  margin-top: 6px;
+}
+.transcript-original {
+  margin-top: 12px;
+  font-size: 11px;
+  color: #838078;
+}
+.transcript-file {
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.claude-transcript .hljs-keyword,
+.claude-transcript .hljs-built_in {
+  color: #825599;
+}
+.claude-transcript .hljs-string {
+  color: #48755b;
+}
+.claude-transcript .hljs-comment {
+  color: #959187;
+}
+.claude-transcript .hljs-number,
+.claude-transcript .hljs-literal {
+  color: #a56939;
+}
+.claude-transcript .hljs-title {
+  color: #426a93;
+}
+.claude-transcript .hljs-addition {
+  background: #dceee0;
+}
+.claude-transcript .hljs-deletion {
+  background: #f5dfdc;
+}
+.claude-transcript button:focus-visible,
+.claude-transcript summary:focus-visible {
+  outline: 2px solid #c58360;
+  outline-offset: 3px;
+}
+
+.notebook-rich-editor .notebook-embedded-cell:has(.claude-transcript--activity) {
+  margin-block: 0;
+}
+
+.notebook-rich-editor .notebook-embedded-cell:has([data-transcript-group-member]) {
+  display: none;
+}
+.transcript-activity-group {
+  margin: 8px 0 14px;
+}
+.transcript-activity-group > summary {
+  cursor: pointer;
+  color: var(--editor-muted, #838078);
+  font-size: 12px;
+  padding: 5px 0;
+}
+.transcript-activity-group > summary span {
+  margin-left: 12px;
+  opacity: 0.75;
+}
+.transcript-activity-steps {
+  list-style: none;
+  padding: 8px 0 0 18px;
+  margin: 0;
+  border-left: 1px solid var(--editor-line, #e4e4e1);
+}
+.transcript-activity-steps > li {
+  margin: 0 0 20px;
+}
+.transcript-step-label {
+  font-size: 12px;
+  color: var(--editor-muted, #838078);
+  display: flex;
+  gap: 12px;
+}
+.transcript-activity-group > summary:focus-visible {
+  outline: 2px solid #c58360;
+  outline-offset: 3px;
+}
+
+.transcript-context {
+  margin: 10px 0 16px;
+  color: var(--editor-muted, #838078);
+  font-size: 12px;
+}
+.transcript-context-label {
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+.transcript-context-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 10px;
+  padding: 3px 0;
+  line-height: 1.6;
+}
+.transcript-context-operation {
+  flex: 0 0 76px;
+}
+.transcript-context-target {
+  flex: 1;
+  min-width: 160px;
+  overflow-wrap: anywhere;
+}
+.transcript-context-row > button,
+.transcript-context-source > summary {
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+}
+.transcript-context-row:hover > button,
+.transcript-context-row:focus-within > button,
+.transcript-context-row:hover .transcript-context-source > summary,
+.transcript-context-row:focus-within .transcript-context-source > summary {
+  opacity: 1;
+}
+.transcript-context-source[open] {
+  flex-basis: 100%;
+  order: 1;
+}
+.transcript-context-source[open] > summary {
+  opacity: 1;
+}
+.transcript-context-source pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  padding: 8px 0;
+}

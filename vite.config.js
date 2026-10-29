@@ -22,6 +22,9 @@ export default defineConfig(({ mode }) => {
     name: 'native-notebook-origin',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
+        if (request.url?.startsWith('/tests/browser/agent-live.html')) {
+          response.setHeader('Document-Policy', 'js-profiling');
+        }
         if (!request.url?.startsWith('/aal-api/')) return next();
         const host = request.headers.host || '';
         const origin = request.headers.origin;
@@ -38,7 +41,11 @@ export default defineConfig(({ mode }) => {
     },
   };
   return {
-    plugins: [react(), nativeOriginGuard, agentBridgePlugin()],
+    plugins: [
+      react(),
+      nativeOriginGuard,
+      agentBridgePlugin(env.AAL_AGENT_WORKER, env.AAL_EASYNET_TARGET, target.origin),
+    ],
     server: {
       port: 3000,
       proxy: {
@@ -80,7 +87,12 @@ export default defineConfig(({ mode }) => {
               '@radix-ui/react-dropdown-menu',
             ],
             'charts-vendor': ['recharts', 'react-google-charts'],
-            'editor-vendor': ['@tiptap/react', '@tiptap/starter-kit', 'react-quill'],
+            'editor-vendor': [
+              'lexical',
+              '@lexical/mdast',
+              '@lexical/react/LexicalExtensionComposer',
+              'react-quill',
+            ],
             'utils-vendor': ['lodash-es', 'date-fns', 'axios'],
           },
         },

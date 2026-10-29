@@ -44,6 +44,7 @@ interface MainContentAreaProps {
 }
 
 export const MainContentArea = ({
+  routeView,
   viewMode,
   isCollapsed,
   isRightSidebarCollapsed,
@@ -127,7 +128,7 @@ export const MainContentArea = ({
       {/* Workflow Panel - shows current workflow progress */}
       <WorkflowPanel />
 
-      <div className="flex-1 overflow-x-hidden overflow-y-scroll scroll-smooth w-full min-w-0 min-h-0">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto w-full min-w-0 min-h-0">
         <div className="w-full h-full relative z-0">{children}</div>
       </div>
       {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
@@ -136,7 +137,7 @@ export const MainContentArea = ({
       <WorkflowControl fallbackViewMode={viewMode} />
 
       {/* AI Command Input - in editor area */}
-      <CommandInput />
+      {routeView === 'workspace' && <CommandInput />}
     </div>
   );
 

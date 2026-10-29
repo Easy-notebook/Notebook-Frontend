@@ -9,29 +9,36 @@ import { StoreCleanupService } from '@Services/store';
 import { uiLog } from '@Utils/logger';
 
 // App-lifetime ownership: unmounting a route cannot abandon an in-flight cleanup.
-const transitions = new RouteTransitionCoordinator(async path => {
-  const session = NotebookSessionService.getInstance();
-  if (path === '/') {
-    if (session.isDisconnected() && !useNotebookStore.getState().notebookId) return;
-    await session.disconnect();
-    await StoreCleanupService.getInstance().cleanAll();
-  } else if (path.startsWith('/workspace/')) {
-    const notebookId = path.slice('/workspace/'.length);
-    const previousId = session.getCurrentNotebookId();
-    if (previousId && previousId !== notebookId) {
-      await session.switchSession(notebookId);
-    } else {
-      // connect owns both the already-loaded check and auto-save activation.
-      await session.connect(notebookId);
+const transitions = new RouteTransitionCoordinator(
+  async (path) => {
+    const session = NotebookSessionService.getInstance();
+    if (path === '/') {
+      if (session.isDisconnected() && !useNotebookStore.getState().notebookId) return;
+      await session.disconnect();
+      await StoreCleanupService.getInstance().cleanAll();
+    } else if (path.startsWith('/workspace/')) {
+      const notebookId = path.slice('/workspace/'.length);
+      const previousId = session.getCurrentNotebookId();
+      if (previousId && previousId !== notebookId) {
+        await session.switchSession(notebookId);
+      } else {
+        // connect owns both the already-loaded check and auto-save activation.
+        await session.connect(notebookId);
+      }
+      // Local document readiness must not wait for remote file discovery.
+      // PreviewStore owns request identity and rejects obsolete publications.
+      void usePreviewStore.getState().switchToNotebook(notebookId).catch((error) => {
+        uiLog.error('Failed to load workspace files', { notebookId, error });
+      });
     }
-    await usePreviewStore.getState().switchToNotebook(notebookId);
-  }
-}, (path, error) => uiLog.error('Failed to synchronize route', { path, error }));
+  },
+  (path, error) => uiLog.error('Failed to synchronize route', { path, error })
+);
 
 export const useRouteSync = () => {
   const location = useLocation();
-  const currentView = useRouteStore(state => state.currentView);
-  const currentNotebookId = useRouteStore(state => state.currentNotebookId);
+  const currentView = useRouteStore((state) => state.currentView);
+  const currentNotebookId = useRouteStore((state) => state.currentNotebookId);
   const transition = useSyncExternalStore(transitions.subscribe, transitions.getSnapshot);
 
   useEffect(() => {
@@ -44,9 +51,16 @@ export const useRouteSync = () => {
     currentView,
     currentNotebookId,
     currentRoute: location.pathname,
-    isRouteReady: transition.status === 'ready' && transition.path === location.pathname,
-    routeError: transition.status === 'error' && transition.path === location.pathname
-      ? String(transition.error) : null,
-    retryRoute: () => { void transitions.request(location.pathname); },
+    // The library reads persistence directly and does not depend on an active editor session.
+    isRouteReady:
+      location.pathname === '/FoKn/Library' ||
+      (transition.status === 'ready' && transition.path === location.pathname),
+    routeError:
+      transition.status === 'error' && transition.path === location.pathname
+        ? String(transition.error)
+        : null,
+    retryRoute: () => {
+      void transitions.request(location.pathname);
+    },
   };
 };

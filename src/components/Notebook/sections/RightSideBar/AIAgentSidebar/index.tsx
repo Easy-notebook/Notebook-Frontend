@@ -1,3 +1,4 @@
+import { NotebookAgentChat } from './components/NotebookAgentChat';
 // moved to sections/RightSideBar
 import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +21,9 @@ import ShinyText from '@/components/UI/magic/shiny-text';
 // ----------------------
 
 const AIAgentSidebar = () => {
+  const hasAgentConversations = useStore((state) =>
+    state.cells.some((cell) => cell.type === 'agent')
+  );
   const { activeView, isLoading, actions, qaList, setActiveView } = useAIAgentStore();
   // 追踪哪些合并组是展开状态
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -208,7 +212,8 @@ const AIAgentSidebar = () => {
 
         {activeView === 'qa' && (
           <div className="space-y-4 py-4">
-            {qasToShow.length === 0 ? (
+            <NotebookAgentChat />
+            {qasToShow.length === 0 && !hasAgentConversations ? (
               <div className="text-center py-8 text-gray-500 flex flex-col items-center">
                 <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p className="text-sm mx-auto text-gray-500">{t('rightSideBar.noChatMessages')}</p>

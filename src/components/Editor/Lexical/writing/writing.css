@@ -1,0 +1,292 @@
+.notebook-editor-container {
+  position: relative;
+  padding-top: 40px;
+}
+/* A cover owns the top edge; controls overlay it instead of reserving a blank row. */
+.notebook-editor-container:has(> [data-notebook-cover='true']) {
+  padding-top: 0;
+}
+.notebook-editor-container:has(> [data-notebook-cover='true']) .notebook-writing-modes,
+.notebook-editor-container:has(> [data-notebook-cover='true']) .notebook-find-owner {
+  background: color-mix(in srgb, var(--editor-surface) 82%, transparent);
+  backdrop-filter: blur(8px);
+  border-radius: 6px;
+}
+.notebook-writing-modes {
+  position: absolute;
+  top: 7px;
+  right: 42px;
+  z-index: 44;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--editor-muted);
+}
+.notebook-view-switch {
+  display: flex;
+  gap: 2px;
+  margin-right: 4px;
+  padding-right: 6px;
+  border-right: 1px solid var(--editor-line);
+}
+.notebook-writing-modes button,
+.notebook-writing-stats {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+.notebook-writing-stats {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.notebook-writing-modes :focus-visible {
+  outline: 2px solid var(--editor-accent);
+  outline-offset: 2px;
+}
+.notebook-writing-modes button,
+.notebook-writing-button,
+.notebook-find-panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  white-space: nowrap;
+}
+.notebook-writing-modes button:hover,
+.notebook-writing-modes button[aria-pressed='true'],
+.notebook-find-panel button:hover {
+  background: var(--editor-surface-muted);
+  color: var(--editor-accent);
+}
+.notebook-find-owner {
+  position: absolute;
+  right: 8px;
+  top: 7px;
+  z-index: 45;
+}
+.notebook-find-panel {
+  width: min(420px, calc(100vw - 32px));
+  padding: 8px;
+  background: var(--editor-surface);
+  color: var(--editor-ink);
+  border: 1px solid var(--editor-line);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px #0002;
+}
+.notebook-writing-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+.notebook-writing-row > input {
+  min-width: 0;
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid var(--editor-line);
+  border-radius: 4px;
+  background: var(--editor-surface-muted);
+  color: inherit;
+}
+.notebook-writing-row label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.notebook-writing-row button:disabled {
+  opacity: 0.4;
+}
+.notebook-editor-container[data-zen='true'] {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: auto;
+  background: var(--editor-surface);
+}
+.notebook-rich-editor[data-focus-mode='true']
+  .notebook-markdown-node
+  > :not([data-writing-focus='true']):not(:focus-within) {
+  opacity: 0.35;
+}
+.notebook-rich-editor[data-focus-mode='true'] .notebook-markdown-node > :hover {
+  opacity: 1;
+}
+.notebook-rich-editor[data-focus-mode='true'] .notebook-markdown-node > * {
+  transition: opacity 100ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .notebook-rich-editor[data-focus-mode='true'] .notebook-markdown-node > * {
+    transition: none;
+  }
+}
+
+.notebook-link-dialog {
+  position: fixed;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  color: #222;
+  box-shadow: 0 12px 40px #0003;
+  z-index: 110;
+}
+.notebook-link-dialog input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  margin: 8px 0;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+.notebook-link-dialog button {
+  padding: 6px 10px;
+  margin-right: 6px;
+  border-radius: 4px;
+  background: #f2f3f5;
+}
+.dark .notebook-link-dialog {
+  background: #24262e;
+  color: #eee;
+  border-color: #454852;
+}
+.dark .notebook-link-dialog button {
+  background: #343740;
+}
+
+.notebook-source-pane {
+  width: 100%;
+  min-width: 0;
+}
+.notebook-source-field textarea {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0;
+  color: var(--editor-ink);
+  background: var(--editor-surface-muted);
+  border: 1px solid var(--editor-line);
+  border-radius: 6px;
+  resize: vertical;
+  font:
+    14px/1.75 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace !important;
+}
+.notebook-source-embedded {
+  opacity: 0.65;
+  padding: 12px;
+  border: 1px dashed var(--editor-line);
+  margin: 8px 0;
+}
+.notebook-source-embedded pre {
+  white-space: pre-wrap;
+}
+.notebook-editor-container[data-writing-view='source'] .notebook-rich-editor {
+  display: none;
+}
+.notebook-editor-container[data-writing-view='split'] .notebook-document-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  max-width: 100%;
+  padding-inline: 48px 24px;
+  align-items: start;
+}
+.notebook-editor-container[data-writing-view='split'] .notebook-source-pane {
+  grid-column: 1;
+  grid-row: 1;
+}
+.notebook-editor-container[data-writing-view='split'] .notebook-rich-editor {
+  grid-column: 2;
+  grid-row: 1;
+}
+@media (max-width: 700px) {
+  .notebook-editor-container[data-writing-view='split'] .notebook-document-frame {
+    display: flex;
+  }
+}
+
+.notebook-rich-editor .notebook-markdown-source {
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: inherit;
+}
+
+/* Split source lists retain the spacing of one continuous list. */
+.notebook-markdown-node :is(ul, ol):has(+ :is(ul, ol)) {
+  margin-bottom: 0;
+}
+.notebook-markdown-node :is(ul, ol) + :is(ul, ol) {
+  margin-top: 0;
+}
+.notebook-markdown-node li:has(> [data-source-block]) {
+  list-style: none;
+}
+
+.notebook-markdown-source a {
+  cursor: text;
+}
+
+/* Source markers are ordinary inline content; they share the block's left edge. */
+.notebook-markdown-node h1 {
+  --source-placeholder: '请输入一级标题';
+}
+.notebook-markdown-node h2 {
+  --source-placeholder: '请输入二级标题';
+}
+.notebook-markdown-node h3 {
+  --source-placeholder: '请输入三级标题';
+}
+.notebook-markdown-node h4 {
+  --source-placeholder: '请输入四级标题';
+}
+.notebook-markdown-node h5 {
+  --source-placeholder: '请输入五级标题';
+}
+.notebook-markdown-node h6 {
+  --source-placeholder: '请输入六级标题';
+}
+.notebook-markdown-node blockquote {
+  --source-placeholder: '请输入引用内容';
+}
+.notebook-markdown-node
+  :is(h1, h2, h3, h4, h5, h6, blockquote):has(
+    > .notebook-markdown-source > span[style*='--editor-syntax-marker']:only-child
+  )::after {
+  content: var(--source-placeholder);
+  color: var(--editor-syntax-marker, #9ca3af);
+  font-weight: 400;
+  pointer-events: none;
+  user-select: none;
+}
+.notebook-markdown-node :is(h1, h2, h3, h4, h5, h6):is(:empty, :has(> br:only-child)) {
+  position: relative;
+}
+.notebook-markdown-node :is(h1, h2, h3, h4, h5, h6):is(:empty, :has(> br:only-child))::before {
+  content: var(--source-placeholder);
+  position: absolute;
+  color: var(--editor-syntax-marker, #9ca3af);
+  font-weight: 400;
+  pointer-events: none;
+  user-select: none;
+}
+
+.notebook-writing-tail {
+  height: 80px;
+}
+.notebook-editor-container[data-typewriter='true'] .notebook-writing-tail {
+  height: calc(var(--writing-viewport-height, 100vh) * 0.55);
+}

@@ -125,27 +125,39 @@ export class FileRepository implements IFileRepository {
     return saved;
   }
 
-  async getFile(notebookId: string, filePath: string): Promise<FileReadRecord | null> {
+  async getFile(
+    notebookId: string,
+    filePath: string,
+    options: { trackAccess?: boolean } = {}
+  ): Promise<FileReadRecord | null> {
     const fileId = makeFileId(notebookId, filePath);
     let result: Awaited<ReturnType<IFileRepository['getFile']>> = null;
     // Read the revision, update its access counters and read its content under one lock.
     // Separate transactions can overwrite a concurrent save with stale metadata.
-    await this.storage.transaction(this.mutationStores, 'readwrite', async (stores) => {
-      const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
-      const metadata = await this.read<FileMetadataEntity | undefined>(metadataStore.get(fileId));
-      if (metadata == null) return;
-      new FileRecordOwnership(notebookId, filePath).verify(metadata);
-      const content = FileContentRecord.expectsLocalContent(metadata)
-        ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], fileId)
-        : undefined;
-      const accessed = {
-        ...metadata,
-        ...new AccessHistory(metadata).accessedAt(Date.now()).toRecord(),
-      };
-      metadataStore.put(accessed);
-      await this.recordAccess(stores, notebookId, filePath);
-      result = { metadata: accessed, content, needsRemoteFetch: content === undefined };
-    });
+    await this.storage.transaction(
+      this.mutationStores,
+      options.trackAccess === false ? 'readonly' : 'readwrite',
+      async (stores) => {
+        const metadataStore = stores[DB_CONFIG.STORES.FILES_METADATA];
+        const metadata = await this.read<FileMetadataEntity | undefined>(metadataStore.get(fileId));
+        if (metadata == null) return;
+        new FileRecordOwnership(notebookId, filePath).verify(metadata);
+        const content = FileContentRecord.expectsLocalContent(metadata)
+          ? await this.readContent(stores[DB_CONFIG.STORES.FILES_CONTENT], fileId)
+          : undefined;
+        if (options.trackAccess === false) {
+          result = { metadata, content, needsRemoteFetch: content === undefined };
+          return;
+        }
+        const accessed = {
+          ...metadata,
+          ...new AccessHistory(metadata).accessedAt(Date.now()).toRecord(),
+        };
+        metadataStore.put(accessed);
+        await this.recordAccess(stores, notebookId, filePath);
+        result = { metadata: accessed, content, needsRemoteFetch: content === undefined };
+      }
+    );
     return result;
   }
 

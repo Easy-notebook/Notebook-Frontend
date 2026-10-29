@@ -1,2 +1,2 @@
 export { default } from './OutlineSidebar';
-export * from './PhaseSection';
+export * from './NotebookOutline';

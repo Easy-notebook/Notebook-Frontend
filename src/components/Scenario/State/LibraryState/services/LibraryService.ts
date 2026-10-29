@@ -1,5 +1,5 @@
+import { libraryPresentation } from './LibraryPresentation';
 import { IPersistenceService } from '../../../../../services/persistence/interfaces';
-import useNotebookStore from '@Store/notebookStore';
 import { CachedNotebook, CONSTANTS } from '../types';
 import { NotebookEntity } from '../../../../../services/persistence/interfaces';
 
@@ -25,31 +25,6 @@ export class LibraryService {
       return [];
     }
 
-    // Handle duplicates
-    const seenIds = new Set<string>();
-    const duplicateIds: string[] = [];
-    allNotebooks.forEach((notebook) => {
-      if (seenIds.has(notebook.id)) {
-        duplicateIds.push(notebook.id);
-      } else {
-        seenIds.add(notebook.id);
-      }
-    });
-
-    if (duplicateIds.length > 0) {
-      console.warn('Found duplicate notebook IDs:', duplicateIds);
-      allNotebooks = allNotebooks.map((notebook, index) => {
-        const existingCount = allNotebooks
-          .slice(0, index)
-          .filter((n) => n.id === notebook.id).length;
-        if (existingCount > 0) {
-          const newId = `${notebook.id}_dup_${existingCount}`;
-          return { ...notebook, id: newId };
-        }
-        return notebook;
-      });
-    }
-
     // Enrich notebooks
     return Promise.all(allNotebooks.map(async (notebook) => this.enrichNotebook(notebook)));
   }
@@ -57,6 +32,7 @@ export class LibraryService {
   private async enrichNotebook(notebook: NotebookEntity): Promise<CachedNotebook> {
     try {
       let lastOpenedFiles: string[] = [];
+      let presentation = libraryPresentation(null, notebook.library?.kind);
       let displayName: string | undefined = notebook.name;
 
       // Get files
@@ -73,7 +49,8 @@ export class LibraryService {
       try {
         const main = await this.persistence.files.getFile(
           notebook.id,
-          `notebook_${notebook.id}.json`
+          `notebook_${notebook.id}.json`,
+          { trackAccess: false }
         );
         const raw = main?.content;
         if (raw) {
@@ -95,6 +72,7 @@ export class LibraryService {
           }
 
           if (data) {
+            presentation = libraryPresentation(data, notebook.library?.kind);
             let extractedTitle = data.title || data.notebookTitle;
             if (!extractedTitle && data.cells && Array.isArray(data.cells)) {
               for (const cell of data.cells) {
@@ -125,7 +103,8 @@ export class LibraryService {
         ...notebook,
         name: finalName,
         lastOpenedFiles,
-        isStarred: false,
+        isStarred: notebook.library?.isStarred ?? false,
+        presentation,
       } as CachedNotebook;
     } catch (err) {
       console.warn(`Failed to process notebook ${notebook.id}:`, err);
@@ -133,7 +112,7 @@ export class LibraryService {
         ...notebook,
         name: notebook.name || `Notebook ${notebook.id?.slice(0, 8) || 'Unknown'}`,
         lastOpenedFiles: [],
-        isStarred: false,
+        isStarred: notebook.library?.isStarred ?? false,
       } as CachedNotebook;
     }
   }
@@ -188,51 +167,6 @@ export class LibraryService {
     } catch (error) {
       console.error(`❌ Failed to export notebook ${notebookId}:`, error);
       throw error;
-    }
-  }
-
-  async loadNotebookContent(notebookId: string, notebooks: CachedNotebook[]): Promise<boolean> {
-    const notebook = notebooks.find((n) => n.id === notebookId);
-    if (!notebook) return false;
-
-    try {
-      console.log(`🔄 Loading notebook ${notebookId} from database...`);
-      const store = useNotebookStore.getState();
-      const loaded = await store.loadFromDatabase(notebookId);
-
-      if (loaded) {
-        const { default: usePreviewStore } = await import('@Store/previewStore');
-        const previewStore = usePreviewStore.getState();
-
-        previewStore.setCurrentPreviewFiles([]);
-        previewStore.setActiveFile(null);
-        previewStore.setActivePreviewMode(null);
-
-        try {
-          await previewStore.loadNotebookTabs(notebookId);
-        } catch {
-          // Tab loading error is non-critical, continue silently
-        }
-      } else {
-        store.setNotebookId(notebook.id);
-        store.setNotebookTitle(notebook.name || `Notebook ${notebook.id.slice(0, 8)}`);
-        store.clearCells();
-      }
-
-      try {
-        await this.persistence.notebooks.updateAccessTime(notebookId);
-      } catch (error) {
-        console.warn('Failed to update notebook access statistics:', error);
-      }
-
-      return true;
-    } catch {
-      // Fallback
-      const store = useNotebookStore.getState();
-      store.setNotebookId(notebook.id);
-      store.setNotebookTitle(notebook.name || `Notebook ${notebook.id.slice(0, 8)}`);
-      store.clearCells();
-      return false;
     }
   }
 }

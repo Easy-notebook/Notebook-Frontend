@@ -15,6 +15,7 @@ export interface NotebookEntity {
   // Metadata
   fileCount: number;
   totalSize: number; // Total size of associated files in bytes
+  library?: { kind?: 'document' | 'project' | 'chat'; icon?: string; isStarred?: boolean };
   // Settings
   cacheEnabled: boolean;
   /** Missing identity is persistent. Automatic cleanup requires explicit evictable ownership. */

@@ -5,7 +5,6 @@ import { CachedNotebook, SortBy, CONSTANTS } from '../types';
 import { useDebounce } from '../utils';
 import { notificationService } from '../../../../../services/notificationService';
 import { NotebookLifecycleService } from '../../../../../services/notebook/NotebookLifecycleService';
-import { NotebookEntity } from '../../../../../services/persistence/interfaces';
 
 export const useLibraryController = (props?: {
   onSelectNotebook?: (id: string, name: string) => void;
@@ -19,7 +18,7 @@ export const useLibraryController = (props?: {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [sortBy, setSortBy] = useState<SortBy>('recent');
   const [selectedNotebook, setSelectedNotebook] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -69,22 +68,47 @@ export const useLibraryController = (props?: {
 
   const handleSelectNotebook = useCallback(
     async (notebookId: string, onSelect?: (id: string, name: string) => void) => {
-      const success = await service.loadNotebookContent(notebookId, notebooks);
-      if (success) {
-        const notebook = notebooks.find((n) => n.id === notebookId);
-        const callback = onSelect || props?.onSelectNotebook;
-        callback?.(notebookId, notebook?.name || `Notebook ${notebookId.slice(0, 8)}`);
-      }
+      const notebook = notebooks.find((n) => n.id === notebookId);
+      if (!notebook) return;
+      const callback = onSelect || props?.onSelectNotebook;
+      callback?.(notebookId, notebook.name || `Notebook ${notebookId.slice(0, 8)}`);
     },
     [service, notebooks, props?.onSelectNotebook]
   );
 
-  const handleToggleStar = useCallback((notebookId: string) => {
-    setNotebooks((prev) =>
-      prev.map((nb) => (nb.id === notebookId ? { ...nb, isStarred: !nb.isStarred } : nb))
-    );
-    // TODO: Persist starring to storage
-  }, []);
+  const updateLibrary = useCallback(
+    async (id: string, patch: NonNullable<CachedNotebook['library']>) => {
+      try {
+        await persistence.notebooks.updateLibraryMetadata(id, patch);
+        setNotebooks((prev) =>
+          prev.map((nb) =>
+            nb.id === id
+              ? {
+                  ...nb,
+                  library: { ...nb.library, ...patch },
+                  isStarred: patch.isStarred ?? nb.isStarred,
+                  presentation: nb.presentation && {
+                    ...nb.presentation,
+                    kind: patch.kind ?? nb.presentation.kind,
+                  },
+                }
+              : nb
+          )
+        );
+      } catch {
+        notificationService.error('保存失败', '资料库设置未保存，请重试');
+        throw new Error('Unable to save library preferences');
+      }
+    },
+    [persistence]
+  );
+  const handleToggleStar = useCallback(
+    (id: string) => {
+      const item = notebooks.find((nb) => nb.id === id);
+      void updateLibrary(id, { isStarred: !item?.isStarred }).catch(() => {});
+    },
+    [notebooks, updateLibrary]
+  );
 
   const openDeleteModal = useCallback((notebookId: string) => {
     setSelectedNotebook(notebookId);
@@ -108,6 +132,10 @@ export const useLibraryController = (props?: {
         (nb) =>
           nb.name?.toLowerCase().includes(query) ||
           nb.description?.toLowerCase().includes(query) ||
+          nb.presentation?.preview.toLowerCase().includes(query) ||
+          nb.presentation?.providers.some((provider) =>
+            (provider === 'claude' ? 'claude code' : 'openai codex').includes(query)
+          ) ||
           nb.lastOpenedFiles?.some((file) => file.toLowerCase().includes(query))
       );
     }
@@ -140,31 +168,8 @@ export const useLibraryController = (props?: {
       const newNotebookId = response.notebook_id;
       if (!newNotebookId) throw new Error('Failed to get notebook ID');
 
-      // 2. Manually sync to local persistence
-      const newNotebook: Omit<NotebookEntity, 'createdAt' | 'updatedAt'> = {
-        id: newNotebookId,
-        name: 'Untitled',
-        description: 'New Notebook',
-        lastAccessedAt: Date.now(),
-        accessCount: 1,
-        fileCount: 0,
-        totalSize: 0,
-        cacheEnabled: true,
-      };
-      await persistence.notebooks.saveNotebook(newNotebook);
-
-      // 3. Refresh list to ensure it's available
-      const updatedNotebooks = await loadNotebooks();
-
-      // 4. Select/Navigate using the FRESH list
-      const success = await service.loadNotebookContent(newNotebookId, updatedNotebooks);
-      if (success) {
-        const notebook = updatedNotebooks.find((n) => n.id === newNotebookId);
-        onSelectNotebook?.(
-          newNotebookId,
-          notebook?.name || `Notebook ${newNotebookId.slice(0, 8)}`
-        );
-      }
+      // The route owns loading the saved document and discovering its files.
+      onSelectNotebook?.(newNotebookId, 'Untitled');
 
       notificationService.success('Success', 'New notebook created');
     } catch (err) {
@@ -197,6 +202,7 @@ export const useLibraryController = (props?: {
     handleSelectNotebook,
     handleCreateNotebook,
     handleToggleStar,
+    updateLibrary,
     openDeleteModal,
     closeDeleteModal,
   };

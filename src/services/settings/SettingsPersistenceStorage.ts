@@ -1,3 +1,4 @@
+import { migrateStoredEditorSettings } from './SettingsMigrations';
 import { readSettingsState } from './SettingsRecord';
 import type { PersistStorage, StorageValue } from 'zustand/middleware';
 import type { PersistedState, SettingsWithTimestamp } from '@Store/models/settings';
@@ -73,7 +74,7 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
 
   private async backup(): Promise<StorageValue<PersistedState> | null> {
     const state = await this.dependencies.readBackup((candidate) =>
-      this.transform(readSettingsState(candidate, false), 'decrypt')
+      this.transform(readSettingsState(migrateStoredEditorSettings(candidate), false), 'decrypt')
     );
     return state === null
       ? null
@@ -125,7 +126,10 @@ export class SettingsPersistenceStorage implements PersistStorage<PersistedState
         assertSupportedSettingsVersion(value.version, this.dependencies.version);
         const result = {
           state: await this.transform(
-            readSettingsState(value.state, value.version !== this.dependencies.version),
+            readSettingsState(
+              migrateStoredEditorSettings(value.state),
+              value.version !== this.dependencies.version
+            ),
             'decrypt'
           ),
           version: (value.version as number | undefined) ?? 0,

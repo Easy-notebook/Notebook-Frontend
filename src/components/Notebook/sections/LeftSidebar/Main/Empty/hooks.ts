@@ -6,7 +6,6 @@ import { message } from 'antd';
 import { NotebookLifecycleService } from '@Services/notebook/NotebookLifecycleService';
 import { usePersistence } from '../../../../../../services/persistence/PersistenceContext';
 import useStore from '@Store/notebookStore';
-import useCodeStore from '@Store/codeStore';
 import { navigateToWorkspace } from '@Utils/navigation';
 import type { CachedNotebook } from './types';
 
@@ -85,33 +84,8 @@ export const useNotebooks = () => {
         throw new Error('No notebook ID returned from server');
       }
 
-      // Initialize store with new notebook state directly
-      // This ensures isLoaded is true before navigation
-      const defaultCell = {
-        id: `title-${Date.now()}`,
-        type: 'markdown' as const,
-        content: '# Untitled',
-        outputs: [],
-        enableEdit: true,
-        phaseId: null,
-        description: null,
-        metadata: { isDefaultTitle: true },
-      };
-
-      useStore.setState({
-        notebookId: newNotebookId,
-        notebookTitle: 'Untitled',
-        cells: [defaultCell],
-        tasks: [],
-        isInitialized: true,
-        isLoaded: true,
-        currentCellId: defaultCell.id,
-        currentPhaseId: null,
-        currentStepIndex: 0,
-        error: null,
-      });
-
-      useCodeStore.getState().setKernelReady(true);
+      const loaded = await useStore.getState().loadFromDatabase(newNotebookId);
+      if (!loaded) throw new Error('Notebook was saved but could not be opened');
 
       // Navigate to the new notebook
       navigateToWorkspace(newNotebookId);

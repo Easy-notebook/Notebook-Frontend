@@ -3,6 +3,7 @@ export const CODE_LANGUAGES = [
   { value: 'aal', label: 'AAL', executable: true },
   { value: 'javascript', label: 'JavaScript', executable: false },
   { value: 'typescript', label: 'TypeScript', executable: false },
+  { value: 'mermaid', label: 'Mermaid', executable: true },
 ] as const;
 
 /** Languages select explicit execution backends; unknown languages remain editable. */

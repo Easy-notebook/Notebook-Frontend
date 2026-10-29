@@ -1,8 +1,9 @@
 import { persistenceService } from '../../src/services/persistence/instance';
 import { notebookContextService } from '../../src/services/notebook-context/instance';
 import React from 'react';
+import '../../src/i18n';
 import { createRoot } from 'react-dom/client';
-import TiptapNotebookEditor from '../../src/components/Editor/TiptapNotebookEditor';
+import NotebookEditor from '../../src/components/Editor/Lexical/NotebookEditor';
 import useStore from '../../src/store/notebookStore';
 import { newAgentCellData } from '../../src/services/agent-cell/protocol';
 import '../../src/index.css';
@@ -17,6 +18,13 @@ useStore.setState({
       id: 'notes',
       type: 'markdown',
       content: 'Revenue data has missing values. Inspect before changing the analysis.',
+    },
+    {
+      id: 'calculation',
+      type: 'code',
+      language: 'aal',
+      content: 'agent Cell is Agent\n  public\n    ability run() -> Any\n      return 2 + 3',
+      outputs: [],
     },
     { id: 'agent', type: 'agent', content: '', metadata: { agent: data } },
   ],
@@ -34,6 +42,6 @@ createRoot(document.getElementById('root')).render(
     <aside>
       <NotebookContextPanel />
     </aside>
-    <TiptapNotebookEditor />
+    <NotebookEditor />
   </main>
 );

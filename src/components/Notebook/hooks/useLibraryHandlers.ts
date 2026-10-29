@@ -3,14 +3,12 @@
 
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import useStore from '@Store/notebookStore';
 import { useToast } from '../../UI/Toast';
 import { uiLog } from '@Utils/logger';
 
 export const useLibraryHandlers = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { setNotebookId, setNotebookTitle } = useStore();
 
   const handleLibrarySelectNotebook = useCallback(
     async (
@@ -19,8 +17,6 @@ export const useLibraryHandlers = () => {
       navigateToWorkspace: (notebookId: string) => void
     ) => {
       try {
-        setNotebookId(notebookId);
-        setNotebookTitle(notebookTitle);
         navigateToWorkspace(notebookId);
 
         toast({
@@ -35,7 +31,7 @@ export const useLibraryHandlers = () => {
         } as any);
       }
     },
-    [setNotebookId, setNotebookTitle, toast, t]
+    [toast, t]
   );
 
   const handleLibraryBack = useCallback((navigateToEmpty: () => void) => {

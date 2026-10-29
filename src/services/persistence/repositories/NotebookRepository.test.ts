@@ -344,3 +344,20 @@ it('preserves default ordering, stable ties and zero-limit behavior without muta
   ]);
   expect(records.map((record) => record.id)).toEqual(['old', 'first', 'second']);
 });
+
+it('updates library preferences atomically without recording a notebook visit', async () => {
+  const { repository, stores } = setup({ ...notebook, library: { icon: '🔬' } });
+  await repository.updateLibraryMetadata('book', { isStarred: true });
+  expect(stores.notebooks.put).toHaveBeenCalledWith({
+    ...notebook,
+    library: { icon: '🔬', isStarred: true },
+  });
+  expect(stores.activities.add).not.toHaveBeenCalled();
+});
+it('keeps library preferences when an autosave snapshot supplies stale metadata', async () => {
+  const { repository, stores } = setup({ ...notebook, library: { icon: '🔬', isStarred: true } });
+  await repository.saveNotebookSnapshot(file, notebook);
+  expect(stores.notebooks.put).toHaveBeenCalledWith(
+    expect.objectContaining({ library: { icon: '🔬', isStarred: true } })
+  );
+});

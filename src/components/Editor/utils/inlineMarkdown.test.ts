@@ -1,7 +1,52 @@
 import { describe, expect, it } from 'vitest';
 import { encodeTableCode, renderInlineMarkdown } from './inlineMarkdown';
 import { marked } from 'marked';
-import { extractTextFromNode } from './cellConverters';
+import { ScientificExtension } from '../Lexical/model/ScientificNode';
+import { TextFormattingExtension } from '../Lexical/model/TextFormatting';
+import { buildEditorFromExtensions } from '@lexical/extension';
+import {
+  MdastCommonMarkExtension,
+  MdastGfmExtension,
+  MdastExtension,
+  $convertToMarkdownString,
+} from '@lexical/mdast';
+import { $createParagraphNode, $createTextNode, $getRoot, type TextFormatType } from 'lexical';
+import { $createLinkNode } from '@lexical/link';
+function extractTextFromNode(data: {
+  type: string;
+  text: string;
+  marks?: { type: string; attrs?: { href: string; title: string } }[];
+}) {
+  const editor = buildEditorFromExtensions(
+    MdastCommonMarkExtension,
+    MdastGfmExtension,
+    MdastExtension,
+    ScientificExtension,
+    TextFormattingExtension
+  );
+  editor.update(
+    () => {
+      $getRoot().clear();
+      const text = $createTextNode(data.text);
+      const paragraph = $createParagraphNode();
+      let parent: ReturnType<typeof $createLinkNode> | null = null;
+      for (const mark of data.marks ?? []) {
+        if (mark.type === 'link') {
+          parent = $createLinkNode(mark.attrs!.href, { title: mark.attrs!.title });
+        } else
+          text.toggleFormat(
+            (mark.type === 'strike' ? 'strikethrough' : mark.type) as TextFormatType
+          );
+      }
+      paragraph.append(parent ? parent.append(text) : text);
+      $getRoot().append(paragraph);
+    },
+    { discrete: true }
+  );
+  const result = editor.getEditorState().read(() => $convertToMarkdownString(), { editor });
+  editor.dispose();
+  return result;
+}
 import { convertMarkdownToHtml } from './markdownConverters';
 
 describe('inline Markdown fidelity', () => {
@@ -38,9 +83,12 @@ describe('inline Markdown fidelity', () => {
     expect(container.querySelector(tag)?.textContent).toBe('marked text');
   });
   it('does not emit empty formatting delimiters for whitespace-only marks', () => {
-    expect(extractTextFromNode({ type: 'text', text: '   ', marks: [{ type: 'bold' }] })).toBe(
-      '   '
+    const element = document.createElement('div');
+    element.innerHTML = renderInlineMarkdown(
+      extractTextFromNode({ type: 'text', text: '   ', marks: [{ type: 'bold' }] })
     );
+    expect(element.textContent).toBe('   ');
+    expect(element.querySelector('strong')).toBeNull();
   });
   it.each([
     '**literal**',

@@ -392,15 +392,15 @@ const SettingsPage = () => {
               {t('settings.editor.editorType', '编辑器类型')}
             </label>
             <Select
-              value={settings.editorSettings?.editorType || 'tiptap'}
+              value={settings.editorSettings?.editorType || 'lexical'}
               onChange={(e) => {
                 const value = e.currentTarget.value;
-                if (value === 'tiptap' || value === 'jupyter')
+                if (value === 'lexical' || value === 'jupyter')
                   handleEditorSettingsChange('editorType', value);
               }}
             >
-              <option value="tiptap">
-                {t('settings.editor.tiptapEditor', 'Tiptap 编辑器 (富文本模式)')}
+              <option value="lexical">
+                {t('settings.editor.lexicalEditor', 'Lexical 编辑器 (富文本模式)')}
               </option>
               <option value="jupyter">
                 {t('settings.editor.jupyterEditor', 'Jupyter 编辑器 (单元格模式)')}
@@ -409,7 +409,7 @@ const SettingsPage = () => {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               {t(
                 'settings.editor.editorTypeDesc',
-                '选择您偏好的编辑器风格。Tiptap适合流畅写作，Jupyter适合结构化编程。'
+                '选择您偏好的编辑器风格。Lexical适合流畅写作，Jupyter适合结构化编程。'
               )}
             </p>
           </div>

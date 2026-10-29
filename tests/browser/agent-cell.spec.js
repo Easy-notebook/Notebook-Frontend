@@ -87,7 +87,7 @@ test('Agent Cell streams, folds actions, summarizes and continues an isolated co
 
 test('slash menu inserts an Agent Cell without losing surrounding cells', async ({ page }) => {
   await page.goto('/tests/browser/agent-cell.html');
-  const editor = page.locator('.ProseMirror');
+  const editor = page.locator('.notebook-rich-editor');
   await editor.locator(':scope > p').last().click();
   await page.keyboard.type('/');
   await page.getByRole('button', { name: /Agent Cell Codex/ }).click();

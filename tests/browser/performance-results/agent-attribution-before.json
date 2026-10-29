@@ -1,0 +1,170 @@
+{
+  "phase": "stream",
+  "seconds": 83.8,
+  "frames": 5027,
+  "frameP50": 16.7,
+  "frameP95": 17.6,
+  "frameP99": 17.7,
+  "over33ms": 0,
+  "over50ms": 0,
+  "maxFrame": 33.29999999999927,
+  "slowFrames": [],
+  "animationFrames": [],
+  "worstCommits": [
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 17.699999928474426,
+      "startTime": 66699.59999996424,
+      "commitTime": 66717.89999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 17.000000059604645,
+      "startTime": 65690.59999996424,
+      "commitTime": 65707.89999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 14.700000047683716,
+      "startTime": 66094.5,
+      "commitTime": 66109.80000001192
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 14.600000023841858,
+      "startTime": 66600.59999996424,
+      "commitTime": 66615.59999996424
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 13.399999976158142,
+      "startTime": 65992.5,
+      "commitTime": 66006.09999996424
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 13.399999976158142,
+      "startTime": 67000.5,
+      "commitTime": 67014.30000001192
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 13.300000071525574,
+      "startTime": 66397,
+      "commitTime": 66410.80000001192
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 13.099999964237213,
+      "startTime": 49503.80000001192,
+      "commitTime": 49517
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 12.899999976158142,
+      "startTime": 56493.89999997616,
+      "commitTime": 56507.30000001192
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 12.799999952316284,
+      "startTime": 66300.59999996424,
+      "commitTime": 66313.80000001192
+    }
+  ],
+  "commits": 909,
+  "commitP95": 10.2,
+  "commitTotal": 3011,
+  "longTasks": [],
+  "layoutShiftTotal": 0.29647650874985587,
+  "unexpectedLayoutShift": 0.026563795937432185,
+  "shiftSources": [
+    {
+      "value": 0.00266990065574646,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0030404359102249147,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.003657328446706136,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.005286632061004639,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.001680100957552592,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0026100397639804416,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0013880874713261924,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.005340475559234619,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.00818067995707194,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.005773077726364137,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.005053968429565429,
+      "recentInput": true,
+      "sources": ["DIV"]
+    },
+    {
+      "value": 0.0001956042183770074,
+      "recentInput": false,
+      "sources": ["BUTTON", "av-muted"]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}

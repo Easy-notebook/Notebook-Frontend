@@ -111,7 +111,7 @@ export abstract class BaseCellViewModel {
       // Focus editor at start or end based on direction
       // We need to access the main editor instance to set selection
       // Since we don't have direct access here, we might need to dispatch an event or use a store action
-      // Assuming TiptapNotebookEditor listens to editingCellId changes and focuses, but it defaults to end?
+      // Assuming NotebookEditor listens to editingCellId changes and focuses, but it defaults to end?
       // Let's try to dispatch a custom event for the main editor to pick up
       setTimeout(() => {
         window.dispatchEvent(

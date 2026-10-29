@@ -1,4 +1,6 @@
 type NativeNotebookRoute =
+  | 'agent'
+  | 'files'
   | 'state'
   | 'knowledge'
   | 'knowledge-report'

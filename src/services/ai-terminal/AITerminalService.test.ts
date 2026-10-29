@@ -6,6 +6,10 @@ import { ActionCommandParser } from '../stream/commands/ActionCommandParser';
 import type { CommandContext } from './types';
 
 const submitOperation = vi.hoisted(() => vi.fn());
+const submitAgent = vi.hoisted(() => vi.fn());
+vi.mock('../agent-cell/NotebookConversation', () => ({
+  notebookConversation: { submit: submitAgent },
+}));
 const memory = vi.hoisted(() => ({
   prepareMemoryContextForBackend: vi.fn(),
   updateUserIntent: vi.fn(),
@@ -119,7 +123,7 @@ it.each(['/unknown', '/', '', 'ordinary question'])(
   }
 );
 
-it.each(['/custom_instruction work', 'question'])(
+it.each(['/custom_instruction work'])(
   'returns false and removes provisional records when %s is refused',
   async (command) => {
     submitOperation.mockResolvedValue({ accepted: false, reason: 'busy', message: 'busy' });
@@ -132,17 +136,15 @@ it.each(['/custom_instruction work', 'question'])(
     expect(useAIAgentStore.getState().actions).toEqual([]);
   }
 );
-it('returns true on admission without waiting for response stream completion', async () => {
-  submitOperation.mockResolvedValue({
-    accepted: true,
-    operationId: 'accepted',
-    completion: new Promise<void>(() => {}),
-  });
+it('admits ordinary questions through the shared Agent conversation without old QA records', async () => {
+  submitAgent.mockReturnValue(true);
   expect(
     await aiTerminalService.processCommand('question', [], context, {
       showToast: vi.fn(),
       setActiveView: vi.fn(),
     })
   ).toBe(true);
-  expect(useAIAgentStore.getState().qaList).toHaveLength(1);
+  expect(submitAgent).toHaveBeenCalledWith('book', 'question', expect.any(Function));
+  expect(submitOperation).not.toHaveBeenCalled();
+  expect(useAIAgentStore.getState().qaList).toHaveLength(0);
 });

@@ -43,7 +43,7 @@ export function readSettingsRecord(value: unknown, partial = false): Settings {
       ),
       editorSettings: nested(
         {
-          editorType: oneOf('tiptap', 'jupyter'),
+          editorType: oneOf('lexical', 'jupyter'),
           defaultLanguage: string,
           kernel: oneOf('local', 'remote', 'docker', 'cloud'),
           autoSave: boolean,

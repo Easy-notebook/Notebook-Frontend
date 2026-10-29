@@ -1,0 +1,242 @@
+.at-panel {
+  border: 0;
+  border-radius: 0;
+  background: var(--av-bg);
+  color: var(--av-text);
+  overflow: hidden;
+  font-size: 14px;
+  box-shadow: none;
+}
+.at-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 2px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.at-header > .at-chevron {
+  margin-left: auto;
+}
+.at-time {
+  color: var(--av-muted);
+  font-variant-numeric: tabular-nums;
+}
+.at-title {
+  font-weight: 500;
+}
+.at-pixels {
+  width: 14px;
+  height: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  margin-right: 3px;
+}
+.at-pixels i {
+  background: var(--av-blue);
+  border-radius: 0.5px;
+}
+.at-panel[data-active='true'] .at-pixels i {
+  animation: at-twinkle 1.5s ease-in-out infinite;
+}
+.at-chevron {
+  transition: transform 0.18s ease;
+  transform: rotate(-90deg);
+  color: var(--av-muted);
+}
+.at-chevron.is-open {
+  transform: rotate(0);
+}
+.at-body {
+  border-top: 0;
+  padding: 8px 2px;
+}
+.at-steps {
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.at-step {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 0 0 10px !important;
+  margin: 0 !important;
+  animation: at-enter 0.18s ease-out;
+}
+.at-step:last-child {
+  padding-bottom: 0 !important;
+}
+.at-step:not(:last-child):before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 23px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--av-border);
+}
+.at-node {
+  width: 16px;
+  flex: none;
+  padding-top: 3px;
+  color: var(--av-muted);
+}
+.at-step[data-state='running'] .at-node {
+  color: var(--av-blue);
+  animation: at-twinkle 1.5s ease-in-out infinite;
+}
+.at-step[data-state='waiting'] .at-node {
+  color: #d99b33;
+}
+.at-step[data-state='failed'] .at-node {
+  color: #e26b6b;
+}
+.at-step-content {
+  min-width: 0;
+  flex: 1;
+}
+.at-step-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.at-step-title:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.at-step-status {
+  font-size: 11px;
+  color: var(--av-muted);
+  white-space: nowrap;
+}
+.at-chip,
+.at-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--av-border);
+  border-radius: 7px;
+  padding: 4px 7px;
+  background: transparent;
+  color: var(--av-muted);
+  font-size: 12px;
+  margin-top: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.at-more {
+  margin: 0 0 14px 28px;
+  cursor: pointer;
+}
+.at-empty {
+  margin: 0;
+  color: var(--av-muted);
+  font-size: 13px;
+}
+.at-payload {
+  margin-top: 10px;
+}
+.at-payload-label {
+  font-size: 11px;
+  color: var(--av-muted);
+}
+.at-json {
+  margin: 4px 0 10px !important;
+  padding: 10px !important;
+  max-height: 260px;
+  overflow: auto;
+  background: var(--av-panel) !important;
+  border: 1px solid var(--av-border);
+  border-radius: 6px;
+  font:
+    12px/1.6 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--av-text);
+}
+.at-json code {
+  font: inherit;
+  background: none !important;
+  color: inherit;
+}
+.at-json-key {
+  color: var(--av-blue);
+}
+.at-json-string {
+  color: var(--av-green, #399f78);
+}
+.at-json-number,
+.at-json-literal {
+  color: #b48ade;
+}
+.at-header:focus-visible,
+.at-step-title:focus-visible,
+.at-more:focus-visible {
+  outline: 2px solid var(--av-blue);
+  outline-offset: -2px;
+}
+@keyframes at-twinkle {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes at-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .at-panel * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Retain disclosure state and JSON nodes across folding and new tool events. */
+.at-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 0.2s ease,
+    opacity 0.15s ease;
+}
+.at-collapse[data-open='false'] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.2s ease,
+    opacity 0.15s ease,
+    visibility 0s 0.2s;
+}
+.at-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.at-step[hidden] {
+  display: none;
+}

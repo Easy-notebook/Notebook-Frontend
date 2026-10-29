@@ -7,8 +7,8 @@ vi.mock('@/contexts/ThemeContext', () => ({ useTheme: () => theme }));
 
 import mermaid from 'mermaid';
 import { MermaidPreview } from './MermaidPreview';
-import { mermaidRenderService } from './model/MermaidRenderService';
-import { PreviewEngineLoadError } from './model/PreviewEngineLoadError';
+import { mermaidRenderService } from '@/services/rendering/MermaidRenderService';
+import { PreviewEngineLoadError } from '@/services/rendering/PreviewEngineLoadError';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

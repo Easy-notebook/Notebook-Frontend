@@ -94,8 +94,8 @@
     "editor": {
       "title": "编辑器设置",
       "editorType": "编辑器类型",
-      "editorTypeDesc": "选择您偏好的编辑器风格。Tiptap适合流畅写作，Jupyter适合结构化编程。",
-      "tiptapEditor": "Tiptap 编辑器 (富文本模式)",
+      "editorTypeDesc": "选择您偏好的编辑器风格。Lexical适合流畅写作，Jupyter适合结构化编程。",
+      "lexicalEditor": "Lexical 编辑器 (富文本模式)",
       "jupyterEditor": "Jupyter 编辑器 (单元格模式)",
       "defaultLanguage": "默认编程语言",
       "defaultLanguageDesc": "新建代码单元格时使用的默认编程语言。",

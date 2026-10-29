@@ -39,6 +39,11 @@ export interface UploadConfig {
 }
 
 export interface FileInfo {
+  creatable?: boolean;
+  primary?: boolean;
+  revision?: number;
+  writable?: boolean;
+  removable?: boolean;
   name: string;
   size: number;
   type: string;
@@ -48,6 +53,12 @@ export interface FileInfo {
 }
 
 export interface FileListResponse extends ApiResponse {
+  datasetToken?: string;
+  datasets?: FileInfo[];
+  revision?: number;
+  unchanged?: boolean;
+  reset?: boolean;
+  removed?: string[];
   files?: FileInfo[];
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { mathRenderService } from './MathRenderService';
-import { PreviewEngineLoadError } from './PreviewEngineLoadError';
+import { PreviewEngineLoadError } from '@/services/rendering/PreviewEngineLoadError';
 
 type Result = { source: string; displayMode: boolean; attempt: number } & (
   | { html: string; error?: never }

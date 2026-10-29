@@ -10,7 +10,7 @@ export const initialSettings: Settings = {
     lineNumbers: false,
   },
   editorSettings: {
-    editorType: 'tiptap',
+    editorType: 'lexical',
     defaultLanguage: 'python',
     kernel: 'local',
     autoSave: true,

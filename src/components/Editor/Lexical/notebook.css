@@ -1,0 +1,354 @@
+.notebook-text-bold {
+  font-weight: 700;
+}
+.notebook-text-italic {
+  font-style: italic;
+}
+.notebook-text-strike {
+  text-decoration: line-through;
+}
+.notebook-text-underline {
+  text-decoration: underline;
+}
+.notebook-text-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  background: var(--editor-surface-muted);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.notebook-rich-editor .notebook-list-nested {
+  list-style: none;
+}
+.notebook-rich-editor .notebook-embedded-cell {
+  margin: 12px 0;
+}
+.notebook-rich-editor [data-lexical-decorator='true'] {
+  outline: none;
+}
+.notebook-rich-editor .notebook-fenced-code {
+  display: block;
+  white-space: pre;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  padding: 12px;
+  margin: 12px 0;
+  background: var(--editor-surface-muted);
+  border: 1px solid var(--editor-line);
+  border-radius: 6px;
+}
+.notebook-rich-editor .notebook-fenced-code * {
+  font-family: inherit !important;
+}
+
+.notebook-document-frame:has(.notebook-title-node:hover) .notebook-title-controls {
+  opacity: 1;
+}
+
+/* Document typography belongs to rich cells, never executable cells or their output. */
+.notebook-editor-container .notebook-rich-editor {
+  color: var(--editor-ink);
+  font-size: 16px;
+  line-height: 1.8;
+  overflow-wrap: break-word;
+  caret-color: var(--editor-accent);
+}
+.notebook-document-frame {
+  width: 100%;
+  max-width: 896px;
+  padding-inline: 64px;
+}
+.notebook-rich-editor
+  :is(.notebook-markdown-node, .notebook-title-node)
+  :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1.8em 0 0.68em;
+  color: var(--editor-ink);
+  font-weight: 690;
+  letter-spacing: -0.018em;
+  line-height: 1.22;
+  text-wrap: balance;
+}
+.notebook-rich-editor :is(.notebook-markdown-node, .notebook-title-node) h1 {
+  font-size: 32px;
+}
+.notebook-rich-editor .notebook-markdown-node h2 {
+  font-size: 26.4px;
+}
+.notebook-rich-editor .notebook-markdown-node h3 {
+  font-size: 20.8px;
+}
+.notebook-rich-editor .notebook-markdown-node h4 {
+  font-size: 17.28px;
+}
+.notebook-rich-editor .notebook-markdown-node h5 {
+  font-size: 16px;
+}
+.notebook-rich-editor .notebook-markdown-node h6 {
+  font-size: 14.72px;
+  color: var(--editor-muted);
+  letter-spacing: 0.01em;
+}
+.notebook-rich-editor .notebook-title-node h1 {
+  position: relative;
+  margin: 0 0 1rem;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.notebook-rich-editor .notebook-title-node h1[data-empty='true']::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  inset: 0;
+  color: var(--editor-muted);
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.notebook-markdown-node p {
+  margin: 0 0 1em;
+}
+.notebook-markdown-node :is(ul, ol) {
+  margin: 0.8em 0 1.1em;
+  padding-left: 1.55em;
+}
+.notebook-markdown-node ul {
+  list-style-type: disc;
+}
+.notebook-markdown-node ol {
+  list-style-type: decimal;
+}
+.notebook-markdown-node li {
+  margin: 0.24em 0;
+}
+.notebook-markdown-node li :is(ul, ol) {
+  margin-block: 0.24em;
+}
+.notebook-markdown-node blockquote {
+  margin: 1.25em 0;
+  border-left: 2px solid var(--editor-accent);
+  padding: 0.1em 0 0.1em 1em;
+  color: var(--editor-muted);
+}
+.notebook-markdown-node blockquote > :last-child {
+  margin-bottom: 0;
+}
+.notebook-markdown-node a {
+  color: var(--editor-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+.notebook-markdown-node .notebook-text-code {
+  font-size: 0.86em;
+  padding: 0.12em 0.32em;
+}
+.notebook-text-underline {
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+.notebook-markdown-node hr {
+  margin: 2em 0;
+  border: 0;
+  border-top: 1px solid var(--editor-line);
+}
+.notebook-rich-editor .notebook-markdown-node table {
+  width: 100%;
+  /* Reserve toolbar space even while selection changes during a drag. */
+  margin: calc(1.25em + 36px) 0 1.25em;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+.notebook-rich-editor .notebook-markdown-node :is(td, th) {
+  border: 1px solid var(--editor-line);
+  padding: 7px 9px;
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.5;
+  background: var(--editor-surface);
+}
+.notebook-rich-editor .notebook-markdown-node th {
+  background: var(--editor-surface-muted);
+  font-weight: 650;
+}
+.notebook-rich-editor .notebook-markdown-node :is(td, th) > * {
+  margin: 0;
+}
+.notebook-rich-editor .notebook-markdown-node :is(td, th) > * + * {
+  margin-top: 6px;
+}
+.notebook-rich-editor .notebook-markdown-node :is(td, th):focus-within {
+  box-shadow: inset 0 0 0 1px var(--editor-accent);
+}
+.notebook-rich-editor .notebook-markdown-node :is(td, th).selectedCell {
+  background: var(--editor-selection);
+}
+.notebook-markdown-node img {
+  border-radius: 6px;
+}
+.notebook-rich-editor .persistent-block-body > :first-child {
+  margin-top: 0;
+}
+.notebook-rich-editor .persistent-block-body > :last-child {
+  margin-bottom: 0;
+}
+@media (max-width: 640px) {
+  .notebook-document-frame {
+    padding-inline: 48px 20px;
+  }
+}
+
+/* Portals use explicit theme tokens because they live outside the editor root. */
+.notebook-format-toolbar {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100vw - 16px);
+  overflow-x: auto;
+  padding: 4px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  box-shadow: 0 4px 16px #00000014;
+}
+.notebook-format-toolbar button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+}
+.notebook-format-toolbar button:hover,
+.notebook-format-toolbar button[aria-pressed='true'] {
+  background: #f1f3f5;
+  color: #2563eb;
+}
+.notebook-format-toolbar button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+.dark .notebook-format-toolbar {
+  background: #24262e;
+  border-color: #4b5563;
+  color: #e5e7eb;
+}
+.dark .notebook-format-toolbar button:hover,
+.dark .notebook-format-toolbar button[aria-pressed='true'] {
+  background: #343740;
+  color: #93b4ff;
+}
+
+/* The app's universal 12px rule must not reset each nested lexical text run. */
+.notebook-rich-editor :is(.notebook-markdown-node, .notebook-title-node),
+.notebook-markdown-node :is(p, li, ul, ol, blockquote, a),
+.notebook-rich-editor [data-lexical-text='true']:not(.notebook-text-code) {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.notebook-rich-editor .notebook-markdown-node :is(tbody, thead, tr, td, th) {
+  font-size: inherit;
+}
+.notebook-markdown-node ul.notebook-check-list {
+  list-style: none;
+  padding-left: 0;
+}
+.notebook-markdown-node :is(.notebook-list-item-checked, .notebook-list-item-unchecked) {
+  position: relative;
+  padding-left: 26px;
+  list-style: none;
+  outline: none;
+}
+.notebook-markdown-node :is(.notebook-list-item-checked, .notebook-list-item-unchecked)::before {
+  position: absolute;
+  top: 0.38em;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--editor-line);
+  border-radius: 3px;
+  background: var(--editor-surface);
+  content: '';
+}
+.notebook-markdown-node .notebook-list-item-checked::before {
+  background: var(--editor-accent);
+  border-color: var(--editor-accent);
+}
+.notebook-markdown-node .notebook-list-item-checked::after {
+  position: absolute;
+  top: 0.42em;
+  left: 6px;
+  width: 4px;
+  height: 7px;
+  transform: rotate(45deg);
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+  content: '';
+}
+.notebook-markdown-node .notebook-list-item-checked {
+  color: var(--editor-muted);
+  text-decoration: line-through;
+}
+.notebook-markdown-node .notebook-list-item-checked:focus-visible::before,
+.notebook-markdown-node .notebook-list-item-unchecked:focus-visible::before {
+  outline: 2px solid var(--editor-accent);
+  outline-offset: 2px;
+}
+.notebook-rich-editor .notebook-formula-surface {
+  border-radius: 4px;
+  cursor: pointer;
+}
+.notebook-rich-editor .notebook-formula-surface:hover {
+  background: var(--editor-surface-muted);
+}
+.notebook-rich-editor .notebook-formula-surface[data-selected='true'] {
+  outline: 1px solid var(--editor-accent);
+  outline-offset: 3px;
+}
+.notebook-rich-editor .notebook-media-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.notebook-source-surface {
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--editor-line);
+  border-radius: 6px;
+  background: var(--editor-surface-muted);
+  color: var(--editor-ink);
+  font:
+    14px/1.75 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace !important;
+}
+.notebook-source-input {
+  min-height: 80px;
+  resize: vertical;
+}
+.notebook-source-input:focus-visible {
+  outline: 2px solid var(--editor-accent);
+  outline-offset: 2px;
+}
+.notebook-source-action {
+  padding: 4px 8px;
+  border: 1px solid var(--editor-line);
+  border-radius: 4px;
+  background: var(--editor-surface);
+  color: var(--editor-ink);
+}
+.notebook-source-action:hover {
+  background: var(--editor-selection);
+}

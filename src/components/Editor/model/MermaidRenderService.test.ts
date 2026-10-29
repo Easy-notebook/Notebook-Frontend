@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MermaidRenderService } from './MermaidRenderService';
-import { PreviewEngineLoadError } from './PreviewEngineLoadError';
+import { MermaidRenderService } from '@/services/rendering/MermaidRenderService';
+import { PreviewEngineLoadError } from '@/services/rendering/PreviewEngineLoadError';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

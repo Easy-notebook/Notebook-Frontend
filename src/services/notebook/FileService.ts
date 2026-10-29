@@ -1,3 +1,4 @@
+import { NativeWorkspaceFiles } from './NativeWorkspaceFiles';
 import axios from 'axios';
 import { apiLog } from '@Utils/logger';
 import { BaseService } from './BaseService';
@@ -92,21 +93,21 @@ export class FileService extends BaseService {
   }
 
   // List files
-  static async listFiles(notebookId: string, signal?: AbortSignal): Promise<FileListResponse> {
-    try {
-      const response = await fetch(`${this.baseUrl}/list_files/${notebookId}`, {
-        method: 'GET',
-        signal,
-      });
-      return await this.handleResponse<FileListResponse>(response);
-    } catch (error) {
-      apiLog.error('Failed to list files', { error });
-      throw error;
-    }
+  static async listFiles(
+    notebookId: string,
+    signal?: AbortSignal,
+    since?: number,
+    datasetToken?: string
+  ): Promise<FileListResponse> {
+    return new NativeWorkspaceFiles(notebookId, 'product').list(signal, since, datasetToken);
   }
 
   // Download file
   static async downloadFile(notebookId: string, filename: string): Promise<Blob> {
+    if (filename.startsWith('/')) {
+      const file = await new NativeWorkspaceFiles(notebookId, 'product').read(filename);
+      return new Blob([file.content ?? ''], { type: `${file.type ?? 'text/plain'};charset=utf-8` });
+    }
     try {
       const response = await fetch(`${this.baseUrl}/download_file/${notebookId}/${filename}`, {
         method: 'GET',
@@ -147,6 +148,8 @@ export class FileService extends BaseService {
 
   // get file
   static async getFile(notebookId: string, filename: string): Promise<FileContentResponse> {
+    if (filename.startsWith('/'))
+      return new NativeWorkspaceFiles(notebookId, 'product').read(filename);
     try {
       const response = await fetch(`${this.baseUrl}/get_file`, {
         method: 'POST',
@@ -186,7 +189,17 @@ export class FileService extends BaseService {
   }
 
   // delete file
-  static async deleteFile(notebookId: string, filename: string): Promise<ApiResponse> {
+  static async deleteFile(
+    notebookId: string,
+    filename: string,
+    revision?: number
+  ): Promise<ApiResponse> {
+    if (filename.startsWith('/')) {
+      const files = new NativeWorkspaceFiles(notebookId, 'product');
+      if (revision === undefined) throw new Error('Refresh the file list before deleting');
+      await files.execute({ op: 'remove', path: filename, revision });
+      return { status: 'ok' };
+    }
     try {
       const response = await fetch(`${this.baseUrl}/delete_file`, {
         method: 'POST',

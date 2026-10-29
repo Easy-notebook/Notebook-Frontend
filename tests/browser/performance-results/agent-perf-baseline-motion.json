@@ -1,0 +1,128 @@
+{
+  "phase": "collapse-scroll",
+  "seconds": 25,
+  "frames": 1498,
+  "frameP50": 16.7,
+  "frameP95": 17.2,
+  "frameP99": 17.6,
+  "over33ms": 1,
+  "over50ms": 0,
+  "maxFrame": 49.10000000000582,
+  "commits": 54,
+  "commitP95": 18.2,
+  "commitTotal": 260.6,
+  "longTasks": [],
+  "layoutShiftTotal": 0.0858230135838191,
+  "unexpectedLayoutShift": 0,
+  "shiftSources": [
+    {
+      "value": 0.005899603525797526,
+      "recentInput": true,
+      "sources": ["space-y-2", "rounded border border-slate-200 text-sm", "text-xs text-slate-500"]
+    },
+    {
+      "value": 0.003366940379142761,
+      "recentInput": true,
+      "sources": [
+        "space-y-2",
+        "rounded border border-slate-200 text-sm",
+        "text-xs text-slate-500",
+        "rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+      ]
+    },
+    {
+      "value": 0.0015925196541680228,
+      "recentInput": true,
+      "sources": [
+        "rounded border border-slate-200 text-sm",
+        "min-h-20 w-full resize-y rounded border p-2 text-sm",
+        "text-xs text-slate-500"
+      ]
+    },
+    {
+      "value": 0.0005799333254496256,
+      "recentInput": true,
+      "sources": ["rounded border border-slate-200 text-sm"]
+    },
+    {
+      "value": 0.0001411425272623698,
+      "recentInput": true,
+      "sources": ["rounded border border-slate-200 text-sm"]
+    },
+    {
+      "value": 0.0010671843422783746,
+      "recentInput": true,
+      "sources": ["rounded border border-slate-200 text-sm", "text-xs text-slate-500"]
+    },
+    {
+      "value": 0.002136221528053284,
+      "recentInput": true,
+      "sources": [
+        "rounded border border-slate-200 text-sm",
+        "min-h-20 w-full resize-y rounded border p-2 text-sm",
+        "text-xs text-slate-500"
+      ]
+    },
+    {
+      "value": 0.0030844586690266925,
+      "recentInput": true,
+      "sources": [
+        "space-y-2",
+        "rounded border border-slate-200 text-sm",
+        "text-xs text-slate-500",
+        "rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+      ]
+    },
+    {
+      "value": 0.003433507627911038,
+      "recentInput": true,
+      "sources": [
+        "space-y-2",
+        "rounded border border-slate-200 text-sm",
+        "text-xs text-slate-500",
+        "rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+      ]
+    },
+    {
+      "value": 0.004970975756645203,
+      "recentInput": true,
+      "sources": [
+        "space-y-2",
+        "rounded border border-slate-200 text-sm",
+        "text-xs text-slate-500",
+        "rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+      ]
+    },
+    {
+      "value": 0.0023321747779846192,
+      "recentInput": true,
+      "sources": [
+        "rounded border border-slate-200 text-sm",
+        "min-h-20 w-full resize-y rounded border p-2 text-sm",
+        "text-xs text-slate-500"
+      ]
+    },
+    {
+      "value": 0.001030619780222575,
+      "recentInput": true,
+      "sources": ["rounded border border-slate-200 text-sm", "text-xs text-slate-500"]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ]
+}

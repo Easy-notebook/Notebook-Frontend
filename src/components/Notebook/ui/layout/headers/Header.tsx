@@ -75,7 +75,7 @@ const Header: React.FC<HeaderProps> = ({
 
         <input
           type="file"
-          accept=".ipynb,application/json"
+          accept=".easynb,.ipynb,.json,.txt,application/json,text/plain"
           ref={fileInputRef}
           style={{ display: 'none' }}
           onChange={onHandleImport}

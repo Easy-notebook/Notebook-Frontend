@@ -1,3 +1,4 @@
+import { TerminalAgentIdentity } from './TerminalAgentIdentity';
 // moved to features/function-bar
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useAIAgentStore } from '@Store/AIAgentStore';
@@ -278,7 +279,9 @@ const CommandInput: React.FC = () => {
         className="absolute left-1/2 -translate-x-1/2 w-4/5 max-w-5xl transition-all duration-200 rounded-3xl p-4 bg-black/3 dark:bg-white/3 pointer-events-auto"
         ref={modalRef}
         style={{
-          top: '75%',
+          bottom: '16px',
+          maxHeight: '80%',
+          overflowY: 'auto',
           backdropFilter: 'blur(4px)',
           WebkitBackdropFilter: 'blur(4px)',
         }}
@@ -296,6 +299,7 @@ const CommandInput: React.FC = () => {
             border: isDragging ? '2px dashed #2d7a5c' : 'none',
           }}
         >
+          {notebookId && <TerminalAgentIdentity key={notebookId} notebookId={notebookId} />}
           {/* Drag overlay */}
           {isDragging && (
             <div className="absolute inset-0 z-50 bg-theme-50/90 dark:bg-theme-900/90 flex items-center justify-center">
@@ -410,7 +414,7 @@ const CommandInput: React.FC = () => {
           )}
 
           {/* Hints */}
-          <div className="absolute right-6 top-4 flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500 z-10">
+          <div className="relative px-6 pb-3 flex items-center justify-end gap-3 text-xs text-gray-400 dark:text-gray-500">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}

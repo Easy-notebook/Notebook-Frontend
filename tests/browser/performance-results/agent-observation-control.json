@@ -1,0 +1,119 @@
+{
+  "phase": "collapse-scroll",
+  "profileSamples": 6132,
+  "timeOrigin": 1793160999739.9,
+  "started": 342508.1999999881,
+  "interactions": [
+    {
+      "time": 416687.09999996424,
+      "type": "click",
+      "target": "停止性能采集"
+    }
+  ],
+  "nativeCalls": [],
+  "seconds": 74.2,
+  "frames": 4446,
+  "frameP50": 16.7,
+  "frameP95": 17.4,
+  "frameP99": 17.7,
+  "over33ms": 2,
+  "over50ms": 0,
+  "maxFrame": 33.5,
+  "slowFrames": [
+    {
+      "start": 397462.1,
+      "end": 397495.5,
+      "duration": 33.40000000002328,
+      "commits": [],
+      "interactions": []
+    },
+    {
+      "start": 398361.9,
+      "end": 398395.4,
+      "duration": 33.5,
+      "commits": [],
+      "interactions": []
+    }
+  ],
+  "animationFrames": [],
+  "worstCommits": [
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 0.40000003576278687,
+      "startTime": 416681.59999996424,
+      "commitTime": 416682.39999997616
+    },
+    {
+      "id": "live-notebook",
+      "phase": "update",
+      "duration": 0,
+      "startTime": 416686.5,
+      "commitTime": 416686.59999996424
+    }
+  ],
+  "renderGroups": {
+    "live-notebook": {
+      "count": 2,
+      "p95": 0.4,
+      "p99": 0.4,
+      "max": 0.40000003576278687,
+      "total": 0.40000003576278687
+    }
+  },
+  "commits": 2,
+  "commitP95": 0.4,
+  "commitTotal": 0.4,
+  "longTasks": [],
+  "layoutShiftTotal": 0.012751685248480905,
+  "unexpectedLayoutShift": 0,
+  "shiftSources": [
+    {
+      "value": 0.012751685248480905,
+      "recentInput": true,
+      "sources": [
+        "SECTION"
+      ]
+    }
+  ],
+  "support": [
+    "element",
+    "event",
+    "first-input",
+    "interaction-contentful-paint",
+    "largest-contentful-paint",
+    "layout-shift",
+    "long-animation-frame",
+    "longtask",
+    "mark",
+    "measure",
+    "navigation",
+    "paint",
+    "resource",
+    "soft-navigation",
+    "visibility-state"
+  ],
+  "observationWindows": [
+    {
+      "kind": "scoped innerText",
+      "start": 1793161379453,
+      "end": 1793161379524,
+      "startRelative": 379713.10009765625,
+      "endRelative": 379784.10009765625
+    },
+    {
+      "kind": "full AX snapshot",
+      "start": 1793161379524,
+      "end": 1793161380088,
+      "startRelative": 379784.10009765625,
+      "endRelative": 380348.10009765625
+    },
+    {
+      "kind": "textContent lengths",
+      "start": 1793161380088,
+      "end": 1793161380130,
+      "startRelative": 380348.10009765625,
+      "endRelative": 380390.10009765625
+    }
+  ]
+}

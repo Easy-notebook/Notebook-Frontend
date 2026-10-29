@@ -473,3 +473,17 @@ it.each(['false', 'true', 0, 1, null, undefined])(
     expect(metadataStore.put).not.toHaveBeenCalled();
   }
 );
+
+it('reads library previews without changing access history or activity', async () => {
+  const { repository, storage, stores, metadataStore } = setup();
+  const result = await repository.getFile('book', 'note.json', { trackAccess: false });
+  expect(result?.content).toBe('revision two');
+  expect(storage.transaction).toHaveBeenCalledWith(
+    expect.any(Array),
+    'readonly',
+    expect.any(Function)
+  );
+  expect(metadataStore.put).not.toHaveBeenCalled();
+  expect(stores[DB_CONFIG.STORES.NOTEBOOKS].put).not.toHaveBeenCalled();
+  expect(stores[DB_CONFIG.STORES.ACTIVITIES].add).not.toHaveBeenCalled();
+});

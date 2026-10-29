@@ -1,0 +1,299 @@
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Edit3, X, Copy, Maximize2, Minimize2 } from 'lucide-react';
+import { useMathPreview } from '../../model/useMathPreview';
+import { MathPreviewError } from '../../MathPreview';
+import { isCompositionInput } from '../../utils/compositionInput';
+import { usePreviewStart } from '../../model/usePreviewStart';
+
+// Inject styles
+const latexStyles = `
+  .latex-markdown-wrapper {
+    line-height: 1;
+  }
+  .latex-markdown-wrapper.inline-latex {
+    display: inline !important;
+    vertical-align: baseline;
+  }
+  .latex-markdown-wrapper.block-latex {
+    display: inline-block !important;
+    width: 100% !important;
+    text-align: center !important;
+    margin: 0.5em 0 !important;
+  }
+  .latex-markdown-wrapper .katex-rendered {
+    color: currentColor !important;
+  }
+  .latex-markdown-wrapper .katex-display {
+    margin: 0.5em auto;
+    text-align: center;
+  }
+  .latex-markdown-wrapper .katex {
+    color: currentColor !important;
+    font-size: 1em !important;
+  }
+  .latex-markdown-wrapper .katex * {
+    color: currentColor !important;
+  }
+  .latex-markdown-wrapper.inline-latex .katex {
+    display: inline !important;
+    vertical-align: baseline !important;
+  }
+  .latex-markdown-wrapper.inline-latex .katex-rendered {
+    display: inline !important;
+    vertical-align: baseline !important;
+    line-height: 1 !important;
+  }
+  .latex-markdown-wrapper.block-latex .katex-rendered {
+    display: block !important;
+    text-align: center !important;
+    margin: 0.5em auto !important;
+    width: 100% !important;
+  }
+  .latex-markdown-wrapper.block-latex::before,
+  .latex-markdown-wrapper.block-latex::after {
+    content: "";
+    display: block;
+    width: 100%;
+    height: 0;
+  }
+`;
+
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.type = 'text/css';
+  styleSheet.innerText = latexStyles;
+  document.head.appendChild(styleSheet);
+}
+
+export function FormulaView({
+  latex,
+  displayMode,
+  onChange,
+  onDelete,
+  readOnly,
+}: {
+  latex: string;
+  displayMode: boolean;
+  onChange: (data: { latex?: string; displayMode?: boolean }) => void;
+  onDelete: () => void;
+  readOnly: boolean;
+}) {
+  const [isEditing, setEditing] = useState(false);
+  const updateAttributes = (data: { latex?: string; displayMode?: boolean }) => {
+    if (!readOnly) onChange(data);
+  };
+  const deleteNode = () => {
+    if (!readOnly) onDelete();
+  };
+  const [tempLatex, setTempLatex] = useState(latex || '');
+  const { container: containerRef, active } = usePreviewStart<HTMLSpanElement>(isEditing);
+  const {
+    html: renderedHtml,
+    error,
+    retry,
+    reloadRequired,
+  } = useMathPreview(isEditing ? tempLatex : latex || '', !!displayMode, isEditing, active);
+  const textareaRef = useRef<HTMLInputElement>(null);
+
+  useLayoutEffect(() => {
+    if (isEditing) {
+      setTempLatex(latex || '');
+      textareaRef.current?.focus();
+    }
+  }, [isEditing, latex]);
+
+  const [showToolbar, setShowToolbar] = useState(false);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowToolbar(false);
+      }
+    };
+
+    if (showToolbar) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showToolbar, containerRef]);
+
+  const handleSave = () => {
+    if (!readOnly) onChange({ latex: tempLatex });
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setTempLatex(latex || '');
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (isCompositionInput(e.nativeEvent)) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancel();
+    }
+  };
+
+  const copyLatex = () => {
+    const latexText = displayMode ? `$$${latex}$$` : `$${latex}$`;
+    navigator.clipboard.writeText(latexText);
+    setShowToolbar(false);
+  };
+
+  return (
+    <span
+      ref={containerRef}
+      contentEditable={false}
+      onKeyDown={(event) => event.stopPropagation()}
+      className={`latex-markdown-wrapper ${displayMode ? 'block-latex' : 'inline-latex'}`}
+      style={{
+        display: displayMode ? 'inline-block' : 'inline',
+        verticalAlign: 'baseline',
+        width: displayMode ? '100%' : 'auto',
+        textAlign: displayMode ? 'center' : 'left',
+        color: 'inherit',
+      }}
+    >
+      {isEditing ? (
+        <span className={`latex-editor ${displayMode ? 'block' : 'inline-block'}`}>
+          <input
+            ref={textareaRef}
+            type="text"
+            value={tempLatex}
+            onChange={(e) => setTempLatex(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            placeholder="Enter LaTeX formula, e.g. E = mc^2"
+            className="p-1 border border-gray-300 dark:border-gray-600 rounded font-mono text-xs focus:outline-none focus:border-theme-400 bg-white dark:bg-gray-800 text-gray-900 dark:!text-white"
+            style={{
+              width: `${Math.max(120, tempLatex.length * 8 + 20)}px`,
+              minWidth: '120px',
+              maxWidth: displayMode ? '100%' : '300px',
+              height: '24px',
+            }}
+          />
+          {displayMode && tempLatex && (
+            <span className="mt-2 block">
+              {error ? (
+                <span className="p-2 bg-red-50 border border-red-200 rounded text-red-600 text-xs block">
+                  <MathPreviewError error={error} reloadRequired={reloadRequired} retry={retry} />
+                </span>
+              ) : (
+                <span
+                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  className="katex-rendered katex-display text-center block"
+                  style={{ color: 'inherit' }}
+                />
+              )}
+            </span>
+          )}
+          {displayMode && (
+            <span className="mt-1 flex items-center justify-between">
+              <button
+                onClick={() => updateAttributes({ displayMode: !displayMode })}
+                className="text-xs text-theme-500 hover:text-theme-700"
+              >
+                Switch to Inline
+              </button>
+            </span>
+          )}
+        </span>
+      ) : (
+        <span className={`latex-display ${displayMode ? 'block w-full text-center' : 'inline'}`}>
+          {latex ? (
+            <span className={`relative group ${displayMode ? 'inline-block' : 'inline'}`}>
+              {renderedHtml ? (
+                <span
+                  dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowToolbar(!showToolbar);
+                  }}
+                  className={`katex-rendered notebook-formula-surface ${displayMode ? 'katex-display px-4 py-2' : 'px-1'}`}
+                  data-selected={showToolbar}
+                  style={{
+                    color: 'inherit',
+                    display: displayMode ? 'block' : 'inline',
+                    verticalAlign: 'baseline',
+                    margin: 0, // Margin handled by parent centering
+                  }}
+                  title="Click to show options"
+                />
+              ) : error ? (
+                <span className="p-1 bg-red-100 text-red-600 text-xs rounded">
+                  {latex}{' '}
+                  <MathPreviewError error={error} reloadRequired={reloadRequired} retry={retry} />
+                </span>
+              ) : (
+                <span aria-busy="true" className="p-1 bg-gray-100 text-gray-600 text-xs rounded">
+                  {latex}
+                </span>
+              )}
+              <span
+                className={`absolute -top-8 left-1/2 transform -translate-x-1/2 flex gap-1 transition-all duration-200 z-10 bg-white/90 dark:bg-gray-800/90 backdrop-blur shadow-sm rounded p-1 border border-gray-200 dark:border-gray-700
+                                    ${showToolbar ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-2 pointer-events-none'}
+                                `}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateAttributes({ displayMode: !displayMode });
+                    setShowToolbar(false);
+                  }}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300 transition-colors"
+                  title={displayMode ? 'Switch to Inline' : 'Switch to Block'}
+                >
+                  {displayMode ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!readOnly) setEditing(true);
+                  }}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300 transition-colors"
+                  title="Edit"
+                >
+                  <Edit3 size={12} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    copyLatex();
+                  }}
+                  className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300 transition-colors"
+                  title="Copy"
+                >
+                  <Copy size={12} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteNode();
+                  }}
+                  className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500 transition-colors"
+                  title="Delete"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            </span>
+          ) : (
+            <span
+              className="latex-placeholder inline-block border border-dashed border-gray-300 rounded px-2 py-1 text-gray-500 cursor-pointer hover:border-gray-400 transition-colors text-xs"
+              onClick={() => !readOnly && setEditing(true)}
+            >
+              Add Formula
+            </span>
+          )}
+        </span>
+      )}
+    </span>
+  );
+}
