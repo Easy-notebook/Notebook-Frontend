@@ -42,7 +42,15 @@ export type {
 /**
  * Preview Store 状态接口
  */
+export interface AgentTab {
+  id: string;
+  notebookId: string;
+  className: string;
+}
+
 export interface PreviewStoreState {
+  agentTabs: AgentTab[];
+  activeAgentTab: string | null;
   previewMode: PreviewMode;
   currentPreviewFiles: PreviewFile[]; // List of files being previewed
   activeFile: FileObject | null; // Currently active preview file
@@ -69,6 +77,9 @@ export interface PreviewEditTarget {
 }
 
 export interface PreviewStoreActions {
+  openAgentTab: (notebookId: string, className: string) => void;
+  closeAgentTab: (id: string) => void;
+  leaveAgentTab: () => void;
   changePreviewMode: () => void;
   resetToNotebookMode: () => void;
   clearError: () => void;
@@ -538,6 +549,27 @@ const usePreviewStore = create<PreviewStore>()(
       };
       return {
         previewMode: 'notebook',
+        agentTabs: [],
+        activeAgentTab: null,
+        openAgentTab: (notebookId, className) => {
+          cancelNormalPreview();
+          const id = `agent:${JSON.stringify([notebookId, className])}`;
+          set((state) => ({
+            agentTabs: state.agentTabs.some((tab) => tab.id === id)
+              ? state.agentTabs
+              : [...state.agentTabs, { id, notebookId, className }],
+            activeAgentTab: id,
+            isLoading: false,
+          }));
+        },
+        closeAgentTab: (id) =>
+          set((state) => ({
+            agentTabs: state.agentTabs.filter((tab) => tab.id !== id),
+            ...(state.activeAgentTab === id
+              ? { activeAgentTab: null, previewMode: 'notebook' as const }
+              : {}),
+          })),
+        leaveAgentTab: () => set({ activeAgentTab: null }),
         currentPreviewFiles: [], // List of files being previewed
         activeFile: null, // Currently active preview file
         activePreviewMode: null,
@@ -554,6 +586,7 @@ const usePreviewStore = create<PreviewStore>()(
         isSplitLoading: false,
 
         changePreviewMode: () => {
+          set({ activeAgentTab: null });
           cancelNormalPreview();
           if (get().previewMode === 'notebook') {
             set({ previewMode: 'file', isLoading: false });
@@ -565,6 +598,7 @@ const usePreviewStore = create<PreviewStore>()(
         resetToNotebookMode: () => {
           cancelNormalPreview();
           set({
+            activeAgentTab: null,
             isLoading: false,
             ...resetSplit(),
             previewMode: 'notebook',
@@ -583,7 +617,7 @@ const usePreviewStore = create<PreviewStore>()(
         // Set active file
         setActiveFile: (file: FileObject | null) => {
           cancelNormalPreview();
-          set({ activeFile: file, isLoading: false });
+          set({ activeFile: file, isLoading: false, activeAgentTab: null });
         },
 
         // Set active preview mode
@@ -593,6 +627,7 @@ const usePreviewStore = create<PreviewStore>()(
 
         // Fetch and preview a file
         previewFile: (notebookId, filePath, fileMetadata) => {
+          set({ activeAgentTab: null });
           const metadata = new PreviewFileMetadata(filePath, fileMetadata);
           return runPreviewRequest((request) =>
             previewFile(request, notebookId, filePath, metadata)
@@ -729,6 +764,7 @@ const usePreviewStore = create<PreviewStore>()(
         // Note: Notebook content loading is handled by NotebookSessionService.connect()
         // This function only manages preview/tab state
         switchToNotebook: async (notebookId) => {
+          set({ activeAgentTab: null });
           await runPreviewRequest((request) => switchToNotebook(request, notebookId));
         },
 
@@ -900,6 +936,8 @@ const usePreviewStore = create<PreviewStore>()(
           cancelNormalPreview();
           storeLog.info('Clearing all notebook state from previewStore');
           set({
+            agentTabs: [],
+            activeAgentTab: null,
             isLoading: false,
             currentNotebookId: null,
             currentPreviewFiles: [],
