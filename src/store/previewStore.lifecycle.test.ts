@@ -1345,3 +1345,36 @@ it('does not publish cancelled content when an admitted cache write finishes', a
   expect(state().activeSplitFile).toBeNull();
   expect(state().isSplitLoading).toBe(false);
 });
+
+describe('agent editor tabs', () => {
+  it('deduplicates within a notebook while isolating identical classes across notebooks', () => {
+    state().openAgentTab('book', 'NotebookWorkspace');
+    state().openAgentTab('book', 'NotebookWorkspace');
+    expect(state().agentTabs).toHaveLength(1);
+    state().openAgentTab('other', 'NotebookWorkspace');
+    expect(state().agentTabs).toHaveLength(2);
+    expect(state().agentTabs[0].id).not.toEqual(state().agentTabs[1].id);
+  });
+  it('closing an inactive tab preserves selection; closing active returns to notebook', () => {
+    state().openAgentTab('book', 'First');
+    const first = state().activeAgentTab!;
+    state().openAgentTab('book', 'Second');
+    const second = state().activeAgentTab!;
+    state().closeAgentTab(first);
+    expect(state().activeAgentTab).toBe(second);
+    state().closeAgentTab(second);
+    expect(state().activeAgentTab).toBeNull();
+    expect(state().previewMode).toBe('notebook');
+  });
+  it('opening an agent revokes pending file previews', async () => {
+    const pending = deferred<any>();
+    io.fileRead.mockReturnValue(pending.promise);
+    const loading = state().previewFile('book', 'pending.txt');
+    state().openAgentTab('book', 'NotebookWorkspace');
+    const active = state().activeAgentTab;
+    pending.resolve(cached('pending.txt'));
+    await loading;
+    expect(state().activeAgentTab).toBe(active);
+    expect(state().activeFile).toBeNull();
+  });
+});

@@ -1,9 +1,12 @@
+import { useNotebookAgentProfiles } from '@Services/agent-cell/NotebookAgentIdentity';
+import { NotebookAgentLogo } from '../function-bar/NotebookAgentLogo';
 import React, { useCallback, useMemo } from 'react';
 import usePreviewStore, { FileType } from '@Store/previewStore';
 import useStore from '@Store/notebookStore';
 import useRouteStore from '@Store/routeStore';
 import { Tabs } from 'antd';
 import {
+  Bot,
   FileText,
   Image as ImageIcon,
   File as FileIcon,
@@ -17,15 +20,18 @@ import { uiLog, fileLog } from '@Utils/logger';
 interface FileTab {
   id: string;
   name: string;
-  type: FileType | 'notebook';
+  type: FileType | 'notebook' | 'agent';
+  logo?: string;
   isActive: boolean;
   isDirty?: boolean;
   isCurrentNotebook?: boolean;
 }
 
 // ---------- Helpers ----------
-const getFileTabIcon = (type: FileType | 'notebook') => {
+const getFileTabIcon = (type: FileType | 'notebook' | 'agent') => {
   switch (type) {
+    case 'agent':
+      return <Bot className="w-4 h-4" aria-hidden />;
     case 'notebook':
       return <img src="/icon.svg" className="w-4 h-4" alt="Notebook" />;
     case 'csv':
@@ -59,6 +65,16 @@ const GlobalTabList: React.FC = () => {
   const { currentPreviewFiles, activeFile, isTabDirty, previewMode, getCurrentNotebookId } =
     usePreviewStore();
 
+  const notebookId = useStore((s) => s.notebookId);
+  const agentTabs = usePreviewStore((s) => s.agentTabs);
+  const activeAgentTab = usePreviewStore((s) => s.activeAgentTab);
+  const profile = useNotebookAgentProfiles((s) =>
+    notebookId ? s.entries[notebookId]?.identity : undefined
+  );
+  const currentAgentTabs = useMemo(
+    () => agentTabs.filter((tab) => tab.notebookId === notebookId),
+    [agentTabs, notebookId]
+  );
   // --- Memos ---
   const tabs = useMemo<FileTab[]>(() => {
     // Get current notebook ID
@@ -98,8 +114,21 @@ const GlobalTabList: React.FC = () => {
       isDirty: isTabDirty(file.id),
     }));
 
-    return [notebookTab, ...fileTabs];
+    return [
+      notebookTab,
+      ...fileTabs,
+      ...currentAgentTabs.map((tab) => ({
+        id: tab.id,
+        name: profile?.className === tab.className ? profile.name : tab.className,
+        logo: profile?.className === tab.className ? profile.logo : undefined,
+        type: 'agent' as const,
+        isActive: activeAgentTab === tab.id,
+      })),
+    ];
   }, [
+    currentAgentTabs,
+    profile,
+    activeAgentTab,
     currentPreviewFiles,
     activeFile?.id,
     isTabDirty,
@@ -122,6 +151,12 @@ const GlobalTabList: React.FC = () => {
     (tabId: string) => {
       uiLog.userInteraction('tab_select', tabId);
       const store = usePreviewStore.getState();
+      const agent = currentAgentTabs.find((tab) => tab.id === tabId);
+      if (agent) {
+        store.openAgentTab(agent.notebookId, agent.className);
+        return;
+      }
+      store.leaveAgentTab();
 
       // 如果选择的是当前notebook tab
       if (tabId === 'current-notebook') {
@@ -167,11 +202,15 @@ const GlobalTabList: React.FC = () => {
       // 预览对应文件
       previewFileById(tabId);
     },
-    [previewFileById, previewMode, getCurrentNotebookId, navigateToWorkspace]
+    [currentAgentTabs, previewFileById, previewMode, getCurrentNotebookId, navigateToWorkspace]
   );
 
   const handleTabClose = useCallback(
     (tabId: string) => {
+      if (currentAgentTabs.some((tab) => tab.id === tabId)) {
+        usePreviewStore.getState().closeAgentTab(tabId);
+        return;
+      }
       // 不允许关闭当前notebook tab
       if (tabId === 'current-notebook') return;
 
@@ -210,18 +249,25 @@ const GlobalTabList: React.FC = () => {
 
       uiLog.debug('GlobalTabList: Tab close operation completed', { tabId });
     },
-    [activeFile?.id, currentPreviewFiles, getCurrentNotebookId, navigateToWorkspace]
+    [
+      currentAgentTabs,
+      activeFile?.id,
+      currentPreviewFiles,
+      getCurrentNotebookId,
+      navigateToWorkspace,
+    ]
   );
 
   // 先计算所有的 Hook，然后再决定是否渲染
   const activeKey = useMemo(() => {
+    if (currentAgentTabs.some((tab) => tab.id === activeAgentTab)) return activeAgentTab!;
     if (previewMode !== 'file' || !activeFile?.id) {
       return 'current-notebook';
     }
     // Ensure the active file is actually in the current tabs list
     const isActiveFileInTabs = tabs.some((t) => t.id === activeFile.id);
     return isActiveFileInTabs ? activeFile.id : 'current-notebook';
-  }, [previewMode, activeFile?.id, tabs]);
+  }, [currentAgentTabs, activeAgentTab, previewMode, activeFile?.id, tabs]);
 
   const items = useMemo(
     () =>
@@ -229,7 +275,7 @@ const GlobalTabList: React.FC = () => {
         key: t.id,
         label: (
           <div className="flex items-center gap-2 min-w-0 max-w-48">
-            {getFileTabIcon(t.type)}
+            {t.logo ? <NotebookAgentLogo logo={t.logo} /> : getFileTabIcon(t.type)}
             <span
               className={`truncate text-sm ${t.isCurrentNotebook ? 'font-bold text-primary dark:text-primary-light' : 'font-medium text-gray-700 dark:text-gray-300'}`}
             >

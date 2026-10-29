@@ -8,7 +8,7 @@ export class NotebookArtifactStore {
   ) {}
   private async request(
     notebookId: string,
-    route: 'files' | 'agent',
+    route: 'files' | 'agent' | 'agent-session',
     body?: unknown
   ): Promise<any> {
     const target = new URL(this.target);
@@ -36,10 +36,25 @@ export class NotebookArtifactStore {
         name: z.string(),
         provider: z.enum(['codex', 'claude']),
         className: z.string(),
+        source: z
+          .object({
+            provider: z.enum(['codex', 'claude']),
+            sessionId: z.string().uuid(),
+            cwd: z.string(),
+          })
+          .nullable()
+          .optional(),
       })
       .parse(value);
     if (profile.notebookId !== notebookId) throw new Error('Notebook agent ownership mismatch');
     return profile;
+  }
+  bindSession(
+    notebookId: string,
+    source: { provider: string; sessionId: string; cwd: string },
+    revision: number
+  ) {
+    return this.request(notebookId, 'agent-session', { ...source, revision });
   }
   private executeFile(notebookId: string, operation: unknown) {
     return this.request(notebookId, 'files', {

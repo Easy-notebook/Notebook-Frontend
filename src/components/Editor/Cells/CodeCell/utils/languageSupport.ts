@@ -3,9 +3,10 @@ import { python } from '@codemirror/lang-python';
 import { javascript } from '@codemirror/lang-javascript';
 import { normalizeCodeLanguage } from '@Store/models/codeLanguage';
 import { aalLanguage } from './aalLanguage';
+import { aalFolding } from './aalFolding';
 
 const syntax: Record<string, Extension[]> = {
-  aal: [aalLanguage],
+  aal: [aalLanguage, ...aalFolding],
   python: [python()],
   javascript: [javascript()],
   typescript: [javascript({ typescript: true })],

@@ -3,8 +3,8 @@
 .notebook-code-editor .cm-scroller *,
 .notebook-code-editor pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-  font-size: 13px;
-  line-height: 22px;
+  font-size: var(--code-font-size, 13px);
+  line-height: var(--code-line-height, 22px);
 }
 .notebook-code-editor .cm-content {
   padding: 8px 0;

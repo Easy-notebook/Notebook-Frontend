@@ -102,6 +102,7 @@ class AgentCellService {
       agent: {
         ...newAgentCellData(provider, role),
         notebookAgentId,
+        sourceSessionId: previous?.sourceSessionId,
         ...(notebookAgentId ? { turns: previous.turns, summary: previous.summary } : {}),
       },
     });

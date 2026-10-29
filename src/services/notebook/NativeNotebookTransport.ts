@@ -1,4 +1,14 @@
+export class NativeNotebookError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string
+  ) {
+    super(message);
+  }
+}
 type NativeNotebookRoute =
+  | 'agents'
+  | `agents/${string}/source`
   | 'agent'
   | 'files'
   | 'state'
@@ -68,11 +78,12 @@ export class NativeNotebookTransport {
     });
     if (!response.ok) {
       const value: unknown = await response.json();
-      const error = value as { error?: { message?: unknown } };
-      throw new Error(
+      const error = value as { error?: { message?: unknown; code?: string } };
+      throw new NativeNotebookError(
         typeof error?.error?.message === 'string'
           ? error.error.message
-          : `Native runtime HTTP ${response.status}`
+          : `Native runtime HTTP ${response.status}`,
+        error?.error?.code
       );
     }
     return response;

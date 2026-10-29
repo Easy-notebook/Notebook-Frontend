@@ -1,3 +1,5 @@
+import usePreviewStore from '@Store/previewStore';
+import { AgentDetails } from '../features/agents/WorkspaceAgents';
 // src/components/Notebook/components/MainContentArea.tsx
 // Main content area without header (header is now in NotebookApp)
 
@@ -7,7 +9,6 @@ import ErrorAlert from '../../UI/ErrorAlert';
 import CommandInput from '../features/function-bar/AITerminal';
 import OutlineSidebar from '@LeftSidebar/Main/Workspace/OutlineView/OutlineSidebar';
 import { EmptySidebar } from '@LeftSidebar/Main/Empty';
-import { AgentType } from '@Services/agentMemoryService';
 import { ThreePanelLayout } from './ThreePanelLayout';
 import { RightSidebar } from './RightSidebar';
 import WorkflowControl from '../features/workflow/WorkflowControl';
@@ -40,7 +41,6 @@ interface MainContentAreaProps {
   onToggleRightSidebar: () => void;
   onSetError: (error: string | null) => void;
   onPhaseSelect: (phaseId: string, stepId: string) => void;
-  onAgentSelect: (agentType: AgentType) => void;
 }
 
 export const MainContentArea = ({
@@ -57,10 +57,14 @@ export const MainContentArea = ({
   activeSidebarItem,
   onSetError,
   onPhaseSelect,
-  onAgentSelect,
 }: MainContentAreaProps) => {
   // Check if there's a detached cell to display
   const { detachedCellId, setDetachedCellId, notebookId } = useStore();
+  const agentTabs = usePreviewStore((s) => s.agentTabs);
+  const activeAgentTab = usePreviewStore((s) => s.activeAgentTab);
+  const selectedAgent = agentTabs.find(
+    (tab) => tab.id === activeAgentTab && tab.notebookId === notebookId
+  );
   // Helper function to check if sidebar has content
   const hasSidebarContent = useCallback(() => {
     const activeItem = activeSidebarItem;
@@ -94,7 +98,6 @@ export const MainContentArea = ({
             currentPhaseId={currentPhaseId || ''}
             currentStepId={currentStepId || ''}
             onPhaseSelect={onPhaseSelect}
-            onAgentSelect={onAgentSelect}
             viewMode={viewMode}
           />
         );
@@ -114,7 +117,6 @@ export const MainContentArea = ({
     currentPhaseId,
     currentStepId,
     onPhaseSelect,
-    onAgentSelect,
     viewMode,
   ]);
 
@@ -126,18 +128,35 @@ export const MainContentArea = ({
       <GlobalTabList />
 
       {/* Workflow Panel - shows current workflow progress */}
-      <WorkflowPanel />
+      {!selectedAgent && <WorkflowPanel />}
 
       <div className="flex-1 overflow-x-hidden overflow-y-auto w-full min-w-0 min-h-0">
-        <div className="w-full h-full relative z-0">{children}</div>
+        <div className="w-full h-full relative z-0" hidden={Boolean(selectedAgent)}>
+          {children}
+        </div>
+        {agentTabs
+          .filter((tab) => tab.notebookId === notebookId)
+          .map((tab) => (
+            <section
+              key={tab.id}
+              hidden={tab.id !== selectedAgent?.id}
+              aria-label={`${tab.className} Agent 详情`}
+            >
+              <AgentDetails notebookId={tab.notebookId} className={tab.className} />
+            </section>
+          ))}
       </div>
       {error && <ErrorAlert message={error} onClose={() => onSetError(null)} />}
 
       {/* Workflow Control - fixed in editor area bottom-right */}
-      <WorkflowControl fallbackViewMode={viewMode} />
+      {!selectedAgent && <WorkflowControl fallbackViewMode={viewMode} />}
 
       {/* AI Command Input - in editor area */}
-      {routeView === 'workspace' && <CommandInput />}
+      {routeView === 'workspace' && (
+        <>
+          <CommandInput />
+        </>
+      )}
     </div>
   );
 

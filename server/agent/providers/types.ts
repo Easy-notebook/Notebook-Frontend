@@ -7,6 +7,8 @@ import type {
 } from '../../../src/services/agent-cell/protocol';
 export interface ProviderSession {
   threadId?: string;
+  cwd?: string;
+  sourceSessionId?: string;
 }
 export interface ProviderRun {
   role?: AgentRole;

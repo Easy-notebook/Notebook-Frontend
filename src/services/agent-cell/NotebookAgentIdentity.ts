@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { z } from 'zod';
-import { NativeNotebookTransport } from '../notebook/NativeNotebookTransport';
+import { NativeNotebookError, NativeNotebookTransport } from '../notebook/NativeNotebookTransport';
 export const notebookAgentSchema = z.object({
   notebookId: z.string(),
   agentId: z.string().min(1),
@@ -8,6 +8,14 @@ export const notebookAgentSchema = z.object({
   name: z.string().min(1).max(80),
   logo: z.string().min(1).max(131072),
   provider: z.enum(['codex', 'claude']),
+  source: z
+    .object({
+      provider: z.enum(['codex', 'claude']),
+      sessionId: z.string().uuid(),
+      cwd: z.string(),
+    })
+    .nullable()
+    .optional(),
   revision: z.number().int().nonnegative(),
 });
 export type NotebookAgentIdentity = z.infer<typeof notebookAgentSchema>;
@@ -42,11 +50,27 @@ class NotebookAgentProfiles {
   }
   private async read(id: string) {
     try {
-      const identity = this.validate(id, await new NativeNotebookTransport(id).send('agent'));
+      const transport = new NativeNotebookTransport(id);
+      let value: unknown;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          value = await transport.send('agent');
+          break;
+        } catch (error) {
+          // Reads contend with short notebook transactions. Bound retries; never retry mutations.
+          if (!(error instanceof NativeNotebookError) || error.code !== 'E_BUSY' || attempt >= 3)
+            throw error;
+          await new Promise((resolve) => setTimeout(resolve, 150 * 2 ** attempt));
+        }
+      }
+      const identity = this.validate(id, value);
       this.publish(id, { identity });
       return identity;
     } catch (error) {
-      this.publish(id, { error: error instanceof Error ? error.message : String(error) });
+      this.publish(id, {
+        identity: useNotebookAgentProfiles.getState().entries[id]?.identity,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }

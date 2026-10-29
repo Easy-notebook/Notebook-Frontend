@@ -8,7 +8,6 @@ import usePreviewStore from '@Store/previewStore';
 import useSettingsStore from '@Store/settingsStore';
 import { useNativeNotebookFiles } from '@Hooks/useNativeNotebookFiles';
 import { useRouteSync } from '@Hooks/useRouteSync';
-import { AgentType } from '@Services/agentMemoryService';
 import SettingsPage from '../Scenario/settingState';
 import { LeftSideBar } from '@LeftSidebar';
 import StepNavigation from './features/workflow/StepNavigation';
@@ -47,8 +46,6 @@ const NotebookApp = () => {
   const [activeSidebarItem, setActiveSidebarItem] = useState<
     'workspace' | 'knowledge-forest' | 'easynet' | 'new-notebook' | 'settings'
   >('workspace');
-  const [, setCurrentView] = useState<'notebook' | 'agent'>('notebook');
-  const [, setSelectedAgentType] = useState<AgentType | null>(null);
 
   // Notebook store state
   const {
@@ -211,11 +208,6 @@ const NotebookApp = () => {
   });
 
   // Sidebar handlers
-  const handleAgentSelect = useCallback((agentType: AgentType) => {
-    setSelectedAgentType(agentType);
-    setCurrentView('agent');
-  }, []);
-
   const handleSidebarItemChange = useCallback(
     (itemId: string) => {
       setActiveSidebarItem(itemId as typeof activeSidebarItem);
@@ -370,7 +362,6 @@ const NotebookApp = () => {
                   onToggleRightSidebar={handleRightSidebarToggle}
                   onSetError={setError}
                   onPhaseSelect={handlePhaseSelect}
-                  onAgentSelect={handleAgentSelect}
                 >
                   {resolveMainContent().component}
                 </MainContentArea>

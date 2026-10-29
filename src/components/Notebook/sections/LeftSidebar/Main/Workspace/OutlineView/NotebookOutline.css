@@ -1,6 +1,13 @@
+.notebook-outline-surface {
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
 .notebook-outline {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-width: 0;
   min-height: 0;
   color: var(--color-text-primary, #334155);
 }
@@ -12,7 +19,9 @@
   padding: 0;
   margin: 0;
   overflow: auto;
-  max-height: calc(100dvh - 200px);
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 8px;
   overscroll-behavior: contain;
 }
 .notebook-outline-list > li {
