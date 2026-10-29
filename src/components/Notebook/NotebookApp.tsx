@@ -6,6 +6,7 @@ import useStore from '@Store/notebookStore';
 import useRouteStore from '@Store/routeStore';
 import usePreviewStore from '@Store/previewStore';
 import useSettingsStore from '@Store/settingsStore';
+import { useNativeNotebookFiles } from '@Hooks/useNativeNotebookFiles';
 import { useRouteSync } from '@Hooks/useRouteSync';
 import { AgentType } from '@Services/agentMemoryService';
 import SettingsPage from '../Scenario/settingState';
@@ -36,6 +37,8 @@ const NotebookApp = () => {
   const routeView = routeStore.currentView;
   const { navigateToWorkspace, navigateToEmpty } = routeStore;
   const { isRouteReady, routeError, retryRoute } = useRouteSync();
+
+  const nativeFileError = useNativeNotebookFiles(isRouteReady && routeView === 'workspace');
 
   // Settings store
   const settingstore = useSettingsStore();
@@ -289,19 +292,27 @@ const NotebookApp = () => {
   };
 
   return (
-    <div className="h-screen overflow-hidden relative text-foreground transition-colors duration-300">
+    <div className="fixed inset-0 overflow-hidden text-foreground transition-colors duration-300">
       <SettingsPage />
+      {nativeFileError && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-20 right-20 z-50 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700 shadow"
+        >
+          {nativeFileError}
+        </div>
+      )}
 
       {/* Global background layers now live at App level */}
 
       {/* Content Layer on top of background */}
-      <div className="relative z-10 h-screen flex box-border pt-[4px]">
+      <div className="relative z-10 h-full flex box-border pt-[4px]">
         {/* Left: fixed-width icon rail */}
         <div className="w-[var(--sidebar-mini-width)] shrink-0">
           <LeftSideBar
             tasks={tasks}
             currentPhaseId={currentPhaseId}
-            activeSidebarItem={activeSidebarItem}
+            activeSidebarItem={routeView === 'workspace' ? 'workspace' : activeSidebarItem}
             onSidebarItemChange={handleSidebarItemChange}
             onSidebarToggle={handleSidebarToggle}
             isMainSidebarExpanded={!isCollapsed}
@@ -349,7 +360,7 @@ const NotebookApp = () => {
                       : null
                   }
                   currentStepIndex={currentStepIndex}
-                  activeSidebarItem={activeSidebarItem}
+                  activeSidebarItem={routeView === 'workspace' ? 'workspace' : activeSidebarItem}
                   onModeChange={handleModeChange}
                   onRunAll={handleRunAll}
                   onExportJson={handleExportJson}

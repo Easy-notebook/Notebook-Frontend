@@ -2,11 +2,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { v4 as uuidv4 } from 'uuid';
 import { Input, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { SendHorizontal, LoaderCircle } from 'lucide-react';
 import './AICommandInput.css';
+import { aiTerminalService } from '@Services/ai-terminal/AITerminalService';
+import { NotebookCreation } from '@Services/notebook/NotebookCreation';
+import { navigateToWorkspace } from '@Utils/navigation';
 import {
   usePipelineStore,
   PIPELINE_STAGES,
@@ -14,11 +16,7 @@ import {
 import usePreStageStore from '@/components/Scenario/Workflow/store/preStageStore';
 import { generalResponse } from '@/components/Scenario/Workflow/api';
 import { useAIAgentStore } from '@Store/AIAgentStore';
-import { EVENT_TYPES } from '@Store/models/agent';
-import { AgentMemoryService, AgentType } from '@Services/agentMemoryService';
 import useStore from '@Store/notebookStore';
-import useOperatorStore from '@Store/operatorStore';
-import { createUserAskQuestionAction } from '@Store/actionCreators';
 import { emptyStateAttachmentUploadService } from '@Services/ai-terminal/EmptyStateAttachmentUploadService';
 import { useAIPlanningContextStore } from '@/components/Scenario/Workflow/store/aiPlanningContext';
 
@@ -54,9 +52,8 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
   const [presetQuestions, setPresetQuestions] = useState<VDSQuestion[]>(defaultPresetQuestions);
 
   const { setPreStage } = usePipelineStore();
-  const submitOperation = useOperatorStore((s) => s.submitOperation);
 
-  const { addAction, setActiveView, actions, qaList, addQA } = useAIAgentStore();
+  const { setActiveView, actions, qaList } = useAIAgentStore();
 
   const {
     viewMode,
@@ -180,7 +177,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
     async (command: string): Promise<boolean> => {
       if (!command) return false;
       preparation.cancel();
-      const timestamp = new Date().toLocaleTimeString();
 
       // VDS：直接启动工作流
       const csvFile = files.find((f) => /\.(csv|xlsx|xls)$/i.test(f.name));
@@ -212,97 +208,39 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
         return true;
       }
 
-      // Command 模式
-      if (command.startsWith('/')) {
-        setActiveView('script');
-        const commandId = `action-${Date.now()}`;
-        const actionData = {
-          id: commandId,
-          type: EVENT_TYPES.USER_NEW_INSTRUCTION,
-          timestamp,
-          content: command,
-          result: '',
-          relatedQAIds: [] as string[],
-          cellId: currentCellId,
-          viewMode,
-          onProcess: false,
-          attachedFiles: files,
-        };
-        const recordedActionId = addAction(actionData as any);
-
-        const submission = await submitOperation(useStore.getState().notebookId, {
-          type: 'user_command',
-          payload: {
-            current_view_mode: viewMode,
-            current_phase_id: currentPhaseId,
-            current_step_index: currentStepIndex,
-            content: command,
-            commandId,
-            files,
-          },
-        });
-        if (!submission.accepted) {
-          useAIAgentStore.getState().removeAction(recordedActionId);
-          return false;
-        }
-      } else {
-        // QA 模式
-        console.log('[DEBUG] AICommandInput - Entering QA mode for question:', command);
-        setIsRightSidebarCollapsed(false); // 打开右侧边栏以显示 QA
-        setActiveView('qa');
-        const qaId = `qa-${uuidv4()}`;
-        const qaData = {
-          id: qaId,
-          type: 'user',
-          timestamp,
-          content: command,
-          resolved: false,
-          relatedActionId: null,
-          cellId: currentCellId,
-          viewMode,
-          onProcess: true,
-          attachedFiles: files,
-        };
-        addQA(qaData as any);
-        const action = createUserAskQuestionAction(command, [qaId], currentCellId);
-        const recordedActionId = useAIAgentStore.getState().addAction(action);
-
-        const memoryContext = AgentMemoryService.prepareMemoryContextForBackend(
-          useStore.getState().notebookId || '',
-          'general' as AgentType,
-          {
-            current_cell_id: currentCellId ?? '',
-            related_cells: getCurrentViewCells(),
-            related_qa_ids: qaList.map((qa) => qa.id),
-            current_qa_id: qaId,
-            question_content: command,
-          }
-        );
-
-        const finalPayload = {
-          type: 'user_question',
-          payload: {
-            content: command,
-            QId: [qaId],
-            current_view_mode: viewMode,
-            current_phase_id: currentPhaseId,
-            current_step_index: currentStepIndex,
-            related_qas: qaList,
-            related_actions: actions,
-            related_cells: getCurrentViewCells(),
-            files,
-            ...memoryContext,
-          },
-        };
-        console.log('[DEBUG] AICommandInput - Sending user_question operation:', finalPayload);
-        const submission = await submitOperation(useStore.getState().notebookId, finalPayload);
-        if (!submission.accepted) {
-          useAIAgentStore.getState().removeQA(qaId);
-          useAIAgentStore.getState().removeAction(recordedActionId);
-          return false;
-        }
-        console.log('[DEBUG] AICommandInput - user_question operation sent successfully');
+      if (files.length && !command.startsWith('/'))
+        throw new Error('Agent 输入暂不支持附件，请先将附件内容放入 notebook 后再提问');
+      let targetId = useStore.getState().notebookId;
+      if (!targetId) {
+        targetId = await new NotebookCreation().create();
+        if (useStore.getState().notebookId)
+          throw new Error('Notebook changed while preparing the conversation');
+        if (!(await useStore.getState().loadFromDatabase(targetId)))
+          throw new Error('Unable to open notebook');
       }
+      navigateToWorkspace(targetId);
+      setIsRightSidebarCollapsed(false);
+      const accepted = await aiTerminalService.processCommand(
+        command,
+        files,
+        {
+          notebookId: targetId,
+          currentCellId,
+          viewMode: viewMode ?? 'create',
+          currentPhaseId,
+          currentStepIndex,
+          actionsToShow: actions,
+          qasToShow: qaList,
+          currentViewCells: getCurrentViewCells(),
+        },
+        {
+          setActiveView,
+          showToast: async ({ message }) => {
+            console.error(message);
+          },
+        }
+      );
+      if (!accepted) return false;
 
       const submittedIds = new Set(files.map((file) => file.id));
       setFiles((current) => current.filter((file) => !submittedIds.has(file.id)));
@@ -313,9 +251,6 @@ const AICommandInput: React.FC<AICommandInputProps> = ({ files, setFiles }) => {
       files,
       isVDSMode,
       setActiveView,
-      addAction,
-      addQA,
-      submitOperation,
       currentCellId,
       viewMode,
       currentPhaseId,

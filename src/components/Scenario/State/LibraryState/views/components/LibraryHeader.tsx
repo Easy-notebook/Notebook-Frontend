@@ -1,75 +1,102 @@
-// LibraryState/LibraryHeader.tsx
-// Header component for the notebook library
-
-import React, { memo } from 'react';
-import { Button, Input, Space } from 'antd';
-import { RefreshCw, Grid, List, Search as SearchIcon, TreePine } from 'lucide-react';
-import { formatSize } from '../../utils';
-import type { LibraryHeaderProps } from '../../types';
-
-const LibraryHeader: React.FC<LibraryHeaderProps> = memo(
-  ({
-    totalNotebooks,
-    totalSize,
-    searchQuery,
-    viewMode,
-    refreshing,
-    onSearchChange,
-    onViewModeChange,
-    onRefresh,
-  }) => (
-    <div className="px-6 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <TreePine className="w-6 h-6 text-blue-500 dark:text-blue-400" />
-              Notebook Library
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-              {totalNotebooks} Notebooks · Total Size {formatSize(totalSize)}
-            </p>
-          </div>
-        </div>
-
-        <Space>
-          <Button
-            icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}
-            onClick={onRefresh}
-            loading={refreshing}
-          >
-            Refresh
-          </Button>
-          <Button
-            type={viewMode === 'grid' ? 'primary' : 'default'}
-            aria-label="Grid view"
-            icon={<Grid className="w-4 h-4" />}
-            onClick={() => onViewModeChange('grid')}
+import { Grid2X2, List, Plus, RefreshCw, Search } from 'lucide-react';
+import type { LibraryHeaderProps, SortBy } from '../../types';
+export type LibraryFilter = 'all' | 'favorites' | 'chat' | 'document' | 'project';
+const filters: Array<[LibraryFilter, string]> = [
+  ['all', '全部'],
+  ['favorites', '收藏'],
+  ['chat', '聊天记录'],
+  ['document', '文档'],
+  ['project', '项目'],
+];
+export default function LibraryHeader({
+  searchQuery,
+  viewMode,
+  refreshing,
+  onSearchChange,
+  onViewModeChange,
+  onRefresh,
+  filter,
+  onFilter,
+  onCreate,
+  sortBy,
+  onSort,
+  count,
+}: LibraryHeaderProps & {
+  filter: LibraryFilter;
+  onFilter: (value: LibraryFilter) => void;
+  onCreate: () => void;
+  sortBy: SortBy;
+  onSort: (value: SortBy) => void;
+  count: number;
+}) {
+  return (
+    <header className="library-header">
+      <h1>资料库</h1>
+      <div className="library-search-row">
+        <label className="library-search">
+          <Search size={21} />
+          <input
+            aria-label="搜索资料库"
+            placeholder="搜索资料库"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
           />
-          <Button
-            type={viewMode === 'list' ? 'primary' : 'default'}
-            aria-label="List view"
-            icon={<List className="w-4 h-4" />}
-            onClick={() => onViewModeChange('list')}
-          />
-        </Space>
+          {searchQuery && (
+            <button aria-label="清除搜索" onClick={() => onSearchChange('')}>
+              ×
+            </button>
+          )}
+        </label>
+        <button
+          className="library-create"
+          aria-label="新建文档"
+          title="新建文档"
+          onClick={onCreate}
+        >
+          <Plus size={24} />
+        </button>
       </div>
-
-      {/* Search Bar */}
-      <Input
-        placeholder="Search Notebook..."
-        aria-label="Search notebooks"
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
-        style={{ maxWidth: 420 }}
-        size="large"
-        prefix={<SearchIcon className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
-        allowClear
-      />
-    </div>
-  )
-);
-
-LibraryHeader.displayName = 'LibraryHeader';
-
-export default LibraryHeader;
+      <nav className="library-filters" aria-label="资料库分类">
+        {filters.map(([value, label]) => (
+          <button key={value} aria-pressed={value === filter} onClick={() => onFilter(value)}>
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div className="library-controls">
+        <span>{count} 个项目</span>
+        <div>
+          <button aria-label="刷新资料库" title="刷新" disabled={refreshing} onClick={onRefresh}>
+            <RefreshCw size={17} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+          <select
+            aria-label="排序"
+            value={sortBy}
+            onChange={(e) => onSort(e.target.value as SortBy)}
+          >
+            <option value="recent">最近活动</option>
+            <option value="name">名称</option>
+            <option value="size">大小</option>
+          </select>
+          <span className="library-control-divider" />
+          <button
+            aria-label="网格视图"
+            title="网格视图"
+            aria-pressed={viewMode === 'grid'}
+            onClick={() => onViewModeChange('grid')}
+          >
+            <Grid2X2 size={19} />
+          </button>
+          <button
+            aria-label="列表视图"
+            title="列表视图"
+            aria-pressed={viewMode === 'list'}
+            onClick={() => onViewModeChange('list')}
+          >
+            <List size={21} />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}

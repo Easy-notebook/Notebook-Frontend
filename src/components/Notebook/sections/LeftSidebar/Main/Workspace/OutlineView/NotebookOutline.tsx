@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ListTree } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import useStore from '@Store/notebookStore';
 import { NotebookOutlineModel } from './NotebookOutlineModel';
 import { useNotebookOutlineNavigation } from './useNotebookOutlineNavigation';
@@ -15,7 +15,6 @@ export function NotebookOutline({
   const headings = useMemo(() => NotebookOutlineModel.project(cells), [cells]);
   const { activeKey, navigate } = useNotebookOutlineNavigation(notebookId, headings);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [compact, setCompact] = useState(false);
   const following = useRef(true);
   const nav = useRef<HTMLElement>(null);
   const parents = useMemo(() => new Set(headings.map((heading) => heading.parent)), [headings]);
@@ -36,26 +35,9 @@ export function NotebookOutline({
     const bounds = surface.getBoundingClientRect();
     if (row.top < bounds.top) surface.scrollTop += row.top - bounds.top - 8;
     else if (row.bottom > bounds.bottom) surface.scrollTop += row.bottom - bounds.bottom + 8;
-  }, [activeKey, compact]);
+  }, [activeKey]);
   return (
-    <nav
-      ref={nav}
-      className={`notebook-outline ${compact ? 'is-compact' : ''}`}
-      aria-label="Notebook outline"
-    >
-      <div className="notebook-outline-header">
-        <span>
-          目录 <span className="notebook-outline-count">{headings.length}</span>
-        </span>
-        <button
-          type="button"
-          aria-label={compact ? 'Expand outline labels' : 'Compact outline'}
-          aria-pressed={compact}
-          onClick={() => setCompact(!compact)}
-        >
-          <ListTree size={16} />
-        </button>
-      </div>
+    <nav ref={nav} className="notebook-outline" aria-label="Notebook outline">
       {!headings.length ? (
         <p className="notebook-outline-empty">添加标题后，目录会显示在这里。</p>
       ) : (
@@ -68,12 +50,12 @@ export function NotebookOutline({
             following.current = false;
           }}
         >
-          {(compact ? headings : visible).map((heading) => (
+          {visible.map((heading) => (
             <li
               key={heading.key}
               style={{ '--outline-depth': heading.depth } as React.CSSProperties}
             >
-              {!compact && parents.has(heading.key) ? (
+              {parents.has(heading.key) ? (
                 <button
                   type="button"
                   className="notebook-outline-fold"
@@ -94,9 +76,7 @@ export function NotebookOutline({
                     <ChevronDown size={12} />
                   )}
                 </button>
-              ) : (
-                !compact && <span className="notebook-outline-fold" />
-              )}
+              ) : null}
               <button
                 type="button"
                 className={`notebook-outline-link ${heading.isTitle ? 'is-title' : ''}`}
@@ -110,17 +90,10 @@ export function NotebookOutline({
                   navigate(heading);
                 }}
               >
-                {compact ? (
-                  <span
-                    className="notebook-outline-bar"
-                    style={{ width: Math.max(10, 30 - heading.depth * 6) }}
-                  />
-                ) : (
-                  <>
-                    <span className="notebook-outline-number">{heading.number}</span>
-                    <span>{heading.title}</span>
-                  </>
+                {heading.number && (
+                  <span className="notebook-outline-number">{heading.number}</span>
                 )}
+                <span>{heading.title}</span>
               </button>
             </li>
           ))}

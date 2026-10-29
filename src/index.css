@@ -1205,7 +1205,7 @@
 }
 
 .notebook-editor-container {
-  transition: all 0.2s ease-in-out;
+  transition: background-color 0.2s ease-in-out;
   position: relative;
 }
 
@@ -2408,4 +2408,25 @@ vds-cleaning-report {
   padding-inline: 8px;
   font-size: 13px;
   font-weight: 500;
+}
+
+/* Navigation uses a quiet filled selection, not a bordered control. */
+.app-rail-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+}
+.app-rail-button .app-navigation-icon {
+  width: 20px;
+  height: 20px;
+}
+.app-rail-button[aria-current='page'],
+.workspace-navigation-button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+  color: var(--foreground);
+}
+
+.workspace-navigation-button {
+  flex: 0 1 32px;
+  min-width: 0;
 }

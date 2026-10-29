@@ -33,15 +33,29 @@ vi.mock('@fluentui/react-file-type-icons', () => ({
   getFileTypeIconProps: vi.fn(),
 }));
 vi.mock('antd', () => ({
-  Dropdown: () => null,
+  Dropdown: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   Tree: ({
     treeData,
     onSelect,
   }: {
     treeData: { key: string }[];
-    onSelect: (keys: string[], info: { node: { key: string } }) => void;
+    onSelect: (
+      keys: string[],
+      info: { node: { key: string }; nativeEvent?: { target: Node } }
+    ) => void;
   }) => (
-    <button onClick={() => onSelect([treeData[0].key], { node: treeData[0] })}>Select file</button>
+    <>
+      <button onClick={() => onSelect([treeData[0].key], { node: treeData[0] })}>
+        Select file
+      </button>
+      <button
+        onClick={() =>
+          onSelect([treeData[0].key], { node: treeData[0], nativeEvent: { target: document.body } })
+        }
+      >
+        Select portal
+      </button>
+    </>
   ),
 }));
 import FileExplorer from './FileExplorer';
@@ -86,7 +100,7 @@ it('leaves the current preview untouched when the selected file type is unsuppor
 });
 
 it('navigates synchronously and delegates notebook mode to the preview lifecycle', () => {
-  fixture.files[0] = { ...fixture.files[0], name: 'book.easynb', path: 'book.easynb' };
+  fixture.files[0] = { ...fixture.files[0], name: 'book.easynb', path: '/notebook.easynb' };
   render(<FileExplorer notebookId="owner" />);
   fireEvent.click(screen.getByText('Select file'));
   expect(fixture.navigate).toHaveBeenCalledExactlyOnceWith('owner');
@@ -96,7 +110,7 @@ it('navigates synchronously and delegates notebook mode to the preview lifecycle
 });
 
 it('handles a failed notebook switch without an unhandled rejection', async () => {
-  fixture.files[0] = { ...fixture.files[0], name: 'book.easynb', path: 'book.easynb' };
+  fixture.files[0] = { ...fixture.files[0], name: 'book.easynb', path: '/notebook.easynb' };
   fixture.switchNotebook.mockRejectedValueOnce(new Error('switch failed'));
   const log = vi.spyOn(console, 'log').mockImplementation(() => {});
   render(<FileExplorer notebookId="owner" />);
@@ -106,4 +120,11 @@ it('handles a failed notebook switch without an unhandled rejection', async () =
       expect.stringContaining('Notebook Switch Error - switch failed')
     )
   );
+});
+
+it('does not open the underlying file when a portal menu action bubbles through the tree', () => {
+  render(<FileExplorer notebookId="owner" />);
+  fireEvent.click(screen.getByText('Select portal'));
+  expect(fixture.preview).not.toHaveBeenCalled();
+  expect(fixture.switchNotebook).not.toHaveBeenCalled();
 });

@@ -5,7 +5,7 @@
  */
 
 import { memo, ReactNode } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, ListTree, Files, Bot, BookOpen } from 'lucide-react';
 import { SHARED_STYLES, TabId, TAB_CONFIG } from './constants';
 
 // 状态指示器组件
@@ -82,27 +82,38 @@ export const SidebarButton = memo<{
 
 SidebarButton.displayName = 'SidebarButton';
 
-// Obsidian风格Tab切换组件
+const TAB_ICONS = { outline: ListTree, file: Files, agents: Bot, context: BookOpen };
+
+// Workspace navigation shares one compact icon layout.
 export const TabSwitcher = memo<{
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   className?: string;
 }>(({ activeTab, onTabChange, className = '' }) => {
   return (
-    <div className={`flex flex-wrap justify-center gap-0.5 p-1 rounded-lg ${className}`}>
-      {TAB_CONFIG.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => onTabChange(tab.id)}
-          className={`
-            ${SHARED_STYLES.tab.base}
-            ${activeTab === tab.id ? SHARED_STYLES.tab.active : SHARED_STYLES.tab.inactive}
-            relative
+    <div
+      role="group"
+      aria-label="工作区导航"
+      className={`flex w-full min-w-0 flex-nowrap justify-center gap-1 p-1 ${className}`}
+    >
+      {TAB_CONFIG.map((tab) => {
+        const Icon = TAB_ICONS[tab.id];
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            aria-label={tab.label}
+            title={tab.label}
+            aria-pressed={activeTab === tab.id}
+            onClick={() => onTabChange(tab.id)}
+            className={`
+            app-chrome-button workspace-navigation-button
           `}
-        >
-          <span className="relative z-10">{tab.label}</span>
-        </button>
-      ))}
+          >
+            <Icon size={17} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        );
+      })}
     </div>
   );
 });
@@ -117,7 +128,11 @@ export const TabSwitcherGeneric = memo<{
   className?: string;
 }>(({ items, activeId, onChange, className = '' }) => {
   return (
-    <div className={`flex flex-wrap justify-center gap-0.5 p-1 rounded-lg ${className}`}>
+    <div
+      role="group"
+      aria-label="工作区导航"
+      className={`flex w-full min-w-0 flex-nowrap justify-center gap-1 p-1 ${className}`}
+    >
       {items.map((tab) => (
         <button
           key={tab.id}

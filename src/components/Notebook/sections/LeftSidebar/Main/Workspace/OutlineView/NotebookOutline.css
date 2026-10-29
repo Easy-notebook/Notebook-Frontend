@@ -7,28 +7,9 @@
 .dark .notebook-outline {
   color: #d1d5db;
 }
-.notebook-outline-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px 12px;
-  font-weight: 600;
-}
-.notebook-outline-count {
-  margin-left: 6px;
-  color: #94a3b8;
-  font-variant-numeric: tabular-nums;
-}
-.notebook-outline-header button {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 5px;
-}
 .notebook-outline-list {
   list-style: none;
-  padding: 0 6px;
+  padding: 0;
   margin: 0;
   overflow: auto;
   max-height: calc(100dvh - 200px);
@@ -91,20 +72,4 @@
   padding: 12px;
   color: #94a3b8;
   line-height: 1.7;
-}
-.notebook-outline-bar {
-  display: block;
-  height: 3px;
-  background: currentColor;
-  border-radius: 2px;
-  opacity: 0.5;
-}
-.notebook-outline-link[aria-current='location'] .notebook-outline-bar {
-  opacity: 1;
-}
-.notebook-outline.is-compact .notebook-outline-list > li {
-  padding-left: 8px;
-}
-.notebook-outline.is-compact .notebook-outline-link {
-  padding: 7px;
 }

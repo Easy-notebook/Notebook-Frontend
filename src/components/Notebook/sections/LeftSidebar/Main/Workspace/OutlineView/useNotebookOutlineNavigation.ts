@@ -1,3 +1,7 @@
+import {
+  writingScroller,
+  revealWritingPosition,
+} from '@/components/Editor/Lexical/writing/WritingViewport';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NotebookHeading } from './NotebookOutlineModel';
 
@@ -91,7 +95,13 @@ export function useNotebookOutlineNavigation(
     const target = resolveOutlineTarget(root, heading);
     if (!target) return;
     navigationTarget.current = heading.key;
-    target.scrollIntoView({ block: 'start', behavior: 'instant' });
+    const scroller = writingScroller(target);
+    if (scroller)
+      revealWritingPosition(
+        scroller,
+        target.getBoundingClientRect().top,
+        root.dataset.typewriter === 'true'
+      );
     setActiveKey(heading.key);
   }, []);
   return { activeKey, navigate };

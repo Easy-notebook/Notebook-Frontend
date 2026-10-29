@@ -193,8 +193,9 @@ export const ThreePanelLayout = ({
     if (wrapPanelsInCard) {
       return (
         <Card
-          className={`h-full flex flex-col ${overflowClass} ${panelClassName}`}
-          style={{ boxSizing: 'border-box', ...strictWidthStyle }}
+          fillHeight
+          className={`h-full min-h-0 min-w-0 flex flex-col ${overflowClass} ${panelClassName}`}
+          style={{ boxSizing: 'border-box', ...(isCenter ? { borderWidth: 0 } : {}), ...strictWidthStyle }}
         >
           {content}
         </Card>

@@ -2,6 +2,7 @@ import { isNotebookTitleCell } from '@Editor/utils/documentTitle';
 import type { Cell } from '@Store/models';
 import { createMarkdownParser } from '@Editor/utils/inlineMarkdown';
 import type { Token, Tokens } from 'marked';
+import { TranscriptCellDocument } from '@Utils/importFile/TranscriptCellDocument';
 
 export interface NotebookHeading {
   key: string;
@@ -72,7 +73,8 @@ export class NotebookOutlineModel {
           }
         }
       };
-      visit(parser.lexer(cell.content));
+      const transcript = TranscriptCellDocument.read(cell);
+      if (!transcript || transcript.richMarkdown) visit(parser.lexer(cell.content));
     });
     return result;
   }

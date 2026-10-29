@@ -77,7 +77,7 @@ export function NotebookRecoveryCenter() {
         state.restored ||
         Object.keys(saveFailures).length > 0) && (
         <Button
-          style={{ position: 'fixed', right: 24, bottom: 24, zIndex: 900 }}
+          style={{ position: 'fixed', right: 76, bottom: 24, zIndex: 900 }}
           onClick={() => {
             setOpen(true);
             void controller.refresh();

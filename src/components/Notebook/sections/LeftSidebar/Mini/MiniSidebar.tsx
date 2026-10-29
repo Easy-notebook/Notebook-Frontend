@@ -57,7 +57,7 @@ const ItemButton: React.FC<
   <button
     {...props}
     aria-current={active ? 'page' : undefined}
-    className={`app-chrome-button ${className}`}
+    className={`app-chrome-button app-rail-button ${className}`}
   >
     {children}
   </button>
@@ -115,44 +115,8 @@ const MiniSidebar = memo(function MiniSidebar({
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-visible pt-[4px]">
-        {/* Phases area - only show when workspace is active and sidebar is collapsed */}
-        {/* {shouldShowPhases && (
-          <div className="relative -mr-2 my-0">
-            <div
-              className="absolute inset-0 bg-white rounded-l-3xl"
-              style={{
-                borderRight: 'none'
-              }}
-            />
-
-            <ul className="space-y-1 relative z-10 py-3 pl-1 pr-4">
-              {phases!.map((phase) => {
-                const IconComp =
-                  (iconMapping as Record<string, LucideIcon>)[phase.icon] ?? CheckCircle2;
-                const isActive = currentPhaseId === phase.id;
-
-                return (
-                  <li key={phase.id} className="flex justify-center overflow-visible">
-                    <div className="overflow-visible relative">
-                      <ItemButton
-                        active={isActive}
-                        onClick={() => onPhaseClick?.(phase.id)}
-                        title={phase.title}
-                      >
-                        <IconComp size={20} />
-                      </ItemButton>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        {shouldShowFolderIcon &&
-        ( */}
         {/* Primary items - show workspace only if notebookId exists */}
-        <ul className="space-y-1">
+        <ul className="space-y-3">
           {PRIMARY_ITEMS.filter((item) => item.id !== 'workspace' || notebookId).map((item) => {
             const Icon = item.icon;
             const isActive = activeItemId === item.id;
@@ -176,7 +140,7 @@ const MiniSidebar = memo(function MiniSidebar({
 
       {/* Bottom items - always show */}
       <div className="py-2 shrink-0">
-        <ul className="space-y-1">
+        <ul className="space-y-3">
           {BOTTOM_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeItemId === item.id;

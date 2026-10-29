@@ -136,7 +136,7 @@ const OutlineSidebar = ({
           <NotebookContextPanel key={notebookId} readOnly={viewMode === 'demo'} />
         ) : activeTab === 'file' ? (
           // 文件视图：使用 FileTree 组件，简化容器支持换行
-          <div className="py-0">
+          <div className="h-full min-h-0 py-0">
             <FileTree notebookId={notebookId || ''} projectName={projectName} />
           </div>
         ) : activeTab === 'agents' ? (

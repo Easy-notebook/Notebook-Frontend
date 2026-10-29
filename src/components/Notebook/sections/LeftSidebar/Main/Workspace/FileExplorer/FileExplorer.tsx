@@ -1,47 +1,50 @@
+import { NotebookAgentTag } from './NotebookAgentTag';
 import { useNotebookFileList } from '@Hooks/useNotebookFileList';
 import type { FileNode, FileNodeFile } from '@Services/notebook/FileListSession';
 import { useNotebookUploadControl } from '@Hooks/useNotebookUploadControl';
-import { fileUploadClient } from '@Services/notebook/FileUploadClient';
-// moved to sections/LeftSideBar/Main/Workspace/FileExplorer/FileExplorer.tsx
+import { workspaceFileImport } from '@Services/notebook/WorkspaceFileImport';
+import { VersionHistoryDialog } from './VersionHistoryDialog';
+import './FileExplorer.css';
+import { FileOperationDialog, type FileOperation } from './FileOperationDialog';
 import { useState, useEffect, useCallback, memo, useRef, useMemo } from 'react';
 import { Tree, Dropdown, type MenuProps } from 'antd';
-import type { TreeDataNode, TreeProps } from 'antd';
-import { Folder, FolderOpen, Download, Trash, Eye, RefreshCw, MoreHorizontal } from 'lucide-react';
+import type { TreeDataNode } from 'antd';
+import {
+  Folder,
+  FolderOpen,
+  Download,
+  Trash,
+  Eye,
+  RefreshCw,
+  MoreHorizontal,
+  ChevronRight,
+  ChevronsDownUp,
+  NotebookPen,
+  FilePlus2,
+  FolderPlus,
+  Pencil,
+  FolderInput,
+  History,
+  Upload,
+} from 'lucide-react';
 import { Icon } from '@fluentui/react/lib/Icon';
 import { getFileTypeIconProps, initializeFileTypeIcons } from '@fluentui/react-file-type-icons';
 import { fileActionClient } from '@Services/notebook/FileActionClient';
-import { handleFileUpload, handleDownload, handleDeleteFile } from '@Utils/fileUtils';
+import { handleFileUpload, handleDownload } from '@Utils/fileUtils';
 import usePreviewStore from '@Store/previewStore';
 import useRouteStore from '@Store/routeStore';
-import useStore from '@Store/notebookStore';
 import { FILE_PREVIEW_CONFIG } from '@LeftSidebar/shared/constants';
-import { LoadingIndicator } from '@LeftSidebar/shared/components';
 
 /* ----------------------------- Types ------------------------------ */
 
 /** 扩展 antd TreeDataNode，挂载原始文件数据 */
 type FileTreeDataNode = TreeDataNode & { file?: FileNode };
 
-type WidthTier = 'narrow' | 'regular' | 'wide';
-const pickTier = (w: number): WidthTier => (w < 220 ? 'narrow' : w < 300 ? 'regular' : 'wide');
-
-/* ------------------------ UI Tokens（与 PhaseSection 对齐） ------------------------ */
-// 与 PhaseSection 完全一致的文本，支持换行
-const NB_TEXT_CLASS =
-  'text-[12px] leading-[20px] font-normal text-theme-800 dark:!text-gray-100 break-words';
-const NB_TEXT_CLASS_FILE =
-  'text-[12px] leading-[20px] font-normal text-gray-700 dark:!text-gray-200 break-words';
-
-// 行高 - 支持多行文本，使用 auto 高度
-const NB_ROW_H = 'min-h-[28px] py-1';
-
-// 统一图标：容器 28×28（h-7 w-7），图标本体 18
-const NB_ICON_WRAPPER = 'inline-flex items-center justify-center h-7 w-7 flex-shrink-0';
-const NB_ICON_SIZE = 18;
-const NB_ICON_CLASS = 'text-theme-600 dark:text-theme-400';
-
-// 过渡/容器
-const NB_TRANSITION = 'transition-all duration-300';
+const NB_TEXT_CLASS = 'explorer-name';
+const NB_TEXT_CLASS_FILE = 'explorer-name';
+const NB_ICON_WRAPPER = 'explorer-icon';
+const NB_ICON_SIZE = 16;
+const NB_ICON_CLASS = 'explorer-file-icon';
 
 /* -------------------------- Helpers ------------------------------- */
 
@@ -56,6 +59,8 @@ const getFileIcon = (filename?: string) => {
   const base = (ext: string) => (
     <Icon {...getFileTypeIconProps({ extension: ext })} className={NB_ICON_CLASS} />
   );
+  if (filename?.endsWith('.easynb'))
+    return <NotebookPen size={16} className="explorer-notebook-icon" />;
   if (!filename) return base('txt');
   try {
     const ext = (filename.split('.').pop() || 'txt').toLowerCase();
@@ -101,22 +106,27 @@ const getContextMenuItems = (
       icon: <Trash size={16} />,
       label: 'Delete',
       danger: true,
+      disabled:
+        file.removable === false || file.primary === true || file.path === '/notebook.easynb',
       onClick: () => onDelete(file),
     }
   );
   return items;
 };
 
+const treeNodeCache = new WeakMap<FileNode, FileTreeDataNode>();
 const toTreeData = (nodes: FileNode[]): FileTreeDataNode[] =>
   nodes.map((node) => {
-    const isDirectory = node.type === 'directory';
-    const out: FileTreeDataNode = {
+    const cached = treeNodeCache.get(node);
+    if (cached) return cached;
+    const value: FileTreeDataNode = {
       key: node.path,
-      isLeaf: !isDirectory,
+      isLeaf: node.type === 'file',
       file: node,
+      ...(node.type === 'directory' ? { children: toTreeData(node.children) } : {}),
     };
-    if (isDirectory && node.children) out.children = toTreeData(node.children);
-    return out;
+    treeNodeCache.set(node, value);
+    return value;
   });
 
 /* --------------------------- Component ---------------------------- */
@@ -127,16 +137,28 @@ interface FileTreeProps {
 }
 
 const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
-  const tasks = useStore((s) => s.tasks);
-
   const { state: fileList, refresh: fetchFileListWrapper } = useNotebookFileList(notebookId);
   const processedTree = fileList.files;
   const isLoading = fileList.status === 'loading';
   const treeData = useMemo(() => toTreeData(processedTree), [processedTree]);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  const workspaceOwner = useRef(notebookId);
+  workspaceOwner.current = notebookId;
+  const expandedOwner = useRef<string | null>(null);
+  useEffect(() => {
+    if (expandedOwner.current === notebookId || !processedTree.length) return;
+    expandedOwner.current = notebookId;
+    setExpandedKeys(
+      processedTree.filter((node) => node.type === 'directory').map((node) => node.path)
+    );
+  }, [notebookId, processedTree]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const importParent = useRef('/');
+  const [operation, setOperation] = useState<FileOperation | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [widthTier, setWidthTier] = useState<WidthTier>('regular');
+  const [treeHeight, setTreeHeight] = useState(400);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -155,6 +177,9 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   useEffect(() => {
     setUploadState({ uploading: false, progress: 0, error: null });
+    setOperation(null);
+    setHistoryOpen(false);
+    setSelectedKeys([]);
   }, [notebookId]);
 
   const { error: previewError, isLoading: previewLoading } = usePreviewStore();
@@ -162,7 +187,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
   const uploadConfig = useMemo(
     () => ({
       mode: 'restricted' as const,
-      maxFileSize: 50 * 1024 * 1024,
+      maxFileSize: 2 * 1024 * 1024,
       maxFiles: 10,
       allowedTypes: [
         '.txt',
@@ -175,19 +200,15 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         '.py',
         '.html',
         '.css',
-        '.png',
-        '.jpg',
-        '.jpeg',
-        '.gif',
         '.svg',
         '.csv',
-        '.pdf',
-        '.doc',
-        '.docx',
-        '.xlsx',
-        '.xls',
+        '.sql',
+        '.yaml',
+        '.yml',
+        '.aal',
+        '.easynb',
       ],
-      targetDir: 'assets',
+      targetDir: '/',
     }),
     []
   );
@@ -223,16 +244,14 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     return () => window.removeEventListener('refreshFileList', h);
   }, [fetchFileListWrapper]);
 
-  // 监听父容器宽度 → 设置 tier
   useEffect(() => {
-    if (!rootRef.current) return;
-    const parent = rootRef.current.parentElement || rootRef.current;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0].contentRect.width;
-      setWidthTier(pickTier(w));
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(() => {
+      setTreeHeight(Math.max(1, viewport.clientHeight));
     });
-    ro.observe(parent);
-    return () => ro.disconnect();
+    observer.observe(viewport);
+    return () => observer.disconnect();
   }, [notebookId]);
 
   const handlePreviewFile = useCallback(
@@ -283,7 +302,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
       const ext = (file.name.split('.').pop() || '').toLowerCase();
 
       // 特殊处理 .easynb 文件 - 应该切换到 notebook 模式
-      if (ext === 'easynb') {
+      if (file.primary === true || file.path === '/notebook.easynb') {
         await switchToNotebookMode();
         return;
       }
@@ -296,7 +315,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         ...PREVIEWABLE_DOC_TYPES,
         ...jsxTypes,
       ];
-      const isPreviewable = allPreviewable.includes(`.${ext}`);
+      const isPreviewable = ext === 'easynb' || allPreviewable.includes(`.${ext}`);
       if (isPreviewable) await handlePreviewFile(file);
       else
         toast({
@@ -310,7 +329,16 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   /** 选择：目录→切展开；文件→预览 */
   const handleTreeSelect = useCallback(
-    (keys: React.Key[], info: { node: FileTreeDataNode }) => {
+    (
+      keys: React.Key[],
+      info: { node: FileTreeDataNode; nativeEvent?: MouseEvent | KeyboardEvent }
+    ) => {
+      // Portal menus belong to an action, not to the underlying row selection.
+      if (
+        info.nativeEvent?.target instanceof Node &&
+        !rootRef.current?.contains(info.nativeEvent.target)
+      )
+        return;
       const node: FileTreeDataNode = info?.node;
       if (!node?.file) return;
 
@@ -329,27 +357,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
 
   const handleTreeExpand = useCallback((keys: React.Key[]) => setExpandedKeys(keys), []);
 
-  const handleTreeDrop: TreeProps['onDrop'] = useCallback(
-    (info: { dragNode: FileTreeDataNode; node: FileTreeDataNode; dropPosition: number }) => {
-      const { dragNode, node, dropPosition } = info;
-      console.log('Tree drop:', { dragKey: dragNode?.key, dropKey: node?.key, dropPosition });
-      toast({
-        title: 'Drop Operation',
-        description: 'Moving files is not yet implemented',
-        variant: 'info',
-      });
-    },
-    [toast]
-  );
-
-  const handleAllowDrop: TreeProps['allowDrop'] = useCallback(
-    ({ dropNode }: { dropNode: FileTreeDataNode }) => {
-      const node = dropNode as FileTreeDataNode;
-      return node?.file?.type === 'directory';
-    },
-    []
-  );
-
   const handleDownloadFileCb = useCallback(
     (file: FileNodeFile) => {
       handleDownload({
@@ -365,17 +372,105 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
   const handleDeleteFileAction = useCallback(
     (file: FileNodeFile) => {
       if (confirm(`Are you sure you want to delete ${file.name}?`)) {
-        handleDeleteFile({
-          notebookId,
-          filename: file.path,
-          fileService: fileActionClient,
-          fetchFileList: fetchFileListWrapper,
-          toast,
-        });
+        void fileActionClient
+          .deleteFile(notebookId, file.path, file.revision)
+          .then(() => fetchFileListWrapper())
+          .catch((error) =>
+            toast({ title: 'Delete failed', description: String(error), variant: 'destructive' })
+          );
       }
     },
     [notebookId, fetchFileListWrapper, toast]
   );
+
+  const menuFor = (file?: FileNode): MenuProps['items'] => {
+    const parent =
+      file?.type === 'directory'
+        ? file.path
+        : file?.path.slice(0, file.path.lastIndexOf('/')) || '/';
+    const creatable = !file || file.creatable === true;
+    const mutable = !!file && file.removable === true && !(file.type === 'file' && file.primary);
+    return [
+      {
+        key: 'import',
+        label: '导入文件…',
+        icon: <Upload size={14} />,
+        disabled: !creatable,
+        onClick: () => {
+          importParent.current = parent;
+          fileInputRef.current?.click();
+        },
+      },
+      {
+        key: 'new-file',
+        label: '新建文件…',
+        icon: <FilePlus2 size={14} />,
+        disabled: !creatable,
+        onClick: () => setOperation({ kind: 'file', parent }),
+      },
+      {
+        key: 'new-folder',
+        label: '新建文件夹…',
+        icon: <FolderPlus size={14} />,
+        disabled: !creatable,
+        onClick: () => setOperation({ kind: 'folder', parent }),
+      },
+      ...(file
+        ? [
+            { type: 'divider' as const },
+            {
+              key: 'rename',
+              label: '重命名…',
+              icon: <Pencil size={14} />,
+              disabled: !mutable,
+              onClick: () => setOperation({ kind: 'rename', file }),
+            },
+            {
+              key: 'move',
+              label: '移动到…',
+              icon: <FolderInput size={14} />,
+              disabled: !mutable,
+              onClick: () => setOperation({ kind: 'move', file }),
+            },
+            ...(file.type === 'file'
+              ? (getContextMenuItems(
+                  file,
+                  handlePreviewFile,
+                  handleDownloadFileCb,
+                  handleDeleteFileAction
+                ) ?? [])
+              : []),
+          ]
+        : []),
+      { type: 'divider' },
+      {
+        key: 'refresh',
+        label: '刷新',
+        icon: <RefreshCw size={14} />,
+        onClick: fetchFileListWrapper,
+      },
+    ];
+  };
+  const completeOperation = async (source: string | undefined, destination: string) => {
+    if (workspaceOwner.current !== notebookId) return;
+    await fetchFileListWrapper();
+    if (workspaceOwner.current !== notebookId) return;
+    setSelectedKeys([destination]);
+    const parent = destination.slice(0, destination.lastIndexOf('/'));
+    setExpandedKeys((keys) => [
+      ...new Set([
+        ...keys.map((key) =>
+          source && (key === source || String(key).startsWith(source + '/'))
+            ? destination + String(key).slice(source.length)
+            : key
+        ),
+        ...parent
+          .split('/')
+          .filter(Boolean)
+          .map((_, index, array) => '/' + array.slice(0, index + 1).join('/')),
+      ]),
+    ]);
+  };
 
   // 外层拖拽上传
   useEffect(() => {
@@ -402,8 +497,14 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          fileService: fileUploadClient,
-          uploadConfig,
+          fileService: workspaceFileImport,
+          uploadConfig: {
+            ...uploadConfig,
+            targetDir:
+              e.target instanceof Element
+                ? e.target.closest('[data-directory]')?.getAttribute('data-directory') || '/'
+                : '/',
+          },
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),
           setError: (error) => setUploadState((p) => ({ ...p, error })),
@@ -441,8 +542,8 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         handleFileUpload({
           notebookId,
           files,
-          fileService: fileUploadClient,
-          uploadConfig,
+          fileService: workspaceFileImport,
+          uploadConfig: { ...uploadConfig, targetDir: importParent.current },
           setUploading: (uploading) => setUploadState((p) => ({ ...p, uploading })),
           setUploadProgress: (progress) => setUploadState((p) => ({ ...p, progress })),
           setError: (error) => setUploadState((p) => ({ ...p, error })),
@@ -463,9 +564,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
     abortControllerRef.current?.abort();
   }, [abortControllerRef]);
 
-  const gapClass = widthTier === 'narrow' ? 'gap-1.5' : 'gap-2';
-  const showActions = widthTier !== 'narrow';
-
   // 如果没有有效的 notebookId，不应该显示任何文件内容
   if (!notebookId) {
     return (
@@ -476,7 +574,7 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
   }
 
   return (
-    <div ref={rootRef} className="h-full flex flex-col" data-tier={widthTier}>
+    <div ref={rootRef} className="notebook-file-explorer h-full min-h-0 flex flex-col">
       <div className="relative flex-1 flex flex-col overflow-hidden">
         {uploadState.uploading && (
           <div className="absolute inset-0 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm z-10 flex flex-col justify-center items-center rounded-lg border border-theme-200 dark:border-theme-700">
@@ -501,14 +599,6 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
           </div>
         )}
 
-        {previewLoading && (
-          <div className="absolute inset-0 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg">
-            <div className="animate-pulse text-theme-700 dark:text-theme-300 font-medium">
-              Loading preview...
-            </div>
-          </div>
-        )}
-
         {isDraggingOver && (
           <div className="absolute inset-0 border-2 border-dashed border-theme-400 z-0 rounded-lg animate-pulse" />
         )}
@@ -520,191 +610,198 @@ const FileTree = memo(({ notebookId, projectName }: FileTreeProps) => {
         )}
 
         {/* 主要内容区域 - 不使用 relative，让内容自然流动 */}
-        <div className="py-0" ref={dropZoneRef}>
+        <div className="explorer-body" ref={dropZoneRef}>
           <input
             type="file"
             ref={fileInputRef}
             className="hidden"
             multiple
+            accept={uploadConfig.allowedTypes.join(',')}
             onChange={handleFileInputChange}
           />
 
-          {projectName && (
-            <div className="flex items-center justify-between px-3 mb-2 ml-3 mt-3">
-              <h2
-                className="text-[13px] font-bold text-theme-800 dark:!text-white p-1 flex-1 min-w-0 break-words"
-                title={projectName}
-              >
-                {projectName}
-              </h2>
+          <div className="explorer-toolbar">
+            <NotebookAgentTag notebookId={notebookId} />
+            <div className="explorer-toolbar-actions">
               <button
-                className={`p-2 rounded-lg hover:bg-theme-100 dark:hover:bg-gray-700 text-theme-700 dark:text-theme-400 flex-shrink-0 ${NB_TRANSITION}`}
+                className="explorer-action"
+                title="新建文件"
+                aria-label="新建文件"
+                onClick={() => setOperation({ kind: 'file', parent: '/' })}
+              >
+                <FilePlus2 size={15} />
+              </button>
+              <button
+                className="explorer-action"
+                title="新建文件夹"
+                aria-label="新建文件夹"
+                onClick={() => setOperation({ kind: 'folder', parent: '/' })}
+              >
+                <FolderPlus size={15} />
+              </button>
+              <button
+                className="explorer-action"
                 onClick={fetchFileListWrapper}
                 title="Refresh file list"
                 aria-label="Refresh file list"
               >
-                <RefreshCw size={14} />
+                <RefreshCw size={15} />
+              </button>
+              <button
+                className="explorer-action"
+                onClick={() => setExpandedKeys([])}
+                title="Collapse all folders"
+                aria-label="Collapse all folders"
+              >
+                <ChevronsDownUp size={15} />
               </button>
             </div>
-          )}
-
-          <div className="px-2 mx-2 flex-1 overflow-y-auto">
-            {isLoading && <LoadingIndicator text="Loading files..." />}
-            <Tree
-              showIcon={false}
-              treeData={treeData}
-              expandedKeys={expandedKeys}
-              selectedKeys={selectedKeys}
-              onSelect={handleTreeSelect}
-              onExpand={handleTreeExpand}
-              onDrop={handleTreeDrop}
-              allowDrop={handleAllowDrop}
-              draggable={{ icon: false }}
-              blockNode
-              className="file-explorer-tree"
-              style={{ background: 'transparent', fontSize: 12 }}
-              titleRender={(node: FileTreeDataNode) => {
-                const file = node.file!;
-                const isDir = file.type === 'directory';
-                const isExpanded = expandedKeys.includes(node.key);
-                return (
-                  <div
-                    className={`flex items-start justify-between w-full group ${NB_ROW_H} ${NB_TRANSITION}`}
-                  >
-                    <div className={`flex items-start ${gapClass} flex-1 min-w-0`}>
-                      <span className={NB_ICON_WRAPPER}>
-                        {isDir ? (
-                          isExpanded ? (
-                            <FolderOpen size={NB_ICON_SIZE} className={NB_ICON_CLASS} />
-                          ) : (
-                            <Folder size={NB_ICON_SIZE} className={NB_ICON_CLASS} />
-                          )
-                        ) : (
-                          getFileIcon((file as FileNodeFile).name)
-                        )}
-                      </span>
-                      <span
-                        className={`${isDir ? NB_TEXT_CLASS : NB_TEXT_CLASS_FILE} flex-1 min-w-0`}
-                        title={file.name}
-                      >
-                        {file.name}
-                      </span>
-                    </div>
-
-                    {showActions && !isDir && (
-                      <Dropdown
-                        menu={{
-                          items: getContextMenuItems(
-                            file,
-                            handlePreviewFile,
-                            handleDownloadFileCb,
-                            handleDeleteFileAction
-                          ),
-                        }}
-                        trigger={['click']}
-                        placement="bottomRight"
-                      >
-                        <button
-                          className={`opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${NB_TRANSITION} flex-shrink-0`}
-                          onClick={(e) => e.stopPropagation()}
-                          aria-label="More actions"
-                        >
-                          <MoreHorizontal size={14} className="text-gray-500 dark:text-gray-400" />
-                        </button>
-                      </Dropdown>
-                    )}
-                  </div>
-                );
-              }}
-            />
           </div>
-
-          {notebookId && (projectName || (tasks && tasks.length > 0)) && (
-            <div
-              className={`flex items-center py-2 my-0 mx-4 cursor-pointer text-gray-700 dark:text-gray-300 hover:bg-theme-50 dark:hover:bg-gray-700 transition-all duration-200 px-2 rounded-lg`}
-              onClick={switchToNotebookMode}
-              title="Open Notebook"
-            >
-              <div className={`flex items-center ${gapClass} flex-1 min-w-0`}>
-                <div className="flex-shrink-0">
-                  <img src="/icon.svg" className="w-6 h-6" alt="Notebook Icon" />
+          <div className="explorer-workspace" title={projectName || notebookId}>
+            <span className="explorer-name">{projectName || 'Workspace'}</span>
+          </div>
+          <Dropdown
+            menu={{ items: menuFor(), onClick: ({ domEvent }) => domEvent.stopPropagation() }}
+            trigger={['contextMenu']}
+          >
+            <div className="explorer-viewport" ref={viewportRef}>
+              {isLoading && (
+                <div role="status" className="explorer-status">
+                  Loading files…
                 </div>
-                <span className={`${NB_TEXT_CLASS} flex-1 min-w-0`}>
-                  {(projectName || (tasks && tasks.length > 0 ? tasks[0].title : '')) + '.easynb'}
-                </span>
-              </div>
+              )}
+              {previewLoading && (
+                <div role="status" className="explorer-status">
+                  Opening preview…
+                </div>
+              )}
+              {fileList.status === 'error' && (
+                <div role="alert" className="explorer-status explorer-error">
+                  {fileList.error}
+                </div>
+              )}
+              <Tree
+                height={treeHeight}
+                itemHeight={24}
+                motion={null}
+                switcherIcon={<ChevronRight size={14} />}
+                virtual
+                showIcon={false}
+                treeData={treeData}
+                expandedKeys={expandedKeys}
+                selectedKeys={selectedKeys}
+                onSelect={handleTreeSelect}
+                onExpand={handleTreeExpand}
+                blockNode
+                className="file-explorer-tree"
+                style={{ background: 'transparent', fontSize: 12 }}
+                titleRender={(node: FileTreeDataNode) => {
+                  const file = node.file!;
+                  const isDir = file.type === 'directory';
+                  const isExpanded = expandedKeys.includes(node.key);
+                  return (
+                    <Dropdown
+                      menu={{
+                        items: menuFor(file),
+                        onClick: ({ domEvent }) => domEvent.stopPropagation(),
+                      }}
+                      trigger={['contextMenu']}
+                    >
+                      <div
+                        className="explorer-row group"
+                        data-directory={isDir ? file.path : undefined}
+                        onContextMenu={(e) => {
+                          e.stopPropagation();
+                          setSelectedKeys([file.path]);
+                        }}
+                        onKeyDown={(e) => {
+                          if (
+                            e.key === 'F2' &&
+                            file.removable &&
+                            !(file.type === 'file' && file.primary)
+                          ) {
+                            e.preventDefault();
+                            setOperation({ kind: 'rename', file });
+                          }
+                        }}
+                      >
+                        <div className="explorer-label">
+                          <span className={NB_ICON_WRAPPER}>
+                            {isDir ? (
+                              isExpanded ? (
+                                <FolderOpen size={NB_ICON_SIZE} className={NB_ICON_CLASS} />
+                              ) : (
+                                <Folder size={NB_ICON_SIZE} className={NB_ICON_CLASS} />
+                              )
+                            ) : (
+                              getFileIcon((file as FileNodeFile).name)
+                            )}
+                          </span>
+                          <span
+                            className={`${isDir ? NB_TEXT_CLASS : NB_TEXT_CLASS_FILE} flex-1 min-w-0`}
+                            title={`${file.path}${file.type === 'file' ? ` · ${file.size ?? 0} bytes · r${file.revision ?? 0}` : ''}`}
+                          >
+                            {file.name}
+                          </span>
+                        </div>
+
+                        {
+                          <Dropdown
+                            menu={{
+                              items: menuFor(file),
+                              onClick: ({ domEvent }) => domEvent.stopPropagation(),
+                            }}
+                            trigger={['click']}
+                            placement="bottomRight"
+                          >
+                            <button
+                              className="explorer-action explorer-row-action"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label="More actions"
+                            >
+                              <MoreHorizontal
+                                size={14}
+                                className="text-gray-500 dark:text-gray-400"
+                              />
+                            </button>
+                          </Dropdown>
+                        }
+                      </div>
+                    </Dropdown>
+                  );
+                }}
+              />
             </div>
-          )}
+          </Dropdown>
         </div>
       </div>
+      <button
+        className="flex items-center gap-2 px-5 py-2 text-xs border-t border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+        onClick={() => setHistoryOpen(true)}
+      >
+        <History size={14} />
+        版本历史
+      </button>
+      {historyOpen && (
+        <VersionHistoryDialog
+          notebookId={notebookId}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={(path) => completeOperation(undefined, path)}
+        />
+      )}
+      {operation && (
+        <FileOperationDialog
+          key={notebookId}
+          operation={operation}
+          notebookId={notebookId}
+          revision={fileList.revision}
+          nodes={processedTree}
+          onClose={() => setOperation(null)}
+          onComplete={completeOperation}
+        />
+      )}
     </div>
   );
 });
-
-const styles = `
-.file-explorer-tree {
-  overflow: visible;
-}
-.file-explorer-tree .ant-tree-list-holder{
-  overflow: visible;
-}
-
-.file-explorer-tree .ant-tree-treenode{
-  padding: 0;
-  display: flex;
-  align-items: center;
-}
-
-.file-explorer-tree .ant-tree-node-content-wrapper{
-  padding: 2px 6px;
-  border-radius: 8px;
-  transition: background .15s ease, box-shadow .15s ease;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-height: 28px;
-  line-height: 20px;
-}
-
-/* 完全隐藏 switcher 并去掉占位 */
-.file-explorer-tree .ant-tree-switcher,
-.file-explorer-tree .ant-tree-switcher-noop {
-  display: none !important;
-  width: 0 !important;
-  margin: 0 !important;
-}
-
-/* 压缩缩进单元，缓解左侧过宽留白 */
-.file-explorer-tree .ant-tree-indent {
-  display: inline-flex;
-}
-.file-explorer-tree .ant-tree-indent-unit {
-  width: 12px;
-}
-
-/* 隐藏拖拽手柄 */
-.file-explorer-tree .ant-tree-draggable-icon{
-  display: none !important;
-}
-
-/* 避免 antd 内部用于测量的隐藏节点影响布局 */
-.file-explorer-tree .ant-tree-treenode[aria-hidden="true"]{
-  display: none !important;
-  height: 0 !important;
-  overflow: hidden !important;
-}
-`;
-
-if (typeof document !== 'undefined') {
-  const styleElement = document.getElementById('file-explorer-custom-styles');
-  if (!styleElement) {
-    const style = document.createElement('style');
-    style.id = 'file-explorer-custom-styles';
-    style.textContent = styles;
-    document.head.appendChild(style);
-  } else {
-    styleElement.textContent = styles;
-  }
-}
 
 export default FileTree;
