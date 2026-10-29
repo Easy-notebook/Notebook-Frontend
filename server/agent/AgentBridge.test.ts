@@ -233,3 +233,65 @@ it('rejects an owned run when native notebook agent identity or provider differs
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 });
+
+it('reconstructs original provider session binding after bridge restart and rejects stale source IDs', async () => {
+  const source = {
+    provider: 'codex' as const,
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    cwd: '/original',
+  };
+  const received: any[] = [];
+  for (let restart = 0; restart < 2; restart++) {
+    const runtime = {
+      run: async (run: any) => {
+        received.push({ ...run.session });
+      },
+    };
+    const bridge = new AgentBridge(
+      { codex: runtime, claude: runtime },
+      {
+        readAgent: async () => ({
+          notebookId: 'notebook',
+          agentId: 'owned',
+          name: 'Notebook',
+          provider: 'codex',
+          className: 'NotebookWorkspace',
+          source,
+        }),
+      } as any,
+      { inspect: async () => ({ ...source, title: 'Original', updatedAt: 1 }) } as any
+    );
+    const server = createServer((req, res) => {
+      void bridge.handle(req, res, () => res.end());
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      const rejected = await post(origin, '/agent-api/run', {
+        ...request(),
+        notebookAgentId: 'owned',
+      });
+      expect(rejected.ok).toBe(false);
+      const accepted = await post(origin, '/agent-api/run', {
+        ...request(),
+        notebookAgentId: 'owned',
+        sourceSessionId: source.sessionId,
+      });
+      expect(accepted.ok).toBe(true);
+      await accepted.text();
+    } finally {
+      bridge.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+  expect(received).toHaveLength(2);
+  expect(
+    received.every(
+      (session) =>
+        session.threadId === source.sessionId &&
+        session.cwd === '/original' &&
+        session.sourceSessionId === source.sessionId
+    )
+  ).toBe(true);
+});

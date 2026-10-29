@@ -30,6 +30,7 @@ export class ClaudeRuntime implements AgentRuntime {
       options: {
         abortController: controller,
         resume: run.session.threadId,
+        ...(run.session.cwd ? { cwd: run.session.cwd } : {}),
         includePartialMessages: true,
         systemPrompt: instructionsForRole(run.role),
         tools: [],
@@ -46,7 +47,11 @@ export class ClaudeRuntime implements AgentRuntime {
       let completed = false;
       for await (const message of stream) {
         run.signal.throwIfAborted();
-        if ('session_id' in message) run.session.threadId = message.session_id;
+        if ('session_id' in message) {
+          if (run.session.sourceSessionId && message.session_id !== run.session.sourceSessionId)
+            throw new Error('Resumed Claude session identity mismatch');
+          run.session.threadId = message.session_id;
+        }
         if (
           message.type === 'stream_event' &&
           message.event.type === 'content_block_delta' &&

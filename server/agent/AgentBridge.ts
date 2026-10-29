@@ -1,3 +1,4 @@
+import { ProviderSessions, sourceSchema } from './ProviderSessions';
 import { NotebookArtifactStore } from './NotebookArtifactStore';
 import { EalAbilityRuntime } from './providers/EalAbilityRuntime';
 import { watchEal } from './providers/EalWatch';
@@ -65,11 +66,16 @@ export const nativeProviders = (
 });
 /** Same-origin local bridge. Provider session IDs never come from the browser. */
 export class AgentBridge {
+  private readonly bindingNotebooks = new Set<string>();
+  private readonly admittingNotebooks = new Set<string>();
+  private readonly sourceRuns = new Set<string>();
+  private discoveryActive = 0;
   private readonly sessions = new Map<string, Session>();
   private readonly runs = new Map<string, ActiveRun>();
   constructor(
     private readonly providers: Record<AgentProvider, AgentRuntime> = nativeProviders(),
-    private readonly artifacts = new NotebookArtifactStore()
+    private readonly artifacts = new NotebookArtifactStore(),
+    private readonly sources = new ProviderSessions()
   ) {}
 
   close(): void {
@@ -100,9 +106,74 @@ export class AgentBridge {
       json(response, 405, { error: 'POST required' });
       return;
     }
+    let admissionNotebook: string | undefined;
     try {
       const artifactRoute = route.startsWith('/agent-api/notebook-files/');
       const input = await body(request, artifactRoute ? 32_000_000 : 2_000_000);
+      if (route.startsWith('/agent-api/sessions/')) {
+        if (this.discoveryActive >= 2) throw new Error('Session discovery is busy');
+        this.discoveryActive++;
+        try {
+          const operation = route.slice('/agent-api/sessions/'.length);
+          if (operation === 'list') {
+            const query = z
+              .object({
+                provider: z.enum(['codex', 'claude']),
+                cursor: z.string().max(2048).optional(),
+              })
+              .strict()
+              .parse(input);
+            json(response, 200, await this.sources.list(query.provider, query.cursor));
+          } else if (operation === 'preview')
+            json(response, 200, await this.sources.history(sourceSchema.strict().parse(input)));
+          else if (operation === 'bind') {
+            const query = sourceSchema
+              .extend({
+                notebookId: z.string().min(1).max(200),
+                revision: z.number().int().nonnegative(),
+                agentId: z.string().max(512),
+              })
+              .strict()
+              .parse(input);
+            if (
+              this.bindingNotebooks.has(query.notebookId) ||
+              this.admittingNotebooks.has(query.notebookId)
+            )
+              throw new Error('Notebook binding is busy');
+            this.bindingNotebooks.add(query.notebookId);
+            try {
+              if (
+                [...this.sessions.values()].some(
+                  (s) => s.active && JSON.parse(s.owner)[0] === query.notebookId
+                )
+              )
+                throw new Error(
+                  'Wait for the notebook agent to finish before connecting a session'
+                );
+              const profile = await this.artifacts.readAgent(query.notebookId);
+              if (profile.agentId !== query.agentId)
+                throw new Error('Notebook Agent ownership mismatch');
+              const info = await this.sources.inspect(query);
+              if (this.sourceRuns.has(`${query.provider}:${query.sessionId}`))
+                throw new Error('Source session is already running');
+              json(
+                response,
+                200,
+                await this.artifacts.bindSession(
+                  query.notebookId,
+                  { provider: info.provider, sessionId: info.sessionId, cwd: info.cwd },
+                  query.revision
+                )
+              );
+            } finally {
+              this.bindingNotebooks.delete(query.notebookId);
+            }
+          } else throw new Error('Unknown session operation');
+        } finally {
+          this.discoveryActive--;
+        }
+        return;
+      }
       if (artifactRoute) {
         json(
           response,
@@ -210,6 +281,12 @@ export class AgentBridge {
         return;
       }
       const inputRun = runRequestSchema.parse(input);
+      if (this.admittingNotebooks.has(inputRun.notebookId))
+        throw new Error('Notebook admission is busy');
+      this.admittingNotebooks.add(inputRun.notebookId);
+      admissionNotebook = inputRun.notebookId;
+      if (this.bindingNotebooks.has(inputRun.notebookId))
+        throw new Error('Notebook binding is changing');
       const notebookAgent = inputRun.notebookAgentId
         ? await this.artifacts.readAgent(inputRun.notebookId)
         : undefined;
@@ -220,13 +297,28 @@ export class AgentBridge {
           (inputRun.role && inputRun.role !== 'worker'))
       )
         throw new Error('Notebook agent binding changed; reload before sending');
+      const source = notebookAgent?.source;
+      const sourceKey = source ? `${source.provider}:${source.sessionId}` : undefined;
+      if ((source?.sessionId ?? undefined) !== inputRun.sourceSessionId)
+        throw new Error('Source session binding changed; reopen the terminal');
+      if (source) {
+        if (this.sourceRuns.has(sourceKey!))
+          throw new Error('This source session is already running');
+        const actual = await this.sources.inspect(source);
+        if (actual.cwd !== source.cwd || actual.provider !== inputRun.provider)
+          throw new Error('Source session environment changed');
+      }
+      if (this.bindingNotebooks.has(inputRun.notebookId))
+        throw new Error('Notebook binding is changing');
       const owner = JSON.stringify([
         inputRun.notebookId,
         inputRun.cellId,
         inputRun.notebookAgentId ?? null,
+        inputRun.sourceSessionId ?? null,
         inputRun.provider,
         inputRun.role ?? 'worker',
       ]);
+      if (response.destroyed) return;
       const now = Date.now();
       for (const [key, session] of this.sessions) {
         if (!session.active && now - session.touched > 24 * 60 * 60 * 1000)
@@ -243,10 +335,21 @@ export class AgentBridge {
         return;
       }
       if (!session) {
-        session = { owner, touched: now };
+        session = {
+          owner,
+          touched: now,
+          ...(source
+            ? { threadId: source.sessionId, sourceSessionId: source.sessionId, cwd: source.cwd }
+            : {}),
+        };
         this.sessions.set(inputRun.sessionId, session);
       }
+      if (sourceKey && this.sourceRuns.has(sourceKey))
+        throw new Error('This source session is already running');
+      if (sourceKey) this.sourceRuns.add(sourceKey);
       session.active = inputRun.runId;
+      this.admittingNotebooks.delete(inputRun.notebookId);
+      admissionNotebook = undefined;
       const run: ActiveRun = { controller: new AbortController(), tools: new Map() };
       this.runs.set(inputRun.runId, run);
       response.writeHead(200, {
@@ -313,6 +416,7 @@ export class AgentBridge {
         clearTimeout(deadline);
         rejectTools();
         run.controller.abort();
+        if (sourceKey) this.sourceRuns.delete(sourceKey);
         session.active = undefined;
         session.touched = Date.now();
         this.runs.delete(inputRun.runId);
@@ -323,6 +427,8 @@ export class AgentBridge {
       if (!response.headersSent)
         json(response, 400, { error: error instanceof Error ? error.message : String(error) });
       else response.end();
+    } finally {
+      if (admissionNotebook) this.admittingNotebooks.delete(admissionNotebook);
     }
   };
 }
