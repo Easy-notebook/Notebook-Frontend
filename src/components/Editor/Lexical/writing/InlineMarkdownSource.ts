@@ -65,7 +65,11 @@ export function $sourceTarget(): LexicalNode | null {
     return node;
   let block: LexicalNode | null = node;
   while (block && block !== cell) {
-    if ($isHeadingNode(block) || $isQuoteNode(block) || $isListItemNode(block)) return block;
+    // ListItemNode owns Enter, indentation and list numbering. Replacing it with
+    // a source block splits the list on every keystroke and invalidates its caret.
+    // Inline formatting may reveal above; whole-list source belongs to SourcePane.
+    if ($isListItemNode(block)) return null;
+    if ($isHeadingNode(block) || $isQuoteNode(block)) return block;
     block = block.getParent();
   }
   return null;

@@ -263,3 +263,74 @@ describe('notebook document ownership', () => {
     close();
   });
 });
+
+it('loads transcript Markdown as native editable cells and preserves it across edits', async () => {
+  const { ClaudeCodeTranscript } = await import('@Utils/importFile/ClaudeCodeTranscript');
+  const { NotebookCellNode } = await import('./NotebookCellNode');
+  const imported = new ClaudeCodeTranscript().parse(
+    '❯ Review\n⏺ Bash(ls)\n  ⎿  data',
+    'session.txt'
+  ).cells;
+  useStore.setState({ notebookId: 'test', cells: imported });
+  const editor = buildEditorFromExtensions(
+    createNotebookExtension(imported, false, new NotebookPluginRegistry([]))
+  );
+  editor.update(() => {}, { discrete: true });
+  const session = new NotebookEditorSession(editor, 'test');
+  session.attach();
+  try {
+    expect(
+      editor.getEditorState().read(() => $getRoot().getChildAtIndex(1) instanceof NotebookCellNode)
+    ).toBe(true);
+    expect(
+      editor.getEditorState().read(() => $readCells((id) => session.cell(id)), { editor })
+    ).toEqual(imported);
+    session.replace(
+      { ...imported[1], metadata: { ...imported[1].metadata, editorMode: 'source' } },
+      imported[1]
+    );
+    const edited = useStore.getState().cells[1];
+    session.replace(previewCellSource(edited), edited);
+    expect(useStore.getState().cells[1]).toMatchObject({
+      type: 'markdown',
+      content: imported[1].content,
+      metadata: { transcriptFormat: 2 },
+    });
+  } finally {
+    session.dispose();
+    editor.dispose();
+  }
+});
+
+it('edits imported code and switches preview without losing its type or associated output', async () => {
+  const { ClaudeCodeTranscript } = await import('@Utils/importFile/ClaudeCodeTranscript');
+  const imported = new ClaudeCodeTranscript().parse(
+    '❯ Review\n⏺ Bash(ls)\n  ⎿  data',
+    'session.txt'
+  ).cells;
+  useStore.setState({ notebookId: 'test', cells: imported });
+  const editor = buildEditorFromExtensions(
+    createNotebookExtension(imported, false, new NotebookPluginRegistry([]))
+  );
+  editor.update(() => {}, { discrete: true });
+  const session = new NotebookEditorSession(editor, 'test');
+  session.attach();
+  try {
+    const code = imported[2];
+    session.replace({ ...code, metadata: { ...code.metadata, editorMode: 'source' } }, code);
+    expect(useStore.getState().cells[2].metadata?.editorMode).toBe('source');
+    session.updateSource(code.id, code.content, 'ls -a');
+    const edited = useStore.getState().cells[2];
+    expect(edited.content).toBe('ls -a');
+    session.replace(previewCellSource(edited), edited);
+    expect(useStore.getState().cells[2]).toMatchObject({
+      type: 'code',
+      language: 'bash',
+      content: 'ls -a',
+      outputs: code.outputs,
+    });
+  } finally {
+    session.dispose();
+    editor.dispose();
+  }
+});

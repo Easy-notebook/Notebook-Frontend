@@ -1,3 +1,4 @@
+import { $handleListInsertParagraph, $isListItemNode, $isListNode, $createListNode } from '@lexical/list';
 import {
   $getSelection,
   $isRangeSelection,
@@ -33,10 +34,35 @@ export function registerNotebookMarkdownInput(editor: LexicalEditor) {
         return false;
       const selection = $getSelection();
       if (!$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+      if ($handleListInsertParagraph()) {
+        event?.preventDefault();
+        return true;
+      }
       const anchor = selection.anchor.getNode();
       const block = $isTextNode(anchor) ? anchor.getParent() : anchor;
       const cell = $cellAncestor(block);
       if (!(cell instanceof NotebookCellNode) || cell.isTitle() || !block) return false;
+      // Notebook cells are document containers, not Lexical shadow roots.
+      // The standard list exit handles nested lists; this handles a cell-owned list.
+      if ($isListItemNode(block) && !block.getTextContent().trim()) {
+        const list = block.getParent();
+        if ($isListNode(list) && list.getParent() === cell) {
+          const following = block.getNextSiblings();
+          const paragraph = $createParagraphNode();
+          list.insertAfter(paragraph);
+          if (following.length) {
+            const tail = $createListNode(list.getListType(), list.getStart() + block.getIndexWithinParent() + 1);
+            tail.append(...following);
+            paragraph.insertAfter(tail);
+          }
+          block.remove();
+          if (!list.getChildrenSize()) list.remove();
+          paragraph.selectStart();
+          event?.preventDefault();
+          $addUpdateTag(HISTORY_PUSH_TAG);
+          return true;
+        }
+      }
       if ($isQuoteNode(block)) {
         const atEnd =
           ($isTextNode(anchor) &&

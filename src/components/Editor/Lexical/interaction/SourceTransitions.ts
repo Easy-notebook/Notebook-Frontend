@@ -27,6 +27,7 @@ export function breakCellFence(cell: Cell): Cell {
 export function previewCellSource(cell: Cell): Cell {
   const fence = standaloneFence(cell.content);
   const metadata = { ...cell.metadata, editorMode: undefined, sourceCellType: undefined };
+  if (cell.metadata?.transcriptFormat === 2) return { ...cell, metadata };
   if (cell.metadata?.sourceCellType === 'hybrid') return { ...cell, type: 'hybrid', metadata };
   if (fence)
     return {

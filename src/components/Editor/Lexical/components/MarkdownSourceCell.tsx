@@ -17,7 +17,7 @@ export function MarkdownSourceCell({ cell }: { cell: Cell }) {
   return (
     <div className="notebook-source-cell" data-cell-id={cell.id} contentEditable={false}>
       <div className="notebook-source-toolbar">
-        <span>Markdown source</span>
+        <span>{cell.type === 'code' ? `${cell.language || 'Code'} source` : 'Markdown source'}</span>
         <button
           type="button"
           disabled={readOnly}

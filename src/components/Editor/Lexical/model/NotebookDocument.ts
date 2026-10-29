@@ -28,10 +28,18 @@ import { NotebookCellNode } from './NotebookCellNode';
 import { EmbeddedCellNode } from './EmbeddedCellNode';
 import type { NotebookPluginRegistry } from '../extensionPoints';
 
+import { TranscriptCellDocument } from '@Utils/importFile/TranscriptCellDocument';
+
 export const EXTERNAL_NOTEBOOK_SYNC = 'external-notebook-sync';
+export function isRichMarkdownCell(cell: Cell): boolean {
+  return (
+    cell.type === 'markdown' &&
+    cell.metadata?.editorMode !== 'source' &&
+    (TranscriptCellDocument.read(cell)?.richMarkdown ?? true)
+  );
+}
 export function $createCellNode(cell: Cell, title = false): NotebookCellNode | EmbeddedCellNode {
-  if (cell.type !== 'markdown' || cell.metadata?.editorMode === 'source')
-    return new EmbeddedCellNode(cell);
+  if (!isRichMarkdownCell(cell)) return new EmbeddedCellNode(cell);
   const node = new NotebookCellNode(cell.id, cell.type, cell.content, null, title);
   const children = $generateNodesFromMarkdownString(cell.content);
   if (title && (!children.length || /^#\s*$/.test(cell.content)))

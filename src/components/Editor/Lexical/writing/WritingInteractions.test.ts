@@ -737,3 +737,51 @@ describe('source structural editing', () => {
     );
   });
 });
+
+describe('list source ownership', () => {
+  it.each(['- First\n- Second', '1. First\n2. Second', '- [ ] First\n- [x] Second'])(
+    'keeps list structure editable instead of revealing a detached source block: %s',
+    (content) => {
+      const t = setup(content);
+      t.editor.update(
+        () => {
+          const list = t.body();
+          const item = list.getFirstChildOrThrow<ElementNode>();
+          item.selectEnd();
+          expect($sourceTarget()).toBeNull();
+          const selection = $getSelection();
+          if (!$isRangeSelection(selection)) throw new Error('Expected list selection');
+          selection.insertParagraph();
+          const next = $getSelection();
+          if (!$isRangeSelection(next)) throw new Error('Expected next item');
+          next.insertText('新项目');
+          expect($sourceTarget()).toBeNull();
+          expect(list.getChildren().map((node) => node.getTextContent())).toEqual([
+            'First',
+            '新项目',
+            'Second',
+          ]);
+        },
+        { discrete: true }
+      );
+    }
+  );
+});
+
+it('exits an empty list item inside a notebook cell without losing following items', () => {
+  const t = setup('- First\n- Second');
+  t.editor.update(() => {
+    t.body().getFirstChildOrThrow<ElementNode>().selectEnd();
+    const selection = $getSelection();
+    if (!$isRangeSelection(selection)) throw new Error('Expected list caret');
+    selection.insertParagraph();
+    t.editor.dispatchCommand(KEY_ENTER_COMMAND, new KeyboardEvent('keydown', {key:'Enter'}));
+    const next = $getSelection();
+    if (!$isRangeSelection(next)) throw new Error('Expected paragraph caret');
+    next.insertText('Outside');
+    const cell = $getRoot().getChildAtIndex(1) as ElementNode;
+    expect(cell.getChildren().map(node => [node.getType(), node.getTextContent()])).toEqual([
+      ['list', 'First'], ['paragraph', 'Outside'], ['list', 'Second'],
+    ]);
+  }, {discrete:true});
+});

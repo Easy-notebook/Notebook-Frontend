@@ -1,3 +1,4 @@
+import { writingScroller, revealWritingPosition } from './WritingViewport';
 import { useEditorSurface } from './useEditorSurface';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -7,6 +8,7 @@ import { $notebookBlock } from '../interaction/NotebookBlockCommands';
 import useStore from '@Store/notebookStore';
 import './writing.css';
 import { SourcePane } from './SourcePane';
+import { PenLine, Code2, Columns2, Maximize2, Focus, Keyboard, Info } from 'lucide-react';
 
 /** View-only modes never rebuild the document or replace its session/history. */
 export function WritingModesPlugin() {
@@ -35,6 +37,12 @@ export function WritingModesPlugin() {
     host.dataset.zen = String(zen);
     host.dataset.writingView = view;
     root.dataset.focusMode = String(focus);
+    host.dataset.typewriter = String(typewriter);
+    const scroller = writingScroller(root);
+    const resize = new ResizeObserver(() => {
+      host.style.setProperty('--writing-viewport-height', `${scroller?.clientHeight ?? 0}px`);
+    });
+    if (scroller) resize.observe(scroller);
     let frame = 0;
     const update = () => {
       session.editor.read(() => {
@@ -54,23 +62,7 @@ export function WritingModesPlugin() {
         if (!selection?.rangeCount || !root.contains(selection.anchorNode)) return;
         const caret = selection.getRangeAt(0).getBoundingClientRect();
         if (!caret.height) return;
-        let scroller: HTMLElement | null = root.parentElement;
-        while (
-          scroller &&
-          !(
-            scroller.scrollHeight > scroller.clientHeight &&
-            /auto|scroll/.test(getComputedStyle(scroller).overflowY)
-          )
-        )
-          scroller = scroller.parentElement;
-        if (!scroller) return;
-        const box = scroller.getBoundingClientRect();
-        const delta = caret.top - (box.top + box.height * 0.45);
-        if (Math.abs(delta) > 2)
-          scroller.scrollBy({
-            top: delta,
-            behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
-          });
+        if (scroller) revealWritingPosition(scroller, caret.top + caret.height / 2, true);
       });
     };
     const detach = session.editor.registerUpdateListener(update);
@@ -84,6 +76,9 @@ export function WritingModesPlugin() {
     host.addEventListener('keydown', escape);
     return () => {
       detach();
+      resize.disconnect();
+      delete host.dataset.typewriter;
+      host.style.removeProperty('--writing-viewport-height');
       cancelAnimationFrame(frame);
       delete host.dataset.zen;
       delete host.dataset.writingView;
@@ -99,27 +94,62 @@ export function WritingModesPlugin() {
       <SourcePane mode={view} />
       {createPortal(
         <div className="notebook-writing-modes" role="toolbar" aria-label="写作模式">
-          <select
-            aria-label="编辑视图"
-            value={view}
-            onChange={(e) => setView(e.target.value as typeof view)}
+          <div className="notebook-view-switch" role="group" aria-label="编辑视图">
+            {(
+              [
+                ['rich', '书写', PenLine],
+                ['source', '源码', Code2],
+                ['split', '分屏', Columns2],
+              ] as const
+            ).map(([mode, label, Icon]) => (
+              <button
+                key={mode}
+                type="button"
+                aria-label={label}
+                title={label}
+                aria-pressed={view === mode}
+                onClick={() => setView(mode)}
+              >
+                <Icon size={16} aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            aria-label="禅模式"
+            title="禅模式 · Esc 退出"
+            aria-pressed={zen}
+            onClick={() => setZen(!zen)}
           >
-            <option value="rich">书写</option>
-            <option value="source">源码</option>
-            <option value="split">分屏</option>
-          </select>
-          <button aria-pressed={zen} onClick={() => setZen(!zen)}>
-            禅模式
+            <Maximize2 size={16} aria-hidden="true" />
           </button>
-          <button aria-pressed={focus} onClick={() => setFocus(!focus)}>
-            专注段落
+          <button
+            type="button"
+            aria-label="专注段落"
+            title="专注段落"
+            aria-pressed={focus}
+            onClick={() => setFocus(!focus)}
+          >
+            <Focus size={16} aria-hidden="true" />
           </button>
-          <button aria-pressed={typewriter} onClick={() => setTypewriter(!typewriter)}>
-            打字机
+          <button
+            type="button"
+            aria-label="打字机"
+            title="打字机"
+            aria-pressed={typewriter}
+            onClick={() => setTypewriter(!typewriter)}
+          >
+            <Keyboard size={16} aria-hidden="true" />
           </button>
-          <output aria-label="正文统计">
-            {count.characters} 字符 · {count.words} 词
-          </output>
+          <span
+            className="notebook-writing-stats"
+            tabIndex={0}
+            role="img"
+            aria-label={`正文统计：${count.characters} 字符 · ${count.words} 词`}
+            title={`${count.characters} 字符 · ${count.words} 词`}
+          >
+            <Info size={16} aria-hidden="true" />
+          </span>
         </div>,
         host
       )}

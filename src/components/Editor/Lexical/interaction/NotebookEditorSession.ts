@@ -18,6 +18,7 @@ import type { Cell } from '@Store/models';
 import useStore from '@Store/notebookStore';
 import {
   $createCellNode,
+  isRichMarkdownCell,
   $cellAncestor,
   $readCells,
   EXTERNAL_NOTEBOOK_SYNC,
@@ -31,6 +32,14 @@ type SessionPhase = 'creating' | 'ready' | 'publishing' | 'synchronizing' | 'dis
 /** One session owns tree/store reconciliation and the cell snapshots needed by undo. */
 export class NotebookEditorSession {
   phase: SessionPhase = 'creating';
+  private expandedSections = new Set<string>();
+  isSectionExpanded(id: string) {
+    return this.expandedSections.has(id);
+  }
+  setSectionExpanded(id: string, expanded: boolean) {
+    if (expanded) this.expandedSections.add(id);
+    else this.expandedSections.delete(id);
+  }
   private snapshots = new Map<string, Cell>();
   private detach: (() => void)[] = [];
   constructor(
@@ -144,7 +153,7 @@ export class NotebookEditorSession {
                 let node = current.get(cell.id);
                 const before = old.get(cell.id);
                 const title = index === 0 && isNotebookTitleCell(cell);
-                const rich = cell.type === 'markdown' && cell.metadata?.editorMode !== 'source';
+                const rich = isRichMarkdownCell(cell);
                 const mustReplace =
                   !node ||
                   rich !== node instanceof NotebookCellNode ||
@@ -333,5 +342,6 @@ export class NotebookEditorSession {
     this.phase = 'disposed';
     this.detach.splice(0).forEach((fn) => fn());
     this.snapshots.clear();
+    this.expandedSections.clear();
   }
 }

@@ -5,7 +5,8 @@
   box-sizing: border-box;
   /* Mounting or suspending a code editor must not resize the notebook's ancestors. */
   contain: inline-size;
-  overflow-x: hidden;
+  /* Clip horizontal overflow without creating a second vertical scroll owner. */
+  overflow-x: clip;
 }
 
 :is(.jupyter-notebook-editor, .notebook-editor-container)

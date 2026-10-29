@@ -92,6 +92,7 @@ export const EditorCover: React.FC<EditorCoverProps> = ({ readOnly = false }) =>
   return (
     <div
       className="relative w-full group shrink-0"
+      data-notebook-cover={cover ? 'true' : undefined}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

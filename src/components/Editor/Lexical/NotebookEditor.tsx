@@ -1,7 +1,6 @@
 import { TableToolbarPlugin } from './plugins/TableToolbarPlugin';
 import { NotebookMarkdownInputPlugin } from './writing/NotebookMarkdownInputPlugin';
 import { MarkdownRevealPlugin } from './writing/MarkdownRevealPlugin';
-import { WritingCompletionPlugin } from './writing/WritingCompletionPlugin';
 import { useMemo, useLayoutEffect, forwardRef, type ForwardedRef } from 'react';
 import { LexicalExtensionComposer } from '@lexical/react/LexicalExtensionComposer';
 import { ReactExtension, type EditorChildrenComponentProps } from '@lexical/react/ReactExtension';
@@ -22,7 +21,6 @@ import { createNotebookExtension } from './model/NotebookDocument';
 import { NotebookSessionPlugin } from './plugins/NotebookSessionPlugin';
 import { EditorHandlePlugin, type NotebookEditorRef } from './plugins/EditorHandlePlugin';
 export type { NotebookEditorRef } from './plugins/EditorHandlePlugin';
-import { WritingAssistantPlugin } from './writing/WritingAssistantPlugin';
 import { WritingInputPlugin } from './writing/WritingInputPlugin';
 import { LinkEditingPlugin } from './writing/LinkEditingPlugin';
 import { FindPlugin } from './writing/FindPlugin';
@@ -67,8 +65,6 @@ function EditabilityPlugin() {
   return null;
 }
 const registry = new NotebookPluginRegistry([
-  { id: 'writing-completion', Component: WritingCompletionPlugin },
-  { id: 'writing-assistant', Component: WritingAssistantPlugin },
   { id: 'notebook-markdown-input', Component: NotebookMarkdownInputPlugin },
   { id: 'markdown-reveal', Component: MarkdownRevealPlugin },
   { id: 'writing-input', Component: WritingInputPlugin },
@@ -167,7 +163,7 @@ function NotebookDocumentHost({
               {registry.plugins.map(({ id, Component }) => Component && <Component key={id} />)}
             </>
           </LexicalExtensionComposer>
-          <div className="h-20 w-full flex-shrink-0" />
+          <div className="notebook-writing-tail w-full flex-shrink-0" aria-hidden="true" />
         </div>
       </div>
     </EditorReadOnlyContext.Provider>

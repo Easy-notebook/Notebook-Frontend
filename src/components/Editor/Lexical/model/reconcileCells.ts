@@ -37,6 +37,15 @@ export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
       };
     }
 
+    if (cell.metadata?.transcriptFormat === 2) {
+      if (
+        cell.content === previous.content &&
+        cell.metadata?.editorMode === previous.metadata?.editorMode
+      )
+        return previous;
+      return { ...previous, content: cell.content, metadata: reconcileMetadata(cell, previous) };
+    }
+
     if (
       cell.type === 'code' ||
       cell.type === 'hybrid' ||
