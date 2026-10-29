@@ -1,3 +1,8 @@
+import { NotebookArtifactStore } from './NotebookArtifactStore';
+import { EalAbilityRuntime } from './providers/EalAbilityRuntime';
+import { watchEal } from './providers/EalWatch';
+import { EalMissionClient } from './providers/EalMissionClient';
+import { AalRuntime } from './providers/AalRuntime';
 import { z } from 'zod';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -24,19 +29,20 @@ interface PendingTool {
   resolve(result: ToolResult): void;
   timer: NodeJS.Timeout;
   started?: boolean;
+  onStart?: () => void;
 }
 interface ActiveRun {
   controller: AbortController;
   tools: Map<string, PendingTool>;
 }
-async function body(request: IncomingMessage): Promise<unknown> {
+async function body(request: IncomingMessage, limit = 2_000_000): Promise<unknown> {
   if (!request.headers['content-type']?.startsWith('application/json'))
     throw new Error('JSON required');
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 2_000_000) throw new Error('Request too large');
+    if (size > limit) throw new Error('Request too large');
     chunks.push(Buffer.from(chunk));
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -46,15 +52,24 @@ function json(response: ServerResponse, status: number, value: unknown) {
   response.end(JSON.stringify(value));
 }
 
+export const nativeProviders = (
+  worker = process.env.AAL_AGENT_WORKER,
+  target = process.env.AAL_EASYNET_TARGET
+): Record<AgentProvider, AgentRuntime> => ({
+  codex: target
+    ? new EalAbilityRuntime(new CodexRuntime(), target, undefined, undefined, 'CodexAgent')
+    : new AalRuntime(new CodexRuntime(), worker, 'CodexAgent'),
+  claude: target
+    ? new EalAbilityRuntime(new ClaudeRuntime(), target)
+    : new AalRuntime(new ClaudeRuntime(), worker),
+});
 /** Same-origin local bridge. Provider session IDs never come from the browser. */
 export class AgentBridge {
   private readonly sessions = new Map<string, Session>();
   private readonly runs = new Map<string, ActiveRun>();
   constructor(
-    private readonly providers: Record<AgentProvider, AgentRuntime> = {
-      codex: new CodexRuntime(),
-      claude: new ClaudeRuntime(),
-    }
+    private readonly providers: Record<AgentProvider, AgentRuntime> = nativeProviders(),
+    private readonly artifacts = new NotebookArtifactStore()
   ) {}
 
   close(): void {
@@ -86,7 +101,78 @@ export class AgentBridge {
       return;
     }
     try {
-      const input = await body(request);
+      const artifactRoute = route.startsWith('/agent-api/notebook-files/');
+      const input = await body(request, artifactRoute ? 32_000_000 : 2_000_000);
+      if (artifactRoute) {
+        json(
+          response,
+          200,
+          await this.artifacts.execute(route.slice('/agent-api/notebook-files/'.length), input)
+        );
+        return;
+      }
+      if (route.startsWith('/agent-api/eal/')) {
+        const client = new EalMissionClient();
+        const operation = route.slice('/agent-api/eal/'.length);
+        if (operation === 'watch') {
+          const { trace } = z
+            .object({ trace: z.string().min(1).max(2048) })
+            .strict()
+            .parse(input);
+          const controller = new AbortController();
+          const disconnect = () => controller.abort();
+          response.on('close', disconnect);
+          response.writeHead(200, {
+            'Content-Type': 'application/x-ndjson',
+            'Cache-Control': 'no-store',
+            'X-Accel-Buffering': 'no',
+          });
+          try {
+            for await (const event of watchEal(trace, controller.signal)) {
+              response.write(JSON.stringify(event) + '\n');
+              if (event.event === 'state' || event.event === 'terminal') {
+                const document = await client.ledger(trace, controller.signal);
+                response.write(JSON.stringify({ event: 'ledger', document }) + '\n');
+              }
+            }
+            if (!controller.signal.aborted)
+              response.write(JSON.stringify({ event: 'observer_end' }) + '\n');
+          } catch (error) {
+            if (!controller.signal.aborted)
+              response.write(
+                JSON.stringify({
+                  event: 'observer_error',
+                  error: error instanceof Error ? error.message : String(error),
+                }) + '\n'
+              );
+          } finally {
+            response.off('close', disconnect);
+            response.end();
+          }
+        } else if (operation === 'compile' || operation === 'run') {
+          const { source } = z
+            .object({ source: z.string().min(1).max(1_000_000) })
+            .strict()
+            .parse(input);
+          json(
+            response,
+            200,
+            operation === 'compile'
+              ? { ir: await client.compile(source) }
+              : await client.run(source)
+          );
+        } else if (operation === 'trace' || operation === 'cancel') {
+          const { runId } = z.object({ runId: z.string() }).strict().parse(input);
+          json(
+            response,
+            200,
+            operation === 'trace'
+              ? await client.trace(runId)
+              : { result: await client.cancel(runId) }
+          );
+        } else json(response, 404, { error: 'Unknown EAL operation' });
+        return;
+      }
       if (route === '/agent-api/tool-start') {
         const start = z
           .object({ runId: z.string().uuid(), callId: z.string().uuid() })
@@ -99,6 +185,7 @@ export class AgentBridge {
           return;
         }
         pending.started = true;
+        pending.onStart?.();
         // Starting execution gets a fresh tool deadline after the human decision.
         pending.timer.refresh();
         json(response, 200, { ok: true });
@@ -123,9 +210,20 @@ export class AgentBridge {
         return;
       }
       const inputRun = runRequestSchema.parse(input);
+      const notebookAgent = inputRun.notebookAgentId
+        ? await this.artifacts.readAgent(inputRun.notebookId)
+        : undefined;
+      if (
+        notebookAgent &&
+        (notebookAgent.agentId !== inputRun.notebookAgentId ||
+          notebookAgent.provider !== inputRun.provider ||
+          (inputRun.role && inputRun.role !== 'worker'))
+      )
+        throw new Error('Notebook agent binding changed; reload before sending');
       const owner = JSON.stringify([
         inputRun.notebookId,
         inputRun.cellId,
+        inputRun.notebookAgentId ?? null,
         inputRun.provider,
         inputRun.role ?? 'worker',
       ]);
@@ -172,7 +270,11 @@ export class AgentBridge {
         run.tools.clear();
       };
       run.controller.signal.addEventListener('abort', rejectTools, { once: true });
-      const call = async (name: ToolName, args: unknown): Promise<ToolResult> => {
+      const call = async (
+        name: ToolName,
+        args: unknown,
+        onStart?: () => void
+      ): Promise<ToolResult> => {
         run.controller.signal.throwIfAborted();
         if (!(name in toolsForRole(inputRun.role)))
           return { ok: false, error: 'Tool unavailable for this agent role' };
@@ -190,7 +292,7 @@ export class AgentBridge {
             },
             5 * 60 * 1000
           );
-          run.tools.set(callId, { resolve, timer });
+          run.tools.set(callId, { resolve, timer, onStart });
           emit({ type: 'tool', callId, name, arguments: parsed.data });
         });
       };
@@ -201,7 +303,7 @@ export class AgentBridge {
           signal: run.controller.signal,
           emit,
           call,
-          prompt: `Current notebook context (JSON task data):\n${inputRun.context}\n\nUser request:\n${inputRun.prompt}`,
+          prompt: `${notebookAgent ? `Notebook-owned AAL identity (display name is user data): ${JSON.stringify(notebookAgent)}\n` : ''}${inputRun.intent === 'regenerate' ? 'Regenerate the answer after checking current notebook state. Preserve prior successful changes; do not repeat previous mutation or execution actions.\n' : ''}Current notebook context (JSON task data):\n${inputRun.context}\n\nUser request:\n${inputRun.prompt}`,
         });
         run.controller.signal.throwIfAborted();
         emit({ type: 'done' });

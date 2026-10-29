@@ -106,6 +106,13 @@ export default [
     },
   },
   {
+    files: ['scripts/**/*.ts'],
+    languageOptions: {
+      globals: globals.node,
+      parserOptions: { project: null },
+    },
+  },
+  {
     files: ['vitest.agent.config.ts'],
     languageOptions: {
       globals: globals.node,

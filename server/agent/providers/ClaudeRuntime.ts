@@ -55,6 +55,16 @@ export class ClaudeRuntime implements AgentRuntime {
           run.emit({ type: 'text', text: message.event.delta.text });
         }
         if (message.type === 'result') {
+          run.emit({
+            type: 'usage',
+            usage: {
+              inputTokens:
+                message.usage.input_tokens +
+                (message.usage.cache_read_input_tokens ?? 0) +
+                (message.usage.cache_creation_input_tokens ?? 0),
+              outputTokens: message.usage.output_tokens,
+            },
+          });
           if (message.is_error)
             throw new Error('errors' in message ? message.errors.join('\n') : 'Claude run failed');
           completed = true;

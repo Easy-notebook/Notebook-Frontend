@@ -41,7 +41,11 @@ export default defineConfig(({ mode }) => {
     },
   };
   return {
-    plugins: [react(), nativeOriginGuard, agentBridgePlugin()],
+    plugins: [
+      react(),
+      nativeOriginGuard,
+      agentBridgePlugin(env.AAL_AGENT_WORKER, env.AAL_EASYNET_TARGET, target.origin),
+    ],
     server: {
       port: 3000,
       proxy: {

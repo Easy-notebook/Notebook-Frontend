@@ -123,6 +123,12 @@ export class CodexRuntime implements AgentRuntime {
           });
         } else if (p?.threadId && p.threadId !== run.session.threadId) {
           return;
+        } else if (message.method === 'thread/tokenUsage/updated' && p.tokenUsage?.last) {
+          const usage = p.tokenUsage.last;
+          run.emit({
+            type: 'usage',
+            usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+          });
         } else if (message.method === 'item/agentMessage/delta') {
           run.emit({ type: 'text', text: p.delta });
         } else if (

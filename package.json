@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "import:claude": "tsx scripts/convert-claude-transcripts.ts",
     "build": "vite build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
