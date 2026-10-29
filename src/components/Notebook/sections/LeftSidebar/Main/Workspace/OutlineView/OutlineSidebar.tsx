@@ -1,10 +1,10 @@
+import type { Task } from '@Store/models';
 import { NotebookContextPanel } from '../Context/NotebookContextPanel';
 // moved to sections/LeftSideBar/Main/Workspace/OutlineView
 import { useState, useCallback, memo, useMemo, useEffect } from 'react';
 import useStore from '@Store/notebookStore';
 import FileTree from '@LeftSidebar/Main/Workspace/FileExplorer/FileExplorer';
-import AgentList from '@LeftSidebar/Main/Workspace/Agents/AgentList';
-import { AgentType } from '@Services/agentMemoryService';
+import { WorkspaceAgentList } from '@Notebook/features/agents/WorkspaceAgents';
 import usePreviewStore from '@Store/previewStore';
 
 // 导入拆分后的组件
@@ -20,21 +20,11 @@ import {
 } from '@LeftSidebar/shared/components';
 
 interface OutlineSidebarProps {
-  tasks: Array<{
-    id: string;
-    title: string;
-    phases: Array<{
-      id: string;
-      title: string;
-      icon: string;
-      steps: Array<{ id: string; title: string }>;
-    }>;
-  }>;
+  tasks: Task[];
   currentPhaseId: string;
   currentStepId: string;
   onPhaseSelect: (phaseId: string, stepId: string) => void;
   viewMode: string;
-  onAgentSelect?: (agentType: AgentType) => void;
 }
 
 const OutlineSidebar = ({
@@ -42,7 +32,6 @@ const OutlineSidebar = ({
   currentPhaseId,
   onPhaseSelect,
   viewMode,
-  onAgentSelect,
 }: OutlineSidebarProps) => {
   const notebookId = useStore((state) => state.notebookId);
   const previewMode = usePreviewStore((s) => s.previewMode);
@@ -51,7 +40,6 @@ const OutlineSidebar = ({
     previewMode === 'file' ? 'file' : 'outline'
   );
   const [isHovered, setIsHovered] = useState(false);
-  const [selectedAgentType, setSelectedAgentType] = useState<AgentType | null>(null);
 
   const currentTask = useMemo(() => {
     if (!currentPhaseId) return null;
@@ -59,14 +47,6 @@ const OutlineSidebar = ({
   }, [tasks, currentPhaseId]);
 
   const projectName = currentTask?.title || (tasks && tasks.length > 0 ? tasks[0].title : '');
-
-  const handleAgentSelect = useCallback(
-    (agentType: AgentType) => {
-      setSelectedAgentType(agentType);
-      onAgentSelect?.(agentType);
-    },
-    [onAgentSelect]
-  );
 
   const allPhases = useMemo(() => tasks.flatMap((task) => task.phases), [tasks]);
 
@@ -94,7 +74,7 @@ const OutlineSidebar = ({
       );
     }
 
-    return <div className="w-full h-10" />;
+    return null;
   }, [viewMode, currentPhaseId, allPhases, activeTab, isHovered]);
 
   // Keep tab selection aligned with preview mode
@@ -131,7 +111,7 @@ const OutlineSidebar = ({
       </SidebarHeader>
 
       {/* 中间内容：根据 activeTab 切换显示 */}
-      <SidebarContent>
+      <SidebarContent className={activeTab === 'outline' ? 'notebook-outline-surface' : 'min-h-0'}>
         {activeTab === 'context' ? (
           <NotebookContextPanel key={notebookId} readOnly={viewMode === 'demo'} />
         ) : activeTab === 'file' ? (
@@ -141,13 +121,7 @@ const OutlineSidebar = ({
           </div>
         ) : activeTab === 'agents' ? (
           // Agent视图：显示AI代理列表，简化容器支持换行
-          <div className="py-0">
-            <AgentList
-              isCollapsed={false}
-              onAgentSelect={handleAgentSelect}
-              selectedAgentType={selectedAgentType}
-            />
-          </div>
+          <div className="py-0">{notebookId && <WorkspaceAgentList notebookId={notebookId} />}</div>
         ) : (
           <NotebookOutline onPhaseSelect={onPhaseSelect} />
         )}

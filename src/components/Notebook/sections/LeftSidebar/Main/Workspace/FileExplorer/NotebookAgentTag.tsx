@@ -1,6 +1,6 @@
 import { NotebookAgentLogo } from '@Notebook/features/function-bar/NotebookAgentLogo';
 import { useNotebookAgentIdentity } from '@Hooks/useNotebookAgentIdentity';
-import { useAIAgentStore } from '@Store/AIAgentStore';
+import { openAgentDetails } from '@Notebook/features/agents/agentDetailsSelection';
 
 export function NotebookAgentTag({ notebookId }: { notebookId: string }) {
   const { identity, error } = useNotebookAgentIdentity(notebookId);
@@ -10,11 +10,11 @@ export function NotebookAgentTag({ notebookId }: { notebookId: string }) {
       disabled={!identity}
       title={
         identity
-          ? `${identity.name} · ${identity.className} · 打开详情与 Terminal`
+          ? `${identity.name} · ${identity.className} · 查看详情`
           : error || '正在读取 AAL Agent 身份'
       }
-      aria-label={identity ? `打开 ${identity.name} 详情与 Terminal` : '正在读取 Agent 身份'}
-      onClick={() => useAIAgentStore.getState().setShowCommandInput(true)}
+      aria-label={identity ? `打开 ${identity.name} 详情` : '正在读取 Agent 身份'}
+      onClick={() => identity && openAgentDetails(notebookId, identity.className)}
     >
       <span className="explorer-agent-at" aria-hidden="true">
         @
