@@ -1,3 +1,4 @@
+import { agentWriting } from '../agent-writing/AgentWriting';
 import { describe, it, expect, vi } from 'vitest';
 import type { Cell } from '@Store/models';
 import { AgentCellSession, type AgentSessionPorts } from './AgentCellSession';
@@ -178,12 +179,18 @@ describe('AgentCellSession', () => {
 });
 
 describe('live approvals', () => {
-  it('pauses before mutation and consumes the exact approval only once', async () => {
+  it.each(['sidebar', 'cursor'])('consumes the same approval once from %s', async (surface) => {
     const callId = crypto.randomUUID();
     const f = fixture(async (request, _signal, emit) => {
       const version = JSON.parse(request.context).cells.find(
         (cell: { cellId: string }) => cell.cellId === 'code'
       ).version;
+      await emit({
+        type: 'tool',
+        callId: crypto.randomUUID(),
+        name: 'read_cell',
+        arguments: { cellId: 'code' },
+      });
       await emit({
         type: 'tool',
         callId,
@@ -192,18 +199,30 @@ describe('live approvals', () => {
       });
     });
     const pending = f.session.send('edit');
-    await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
+    await vi.waitFor(() =>
+      expect(
+        f.data().turns[0].actions.find((action) => action.name === 'update_cell')?.status
+      ).toBe('waiting')
+    );
     expect(f.ports.update).not.toHaveBeenCalled();
+    expect(agentWriting.forCell('notebook', 'code')?.phase).toBe('proposed');
     const turn = f.data().turns[0];
     expect(() => f.session.resolve('wrong', turn.id, callId, 'approve')).toThrow('ownership');
-    f.session.resolve(f.data().sessionId, turn.id, callId, 'approve');
+    const cursorApproval = agentWriting.forCell('notebook', 'code')!.approval!;
+    expect(cursorApproval).toBeDefined();
+    if (surface === 'cursor') cursorApproval.resolve('approve');
+    else f.session.resolve(f.data().sessionId, turn.id, callId, 'approve');
+    expect(() => cursorApproval.resolve('approve')).toThrow('no longer');
     expect(() => f.session.resolve(f.data().sessionId, turn.id, callId, 'approve')).toThrow(
       'no longer'
     );
     await pending;
     expect(f.ports.update).toHaveBeenCalledExactlyOnceWith('code', 'approved');
-    expect(f.transport.start).toHaveBeenCalledTimes(1);
-    expect(f.data().turns[0].actions[0]).toMatchObject({ status: 'completed', kind: 'tool' });
+    expect(agentWriting.forCell('notebook', 'code')).toBeUndefined();
+    expect(f.transport.start).toHaveBeenCalledTimes(2);
+    expect(
+      f.data().turns[0].actions.find((action) => action.name === 'update_cell')!
+    ).toMatchObject({ status: 'completed', kind: 'tool' });
     expect(f.data().turns[0].endedAt).toBeGreaterThanOrEqual(f.data().turns[0].startedAt!);
   });
   it.each(['reject', 'cancel', 'switch'] as const)(
@@ -216,25 +235,41 @@ describe('live approvals', () => {
         ).version;
         await emit({
           type: 'tool',
+          callId: crypto.randomUUID(),
+          name: 'read_cell',
+          arguments: { cellId: 'code' },
+        });
+        await emit({
+          type: 'tool',
           callId,
           name: 'update_cell',
           arguments: { cellId: 'code', version, content: 'blocked' },
         });
       });
       const pending = f.session.send('edit');
-      await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
-      if (mode === 'reject')
-        f.session.resolve(f.data().sessionId, f.data().turns[0].id, callId, 'reject');
+      await vi.waitFor(() =>
+        expect(
+          f.data().turns[0].actions.find((action) => action.name === 'update_cell')?.status
+        ).toBe('waiting')
+      );
+      if (mode === 'reject') agentWriting.forCell('notebook', 'code')!.approval!.resolve('reject');
       else if (mode === 'cancel') f.session.cancel();
       else f.switchNotebook();
       await pending;
       expect(f.ports.update).not.toHaveBeenCalled();
-      expect(f.transport.start).not.toHaveBeenCalled();
-      if (mode === 'reject') expect(f.data().turns[0].actions[0].status).toBe('rejected');
+      expect(f.transport.start).not.toHaveBeenCalledWith(
+        expect.anything(),
+        callId,
+        expect.anything()
+      );
+      if (mode === 'reject')
+        expect(
+          f.data().turns[0].actions.find((action) => action.name === 'update_cell')!.status
+        ).toBe('rejected');
       if (mode === 'cancel')
         expect(f.data().turns[0]).toMatchObject({
           status: 'cancelled',
-          actions: [{ status: 'cancelled' }],
+          actions: expect.arrayContaining([expect.objectContaining({ status: 'cancelled' })]),
         });
     }
   );
@@ -246,19 +281,33 @@ describe('live approvals', () => {
       ).version;
       await emit({
         type: 'tool',
+        callId: crypto.randomUUID(),
+        name: 'read_cell',
+        arguments: { cellId: 'code' },
+      });
+      await emit({
+        type: 'tool',
         callId,
         name: 'update_cell',
         arguments: { cellId: 'code', version, content: 'stale' },
       });
     });
     const pending = f.session.send('edit');
-    await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
+    await vi.waitFor(() =>
+      expect(
+        f.data().turns[0].actions.find((action) => action.name === 'update_cell')?.status
+      ).toBe('waiting')
+    );
     (f.ports.cells()[1] as Cell).content = 'manual change';
     for (const listener of f.listeners) listener();
     f.session.resolve(f.data().sessionId, f.data().turns[0].id, callId, 'approve');
     await pending;
     expect(f.ports.update).not.toHaveBeenCalled();
-    expect(JSON.stringify(f.data().turns[0].actions[0].result)).toContain('VERSION_CONFLICT');
+    expect(
+      JSON.stringify(
+        f.data().turns[0].actions.find((action) => action.name === 'update_cell')!.result
+      )
+    ).toContain('VERSION_CONFLICT');
   });
   it('does not mutate when the bridge refuses an expired tool', async () => {
     const callId = crypto.randomUUID();
@@ -268,17 +317,47 @@ describe('live approvals', () => {
       ).version;
       await emit({
         type: 'tool',
+        callId: crypto.randomUUID(),
+        name: 'read_cell',
+        arguments: { cellId: 'code' },
+      });
+      await emit({
+        type: 'tool',
         callId,
         name: 'update_cell',
         arguments: { cellId: 'code', version, content: 'stale' },
       });
     });
-    f.transport.start.mockRejectedValueOnce(new Error('expired'));
+    f.transport.start.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('expired'));
     const pending = f.session.send('edit');
-    await vi.waitFor(() => expect(f.data().turns[0].actions[0]?.status).toBe('waiting'));
+    await vi.waitFor(() =>
+      expect(
+        f.data().turns[0].actions.find((action) => action.name === 'update_cell')?.status
+      ).toBe('waiting')
+    );
     f.session.resolve(f.data().sessionId, f.data().turns[0].id, callId, 'approve');
     await pending;
     expect(f.ports.update).not.toHaveBeenCalled();
     expect(f.data().turns[0].status).toBe('failed');
   });
+});
+
+it('cleans a generating proposal when the provider fails before sending its replacement', async () => {
+  const f = fixture(async (request, _signal, emit) => {
+    const version = JSON.parse(request.context).cells.find(
+      (cell: { cellId: string }) => cell.cellId === 'code'
+    ).version;
+    await emit({
+      type: 'tool',
+      callId: crypto.randomUUID(),
+      name: 'propose_cell_edit',
+      arguments: { cellId: 'code', version, intent: 'Improve the code' },
+    });
+    expect(agentWriting.forCell('notebook', 'code')?.phase).toBe('generating');
+    await emit({ type: 'error', message: 'Provider disconnected' });
+  });
+  await f.session.send('Rewrite');
+  expect(f.session.phase).toBe('failed');
+  expect(agentWriting.forCell('notebook', 'code')).toBeUndefined();
+  expect(f.ports.update).not.toHaveBeenCalled();
 });

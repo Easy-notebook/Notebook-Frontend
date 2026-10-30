@@ -19,6 +19,7 @@ beforeEach(() => {
   mocks.load.mockResolvedValue({ agentId: 'book-agent', provider: 'codex' });
   mocks.state = {
     notebookId: 'book',
+    setIsRightSidebarCollapsed: vi.fn(),
     cells: [],
     addCell: vi.fn((cell) => {
       mocks.state.cells.push({ ...cell, id: 'new' });
@@ -30,6 +31,8 @@ it('creates and reuses the notebook-owned conversation', async () => {
   await notebookConversation.submit('book', 'hello', vi.fn());
   await notebookConversation.submit('book', 'continue', vi.fn());
   expect(mocks.state.addCell).toHaveBeenCalledTimes(1);
+  expect(mocks.state.setIsRightSidebarCollapsed).toHaveBeenCalledWith(false);
+  expect(useNotebookConversation.getState().selected.book).toBe('new');
   expect(mocks.state.cells[0].metadata.agent.notebookAgentId).toBe('book-agent');
   expect(mocks.send).toHaveBeenLastCalledWith('new', 'continue');
 });

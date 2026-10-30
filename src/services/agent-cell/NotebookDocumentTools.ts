@@ -1,3 +1,4 @@
+import { cellSourceIndex } from './NotebookSourceView';
 import { z } from 'zod';
 import type { Cell } from '@Store/models';
 import type { NotebookSnapshot } from '../autoSave/types';
@@ -66,19 +67,10 @@ export class NotebookDocumentTools {
     const snapshot = this.current();
     if (name === 'read_notebook') {
       const { offset, limit } = documentToolSchemas.read_notebook.parse(input);
-      let size = 0;
       const cells = [];
-      for (const cell of snapshot.cells.slice(offset, offset + limit)) {
-        const content =
-          cell.type === 'agent' ? '[Agent conversation]' : cell.content.slice(0, 30_000);
-        if (cells.length && size + content.length > 80_000) break;
-        size += content.length;
+      for (const [index, cell] of snapshot.cells.slice(offset, offset + limit).entries()) {
         cells.push({
-          cellId: cell.id,
-          type: cell.type,
-          language: cell.language,
-          content,
-          contentTruncated: cell.type !== 'agent' && content.length < cell.content.length,
+          ...cellSourceIndex(cell, offset + index),
           outputCount: cell.outputs?.length ?? 0,
           provenance: cell.metadata?.importSource
             ? {

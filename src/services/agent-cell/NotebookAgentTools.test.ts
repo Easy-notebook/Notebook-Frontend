@@ -50,6 +50,37 @@ function fixture() {
 }
 
 describe('NotebookAgentTools', () => {
+  it('requires current detail reads for proposals, direct writes and batch writes', async () => {
+    const f = fixture();
+    const version = f.tools.index()[1].version;
+    const args = { cellId: 'code', version, content: 'new' };
+    expect(f.tools.index()[1]).toMatchObject({ lineNumber: 2, preview: '1 + 1' });
+    expect((await f.tools.execute('update_cell', args)).error).toContain('DETAIL_READ_REQUIRED');
+    expect(f.tools.prepareWriting('update_cell', args)?.error).toContain('DETAIL_READ_REQUIRED');
+    expect(
+      (await f.tools.execute('propose_cell_edit', { cellId: 'code', version, intent: 'edit' }))
+        .error
+    ).toContain('DETAIL_READ_REQUIRED');
+    expect(
+      f.tools.prepareWriting('apply_notebook_edits', {
+        version: 'document',
+        backupId: crypto.randomUUID(),
+        operations: [{ op: 'update', cellId: 'code', content: 'new' }],
+      })?.error
+    ).toContain('DETAIL_READ_REQUIRED');
+    expect(await f.tools.execute('read_cell', { cellId: 'code' })).toMatchObject({
+      ok: true,
+      data: { documentLineNumber: 2, content: '1 + 1', lines: [{ lineNumber: 1, text: '1 + 1' }] },
+    });
+    f.ports.update('code', 'human change');
+    const fresh = f.tools.index()[1].version;
+    expect((await f.tools.execute('update_cell', { ...args, version: fresh })).error).toContain(
+      'DETAIL_READ_REQUIRED'
+    );
+    await f.tools.execute('read_cell', { cellId: 'code' });
+    expect((await f.tools.execute('update_cell', { ...args, version: fresh })).ok).toBe(true);
+    f.tools.dispose();
+  });
   it('isolates curator privileges from ordinary notebook agents', async () => {
     const f = fixture();
     f.ports.curateContext = vi.fn();
@@ -83,6 +114,7 @@ describe('NotebookAgentTools', () => {
     });
     expect(result.error).toContain('VERSION_CONFLICT');
     expect(f.ports.cells()[1].content).toBe('1 + 1');
+    await f.tools.execute('read_cell', { cellId: 'code' });
     const fresh = f.tools.index()[1].version;
     expect(
       (await f.tools.execute('update_cell', { cellId: 'code', version: fresh, content: '3 + 3' }))

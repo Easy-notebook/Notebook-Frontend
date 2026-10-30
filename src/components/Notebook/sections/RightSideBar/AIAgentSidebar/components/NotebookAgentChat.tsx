@@ -12,21 +12,27 @@ export function NotebookAgentChat() {
   const current = agents.find((cell) => cell.id === selected) ?? agents[agents.length - 1];
   return (
     <section aria-label="Notebook Agent 聊天" className="av-theme">
-      <label className="av-live-controls">
-        Notebook Agent
-        <select
-          aria-label="选择 Agent 会话"
-          value={current.id}
-          onChange={(event) => notebookId && select(notebookId, event.target.value)}
-        >
-          {agents.map((cell, index) => (
-            <option key={cell.id} value={cell.id}>
-              {cell.metadata?.agent?.provider === 'claude' ? 'Claude Code' : 'Codex'} · {index + 1}
-            </option>
-          ))}
-        </select>
-      </label>
-      <AgentCell key={current.id} cellId={current.id} />
+      <AgentCell
+        key={current.id}
+        cellId={current.id}
+        author={
+          agents.length > 1 ? (
+            <select
+              aria-label="选择 Agent 会话"
+              className="agent-message-author bg-transparent"
+              value={current.id}
+              onChange={(event) => notebookId && select(notebookId, event.target.value)}
+            >
+              {agents.map((cell, index) => (
+                <option key={cell.id} value={cell.id}>
+                  {cell.metadata?.agent?.provider === 'claude' ? '@ClaudeCodeAgent' : '@CodexAgent'}{' '}
+                  · {index + 1}
+                </option>
+              ))}
+            </select>
+          ) : undefined
+        }
+      />
     </section>
   );
 }

@@ -1,6 +1,7 @@
 // store/notebookStore.ts
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { create } from 'zustand';
+import { create, type StateCreator } from 'zustand';
+import { protectNotebookWrites } from '@Services/agent-writing/protectNotebookWrites';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { produce } from 'immer';
@@ -270,8 +271,11 @@ function deriveEditedTasks(cells: Cell[], previous: Task[]): Task[] {
   return tasks;
 }
 
+const notebookState = (initializer: StateCreator<NotebookStore>) =>
+  subscribeWithSelector<NotebookStore>(protectNotebookWrites(initializer));
+
 const useStore = create(
-  subscribeWithSelector<NotebookStore>((set, get) => {
+  notebookState((set, get) => {
     return {
       // ================= 状态 =================
       notebookId: null,

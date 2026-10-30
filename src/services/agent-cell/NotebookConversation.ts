@@ -1,3 +1,4 @@
+import { useAIAgentStore } from '@Store/AIAgentStore';
 import { notebookAgentProfiles } from './NotebookAgentIdentity';
 import { create } from 'zustand';
 import useStore from '@Store/notebookStore';
@@ -15,6 +16,13 @@ export const useNotebookConversation = create<{
       selected: { ...state.selected, [notebookId]: cellId },
     })),
 }));
+
+/** One destination for chat, approvals and execution details. */
+export function showNotebookConversation(notebookId: string, cellId: string) {
+  useNotebookConversation.getState().select(notebookId, cellId);
+  useAIAgentStore.getState().setActiveView('qa');
+  useStore.getState().setIsRightSidebarCollapsed(false);
+}
 
 /** The notebook terminal always addresses its own agent, never the selected worker. */
 export function resolveNotebookAgent(
@@ -62,7 +70,7 @@ export const notebookConversation = {
           },
         },
       });
-    useNotebookConversation.getState().select(notebookId, cellId);
+    showNotebookConversation(notebookId, cellId);
     void agentCellService.send(cellId, prompt).catch(onError);
     return true;
   },

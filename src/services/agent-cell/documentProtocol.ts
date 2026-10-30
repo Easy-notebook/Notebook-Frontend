@@ -13,6 +13,7 @@ export const documentToolSchemas = {
     .object({
       version: id,
       backupId: z.string().uuid(),
+      outline: z.boolean().optional(),
       operations: z
         .array(
           z.discriminatedUnion('op', [
@@ -35,11 +36,11 @@ export const documentToolSchemas = {
 };
 export const documentToolDescriptions: Record<keyof typeof documentToolSchemas, string> = {
   read_notebook:
-    'Read a bounded page of current notebook cells, original import provenance, and the document version. Follow nextOffset until null. Use read_cell for full content of large cells. Agent conversation bodies are omitted. Re-read after conflicts.',
+    'Read a bounded document index: one cell per 1-based document lineNumber with a single-line preview, import provenance and document version. Follow nextOffset until null. Source is not included; call read_cell for full source and internal line numbers before editing any existing cell. Agent conversation bodies are omitted. Re-read after conflicts.',
   backup_notebook:
     'Create a NEW immutable .easynb disk backup of the current live notebook version, including outputs and metadata. Returns backupId, exact filesystem path and SHA256. Must succeed before apply_notebook_edits; never overwrites the imported original.',
   apply_notebook_edits:
-    'Atomically apply ordered content updates, Markdown insertions, moves or removals to the current notebook. Requires current document version and a backup of that version from this run. Never edit protected agent/read-only cells. Existing metadata and outputs remain intact. One batch is one approval. Returns new version and inserted IDs; call flush_notebook next.',
+    'Atomically apply ordered content updates, Markdown insertions, moves or removals to the current notebook. Requires current document version and a backup of that version from this run. Never edit protected agent/read-only cells. Existing metadata and outputs remain intact. One batch is one approval. Use outline:true for a heading-only insert batch: all inserted nodes stay gray and locked as planned framework until individually expanded/committed or cancelled. Returns new version and inserted IDs; call flush_notebook next.',
   save_notebook_copy:
     'Save the current version as a NEW .easynb disk file. Returns fileId, exact filesystem path and SHA256. Use after edits and flush_notebook to deliver the organized result. Does not overwrite existing files.',
   flush_notebook:

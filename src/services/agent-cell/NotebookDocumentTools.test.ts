@@ -137,3 +137,15 @@ describe('versioned notebook organization', () => {
     await expect(f.read()).rejects.toThrow();
   });
 });
+
+it('numbers document cells across pages without exposing detail source', async () => {
+  const f = fixture();
+  f.snapshot.cells[1].content = 'first\nsecond\nthird';
+  const page = await f.tools.execute('read_notebook', { offset: 1, limit: 1 });
+  expect(page).toMatchObject({
+    totalCells: 3,
+    nextOffset: 2,
+    cells: [{ cellId: 'code', lineNumber: 2, preview: 'first second third' }],
+  });
+  expect((page as { cells: unknown[] }).cells[0]).not.toHaveProperty('content');
+});

@@ -6,14 +6,22 @@ import { AgentAvatar } from '../../../AgentVisuals/shared';
 import { markdownCodeComponents } from '../../MarkdownCodePreview';
 import './agent-cell.css';
 import { FactCapture } from '../../NotebookContext/FactCapture';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowUp, Square, MessageSquarePlus, FileText, CircleHelp, Reply } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import useStore from '@Store/notebookStore';
 import { agentCellService } from '@Services/agent-cell/agentCellService';
 import type { AgentCellData, AgentProvider } from '@Services/agent-cell/protocol';
 
-export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOnly?: boolean }) {
+export function AgentCell({
+  cellId,
+  readOnly = false,
+  author,
+}: {
+  cellId: string;
+  readOnly?: boolean;
+  author?: ReactNode;
+}) {
   const cell = useStore((state) => state.cells.find((item) => item.id === cellId));
   const notebookId = useStore((state) => state.notebookId);
   const data = cell?.metadata?.agent as AgentCellData | undefined;
@@ -81,24 +89,25 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
     >
       <header className="agent-cell-toolbar flex items-center gap-2 px-3 py-2">
         <AgentAvatar name={data?.provider === 'claude' ? 'Claude Code' : 'Codex'} />
-        {!!data?.turns.length ? (
-          <strong className="agent-message-author">
-            {data.provider === 'claude' ? 'Claude Code' : 'Codex'}
-          </strong>
-        ) : (
-          <select
-            aria-label="Agent provider"
-            className="rounded border px-2 py-1 text-sm"
-            value={data?.provider || 'codex'}
-            disabled={disabled || busy || !!data?.turns.length}
-            onChange={(event) =>
-              agentCellService.configure(cellId, event.target.value as AgentProvider)
-            }
-          >
-            <option value="codex">Codex</option>
-            <option value="claude">Claude Code</option>
-          </select>
-        )}
+        {author ??
+          (data?.turns.length ? (
+            <strong className="agent-message-author">
+              {data.provider === 'claude' ? '@ClaudeCodeAgent' : '@CodexAgent'}
+            </strong>
+          ) : (
+            <select
+              aria-label="Agent provider"
+              className="rounded border px-2 py-1 text-sm"
+              value={data?.provider || 'codex'}
+              disabled={disabled || busy || !!data?.turns.length}
+              onChange={(event) =>
+                agentCellService.configure(cellId, event.target.value as AgentProvider)
+              }
+            >
+              <option value="codex">@CodexAgent</option>
+              <option value="claude">@ClaudeCodeAgent</option>
+            </select>
+          ))}
         {attention && (
           <span className="agent-turn-description" role="status">
             {attention}
@@ -166,8 +175,21 @@ export function AgentCell({ cellId, readOnly = false }: { cellId: string; readOn
       <div className="space-y-3 px-3 py-2">
         {!!data?.turns.length && (
           <ReadingViewport label="Agent 对话记录" className="agent-conversation-history">
-            {data?.turns.slice(-1).map((turn) => (
+            {data?.turns.map((turn) => (
               <article key={turn.id} className="agent-answer-card space-y-2">
+                <div aria-label="用户需求" className="rounded border border-current/10 px-3 py-2">
+                  <div className="mb-1 text-xs opacity-60">需求</div>
+                  {turn.prompt.length > 400 ? (
+                    <details>
+                      <summary className="cursor-pointer text-sm">
+                        {turn.prompt.slice(0, 100)}…
+                      </summary>
+                      <p className="mt-2 whitespace-pre-wrap text-sm">{turn.prompt}</p>
+                    </details>
+                  ) : (
+                    <p className="whitespace-pre-wrap text-sm">{turn.prompt}</p>
+                  )}
+                </div>
                 <AgentRunActivity
                   cellId={cellId}
                   notebookId={notebookId || ''}

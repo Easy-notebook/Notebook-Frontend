@@ -113,7 +113,11 @@ export class AgentCellSession {
       this.cellId,
       this.ports,
       controller.signal,
-      data.role ?? 'worker'
+      data.role ?? 'worker',
+      {
+        name: data.provider === 'claude' ? 'Claude' : 'Codex',
+        color: data.provider === 'claude' ? '#d87b59' : '#5b91cb',
+      }
     );
     const results = new Map<string, ToolResult>();
     const receive = async (event: AgentEvent) => {
@@ -162,14 +166,29 @@ export class AgentCellSession {
             kind: 'tool',
             startedAt: Date.now(),
           });
-          const approval = requiresAgentApproval(event.name)
-            ? this.approvals.wait(event.callId, controller.signal)
+          const preparationError = tools.prepareWriting(event.name, event.arguments);
+          const approval =
+            !preparationError && requiresAgentApproval(event.name)
+              ? this.approvals.wait(event.callId, controller.signal)
+              : undefined;
+          const detachApproval = approval
+            ? tools.bindWritingApproval(event.name, event.arguments, (decision) =>
+                this.resolve(data.sessionId, turn.id, event.callId, decision)
+              )
             : undefined;
           publish();
-          const decision = approval ? await approval : 'approve';
+          let decision: ApprovalDecision;
+          try {
+            decision = approval ? await approval : 'approve';
+          } finally {
+            detachApproval?.();
+          }
           controller.signal.throwIfAborted();
           if (!current()) throw new Error('Agent session ownership changed');
-          if (decision === 'reject') {
+          if (preparationError) {
+            result = preparationError;
+          } else if (decision === 'reject') {
+            tools.rejectWriting(event.name, event.arguments);
             result = {
               ok: false,
               error:
