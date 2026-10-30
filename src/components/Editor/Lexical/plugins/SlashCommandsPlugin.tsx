@@ -158,8 +158,8 @@ export function SlashCommandsPlugin() {
       ),
       new Command(
         'agent',
-        'Agent Cell',
-        'Codex / Claude · 回答、修改与运行 cell',
+        'Agent 对话',
+        '在需求面板中打开 Codex / Claude 对话',
         Brain,
         ['agent', 'codex', 'claude', '助手', '智能体'],
         () => insert('agent')

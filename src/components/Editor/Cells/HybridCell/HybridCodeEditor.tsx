@@ -1,7 +1,7 @@
 import CodeMirror from '@uiw/react-codemirror';
 import { dracula } from '@uiw/codemirror-theme-dracula';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useEditorReadOnly } from '../../EditorAccessContext';
+import { useCellEditAccess } from '../../EditorAccessContext';
 import { useCodeEditorActivation } from '../CodeCell/model/useCodeEditorActivation';
 import { codeLanguageExtensions } from '../CodeCell/utils/languageSupport';
 
@@ -19,7 +19,7 @@ export function HybridCodeEditor({
   onChange: (value: string) => void;
 }) {
   const { resolvedTheme } = useTheme();
-  const readOnly = useEditorReadOnly();
+  const { readOnly } = useCellEditAccess(cellId);
   const activation = useCodeEditorActivation(cellId, current);
   return (
     <div

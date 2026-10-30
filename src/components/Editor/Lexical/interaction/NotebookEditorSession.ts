@@ -1,3 +1,7 @@
+import { NotebookDocumentProjection } from '../model/NotebookDocumentProjection';
+import { showNotebookConversation } from '@Services/agent-cell/NotebookConversation';
+import { agentWriting, WritingConflict } from '@Services/agent-writing/AgentWriting';
+import { registerAgentEditGuard } from '../collaboration/AgentEditGuard';
 import { suspendExternalSelection } from './ExternalSelection';
 import { agentFenceProvider, agentFenceCell } from '@/services/agent-cell/AgentFence';
 import {
@@ -12,6 +16,7 @@ import {
   SKIP_DOM_SELECTION_TAG,
   CLEAR_HISTORY_COMMAND,
   type LexicalEditor,
+  type EditorState,
   type ParagraphNode,
 } from 'lexical';
 import type { Cell } from '@Store/models';
@@ -41,11 +46,13 @@ export class NotebookEditorSession {
     else this.expandedSections.delete(id);
   }
   private snapshots = new Map<string, Cell>();
+  private acceptedState: EditorState;
   private detach: (() => void)[] = [];
   constructor(
     readonly editor: LexicalEditor,
     readonly notebookId: string | null
   ) {
+    this.acceptedState = editor.getEditorState();
     useStore.getState().cells.forEach((cell) => this.snapshots.set(cell.id, cell));
   }
   cell(id: string) {
@@ -59,10 +66,16 @@ export class NotebookEditorSession {
       throw new Error('Notebook editor session already attached');
     useStore.getState().cells.forEach((cell) => this.snapshots.set(cell.id, cell));
     this.phase = 'ready';
+    this.detach.push(registerAgentEditGuard(this.editor, this.notebookId));
     this.detach.push(
       this.editor.registerUpdateListener(
         ({ editorState, prevEditorState, tags, dirtyElements, dirtyLeaves }) => {
-          if (!this.owns() || this.phase !== 'ready' || tags.has(EXTERNAL_NOTEBOOK_SYNC)) return;
+          if (!this.owns()) return;
+          if (tags.has(EXTERNAL_NOTEBOOK_SYNC)) {
+            this.acceptedState = editorState;
+            return;
+          }
+          if (this.phase !== 'ready') return;
           const selectionCell = editorState.read(() => {
             const selection = $getSelection();
             return $isRangeSelection(selection)
@@ -73,7 +86,10 @@ export class NotebookEditorSession {
           });
           if (selectionCell && useStore.getState().currentCellId !== selectionCell)
             useStore.getState().setCurrentCell(selectionCell);
-          if (!dirtyElements.size && !dirtyLeaves.size) return;
+          if (!dirtyElements.size && !dirtyLeaves.size) {
+            this.acceptedState = editorState;
+            return;
+          }
           this.phase = 'publishing';
           try {
             const state = useStore.getState();
@@ -97,8 +113,41 @@ export class NotebookEditorSession {
               editor: this.editor,
             });
             const next = reconcileCells(projected, state.cells);
+            try {
+              agentWriting.assertMutation(this.notebookId, state.cells, next);
+            } catch (error) {
+              if (!(error instanceof WritingConflict)) throw error;
+              // Leave Lexical's update-listener phase before restoring; an empty root
+              // otherwise leaves its nested restoration pending without a commit.
+              const restore = this.acceptedState;
+              queueMicrotask(() => {
+                if (this.owns() && this.editor.getEditorState() === editorState)
+                  this.editor.setEditorState(restore, { tag: EXTERNAL_NOTEBOOK_SYNC });
+              });
+              return;
+            }
+            this.acceptedState = editorState;
             next.forEach((cell) => this.snapshots.set(cell.id, cell));
             if (cellsChanged(next, state.cells)) state.setCells(next);
+            const conversation = projected.find((cell) => cell.type === 'agent');
+            if (conversation && this.notebookId) {
+              queueMicrotask(() => {
+                if (!this.owns()) return;
+                this.editor.update(
+                  () => {
+                    for (const node of $getRoot().getChildren()) {
+                      if (
+                        node instanceof EmbeddedCellNode &&
+                        this.cell(node.getCellId())?.type === 'agent'
+                      )
+                        node.remove();
+                    }
+                  },
+                  { discrete: true, tag: EXTERNAL_NOTEBOOK_SYNC }
+                );
+                showNotebookConversation(this.notebookId!, conversation.id);
+              });
+            }
           } finally {
             if (this.owns()) this.phase = 'ready';
           }
@@ -146,10 +195,11 @@ export class NotebookEditorSession {
                   )
               );
               const old = new Map(previous.cells.map((cell) => [cell.id, cell]));
-              const wanted = new Set(state.cells.map((cell) => cell.id));
+              const content = NotebookDocumentProjection.content(state.cells);
+              const wanted = new Set(content.map((cell) => cell.id));
               for (const [id, node] of current) if (!wanted.has(id)) node.remove();
               let predecessor: NotebookCellNode | EmbeddedCellNode | null = null;
-              state.cells.forEach((cell, index) => {
+              content.forEach((cell, index) => {
                 let node = current.get(cell.id);
                 const before = old.get(cell.id);
                 const title = index === 0 && isNotebookTitleCell(cell);
@@ -196,6 +246,12 @@ export class NotebookEditorSession {
   }
   insert(cell: Cell) {
     if (!this.owns() || !this.editor.isEditable()) return;
+    if (cell.type === 'agent' && this.notebookId) {
+      const state = useStore.getState();
+      state.setCells([...state.cells, cell]);
+      showNotebookConversation(this.notebookId, cell.id);
+      return;
+    }
     this.snapshots.set(cell.id, cell);
     this.editor.update(
       () => {
@@ -277,7 +333,8 @@ export class NotebookEditorSession {
   updateSource(id: string, base: string, content: string): boolean {
     if (!this.owns() || !this.editor.isEditable()) return false;
     const latest = useStore.getState().cells.find((cell) => cell.id === id);
-    if (!latest || latest.content !== base) return false;
+    if (!latest || latest.content !== base || agentWriting.forCell(this.notebookId, id))
+      return false;
     let updated = false;
     this.editor.update(
       () => {
@@ -305,6 +362,7 @@ export class NotebookEditorSession {
     return updated;
   }
   remove(id: string) {
+    if (agentWriting.forCell(this.notebookId, id)) return;
     if (!this.owns() || !this.editor.isEditable()) return;
     this.editor.update(
       () => {
@@ -319,6 +377,7 @@ export class NotebookEditorSession {
     );
   }
   replace(cell: Cell, expected?: Cell) {
+    if (agentWriting.forCell(this.notebookId, cell.id)) return;
     if (expected) {
       const latest = useStore.getState().cells.find((item) => item.id === expected.id);
       if (!latest || latest.type !== expected.type || latest.content !== expected.content) return;

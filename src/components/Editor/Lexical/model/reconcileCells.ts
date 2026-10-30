@@ -1,3 +1,4 @@
+import { NotebookDocumentProjection } from './NotebookDocumentProjection';
 import type { Cell } from '@Store/models';
 import { getCellById } from '@Store/models/cellIndex';
 
@@ -16,7 +17,7 @@ function reconcileMetadata(projected: Cell, stored: Cell) {
  * outputs, and metadata that is not represented by a document node.
  */
 export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
-  return projected.map((cell) => {
+  const reconciled = projected.map((cell) => {
     const previous = getCellById(stored, cell.id);
     if (!previous) return cell;
 
@@ -69,6 +70,7 @@ export function reconcileCells(projected: Cell[], stored: Cell[]): Cell[] {
     if (cell.content === previous.content) return previous;
     return { ...previous, content: cell.content };
   });
+  return NotebookDocumentProjection.retainConversations(reconciled, stored);
 }
 
 export function cellsChanged(next: Cell[], current: Cell[]): boolean {

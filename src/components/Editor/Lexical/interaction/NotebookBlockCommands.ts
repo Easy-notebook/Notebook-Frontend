@@ -42,7 +42,7 @@ export const BLOCK_TYPES = [
   ['mermaid', 'Mermaid 图表'],
   ['image', '图片'],
   ['raw', '原始文本'],
-  ['agent', 'Agent Cell'],
+  ['agent', 'Agent 对话'],
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number][0];
 /** A block is a content unit; cell wrappers remain persistence boundaries. */

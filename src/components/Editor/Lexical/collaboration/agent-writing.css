@@ -1,0 +1,140 @@
+.notebook-document-frame {
+  position: relative;
+}
+.agent-writing-target {
+  padding-top: var(--agent-writing-space, 90px) !important;
+}
+.agent-writing-target > * {
+  opacity: 0.6;
+}
+.agent-writing-decoration {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  --agent-muted: #777772;
+  color: var(--agent-muted);
+  --agent-shine: #b4b4b0;
+  padding: 0 0 8px;
+}
+.dark .agent-writing-decoration {
+  --agent-muted: #92928a;
+  --agent-shine: #eeeee7;
+}
+.agent-writing-draft {
+  position: relative;
+  margin-top: 24px;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  padding-top: 20px;
+}
+.agent-writing-decoration--inplace .agent-writing-draft {
+  margin-top: 0;
+  padding-top: 0;
+}
+.agent-writing-caret {
+  position: absolute;
+  left: -2px;
+  top: 0;
+  height: 1.7em;
+  border-left: 2px solid var(--agent-color);
+}
+.agent-writing-name {
+  position: absolute;
+  left: -2px;
+  bottom: 100%;
+  padding: 1px 7px;
+  border-radius: 4px 4px 4px 0;
+  font:
+    12px/18px system-ui,
+    sans-serif;
+  color: white;
+  background: var(--agent-color);
+  white-space: nowrap;
+  overflow-wrap: normal;
+  width: max-content;
+}
+/* Shiny Text treatment: a narrow highlight crosses only the working text. */
+.agent-shiny-text {
+  background-image: linear-gradient(
+    110deg,
+    currentColor 35%,
+    var(--agent-shine) 48%,
+    currentColor 61%
+  );
+  background-size: 250% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: agent-writing-shine 2.8s linear infinite;
+}
+@keyframes agent-writing-shine {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-shiny-text {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+@media print {
+  .agent-writing-decoration {
+    display: none;
+  }
+  .agent-writing-target {
+    padding-top: 0 !important;
+  }
+  .agent-writing-target > * {
+    opacity: 1;
+  }
+}
+
+.agent-writing-caret--inline {
+  position: absolute;
+  pointer-events: none;
+}
+
+.agent-cursor-approval {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  display: flex;
+  gap: 6px;
+  width: max-content;
+  padding: 6px 0;
+  margin-top: 0;
+  pointer-events: auto;
+  font:
+    12px/20px system-ui,
+    sans-serif;
+}
+.agent-cursor-approval button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  background: var(--av-bg);
+}
+
+/* Typography and block layout come from the authored document. Only activity color differs. */
+.notebook-rich-editor.agent-markdown-preview {
+  min-height: 0;
+  color: var(--agent-muted);
+  --editor-ink: var(--agent-muted);
+  --editor-muted: var(--agent-muted);
+  --editor-accent: var(--agent-muted);
+}
+.agent-writing-draft > pre {
+  white-space: pre-wrap;
+}
+
+/* Framework placeholders have one read-only gray representation, never a second normal heading. */
+.agent-outline-target > *,
+.agent-preview-target > * {
+  display: none !important;
+}

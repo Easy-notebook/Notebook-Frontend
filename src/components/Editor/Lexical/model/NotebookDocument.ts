@@ -1,3 +1,4 @@
+import { NotebookDocumentProjection } from './NotebookDocumentProjection';
 import { MarkdownSourceExtension } from './MarkdownSourceNode';
 import {
   $createParagraphNode,
@@ -51,7 +52,7 @@ export function $createCellNode(cell: Cell, title = false): NotebookCellNode | E
 export function $loadCells(cells: readonly Cell[]) {
   const root = $getRoot();
   root.clear();
-  cells.forEach((cell, index) =>
+  NotebookDocumentProjection.content(cells).forEach((cell, index) =>
     root.append($createCellNode(cell, index === 0 && isNotebookTitleCell(cell)))
   );
   if (!root.getChildrenSize())

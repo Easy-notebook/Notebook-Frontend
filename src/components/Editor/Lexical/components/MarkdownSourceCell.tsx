@@ -2,22 +2,24 @@ import { useRef, useLayoutEffect } from 'react';
 import { handleSourceInputHistory, useSourceNativeHistory } from '../interaction/sourceInput';
 import type { Cell } from '@Store/models';
 import { useNotebookEditorSession } from '../interaction/NotebookSessionContext';
-import { useEditorReadOnly } from '../../EditorAccessContext';
+import { useCellEditAccess } from '../../EditorAccessContext';
 import { previewCellSource } from '../interaction/SourceTransitions';
 export function MarkdownSourceCell({ cell }: { cell: Cell }) {
   const session = useNotebookEditorSession();
-  const readOnly = useEditorReadOnly();
+  const { readOnly, viewReadOnly } = useCellEditAccess(cell.id);
   const input = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
   useLayoutEffect(() => {
-    if (!readOnly) input.current?.focus({ preventScroll: true });
-  }, [readOnly]);
+    if (!viewReadOnly && !input.current?.readOnly) input.current?.focus({ preventScroll: true });
+  }, [viewReadOnly]);
   const canEdit = () => !readOnly && session.owns();
   useSourceNativeHistory(input, session.editor, canEdit, composing);
   return (
     <div className="notebook-source-cell" data-cell-id={cell.id} contentEditable={false}>
       <div className="notebook-source-toolbar">
-        <span>{cell.type === 'code' ? `${cell.language || 'Code'} source` : 'Markdown source'}</span>
+        <span>
+          {cell.type === 'code' ? `${cell.language || 'Code'} source` : 'Markdown source'}
+        </span>
         <button
           type="button"
           disabled={readOnly}

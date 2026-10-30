@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { DISPLAY_MODES } from '@Store/codeStore';
 import { useCodeCellViewModel } from './model/useCodeCellViewModel';
-import { useEditorReadOnly } from '../../EditorAccessContext';
+import { useCellEditAccess } from '../../EditorAccessContext';
 import { isCompositionInput } from '../../utils/compositionInput';
 import { isPlainBackspace } from '../../utils/editorShortcuts';
 
@@ -24,7 +24,7 @@ const CodeCell: React.FC<CodeCellProps> = ({
   isInDetachedView = false,
   isDemoMode = false,
 }) => {
-  const readOnly = useEditorReadOnly();
+  const { readOnly } = useCellEditAccess(cell.id);
   // ========== Refs ==========
   const editorRef = useRef<ReactCodeMirrorRef>(null);
   const codeContainerRef = useRef<HTMLDivElement | null>(null);

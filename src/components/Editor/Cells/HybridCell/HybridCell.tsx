@@ -4,7 +4,7 @@ import { Trash2, Loader2 } from 'lucide-react';
 import { HybridMarkdown } from './HybridMarkdown';
 import { Cell as StoreCell } from '@Store/models';
 import { useHybridCellViewModel } from './model/useHybridCellViewModel';
-import { useEditorReadOnly } from '../../EditorAccessContext';
+import { useCellEditAccess } from '../../EditorAccessContext';
 import useStore from '@Store/notebookStore';
 
 const LoadingIndicator = () => (
@@ -20,7 +20,7 @@ interface HybridCellProps {
 }
 
 const HybridCell: React.FC<HybridCellProps> = ({ cell, onDelete }) => {
-  const readOnly = useEditorReadOnly();
+  const { readOnly } = useCellEditAccess(cell.id);
   const isCurrentCell = useStore((state) => state.currentCellId === cell.id);
   const vm = useHybridCellViewModel(cell);
   const contentType = vm.contentType;

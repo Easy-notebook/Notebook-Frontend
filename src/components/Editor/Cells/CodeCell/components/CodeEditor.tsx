@@ -6,7 +6,7 @@ import { CodeEditorProps } from '../utils/types';
 import { EXPAND_THRESHOLD } from '../utils';
 import { codeLanguageExtensions } from '../utils/languageSupport';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useEditorReadOnly } from '../../../EditorAccessContext';
+import { useCellEditAccess } from '../../../EditorAccessContext';
 import { useCodeEditorActivation } from '../model/useCodeEditorActivation';
 import { useCodeContentHeight } from '../model/useCodeContentHeight';
 import './CodeEditor.css';
@@ -35,7 +35,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
   onCopyCode,
 }) => {
   const { resolvedTheme } = useTheme();
-  const readOnly = useEditorReadOnly();
+  const { readOnly, viewReadOnly } = useCellEditAccess(cell.id);
   const mutationBlocked = readOnly || isExecuting || dslcMode;
   const activation = useCodeEditorActivation(cell.id, !!isCurrentCell || !!isInDetachedView);
   useCodeContentHeight(
@@ -115,7 +115,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({
                 height: isInDetachedView ? '100%' : 'auto',
               }}
               readOnly={mutationBlocked}
-              autoFocus={isCurrentCell && !dslcMode && !readOnly}
+              autoFocus={isCurrentCell && !dslcMode && !viewReadOnly}
               ref={editorRef}
             />
           ) : (

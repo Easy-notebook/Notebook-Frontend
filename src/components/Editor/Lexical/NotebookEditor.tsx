@@ -1,3 +1,5 @@
+import { notebookContent } from './model/NotebookContent';
+import { AgentWritingPlugin } from './collaboration/AgentWritingPlugin';
 import { TableToolbarPlugin } from './plugins/TableToolbarPlugin';
 import { NotebookMarkdownInputPlugin } from './writing/NotebookMarkdownInputPlugin';
 import { MarkdownRevealPlugin } from './writing/MarkdownRevealPlugin';
@@ -26,18 +28,10 @@ import { LinkEditingPlugin } from './writing/LinkEditingPlugin';
 import { FindPlugin } from './writing/FindPlugin';
 import { WritingModesPlugin } from './writing/WritingModesPlugin';
 import { BlockToolsPlugin } from './plugins/BlockToolsPlugin';
-import { PersistentBlockExtension } from './blocks/PersistentBlockExtension';
-import { ColumnsExtension } from './columns/ColumnsExtension';
-import { TextFormattingExtension } from './model/TextFormatting';
-import { NotebookHtmlExtension } from './model/NotebookHtml';
 import { TableResizePlugin } from './plugins/TableResizePlugin';
 import { TableInputExtension } from './interaction/TableInput';
-import { MarkdownTableSemanticsExtension } from './model/MarkdownTable';
-import { FencedCodeSourceExtension } from './model/FencedCodeSource';
 import { FenceInputPlugin } from './plugins/FenceInputPlugin';
 import { NavigationPlugin } from './plugins/NavigationPlugin';
-import { ImageExtension } from './model/ImageNode';
-import { ScientificExtension } from './model/ScientificNode';
 import { AssetInputPlugin } from './plugins/AssetInputPlugin';
 import { FormattingPlugin } from './plugins/FormattingPlugin';
 import { SlashCommandsPlugin } from './plugins/SlashCommandsPlugin';
@@ -65,6 +59,8 @@ function EditabilityPlugin() {
   return null;
 }
 const registry = new NotebookPluginRegistry([
+  ...notebookContent.plugins,
+  { id: 'agent-writing', Component: AgentWritingPlugin },
   { id: 'notebook-markdown-input', Component: NotebookMarkdownInputPlugin },
   { id: 'markdown-reveal', Component: MarkdownRevealPlugin },
   { id: 'writing-input', Component: WritingInputPlugin },
@@ -73,19 +69,13 @@ const registry = new NotebookPluginRegistry([
   { id: 'writing-modes', Component: WritingModesPlugin },
   {
     id: 'block-tools',
-    extensions: [PersistentBlockExtension, ColumnsExtension],
     Component: BlockToolsPlugin,
   },
-  { id: 'text-formatting', extensions: [TextFormattingExtension] },
-  { id: 'html', extensions: [NotebookHtmlExtension] },
   { id: 'table-resize', Component: TableResizePlugin },
   { id: 'table-toolbar', Component: TableToolbarPlugin },
   { id: 'fence-input', Component: FenceInputPlugin },
-  { id: 'fences', extensions: [FencedCodeSourceExtension] },
-  { id: 'tables', extensions: [MarkdownTableSemanticsExtension, TableInputExtension] },
+  { id: 'tables', extensions: [TableInputExtension] },
   { id: 'navigation', Component: NavigationPlugin },
-  { id: 'images', extensions: [ImageExtension] },
-  { id: 'scientific', extensions: [ScientificExtension] },
   { id: 'asset-input', Component: AssetInputPlugin },
   { id: 'document-behavior', Component: DocumentBehaviorPlugin },
   { id: 'formatting', Component: FormattingPlugin },

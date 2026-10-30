@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Cell } from '@Store/models';
 import useStore from '@Store/notebookStore';
-import { useEditorReadOnly } from '../../EditorAccessContext';
+import { useCellEditAccess } from '../../EditorAccessContext';
 import { isCompositionInput } from '../../utils/compositionInput';
 import { useNotebookEditorSession } from '../interaction/NotebookSessionContext';
 
 /** Source edits use compare-and-set: concurrent agent changes never overwrite a local draft. */
 export function SourceCell({ cell, onDelete }: { cell: Cell; onDelete?: () => void }) {
-  const readOnly = useEditorReadOnly();
+  const { readOnly } = useCellEditAccess(cell.id);
   const session = useNotebookEditorSession();
   const [draft, setDraft] = useState<{ base: string; value: string; error?: string } | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
