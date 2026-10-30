@@ -80,6 +80,8 @@ describe.skipIf(!executable)('packaged native AAL ability with local Host', () =
     let count = 0;
     const f = await fixture({
       run: async (run: any) => {
+        expect(run.notebookSkill?.name).toBe('notebook');
+        expect(run.notebookSkill?.allowedTools).toContain('propose_cell_edit');
         count++;
         run.emit({ type: 'text', text: 'native host answer' });
       },
@@ -97,7 +99,7 @@ describe.skipIf(!executable)('packaged native AAL ability with local Host', () =
       await f.close();
     }
   });
-  it('exports the standard-library Codex ability through its explicit binding', async () => {
+  it('exports the source-imported Notebook skill through the Codex binding', async () => {
     const f = await fixture(
       { run: async (run: any) => run.emit({ type: 'text', text: 'codex extension' }) },
       undefined,
@@ -111,7 +113,9 @@ describe.skipIf(!executable)('packaged native AAL ability with local Host', () =
       expect(f.events.some((e) => e.type === 'span' && e.span.name === 'CodexAgent.run')).toBe(
         true
       );
-      expect(f.events.some((e) => e.type === 'span' && e.span.name === 'skill.codex')).toBe(true);
+      expect(f.events.some((e) => e.type === 'span' && e.span.name === 'skill.notebook')).toBe(
+        true
+      );
     } finally {
       await f.close();
     }

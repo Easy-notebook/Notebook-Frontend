@@ -6,6 +6,13 @@ export type AgentRole = 'worker' | 'curator';
 export const providerSchema = z.enum(['codex', 'claude']);
 export type AgentProvider = z.infer<typeof providerSchema>;
 const id = z.string().min(1).max(200);
+export const cellInsertionSchema = z
+  .object({
+    anchor: z.string().min(1).max(500_000),
+    position: z.enum(['before', 'after']),
+  })
+  .strict();
+export type CellInsertion = z.infer<typeof cellInsertionSchema>;
 export const toolSchemas = {
   ...documentToolSchemas,
   read_context: z
@@ -17,7 +24,25 @@ export const toolSchemas = {
   curate_context: curationSchema,
   list_cells: z.object({}).strict(),
   read_cell: z.object({ cellId: id }).strict(),
-  update_cell: z.object({ cellId: id, version: id, content: z.string().max(500_000) }).strict(),
+  propose_cell_edit: z
+    .object({
+      cellId: id,
+      version: id,
+      intent: z.string().min(1).max(2000),
+      draft: z.string().max(500_000).optional(),
+      stage: z.enum(['planned', 'writing']).optional(),
+      insertion: cellInsertionSchema.optional(),
+    })
+    .strict(),
+  cancel_cell_edit: z.object({ cellId: id }).strict(),
+  update_cell: z
+    .object({
+      cellId: id,
+      version: id,
+      content: z.string().max(500_000),
+      insertion: cellInsertionSchema.optional(),
+    })
+    .strict(),
   run_cell: z.object({ cellId: id, version: id }).strict(),
   summary: z
     .object({ text: z.string().min(1).max(16_000), cellIds: z.array(id).max(256) })
@@ -31,11 +56,15 @@ export const toolDescriptions: Record<ToolName, string> = {
   curate_context:
     'Curator-only atomic update of readable context documents. Use the version from read_context. Cite existing evidence IDs, distinguish evidence from inference, preserve original quotes and starting points. Only lead statuses may change; explain changes. Never invent evidence.',
   list_cells:
-    'Read the current ordered notebook cell index and versions. Includes all cells, not only visible cells.',
+    'Read the current ordered notebook index: one cell per document line, with 1-based lineNumber, single-line preview and version. Includes all cells. This is not a detail read; call read_cell before proposing or changing any existing cell.',
   read_cell:
-    'Read current cell content, outputs and version. Read before editing or running; re-read on conflict.',
+    'Read full current cell source, outputs, version, documentLineNumber and internal lines [{lineNumber,text}] numbered from 1. content is lossless source; line labels are metadata, never write them into content. Required before proposing or modifying this cell, including batch updates, moves or removals. Re-read after source changes.',
+  propose_cell_edit:
+    'Before composing a cell replacement, read_cell then declare its version and a short writing intent in the document. This reserves the entire cell until update_cell, cancel_cell_edit or run end. Use stage planned for a static gray proposal, writing (default) while generating. Optional draft previews work without saving it. Repeating updates your own proposal. Never reserve unrelated cells. For insertion within a Markdown cell, pass insertion with an exact unique source anchor and position before/after; draft contains only the new fragment. Include desired whitespace/newlines explicitly. Use the same insertion with update_cell.',
+  cancel_cell_edit:
+    'Release your cell writing proposal without changing document content. Use when abandoning an edit.',
   update_cell:
-    'Replace the content of an editable text/code cell only if version still matches. Returns the new version.',
+    'Replace the content of an editable text/code cell only if version still matches. Returns the new version. To insert inside a Markdown cell without replacing existing text, pass insertion {anchor, position: before/after}; content is only the inserted fragment. Anchor must occur exactly once in the read source. Whitespace/newlines are preserved exactly; include them in content. Omit insertion only for whole-cell replacement.',
   run_cell:
     'Execute a code cell through the notebook kernel only if version matches. Waits for the execution result.',
   summary:
@@ -54,6 +83,8 @@ export const toolNameSchema = z.enum([
   'list_cells',
   'read_cell',
   'update_cell',
+  'propose_cell_edit',
+  'cancel_cell_edit',
   'run_cell',
   'summary',
 ]);
@@ -174,6 +205,8 @@ export function toolsForRole(role: AgentRole = 'worker') {
       role === 'curator'
         ? ![
             'update_cell',
+            'propose_cell_edit',
+            'cancel_cell_edit',
             'run_cell',
             'apply_notebook_edits',
             'backup_notebook',

@@ -1,3 +1,4 @@
+import { notebookSkillFixture } from '../skills/NotebookSkill.fixture';
 import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   requests: [] as any[],
@@ -44,6 +45,7 @@ beforeEach(() => {
   mocks.mismatch = false;
 });
 const run = () => ({
+  notebookSkill: notebookSkillFixture(),
   session: { threadId: 'original', sourceSessionId: 'original', cwd: '/original/project' },
   prompt: 'continue',
   signal: new AbortController().signal,

@@ -1,3 +1,8 @@
+import {
+  notebookSourcePath,
+  notebookSkillSchema,
+  acceptNotebookSkill,
+} from '../skills/NotebookSkill';
 import { NotebookModelHost } from './NotebookModelHost';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
@@ -17,7 +22,8 @@ const messageSchema = z.discriminatedUnion('type', [
     id: z.string(),
     agent: z.string(),
     invocation: z.string(),
-    operation: z.enum(['skill.notebook_model', 'skill.codex']),
+    operation: z.literal('skill.notebook'),
+    skill: notebookSkillSchema,
     arguments: z.tuple([z.string()]),
   }),
   z.object({ type: z.literal('completed'), invocation: z.string(), result: z.unknown() }),
@@ -36,6 +42,7 @@ export class AalRuntime implements AgentRuntime {
         'AAL_AGENT_WORKER is not configured. Build the native aal-agent-cell worker; direct model execution is disabled.'
       );
     run.signal.throwIfAborted();
+    if (!run.instance) throw new Error('Notebook Agent instance identity is required');
     const invocation = randomUUID();
     const child = spawn(this.executable, [], { stdio: ['pipe', 'pipe', 'pipe'] });
     const controller = new AbortController();
@@ -68,7 +75,15 @@ export class AalRuntime implements AgentRuntime {
     };
     let completed = false;
     let modelCalled = false;
-    child.stdin.write(JSON.stringify({ invocation, prompt: run.prompt, agent: this.agent }) + '\n');
+    child.stdin.write(
+      JSON.stringify({
+        invocation,
+        prompt: run.prompt,
+        agent: this.agent,
+        source: notebookSourcePath,
+        instance: run.instance,
+      }) + '\n'
+    );
     try {
       for await (const line of createInterface({ input: child.stdout })) {
         if (line.length > 2_000_000) throw new Error('AAL worker message too large');
@@ -88,17 +103,16 @@ export class AalRuntime implements AgentRuntime {
             invocation,
           });
         } else if (message.type === 'host_call') {
-          if (
-            message.operation !==
-            (this.agent === 'CodexAgent' ? 'skill.codex' : 'skill.notebook_model')
-          )
-            throw new Error('AAL skill identity mismatch');
           if (modelCalled || !spans.has(invocation))
             throw new Error('Unexpected AAL host lifecycle');
           modelCalled = true;
           try {
             const result = await new NotebookModelHost(this.model).execute(
-              { ...run, signal: controller.signal },
+              {
+                ...run,
+                signal: controller.signal,
+                notebookSkill: acceptNotebookSkill(message.skill),
+              },
               spans.get(invocation)!,
               message.arguments[0],
               message.operation

@@ -1,13 +1,10 @@
+import { notebookTools } from '../skills/NotebookSkill';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import {
-  toolsForRole,
-  toolDescriptions,
-  type ToolName,
-} from '../../../src/services/agent-cell/protocol';
+import { toolDescriptions, type ToolName } from '../../../src/services/agent-cell/protocol';
 import type { ProviderRun } from './types';
 /** Per-run loopback tools; possession of its random bearer is scoped to this run only. */
 export async function openNotebookMcp(run: ProviderRun) {
@@ -45,11 +42,11 @@ export async function openNotebookMcp(run: ProviderRun) {
         if (size > 2_000_000) throw new Error('MCP input too large');
         chunks.push(Buffer.from(chunk));
       }
-      for (const [name, schema] of Object.entries(toolsForRole(run.role)))
+      for (const [name, schema] of Object.entries(notebookTools(run)))
         mcp.registerTool(
           name,
           { description: toolDescriptions[name as ToolName], inputSchema: schema.shape },
-          async (args) => {
+          async (args: unknown) => {
             const result = await run.call(name as ToolName, args);
             return {
               content: [{ type: 'text' as const, text: JSON.stringify(result) }],

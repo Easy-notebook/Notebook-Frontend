@@ -1,0 +1,9 @@
+agent NotebookAgent is Agent
+  private
+    use skill "notebook" from path "../skills/notebook"
+  public
+    ability run(connection: String) -> Any effects(skill)
+      return self.skill("notebook", connection)
+
+agent CodexAgent is NotebookAgent
+  role "Use the attached Codex model Host for the live Notebook skill"

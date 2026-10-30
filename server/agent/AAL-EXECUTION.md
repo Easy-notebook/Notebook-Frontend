@@ -10,9 +10,13 @@ cargo build --locked --manifest-path /path/to/Agent-Assembly-Language/demos/agen
 
 Set `AAL_AGENT_WORKER` to the resulting `demos/agent-cell/target/debug/aal-agent-cell` executable in `.env.local` for Vite, or the server process environment for `npm run agent:bridge`. Restart Vite after changing the value.
 
-For Codex, the worker links the optional AAL standard-library extension `stdlib/codex` (`aal.codex`) and invokes `CodexAgent.run(connection)`. Its generic `codex` skill reaches a bounded process Host. The existing generic `NotebookAgent.run(connection)` / `notebook_model` entry serves the other provider. Both use the actual AAL compiler and Rust Kernel. The embedding runs the selected Codex/Claude transport and returns its result to the waiting kernel. Only `Outcome::Completed` and a successful process exit finish the AAL span. Model errors propagate through the kernel. Cancellation aborts the model adapter and terminates the worker, with a kill deadline.
+Both model choices execute the Notebook-owned source `server/agent/aal/notebook.aal`. The source imports the standard `server/agent/skills/notebook/SKILL.md` package with `use skill "notebook" from path "../skills/notebook"`. `CodexAgent` inherits this skill from `NotebookAgent`; the bridge selects the model transport. The worker uses the actual `compile_file`, then creates a notebook-scoped instance factory, publishes the agent instance and calls `invoke_instance`. Only native completion succeeds.
 
-This is a local, ephemeral AAL invocation. The kernel MemoryStore is per invocation; model conversation continuity is owned by the existing server session. It is not a durable AAL workflow, network deployment, distributed receipt, or autonomous AAL sub-agent planner. Existing notebook tools/approval/version checks remain in the notebook application layer.
+The compiler validates and freezes the skill resource. `skill.notebook` Host metadata carries its hash, full document, parsed instructions and declared tools. `NotebookSkill.ts` checks deployment consistency; model tools are the intersection of skill declarations and worker/curator role grants. Both dynamic tools and MCP use this catalog. `NotebookModelHost` checks the same catalog before dispatch. There is no separate TypeScript copy of the skill instructions or direct-model fallback.
+
+Notebook still owns approval, cell version checks, writing reservations, insertion resolution, code execution and persistence. The imported skill explains how to use these tools; it does not grant shell/filesystem access or move notebook state into the AAL kernel.
+
+Local instances use per-invocation MemoryStore. Notebook/agent identity is bound when constructing the instance, but runtime state is not durable across worker exits; provider conversation continuity stays in the existing server session. Cancellation aborts the model Host and native worker. This is not network deployment or a distributed receipt.
 
 ## EAL interface (implemented; distributed execution not verified)
 
@@ -73,7 +77,7 @@ Build and package from the AAL repository:
 
 ```sh
 adapters/easynet/cargo-local.sh /path/EasyNet-Cli /path/EasyNet-Axon build --bin aal-agent-provider
-adapters/easynet/target/debug/aal-agent-provider package /absolute/new/package-directory
+adapters/easynet/target/debug/aal-agent-provider package /absolute/new/package-directory /absolute/Notebook-Frontend/server/agent/aal/notebook.aal
 ```
 
 After pairing, install that directory with `easynet plugin install` and set
@@ -95,8 +99,10 @@ the frontend tests report jsdom's existing unsupported window.scrollTo warning.
 
 ## Notebook organization and standard-library boundary (2026-10-29)
 
-`aal.codex` owns the reusable Codex agent definition; the notebook owns `server/agent/skills/notebook-organization` and its scoped tool registry. The standard library has no notebook files, organization policy or Codex credentials. A locked independent consumer lives at `examples/project-codex` in the AAL repository. The canonical native package binds `notebook.codex` to the library ability; packaging/local Host verification does not mean remote deployment.
+Notebook owns the reusable `notebook` skill and its AAL Agent source. The native worker/ability provider loads that source rather than concatenating generic provider classes and inline notebook instructions. The canonical package keeps the public `notebook.codex` and `notebook.agent` bindings. Repackage after changing SKILL.md: a stale frozen resource is rejected rather than silently replaced. Local package verification is not daemon installation or remote deployment.
 
-Document tools expose paged reading, exact-version immutable backup, atomic edit batches, awaited canonical persistence, separate result copies and scoped artifact list/read. Files are created under `~/Documents/EasyNotebook/agent-artifacts` unless `NOTEBOOK_ARTIFACT_DIR` is set. Tool callers supply labels/file IDs, never arbitrary paths. The original imported file is not overwritten. Version checks protect canonical cells and task structure; task projections use cell references so Agent progress does not invalidate document edits.
+## Source-driven Notebook skill verification (2026-10-30)
 
-See `pr/20261029-notebook-codex-organization/05-verification.md` and `artifact-verification.json` for native/compiler tests and the actual terminal → Codex → backup → 33 Markdown edits → flush → new file → reopen verification.
+The deployed local worker was rebuilt at the configured `AAL_AGENT_WORKER` path. Both NotebookAgent and CodexAgent were exercised with the actual AAL compiler and kernel. The canonical EAL provider was rebuilt and packaged using this repository's `notebook.aal` source; controlled-Host tests verified resource delivery, approval waiting/rejection, cancellation and idempotent replay. No remote installation or paid model invocation was performed.
+
+Checks: 31 server tests passed across the integration run and added missing-resource test; 2 live-model tests were intentionally skipped. Agent TypeScript, targeted ESLint and frontend production build passed. Missing skill imports fail at compilation; mismatched skill deployments fail before the model Host runs. The skill's tool inventory is tested against the authoritative Notebook tool schemas, including proposal, cancellation and Markdown insertion.

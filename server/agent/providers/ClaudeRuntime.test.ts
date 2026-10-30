@@ -1,3 +1,4 @@
+import { notebookSkillFixture } from '../skills/NotebookSkill.fixture';
 import { expect, it, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({ options: {} as any, id: 'original' }));
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
@@ -23,6 +24,7 @@ beforeEach(() => {
 });
 const run = () => ({
   prompt: 'continue',
+  notebookSkill: notebookSkillFixture(),
   session: { threadId: 'original', sourceSessionId: 'original', cwd: '/project' },
   signal: new AbortController().signal,
   emit: vi.fn(),

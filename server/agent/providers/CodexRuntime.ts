@@ -1,11 +1,11 @@
+import { notebookTools, notebookInstructions } from '../skills/NotebookSkill';
 import { z } from 'zod';
 import {
   toolSchemas,
-  toolsForRole,
   toolDescriptions,
   toolNameSchema,
 } from '../../../src/services/agent-cell/protocol';
-import { instructionsForRole, type AgentRuntime, type ProviderRun } from './types';
+import { type AgentRuntime, type ProviderRun } from './types';
 import { CodexConnection } from './CodexConnection';
 import { openNotebookMcp } from './NotebookMcpEndpoint';
 
@@ -94,7 +94,7 @@ export class CodexRuntime implements AgentRuntime {
       const options = {
         approvalPolicy: 'never',
         sandbox: 'read-only',
-        developerInstructions: instructionsForRole(run.role),
+        developerInstructions: notebookInstructions(run),
         ...(run.session.cwd ? { cwd: run.session.cwd } : {}),
       };
       if (run.session.threadId) {
@@ -110,7 +110,7 @@ export class CodexRuntime implements AgentRuntime {
       } else {
         const result = await rpc.request('thread/start', {
           ...options,
-          dynamicTools: Object.entries(toolsForRole(run.role)).map(([name, schema]) => ({
+          dynamicTools: Object.entries(notebookTools(run)).map(([name, schema]) => ({
             type: 'function',
             name,
             description: toolDescriptions[name as keyof typeof toolSchemas],

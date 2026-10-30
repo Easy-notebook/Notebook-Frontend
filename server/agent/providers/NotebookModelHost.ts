@@ -1,3 +1,4 @@
+import { notebookTools } from '../skills/NotebookSkill';
 import { requiresAgentApproval } from '../../../src/services/agent-cell/AgentApprovalGate';
 import { randomUUID } from 'node:crypto';
 import type { AgentRuntime, ProviderRun } from './types';
@@ -10,8 +11,9 @@ export class NotebookModelHost {
     run: ProviderRun,
     parent: ExecutionSpan,
     prompt = run.prompt,
-    operation = 'skill.notebook_model'
+    operation = 'skill.notebook'
   ) {
+    const grants = notebookTools(run);
     const span: ExecutionSpan = {
       id: randomUUID(),
       parentId: parent.id,
@@ -32,6 +34,11 @@ export class NotebookModelHost {
           run.emit(event);
         },
         call: async (name, args) => {
+          if (!(name in grants))
+            return {
+              ok: false,
+              error: 'TOOL_NOT_GRANTED: not granted by the Notebook skill and instance role',
+            };
           const tool: ExecutionSpan = {
             id: randomUUID(),
             parentId: span.id,

@@ -403,6 +403,10 @@ export class AgentBridge {
         await this.providers[inputRun.provider].run({
           session,
           role: inputRun.role,
+          instance: {
+            notebookId: inputRun.notebookId,
+            agentId: inputRun.notebookAgentId ?? inputRun.cellId,
+          },
           signal: run.controller.signal,
           emit,
           call,

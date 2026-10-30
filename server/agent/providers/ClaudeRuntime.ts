@@ -1,10 +1,7 @@
+import { notebookTools, notebookInstructions } from '../skills/NotebookSkill';
 import { query, createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
-import {
-  toolsForRole,
-  toolDescriptions,
-  type ToolName,
-} from '../../../src/services/agent-cell/protocol';
-import { instructionsForRole, type AgentRuntime, type ProviderRun } from './types';
+import { toolDescriptions, type ToolName } from '../../../src/services/agent-cell/protocol';
+import { type AgentRuntime, type ProviderRun } from './types';
 
 export class ClaudeRuntime implements AgentRuntime {
   async run(run: ProviderRun): Promise<void> {
@@ -15,7 +12,7 @@ export class ClaudeRuntime implements AgentRuntime {
     const server = createSdkMcpServer({
       name: 'notebook',
       version: '1.0.0',
-      tools: Object.entries(toolsForRole(run.role)).map(([name, schema]) =>
+      tools: Object.entries(notebookTools(run)).map(([name, schema]) =>
         tool(name, toolDescriptions[name as ToolName], schema.shape, async (args) => {
           const result = await run.call(name as ToolName, args);
           return {
@@ -32,10 +29,10 @@ export class ClaudeRuntime implements AgentRuntime {
         resume: run.session.threadId,
         ...(run.session.cwd ? { cwd: run.session.cwd } : {}),
         includePartialMessages: true,
-        systemPrompt: instructionsForRole(run.role),
+        systemPrompt: notebookInstructions(run),
         tools: [],
         mcpServers: { notebook: server },
-        allowedTools: Object.keys(toolsForRole(run.role)).map((name) => `mcp__notebook__${name}`),
+        allowedTools: Object.keys(notebookTools(run)).map((name) => `mcp__notebook__${name}`),
         permissionMode: 'dontAsk',
         persistSession: true,
         ...(process.env.NOTEBOOK_CLAUDE_BIN

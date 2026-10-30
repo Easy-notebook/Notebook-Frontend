@@ -1,3 +1,4 @@
+import { notebookSkillFixture } from '../skills/NotebookSkill.fixture';
 import { expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -5,6 +6,7 @@ import { openNotebookMcp } from './NotebookMcpEndpoint';
 it('exposes notebook tools through authenticated MCP and forwards mutation approval results', async () => {
   const call = vi.fn().mockResolvedValue({ ok: false, error: 'USER_REJECTED' });
   const endpoint = await openNotebookMcp({
+    notebookSkill: notebookSkillFixture(),
     session: {},
     prompt: 'test',
     signal: new AbortController().signal,

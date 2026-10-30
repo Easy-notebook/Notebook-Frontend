@@ -1,3 +1,4 @@
+import { notebookSkillSchema, acceptNotebookSkill } from '../skills/NotebookSkill';
 import { createServer, type Socket } from 'node:net';
 import { mkdtemp, chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -37,7 +38,7 @@ export class AbilityModelHost {
       let buffer = '';
       const receive = (chunk: Buffer) => {
         buffer += chunk.toString('utf8');
-        if (buffer.length > 8192) {
+        if (buffer.length > 262144) {
           socket.destroy();
           return;
         }
@@ -52,9 +53,8 @@ export class AbilityModelHost {
                 id: z.string().min(1),
                 invocation: z.string().min(1),
                 agent: z.literal(agent),
-                operation: z.literal(
-                  agent === 'CodexAgent' ? 'skill.codex' : 'skill.notebook_model'
-                ),
+                operation: z.literal('skill.notebook'),
+                skill: notebookSkillSchema,
               })
               .strict()
               .parse(JSON.parse(buffer.slice(0, buffer.indexOf('\n'))));
@@ -77,7 +77,11 @@ export class AbilityModelHost {
             run.emit({ type: 'span', span });
             try {
               const result = await new NotebookModelHost(model).execute(
-                { ...run, signal: controller.signal },
+                {
+                  ...run,
+                  signal: controller.signal,
+                  notebookSkill: acceptNotebookSkill(request.skill),
+                },
                 span,
                 run.prompt,
                 request.operation
